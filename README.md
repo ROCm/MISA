@@ -1,3 +1,3 @@
-# iGemmgen
+# iGEMMgen
 
-code generator for implicit gemm
+Code generator for implicit gemm algorithm
