@@ -24,36 +24,40 @@
 # 
 ################################################################################
 from __future__ import print_function
+import argparse
 import sys, os, shutil
-import numpy as np
 
 from igemm.amdgpu import *
 from igemm.codegen import *
 from igemm.igemm_base import *
 from igemm.igemm_algo_v4r1 import *
+from igemm.config_parser import *
 
 OUT_DIR='out'
 CPP_DIR='driver'
 
-def igemm_host_driver():
+def igemm_host_driver(args, config_content):
     cpp_src = os.path.join(CPP_DIR, "conv_driver.cpp")
-    target_exe = os.path.join(OUT_DIR, "conv_driver.exe")
+    target_exe = os.path.join(args.dir, "conv_driver.exe")
+    sec_root = config_content.get_section('codegen')[0]
     arch = amdgpu_arch_config_t({
-        'Arch'          :   AMDGPU_ARCH_GFX906})
+        'arch'          :   amdgpu_string_to_arch(sec_root['arch'])})
     builder = amdgpu_build_host_t(arch, cpp_src, target_exe)
-    rtn = builder.build()
+    rtn = builder.build(cxxflags=['-DIGEMM_CONFIG_FILE=\"{}\"'.format(os.path.abspath(args.config_file))])
     if not rtn:
         assert False
 
-def igemm_v4r1_emit():
+def igemm_v4r1_emit(args, config_content):
     '''
     codegen driver for v4r1
     '''
-    asm_target = os.path.join(OUT_DIR, "igemm_v4r1_dynamic.s")
+    asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
     emitter = codegen_emit_to_file_t(asm_target)
+    sec_root = config_content.get_section('codegen')[0]
     arch = amdgpu_arch_config_t({
-        'Arch'          :   AMDGPU_ARCH_GFX906,
-        'DataType'      :   AMDGPU_PRECISION_FP32 })
+        'arch'          :   amdgpu_string_to_arch( sec_root['arch'] ),
+        'data_type'     :   AMDGPU_PRECISION_FP32,
+        'code_object'   :   amdgpu_string_to_codeobj( sec_root['code_object']) })
 
     # create mc
     mc = codegen_asm_printer_t(emitter, arch)
@@ -68,7 +72,7 @@ def igemm_v4r1_emit():
     emit_write_4d_strided_t(mc).emit()
     emit_c_clear_t(mc).emit()
 
-    tunable_dicts = igemm_get_v4r1_tunable_dict_array()
+    tunable_dicts = [t.to_dict() for t in config_content.get_section('v4r1_dynamic_kernel')]
 
     # emit v4r1 related macros, with different tunable
     emit_v4r1_dynamic_macros(mc, tunable_dicts)
@@ -83,7 +87,16 @@ def igemm_v4r1_emit():
         assert False
 
 if __name__ == '__main__':
-    shutil.rmtree(OUT_DIR, ignore_errors=True)
-    os.mkdir(OUT_DIR)
-    igemm_host_driver()
-    igemm_v4r1_emit()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_file", help="display a square of a given number")
+    parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
+    args = parser.parse_args()
+
+    config_parser = config_parser_t(args.config_file)
+    config_content = config_parser()
+    #config_content.dump()
+
+    shutil.rmtree(args.dir, ignore_errors=True)
+    os.mkdir(args.dir)
+    igemm_host_driver(args, config_content)
+    igemm_v4r1_emit(args, config_content)

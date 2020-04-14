@@ -11,7 +11,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
+ * The above copyright notice and this permission notice shall be included in
+ *all
  * copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -24,6 +25,7 @@
  *
  *******************************************************************************/
 #include "args.h"
+#include "config_parser.h"
 #include "naive_conv.h"
 #include <chrono>
 #include <functional>
@@ -125,7 +127,14 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define ABS(x) ((x) > 0 ? (x) : -1 * (x))
 #endif
 
-#define HSACO "igemm_v4r1_dynamic.hsaco"
+#ifndef IGEMM_HSACO
+#define IGEMM_HSACO "igemm_v4r1_dynamic.hsaco"
+#endif
+
+#ifndef IGEMM_CONFIG_FILE
+#define IGEMM_CONFIG_FILE "igemm_v4r1_dynamic.config"
+#endif
+
 #define WARMUP 3
 #define REPEAT 6
 #define SCLK_MHZ 1725
@@ -246,10 +255,14 @@ void dump_arg(const args_t *arg) {
 }
 
 int main(int argc, char **argv) {
-    char *hsaco = env_get_str("IGEMM_HSACO", HSACO);
+    char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
+    char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
+    config_parser_t config_parser(config_file);
+    auto content = config_parser.parse();
+    auto tunables = igemm_v4r1_dynamic_tunable_from_config(content);
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
@@ -323,11 +336,8 @@ int main(int argc, char **argv) {
 
     {
         igemm_v4r1_dynamic_driver_t conv_driver;
-        for (int i = 0; i < (sizeof(igemm_v4r1_dynamic_tunables) /
-                             sizeof(igemm_v4r1_dynamic_tunables[0]));
-             i++) {
-            igemm_v4r1_dynamic_tunable_t *tunable =
-                &igemm_v4r1_dynamic_tunables[i];
+        for (int i = 0; i < tunables.size(); i++) {
+            igemm_v4r1_dynamic_tunable_t *tunable = &tunables[i];
             // if(std::string("igemm_v4r1_dynamic_64x64x8_8x8_4x4x2x4x2x4_8x1x8x1_4x16")
             // != conv_driver.get_kernel_name(tunable))
             //    continue;

@@ -35,8 +35,12 @@ class config_section_t(object):
         return self.dict[key]
     def __setitem__(self, key, value):
         self.dict[key] = value
+    def __iter__(self):
+        return self.dict.__iter__()
     def __contains__(self, key):
         return key in self.dict
+    def to_dict(self):
+        return self.dict
 
 class config_content_t(object):
     def __init__(self):
@@ -52,9 +56,18 @@ class config_content_t(object):
     def dump(self):
         print('total sections:{}'.format(len(self)))
         for section in self:
-            print('section:{}'.format(section.get_name()))
-
-
+            print('[{}]'.format(section.get_name()))
+            for key in section:
+                print('  {} = {} (type:{})'.format(key, section[key], type(section[key])))
+    
+    def get_section(self, section_name):
+        section_list = []
+        for section in self:
+            if section.get_name() == section_name:
+                section_list.append(section)
+        if len(section_list) == 0:
+            print('no section with name {}'.format(section_name))
+        return section_list
 
 class config_parser_t(object):
     def __init__(self, config_file):
@@ -62,6 +75,10 @@ class config_parser_t(object):
 
     def parse(self):
         # return a list of section, each section is key-value pair
+        def is_empty(line):
+            if len(line) == 0:
+                return True
+            return False
         def is_section(line):
             if line[0] == '[' and line[-1] == ']':
                 return True
@@ -91,6 +108,12 @@ class config_parser_t(object):
                 return True
             except ValueError:
                 return False
+
+        def is_value_string(value):
+            if (value[0] == '\'' and value[-1] == '\'') or \
+                (value[0] == '\"' and value[-1] == '\"'):
+                return True
+            return False
 
         def is_value_list(value):
             # [x,x,x,x]
@@ -123,6 +146,8 @@ class config_parser_t(object):
                 return int(value)
             if is_value_float(value):
                 return float(value)
+            if is_value_string(value):
+                return str(value[1:-1].strip())
             if is_value_list(value):
                 tok = value[1:-1].split(',')
                 for i in range(len(tok)):
@@ -133,6 +158,8 @@ class config_parser_t(object):
                         some_list.append(int(t))
                     elif is_value_float(t):
                         some_list.append(float(t))
+                    elif is_value_string(t):
+                        some_list.append(str(t[1:-1].strip()))
                     else:
                         print("value \"{}\" not suitable for list".format(t))
                         sys.exit(-1)
@@ -149,8 +176,10 @@ class config_parser_t(object):
                 if len(tok) == 2:
                     return range(int(tok[0]), int(tok[1]))
                 if len(tok) == 3:
-                    return range(int(tok[0]), int(tok[1]), int(tok[1]))
+                    return range(int(tok[0]), int(tok[1]), int(tok[2]))
                 assert False, "should not happen"
+            # finaly return string
+            return value
 
         config_content = config_content_t()
         with open(self.config_file) as f:
@@ -158,6 +187,8 @@ class config_parser_t(object):
             lines = f.readlines()
             for x in lines:
                 line = x.strip()
+                if is_empty(line):
+                    continue
                 if is_comment(line):
                     continue
                 if is_section(line):
@@ -169,7 +200,7 @@ class config_parser_t(object):
                 else:
                     assert current_section is not None
                     tok = line.split('=')
-                    if len(tok != 2):
+                    if len(tok) != 2:
                         print("fail to parse current line :\"{}\"".format(line))
                         sys.exit(-1)
                     key = tok[0].strip()
@@ -182,6 +213,13 @@ class config_parser_t(object):
                     else:
                         print("duplicate key :\"{}\" in current section".format(key))
                         sys.exit(-1)
+            if current_section is not None:
+                config_content.add_section(current_section)
         return config_content
     def __call__(self):
         return self.parse()
+
+# if __name__ == '__main__':
+#     config_parser = config_parser_t("v4r1.conf")
+#     config_content = config_parser()
+#     config_content.dump()

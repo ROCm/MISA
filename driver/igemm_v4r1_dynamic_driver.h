@@ -11,7 +11,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
+ * The above copyright notice and this permission notice shall be included in
+ *all
  * copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -26,54 +27,76 @@
 #ifndef __IGEMM_V4R1_DYNAMIC_DRIVER_H
 #define __IGEMM_V4R1_DYNAMIC_DRIVER_H
 
+#include "config_parser.h"
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 typedef struct {
-    int BPerBlock;
-    int KPerBlock;
-    int EPerBlock;
+    int b_per_block;
+    int k_per_block;
+    int e_per_block;
 
-    int GemmNRepeat;
+    int gemm_n_repeat;
 
-    int GemmMPerThreadSubC;
-    int GemmNPerThreadSubC;
+    int gemm_m_per_thread_subc;
+    int gemm_n_per_thread_subc;
 
-    int GemmMLevel0Cluster;
-    int GemmNLevel0Cluster;
-    int GemmMLevel1Cluster;
-    int GemmNLevel1Cluster;
+    int gemm_m_level0_cluster;
+    int gemm_n_level0_cluster;
+    int gemm_m_level1_cluster;
+    int gemm_n_level1_cluster;
 
-    int InBlockCopyClusterLengths_E;
-    int InBlockCopyClusterLengths_N1;
-    int InBlockCopyClusterLengths_B;
-    int InBlockCopyClusterLengths_N2;
+    int in_block_copy_cluster_lengths_e;
+    int in_block_copy_cluster_lengths_n1;
+    int in_block_copy_cluster_lengths_b;
+    int in_block_copy_cluster_lengths_n2;
 
-    int WeiBlockCopyClusterLengths_E;
-    int WeiBlockCopyClusterLengths_K;
+    int wei_block_copy_cluster_lengths_e;
+    int wei_block_copy_cluster_lengths_k;
 
-    int OPT_1x1;
+    // int OPT_1x1;
 } igemm_v4r1_dynamic_tunable_t;
 
-// clang-format off
-static igemm_v4r1_dynamic_tunable_t igemm_v4r1_dynamic_tunables[] = {
-    //bpb  kpb epb nrep mptc nptc ml0c nl0c ml1c nl1c in_e  n1   b  n2 weie   k  1x1
-    { 16, 128, 16,   2,   4,   4,   4,   4,   4,   4,  16,  1,  16,  1,  4,  64,  0},
-    //{ 16, 128, 16,   2,   4,   4,   4,   4,   4,   4,  16,  1,  16,  1,  4,  64,  1},
-    { 16, 128,  8,   2,   4,   4,   4,   4,   4,   4,   8,  2,  16,  1,  2, 128,  0},
-    //{ 16, 128,  8,   2,   4,   4,   4,   4,   4,   4,   8,  2,  16,  1,  2, 128,  1},
-    {  8, 128,  8,   2,   4,   4,   4,   4,   4,   2,   8,  1,   8,  2,  2,  64,  0},
-    //{  8, 128,  8,   2,   4,   4,   4,   4,   4,   2,   8,  1,   8,  2,  2,  64,  1},
-    {  8,  64,  8,   2,   4,   4,   4,   2,   2,   4,   8,  1,   8,  1,  4,  16,  0},
-    //{  8,  64,  8,   2,   4,   4,   4,   2,   2,   4,   8,  1,   8,  1,  4,  16,  1},
-    { 16,  32,  4,   2,   4,   4,   1,   4,   4,   4,   4,  1,  16,  1,  4,  16,  0},
-    //{ 16,  32,  4,   2,   4,   4,   1,   4,   4,   4,   4,  1,  16,  1,  4,  16,  1},
-    { 16,  16,  4,   2,   2,   2,   2,   4,   2,   4,   4,  1,  16,  1,  4,  16,  0},
-    //{ 16,  16,  4,   2,   2,   2,   2,   4,   2,   4,   4,  1,  16,  1,  4,  16,  1},
-    {  8,  32,  4,   2,   2,   2,   2,   4,   4,   2,   4,  2,   8,  1,  4,  16,  0},
-    //{  8,  32,  4,   2,   2,   2,   2,   4,   4,   2,   4,  2,   8,  1,  4,  16,  1},
-};
-// clang-format on
+static inline std::vector<igemm_v4r1_dynamic_tunable_t>
+igemm_v4r1_dynamic_tunable_from_config(const config_content_t &content) {
+    std::vector<igemm_v4r1_dynamic_tunable_t> tunables;
+    for (const auto &sec : content) {
+        if (sec.get_name() == "v4r1_dynamic_kernel") {
+            igemm_v4r1_dynamic_tunable_t tunable;
+            tunable.b_per_block = sec.at("b_per_block").get_int();
+            tunable.k_per_block = sec.at("k_per_block").get_int();
+            tunable.e_per_block = sec.at("e_per_block").get_int();
+            tunable.gemm_n_repeat = sec.at("gemm_n_repeat").get_int();
+            tunable.gemm_m_per_thread_subc =
+                sec.at("gemm_m_per_thread_subc").get_int();
+            tunable.gemm_n_per_thread_subc =
+                sec.at("gemm_n_per_thread_subc").get_int();
+            tunable.gemm_m_level0_cluster =
+                sec.at("gemm_m_level0_cluster").get_int();
+            tunable.gemm_n_level0_cluster =
+                sec.at("gemm_n_level0_cluster").get_int();
+            tunable.gemm_m_level1_cluster =
+                sec.at("gemm_m_level1_cluster").get_int();
+            tunable.gemm_n_level1_cluster =
+                sec.at("gemm_n_level1_cluster").get_int();
+            tunable.in_block_copy_cluster_lengths_e =
+                sec.at("in_block_copy_cluster_lengths_e").get_int();
+            tunable.in_block_copy_cluster_lengths_n1 =
+                sec.at("in_block_copy_cluster_lengths_n1").get_int();
+            tunable.in_block_copy_cluster_lengths_b =
+                sec.at("in_block_copy_cluster_lengths_b").get_int();
+            tunable.in_block_copy_cluster_lengths_n2 =
+                sec.at("in_block_copy_cluster_lengths_n2").get_int();
+            tunable.wei_block_copy_cluster_lengths_e =
+                sec.at("wei_block_copy_cluster_lengths_e").get_int();
+            tunable.wei_block_copy_cluster_lengths_k =
+                sec.at("wei_block_copy_cluster_lengths_k").get_int();
+            tunables.push_back(tunable);
+        }
+    }
+    return tunables;
+}
 
 typedef struct {
     float *p_in;
@@ -110,28 +133,28 @@ class igemm_v4r1_dynamic_driver_t {
     igemm_v4r1_dynamic_driver_t() {}
     ~igemm_v4r1_dynamic_driver_t() {}
     std::string get_kernel_name(const igemm_v4r1_dynamic_tunable_t *tunable) {
-        int b_per_block = tunable->BPerBlock;
-        int k_per_block = tunable->KPerBlock;
-        int e_per_block = tunable->EPerBlock;
-        int gemm_n_repeat = tunable->GemmNRepeat;
-        int gemm_m_per_thread_subc = tunable->GemmMPerThreadSubC;
-        int gemm_n_per_thread_subc = tunable->GemmNPerThreadSubC;
-        int gemm_m_level1_cluster = tunable->GemmMLevel1Cluster;
-        int gemm_n_level1_cluster = tunable->GemmNLevel1Cluster;
-        int gemm_m_level0_cluster = tunable->GemmMLevel0Cluster;
-        int gemm_n_level0_cluster = tunable->GemmNLevel0Cluster;
+        int b_per_block = tunable->b_per_block;
+        int k_per_block = tunable->k_per_block;
+        int e_per_block = tunable->e_per_block;
+        int gemm_n_repeat = tunable->gemm_n_repeat;
+        int gemm_m_per_thread_subc = tunable->gemm_m_per_thread_subc;
+        int gemm_n_per_thread_subc = tunable->gemm_n_per_thread_subc;
+        int gemm_m_level1_cluster = tunable->gemm_m_level1_cluster;
+        int gemm_n_level1_cluster = tunable->gemm_n_level1_cluster;
+        int gemm_m_level0_cluster = tunable->gemm_m_level0_cluster;
+        int gemm_n_level0_cluster = tunable->gemm_n_level0_cluster;
         int in_block_copy_cluster_lengths_e =
-            tunable->InBlockCopyClusterLengths_E;
+            tunable->in_block_copy_cluster_lengths_e;
         int in_block_copy_cluster_lengths_n1 =
-            tunable->InBlockCopyClusterLengths_N1;
+            tunable->in_block_copy_cluster_lengths_n1;
         int in_block_copy_cluster_lengths_b =
-            tunable->InBlockCopyClusterLengths_B;
+            tunable->in_block_copy_cluster_lengths_b;
         int in_block_copy_cluster_lengths_n2 =
-            tunable->InBlockCopyClusterLengths_N2;
+            tunable->in_block_copy_cluster_lengths_n2;
         int wei_block_copy_cluster_lengths_e =
-            tunable->WeiBlockCopyClusterLengths_E;
+            tunable->wei_block_copy_cluster_lengths_e;
         int wei_block_copy_cluster_lengths_k =
-            tunable->WeiBlockCopyClusterLengths_K;
+            tunable->wei_block_copy_cluster_lengths_k;
 
         assert(k_per_block % (gemm_m_per_thread_subc * gemm_m_level0_cluster *
                               gemm_m_level1_cluster) ==
@@ -163,8 +186,8 @@ class igemm_v4r1_dynamic_driver_t {
                std::to_string(wei_block_copy_cluster_lengths_k);
     }
     int get_block_size(const igemm_v4r1_dynamic_tunable_t *tunable) {
-        return tunable->GemmMLevel0Cluster * tunable->GemmNLevel0Cluster *
-               tunable->GemmMLevel1Cluster * tunable->GemmNLevel1Cluster;
+        return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
+               tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
     }
     int get_grid_size(const args_t *arg,
                       const igemm_v4r1_dynamic_tunable_t *tunable) {
@@ -185,11 +208,11 @@ class igemm_v4r1_dynamic_driver_t {
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
-        int b_per_block = tunable->BPerBlock;
-        int k_per_block = tunable->KPerBlock;
+        int b_per_block = tunable->b_per_block;
+        int k_per_block = tunable->k_per_block;
 
-        int gemm_n_repeat = tunable->GemmNRepeat;
-        int gemm_n_per_thread_subc = tunable->GemmNPerThreadSubC;
+        int gemm_n_repeat = tunable->gemm_n_repeat;
+        int gemm_n_per_thread_subc = tunable->gemm_n_per_thread_subc;
 
         int n1 = gemm_n_repeat;
         int n2 = gemm_n_per_thread_subc;
@@ -203,9 +226,9 @@ class igemm_v4r1_dynamic_driver_t {
     }
     int get_lds_size(const igemm_v4r1_dynamic_tunable_t *tunable) {
         // TODO: fp16/bf16, xdlops
-        int lds_a = 4 * tunable->EPerBlock * tunable->KPerBlock;
-        int lds_b = 4 * tunable->EPerBlock * tunable->GemmNRepeat *
-                    tunable->BPerBlock * tunable->GemmNPerThreadSubC;
+        int lds_a = 4 * tunable->e_per_block * tunable->k_per_block;
+        int lds_b = 4 * tunable->e_per_block * tunable->gemm_n_repeat *
+                    tunable->b_per_block * tunable->gemm_n_per_thread_subc;
         return 2 * next_pow2(next_pow2(lds_a) + next_pow2(lds_b));
     }
     bool tunable_is_valid(const args_t *arg,
@@ -228,28 +251,28 @@ class igemm_v4r1_dynamic_driver_t {
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
-        int b_per_block = tunable->BPerBlock;
-        int k_per_block = tunable->KPerBlock;
-        int e_per_block = tunable->EPerBlock;
-        int gemm_n_repeat = tunable->GemmNRepeat;
-        int gemm_m_per_thread_subc = tunable->GemmMPerThreadSubC;
-        int gemm_n_per_thread_subc = tunable->GemmNPerThreadSubC;
-        int gemm_m_level1_cluster = tunable->GemmMLevel1Cluster;
-        int gemm_n_level1_cluster = tunable->GemmNLevel1Cluster;
-        int gemm_m_level0_cluster = tunable->GemmMLevel0Cluster;
-        int gemm_n_level0_cluster = tunable->GemmNLevel0Cluster;
+        int b_per_block = tunable->b_per_block;
+        int k_per_block = tunable->k_per_block;
+        int e_per_block = tunable->e_per_block;
+        int gemm_n_repeat = tunable->gemm_n_repeat;
+        int gemm_m_per_thread_subc = tunable->gemm_m_per_thread_subc;
+        int gemm_n_per_thread_subc = tunable->gemm_n_per_thread_subc;
+        int gemm_m_level1_cluster = tunable->gemm_m_level1_cluster;
+        int gemm_n_level1_cluster = tunable->gemm_n_level1_cluster;
+        int gemm_m_level0_cluster = tunable->gemm_m_level0_cluster;
+        int gemm_n_level0_cluster = tunable->gemm_n_level0_cluster;
         int in_block_copy_cluster_lengths_e =
-            tunable->InBlockCopyClusterLengths_E;
+            tunable->in_block_copy_cluster_lengths_e;
         int in_block_copy_cluster_lengths_n1 =
-            tunable->InBlockCopyClusterLengths_N1;
+            tunable->in_block_copy_cluster_lengths_n1;
         int in_block_copy_cluster_lengths_b =
-            tunable->InBlockCopyClusterLengths_B;
+            tunable->in_block_copy_cluster_lengths_b;
         int in_block_copy_cluster_lengths_n2 =
-            tunable->InBlockCopyClusterLengths_N2;
+            tunable->in_block_copy_cluster_lengths_n2;
         int wei_block_copy_cluster_lengths_e =
-            tunable->WeiBlockCopyClusterLengths_E;
+            tunable->wei_block_copy_cluster_lengths_e;
         int wei_block_copy_cluster_lengths_k =
-            tunable->WeiBlockCopyClusterLengths_K;
+            tunable->wei_block_copy_cluster_lengths_k;
 
         int gemm_m_repeat =
             k_per_block / (gemm_m_per_thread_subc * gemm_m_level0_cluster *
@@ -287,7 +310,7 @@ class igemm_v4r1_dynamic_driver_t {
         VALID_COND_RTN_FALSE(k % k_per_block == 0 && b % b_per_block == 0 &&
                              e % e_per_block == 0);
 
-        // const auto KBlockWork = K / KPerBlock;
+        // const auto KBlockWork = K / k_per_block;
         // if(KBlockWork % ctx.group_counts != 0)
         //    return false;
 

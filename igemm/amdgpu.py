@@ -36,6 +36,15 @@ AMDGPU_ARCH_GFX908      = (2 << 24)
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
 
+def amdgpu_string_to_arch(amdgpu_arch_string):
+    if amdgpu_arch_string == 'gfx900':
+        return AMDGPU_ARCH_GFX900
+    if amdgpu_arch_string == 'gfx906':
+        return AMDGPU_ARCH_GFX906
+    if amdgpu_arch_string == 'gfx908':
+        return AMDGPU_ARCH_GFX908
+    assert False
+
 def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX900:
         return 'gfx900'
@@ -45,17 +54,24 @@ def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
         return 'gfx908'
     assert False
 
+def amdgpu_string_to_codeobj(amdgpu_codeobj_string):
+    if amdgpu_codeobj_string == 'cov2':
+        return AMDGPU_CODEOBJECT_V2
+    if amdgpu_codeobj_string == 'cov3':
+        return AMDGPU_CODEOBJECT_V3
+    assert False
+
 class amdgpu_arch_config_t(object):
     '''
     config some of arch related feature
     '''
     def __init__(self, arch_dict):
         ad = codegen_dict_with_default_t(arch_dict)
-        self.arch           = ad('Arch', AMDGPU_ARCH_GFX906)
-        self.use_dlops      = ad('UseDlops', False)
-        self.use_xdlops     = ad('UseXdlops', False)
-        self.data_type      = ad('DataType', AMDGPU_PRECISION_FP32)
-        self.code_object    = ad('CodeObject', AMDGPU_CODEOBJECT_V3)
+        self.arch           = ad('arch', AMDGPU_ARCH_GFX906)
+        self.use_dlops      = ad('use_dlops', False)
+        self.use_xdlops     = ad('use_sdlops', False)
+        self.data_type      = ad('data_type', AMDGPU_PRECISION_FP32)
+        self.code_object    = ad('code_object', AMDGPU_CODEOBJECT_V3)
 
 class amdgpu_kernel_code_t(object):
     '''
@@ -742,7 +758,7 @@ class amdgpu_build_asm_t(object):
         else:
             self.target_hsaco = target_hsaco
         self.mc = mc
-    def build(self):
+    def build(self, **kwargs):
         # make sure mc output is closed
         self.mc.close()
 
@@ -782,12 +798,16 @@ class amdgpu_build_host_t(object):
         else:
             self.target_exec = target_exec
         self.arch_config = arch_config
-    def build(self):
+    def build(self, **kwargs):
         arch_str = amdgpu_arch_to_string(self.arch_config.arch)
         cmd = ['g++']
         # from `/opt/rocm/bin/hipconfig --cpp_config`
         cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
         cmd += ['-Wall','-O2', '-std=c++11']
+        if 'cflags' in kwargs:
+            cmd += kwargs['cflags']
+        if 'cxxflags' in kwargs:
+            cmd += kwargs['cxxflags']
         if type(self.host_cpp) is str:
             cmd += [self.host_cpp]
         elif type(self.host_cpp) is list:

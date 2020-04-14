@@ -69,22 +69,22 @@ def igemm_get_epack_length(precision):
 
 class igemm_tunable_parameter_t(object):
     def __init__(self, tunable_dict):
-        self.b_per_block                         = tunable_dict['BPerBlock']
-        self.k_per_block                         = tunable_dict['KPerBlock']
-        self.e_per_block                         = tunable_dict['EPerBlock']
-        self.gemm_n_repeat                       = tunable_dict['GemmNRepeat']
-        self.gemm_m_per_thread_subc              = tunable_dict['GemmMPerThreadSubC']
-        self.gemm_n_per_thread_subc              = tunable_dict['GemmNPerThreadSubC']
-        self.gemm_m_level1_cluster               = tunable_dict['GemmMLevel1Cluster']
-        self.gemm_n_level1_cluster               = tunable_dict['GemmNLevel1Cluster']
-        self.gemm_m_level0_cluster               = tunable_dict['GemmMLevel0Cluster']
-        self.gemm_n_level0_cluster               = tunable_dict['GemmNLevel0Cluster']
-        self.in_block_copy_cluster_lengths_e     = tunable_dict['InBlockCopyClusterLengths_E']
-        self.in_block_copy_cluster_lengths_n1    = tunable_dict['InBlockCopyClusterLengths_N1']
-        self.in_block_copy_cluster_lengths_b     = tunable_dict['InBlockCopyClusterLengths_B']
-        self.in_block_copy_cluster_lengths_n2    = tunable_dict['InBlockCopyClusterLengths_N2']
-        self.wei_block_copy_cluster_lengths_e    = tunable_dict['WeiBlockCopyClusterLengths_E']
-        self.wei_block_copy_cluster_lengths_k    = tunable_dict['WeiBlockCopyClusterLengths_K']
+        self.b_per_block                         = tunable_dict['b_per_block']
+        self.k_per_block                         = tunable_dict['k_per_block']
+        self.e_per_block                         = tunable_dict['e_per_block']
+        self.gemm_n_repeat                       = tunable_dict['gemm_n_repeat']
+        self.gemm_m_per_thread_subc              = tunable_dict['gemm_m_per_thread_subc']
+        self.gemm_n_per_thread_subc              = tunable_dict['gemm_n_per_thread_subc']
+        self.gemm_m_level1_cluster               = tunable_dict['gemm_m_level1_cluster']
+        self.gemm_n_level1_cluster               = tunable_dict['gemm_n_level1_cluster']
+        self.gemm_m_level0_cluster               = tunable_dict['gemm_m_level0_cluster']
+        self.gemm_n_level0_cluster               = tunable_dict['gemm_n_level0_cluster']
+        self.in_block_copy_cluster_lengths_e     = tunable_dict['in_block_copy_cluster_lengths_e']
+        self.in_block_copy_cluster_lengths_n1    = tunable_dict['in_block_copy_cluster_lengths_n1']
+        self.in_block_copy_cluster_lengths_b     = tunable_dict['in_block_copy_cluster_lengths_b']
+        self.in_block_copy_cluster_lengths_n2    = tunable_dict['in_block_copy_cluster_lengths_n2']
+        self.wei_block_copy_cluster_lengths_e    = tunable_dict['wei_block_copy_cluster_lengths_e']
+        self.wei_block_copy_cluster_lengths_k    = tunable_dict['wei_block_copy_cluster_lengths_k']
 
         self.gemm_m_repeat = self.k_per_block // (self.gemm_m_per_thread_subc * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
 
@@ -129,22 +129,22 @@ class igemm_tunable_parameter_t(object):
 
     def to_dict(self):
         tunable_dict = {}
-        tunable_dict['BPerBlock']                     = self.b_per_block
-        tunable_dict['KPerBlock']                     = self.k_per_block 
-        tunable_dict['EPerBlock']                     = self.e_per_block
-        tunable_dict['GemmNRepeat']                   = self.gemm_n_repeat
-        tunable_dict['GemmMPerThreadSubC']            = self.gemm_m_per_thread_subc
-        tunable_dict['GemmNPerThreadSubC']            = self.gemm_n_per_thread_subc
-        tunable_dict['GemmMLevel1Cluster']            = self.gemm_m_level1_cluster
-        tunable_dict['GemmNLevel1Cluster']            = self.gemm_n_level1_cluster
-        tunable_dict['GemmMLevel0Cluster']            = self.gemm_m_level0_cluster
-        tunable_dict['GemmNLevel0Cluster']            = self.gemm_n_level0_cluster
-        tunable_dict['InBlockCopyClusterLengths_E']   = self.in_block_copy_cluster_lengths_e
-        tunable_dict['InBlockCopyClusterLengths_N1']  = self.in_block_copy_cluster_lengths_n1
-        tunable_dict['InBlockCopyClusterLengths_B']   = self.in_block_copy_cluster_lengths_b
-        tunable_dict['InBlockCopyClusterLengths_N2']  = self.in_block_copy_cluster_lengths_n2
-        tunable_dict['WeiBlockCopyClusterLengths_E']  = self.wei_block_copy_cluster_lengths_e
-        tunable_dict['WeiBlockCopyClusterLengths_K']  = self.wei_block_copy_cluster_lengths_k
+        tunable_dict['b_per_block']                       = self.b_per_block
+        tunable_dict['k_per_block']                       = self.k_per_block 
+        tunable_dict['e_per_block']                       = self.e_per_block
+        tunable_dict['gemm_n_repeat']                     = self.gemm_n_repeat
+        tunable_dict['gemm_m_per_thread_subc']            = self.gemm_m_per_thread_subc
+        tunable_dict['gemm_n_per_thread_subc']            = self.gemm_n_per_thread_subc
+        tunable_dict['gemm_m_level1_cluster']             = self.gemm_m_level1_cluster
+        tunable_dict['gemm_n_level1_cluster']             = self.gemm_n_level1_cluster
+        tunable_dict['gemm_m_level0_cluster']             = self.gemm_m_level0_cluster
+        tunable_dict['gemm_n_level0_cluster']             = self.gemm_n_level0_cluster
+        tunable_dict['in_block_copy_cluster_lengths_e']   = self.in_block_copy_cluster_lengths_e
+        tunable_dict['in_block_copy_cluster_lengths_n1']  = self.in_block_copy_cluster_lengths_n1
+        tunable_dict['in_block_copy_cluster_lengths_b']   = self.in_block_copy_cluster_lengths_b
+        tunable_dict['in_block_copy_cluster_lengths_n2']  = self.in_block_copy_cluster_lengths_n2
+        tunable_dict['wei_block_copy_cluster_lengths_e']  = self.wei_block_copy_cluster_lengths_e
+        tunable_dict['wei_block_copy_cluster_lengths_k']  = self.wei_block_copy_cluster_lengths_k
         return tunable_dict
 
     def serialize(self, line_starter = '; '):
@@ -181,22 +181,22 @@ def igemm_encode_v4r1_kernel_name(tunable):
         tunable_dict = tunable.to_dict()
     else:
         tunable_dict = tunable
-    b_per_block                       = tunable_dict['BPerBlock']
-    k_per_block                       = tunable_dict['KPerBlock']
-    e_per_block                       = tunable_dict['EPerBlock']
-    gemm_n_repeat                     = tunable_dict['GemmNRepeat']
-    gemm_m_per_thread_subc            = tunable_dict['GemmMPerThreadSubC']
-    gemm_n_per_thread_subc            = tunable_dict['GemmNPerThreadSubC']
-    gemm_m_level1_cluster             = tunable_dict['GemmMLevel1Cluster']
-    gemm_n_level1_cluster             = tunable_dict['GemmNLevel1Cluster']
-    gemm_m_level0_cluster             = tunable_dict['GemmMLevel0Cluster']
-    gemm_n_level0_cluster             = tunable_dict['GemmNLevel0Cluster']
-    in_block_copy_cluster_lengths_e   = tunable_dict['InBlockCopyClusterLengths_E']
-    in_block_copy_cluster_lengths_n1  = tunable_dict['InBlockCopyClusterLengths_N1']
-    in_block_copy_cluster_lengths_b   = tunable_dict['InBlockCopyClusterLengths_B']
-    in_block_copy_cluster_lengths_n2  = tunable_dict['InBlockCopyClusterLengths_N2']
-    wei_block_copy_cluster_lengths_e  = tunable_dict['WeiBlockCopyClusterLengths_E']
-    wei_block_copy_cluster_lengths_k  = tunable_dict['WeiBlockCopyClusterLengths_K']
+    b_per_block                       = tunable_dict['b_per_block']
+    k_per_block                       = tunable_dict['k_per_block']
+    e_per_block                       = tunable_dict['e_per_block']
+    gemm_n_repeat                     = tunable_dict['gemm_n_repeat']
+    gemm_m_per_thread_subc            = tunable_dict['gemm_m_per_thread_subc']
+    gemm_n_per_thread_subc            = tunable_dict['gemm_n_per_thread_subc']
+    gemm_m_level1_cluster             = tunable_dict['gemm_m_level1_cluster']
+    gemm_n_level1_cluster             = tunable_dict['gemm_n_level1_cluster']
+    gemm_m_level0_cluster             = tunable_dict['gemm_m_level0_cluster']
+    gemm_n_level0_cluster             = tunable_dict['gemm_n_level0_cluster']
+    in_block_copy_cluster_lengths_e   = tunable_dict['in_block_copy_cluster_lengths_e']
+    in_block_copy_cluster_lengths_n1  = tunable_dict['in_block_copy_cluster_lengths_n1']
+    in_block_copy_cluster_lengths_b   = tunable_dict['in_block_copy_cluster_lengths_b']
+    in_block_copy_cluster_lengths_n2  = tunable_dict['in_block_copy_cluster_lengths_n2']
+    wei_block_copy_cluster_lengths_e  = tunable_dict['wei_block_copy_cluster_lengths_e']
+    wei_block_copy_cluster_lengths_k  = tunable_dict['wei_block_copy_cluster_lengths_k']
 
     # above is from config
     assert k_per_block % (gemm_m_per_thread_subc * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0
@@ -211,198 +211,3 @@ def igemm_encode_v4r1_kernel_name(tunable):
                 gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
                 in_block_copy_cluster_lengths_e,in_block_copy_cluster_lengths_n1,in_block_copy_cluster_lengths_b,in_block_copy_cluster_lengths_n2,
                 wei_block_copy_cluster_lengths_e,wei_block_copy_cluster_lengths_k)
-
-def igemm_get_v4r1_tunable_dict_array():
-    dict_array = []
-
-    dict = {}
-    dict['BPerBlock']                       = 16
-    dict['KPerBlock']                       = 128
-    dict['EPerBlock']                       = 16
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 4
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 16
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 16
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 64
-    dict_array.append(dict)
-
-    # 0 
-    dict = {}
-    dict['BPerBlock']                       = 16
-    dict['KPerBlock']                       = 128
-    dict['EPerBlock']                       = 8
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 4
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 8
-    dict['InBlockCopyClusterLengths_N1']    = 2
-    dict['InBlockCopyClusterLengths_B']     = 16
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 2
-    dict['WeiBlockCopyClusterLengths_K']    = 128
-    dict_array.append(dict)
-
-    # 1
-    dict = {}
-    dict['BPerBlock']                       = 8
-    dict['KPerBlock']                       = 128
-    dict['EPerBlock']                       = 8
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 4
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 2
-
-    dict['InBlockCopyClusterLengths_E']     = 8
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 8
-    dict['InBlockCopyClusterLengths_N2']    = 2
-
-    dict['WeiBlockCopyClusterLengths_E']    = 2
-    dict['WeiBlockCopyClusterLengths_K']    = 64
-    dict_array.append(dict)
-
-    # 2
-    dict = {}
-    dict['BPerBlock']                       = 8
-    dict['KPerBlock']                       = 64
-    dict['EPerBlock']                       = 8
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 4
-    dict['GemmNLevel0Cluster']              = 2
-    dict['GemmMLevel1Cluster']              = 2
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 8
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 8
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 16
-    dict_array.append(dict)
-
-    # 3
-    dict = {}
-    dict['BPerBlock']                       = 16
-    dict['KPerBlock']                       = 32
-    dict['EPerBlock']                       = 4
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 1
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 4
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 16
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 16
-    dict_array.append(dict)
-
-    # 3
-    dict = {}
-    dict['BPerBlock']                       = 16
-    dict['KPerBlock']                       = 32
-    dict['EPerBlock']                       = 4
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 4
-    dict['GemmNPerThreadSubC']              = 4
-
-    dict['GemmMLevel0Cluster']              = 1
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 4
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 16
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 16
-    dict_array.append(dict)
-
-    # 4
-    dict = {}
-    dict['BPerBlock']                       = 16
-    dict['KPerBlock']                       = 16
-    dict['EPerBlock']                       = 4
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 2
-    dict['GemmNPerThreadSubC']              = 2
-
-    dict['GemmMLevel0Cluster']              = 2
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 2
-    dict['GemmNLevel1Cluster']              = 4
-
-    dict['InBlockCopyClusterLengths_E']     = 4
-    dict['InBlockCopyClusterLengths_N1']    = 1
-    dict['InBlockCopyClusterLengths_B']     = 16
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 16
-    dict_array.append(dict)
-
-    # 5
-    dict = {}
-    dict['BPerBlock']                       = 8
-    dict['KPerBlock']                       = 32
-    dict['EPerBlock']                       = 4
-
-    dict['GemmNRepeat']                     = 2
-    dict['GemmMPerThreadSubC']              = 2
-    dict['GemmNPerThreadSubC']              = 2
-
-    dict['GemmMLevel0Cluster']              = 2
-    dict['GemmNLevel0Cluster']              = 4
-    dict['GemmMLevel1Cluster']              = 4
-    dict['GemmNLevel1Cluster']              = 2
-
-    dict['InBlockCopyClusterLengths_E']     = 4
-    dict['InBlockCopyClusterLengths_N1']    = 2
-    dict['InBlockCopyClusterLengths_B']     = 8
-    dict['InBlockCopyClusterLengths_N2']    = 1
-
-    dict['WeiBlockCopyClusterLengths_E']    = 4
-    dict['WeiBlockCopyClusterLengths_K']    = 16
-    dict_array.append(dict)
-    return dict_array
