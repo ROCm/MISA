@@ -43,7 +43,10 @@ def igemm_host_driver(args, config_content):
     arch = amdgpu_arch_config_t({
         'arch'          :   amdgpu_string_to_arch(sec_root['arch'])})
     builder = amdgpu_build_host_t(arch, cpp_src, target_exe)
-    rtn = builder.build(cxxflags=['-DIGEMM_CONFIG_FILE=\"{}\"'.format(os.path.abspath(args.config_file))])
+    config_file_name = os.path.abspath(args.config_file)
+    hsaco_name = os.path.splitext(os.path.basename(args.config_file))[0] + '.hsaco'
+    rtn = builder.build(cxxflags=['-DIGEMM_CONFIG_FILE=\"{}\"'.format(config_file_name), \
+                        '-DIGEMM_HSACO=\"{}\"'.format(hsaco_name)])
     if not rtn:
         assert False
 
