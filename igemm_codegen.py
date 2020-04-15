@@ -91,11 +91,12 @@ def igemm_v4r1_emit(args, config_content):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", help="display a square of a given number")
+    parser.add_argument("config_file", help="display a square of a given number", default = 'config/igemm_v4r1_dynamic.config')
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
     args = parser.parse_args()
 
     config_parser = config_parser_t(args.config_file)
+    print(os.getcwd())
     config_content = config_parser()
     #config_content.dump()
 

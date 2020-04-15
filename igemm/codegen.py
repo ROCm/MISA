@@ -234,6 +234,10 @@ class codegen_asm_printer_t(object):
         '''
         def _unique_macro_wrapper():
             self.emit_unique_macro(other)
+
+        def _unique_macro_wrapper_1x1():
+            self.emit_unique_macro_1x1(other)
+            
         def _macro_desc_wrapper(*misc):
             self.emit_macro_desc(inspect.cleandoc(other.__doc__), *misc)
         other._emit = self.emit
@@ -242,6 +246,7 @@ class codegen_asm_printer_t(object):
         other._emit_macro_desc = _macro_desc_wrapper
         other._emit_front = self.emit_front
         other._emit_unique_macro = _unique_macro_wrapper
+        other._emit_unique_macro_1x1 = _unique_macro_wrapper_1x1
         other._inc_indent = self.inc_indent
         other._dec_indent = self.dec_indent
         other._indent_context = self.indent_context
