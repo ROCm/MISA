@@ -328,17 +328,18 @@ class emit_amd_metadata_t(amdgpu_asm_utils_t):
                                                                     ki_.kernel_block_size[0]*ki_.kernel_block_size[1]*ki_.kernel_block_size[2]))
 
     def emit(self):
-        self._emit('.amdgpu_metadata')
-        self._emit('---')
-        self._emit('amdhsa.version: [ 1, 0 ]')
-        self._emit('amdhsa.kernels:')
-        if type(self.ki) is list:
-            for k in self.ki:
-                self.emit_one_kernel_metadata(k)
-        else:
-            self.emit_one_kernel_metadata(self.ki)
-        self._emit('...')
-        self._emit('.end_amdgpu_metadata')
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
+            self._emit('.amdgpu_metadata')
+            self._emit('---')
+            self._emit('amdhsa.version: [ 1, 0 ]')
+            self._emit('amdhsa.kernels:')
+            if type(self.ki) is list:
+                for k in self.ki:
+                    self.emit_one_kernel_metadata(k)
+            else:
+                self.emit_one_kernel_metadata(self.ki)
+            self._emit('...')
+            self._emit('.end_amdgpu_metadata')
 
 class emit_int_div_vv_t(amdgpu_asm_utils_t):
     def name(self):
