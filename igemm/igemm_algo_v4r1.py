@@ -34,6 +34,11 @@ class igemm_v4r1_dynamic_t(object):
         self.tunable = tunable
         mc.inject(self)
 
+class igemm_v4r1_dynamic_t_1x1(igemm_v4r1_dynamic_t):
+    def __init__(self, mc, tunable, is_1x1):
+        igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
+        self.is_1x1 = is_1x1
+
 class emit_fma_subtile_t(igemm_v4r1_dynamic_t):
     def name(self):
         return self.fma.name()
@@ -505,8 +510,9 @@ class emit_wei_move_slice_window_t(igemm_v4r1_dynamic_t):
 
 class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
     class kernel_karg_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable):
+        def __init__(self, mc, tunable, is_1x1 = False):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
+            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
                 # Note here, in this implementation, all kernel should be the same
@@ -528,9 +534,12 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set k_dilation_w,          64')
                 self._emit('.set k_pad_h,               68')
                 self._emit('.set k_pad_w,               72')
-                self._emit('.set k_y,                   76')
-                self._emit('.set k_x,                   80')
-                self._emit('.set k_end,                 84')
+                if self.is_1x1:
+                    self._emit('.set k_end,             76')
+                else:
+                    self._emit('.set k_y,                   76')
+                    self._emit('.set k_x,                   80')
+                    self._emit('.set k_end,                 84')
                 self._emit_empty_line()
             return self._get_deferred(), igemm_next_mul(84, 8)   # TODO: karg alignment
         def get_count(self):
@@ -541,56 +550,60 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code)
 
     class kernel_sgpr_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable):
+        def __init__(self, mc, tunable, is_1x1 = False):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
+            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
+                s_seq = gpr_sequencer_t()
                 self._emit('; sgpr')
-                self._emit('.set s_ka,                  0')
-                self._emit('.set s_bx,                  2')
-                self._emit('.set s_p_in,                4')
-                self._emit('.set s_p_wei,               6')
-                self._emit('.set s_hi,                  8')
-                self._emit('.set s_wi,                  9')
-                self._emit('.set s_n,                   10')
-                self._emit('.set s_k,                   11')
-                self._emit('.set s_c,                   12')
-                self._emit('.set s_ho,                  13')
-                self._emit('.set s_wo,                  14')
-                self._emit('.set s_stride_h,            15')
-                self._emit('.set s_stride_w,            16')
-                self._emit('.set s_dilation_h,          17')
-                self._emit('.set s_dilation_w,          18')
-                self._emit('.set s_pad_h,               19')
-                self._emit('.set s_pad_w,               20')
-                self._emit('.set s_y,                   21')
-                self._emit('.set s_x,                   22')
-                self._emit('.set s_p_out,               24')
-                self._emit('.set s_block_ik,            26')
-                self._emit('.set s_block_ib,            27')
-                self._emit('.set s_in_stride_c,         28')
-                self._emit('.set s_in_stride_n2,        29')
-                self._emit('.set s_in_stride_n1,        30')
-                self._emit('.set s_in_ic,               31')
-                self._emit('.set s_in_iy,               32')
-                self._emit('.set s_in_ix,               33')
-                self._emit('.set s_wei_stride_c,        34')
-                self._emit('.set s_wei_stride_k,        35')
-                self._emit('.set s_wei_ic,              s_in_ic     ; weight&input ic, iy, ix from EPerBlock is the same')
-                self._emit('.set s_wei_iy,              s_in_iy')
-                self._emit('.set s_wei_ix,              s_in_ix')
-                self._emit('.set s_out_stride_k0,       36')
-                self._emit('.set s_out_stride_k1,       37')
-                self._emit('.set s_out_stride_n1,       38')
-                self._emit('.set s_out_stride_n2,       39')
+                self._emit('.set s_ka,                  {}'.format(s_seq(2)))
+                self._emit('.set s_bx,                  {}'.format(s_seq(2)))
+                self._emit('.set s_p_in,                {}'.format(s_seq(2)))
+                self._emit('.set s_p_wei,               {}'.format(s_seq(2)))
+                self._emit('.set s_hi,                  {}'.format(s_seq(1)))
+                self._emit('.set s_wi,                  {}'.format(s_seq(1)))
+                self._emit('.set s_n,                   {}'.format(s_seq(1)))
+                self._emit('.set s_k,                   {}'.format(s_seq(1)))
+                self._emit('.set s_c,                   {}'.format(s_seq(1)))
+                self._emit('.set s_ho,                  {}'.format(s_seq(1)))
+                self._emit('.set s_wo,                  {}'.format(s_seq(1)))
+                self._emit('.set s_stride_h,            {}'.format(s_seq(1)))
+                self._emit('.set s_stride_w,            {}'.format(s_seq(1)))
+                self._emit('.set s_dilation_h,          {}'.format(s_seq(1)))
+                self._emit('.set s_dilation_w,          {}'.format(s_seq(1)))
+                self._emit('.set s_pad_h,               {}'.format(s_seq(1)))
+                self._emit('.set s_pad_w,               {}'.format(s_seq(1)))
+                self._emit('.set s_y,                   {}'.format(s_seq(1)))
+                self._emit('.set s_x,                   {}'.format(s_seq(2)))
+                self._emit('.set s_p_out,               {}'.format(s_seq(2)))
+                self._emit('.set s_block_ik,            {}'.format(s_seq(1)))
+                self._emit('.set s_block_ib,            {}'.format(s_seq(1)))
+                self._emit('.set s_in_stride_c,         {}'.format(s_seq(1)))
+                self._emit('.set s_in_stride_n2,        {}'.format(s_seq(1)))
+                self._emit('.set s_in_stride_n1,        {}'.format(s_seq(1)))
+                if not(self.is_1x1):
+                    self._emit('.set s_in_ic,               {}'.format(s_seq(1)))
+                    self._emit('.set s_in_iy,               {}'.format(s_seq(1)))
+                    self._emit('.set s_in_ix,               {}'.format(s_seq(1)))
+                self._emit('.set s_wei_stride_c,        {}'.format(s_seq(1)))
+                self._emit('.set s_wei_stride_k,        {}'.format(s_seq(1)))
+                if not(self.is_1x1):
+                    self._emit('.set s_wei_ic,              s_in_ic     ; weight&input ic, iy, ix from EPerBlock is the same')
+                    self._emit('.set s_wei_iy,              s_in_iy')
+                    self._emit('.set s_wei_ix,              s_in_ix')
+                self._emit('.set s_out_stride_k0,       {}'.format(s_seq(1)))
+                self._emit('.set s_out_stride_k1,       {}'.format(s_seq(1)))
+                self._emit('.set s_out_stride_n1,       {}'.format(s_seq(1)))
+                self._emit('.set s_out_stride_n2,       {}'.format(s_seq(1)))
                 self._emit('.set s_kitr,                0')
-                self._emit('.set s_tmp,                 40')
+                self._emit('.set s_tmp,                 {}'.format(s_seq(4)))
                 self._emit('.set s_p_buf_in,            s_p_in      ; 4 sgpr used for MUBUF')
-                self._emit('.set s_p_buf_wei,           44')
+                self._emit('.set s_p_buf_wei,           {}'.format(s_seq(4)))
                 self._emit('.set s_p_buf_out,           s_p_out')
-                self._emit('.set s_end,                 48')
+                self._emit('.set s_end,                 {}'.format(s_seq(0)))
                 self._emit_empty_line()
-            return self._get_deferred(), 48
+            return self._get_deferred(), s_seq()
         def get_count(self):
             _, cnt = self()
             return cnt
@@ -599,8 +612,9 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code)
 
     class kernel_vgpr_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable):
+        def __init__(self, mc, tunable, is_1x1 = False):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
+            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
                 vseq = gpr_sequencer_t()
@@ -618,24 +632,29 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set v_sld_b_os,            {}'.format(vseq(1)))
                 self._emit('.set v_out_os,              {}'.format(vseq(1)))
                 self._emit('.set v_flag,                {}'.format(vseq(1)))
-                self._emit('.set v_in_ic,               {}'.format(vseq(1)))
-                self._emit('.set v_in_iy,               {}'.format(vseq(1)))
-                self._emit('.set v_in_ix,               {}'.format(vseq(1)))
-                self._emit('.set v_in_ihi,              {}'.format(vseq(1)))
-                self._emit('.set v_in_iwi,              {}'.format(vseq(1)))
-                self._emit('.set v_wei_ic,              {}'.format(vseq(1)))
-                self._emit('.set v_wei_iy,              {}'.format(vseq(1)))
-                self._emit('.set v_wei_ix,              {}'.format(vseq(1)))
+                if not(self.is_1x1):
+                    self._emit('.set v_in_ic,               {}'.format(vseq(1)))
+                    self._emit('.set v_in_iy,               {}'.format(vseq(1)))
+                    self._emit('.set v_in_ix,               {}'.format(vseq(1)))
+                    self._emit('.set v_in_ihi,              {}'.format(vseq(1)))
+                    self._emit('.set v_in_iwi,              {}'.format(vseq(1)))
+                    self._emit('.set v_wei_ic,              {}'.format(vseq(1)))
+                    self._emit('.set v_wei_iy,              {}'.format(vseq(1)))
+                    self._emit('.set v_wei_ix,              {}'.format(vseq(1)))
                 if self.tunable.num_accumulate_c_vgpr <= 6:
-                    self._emit('.set v_in_in0,              {}'.format(vseq(1)))
-                    self._emit('.set v_in_iho,              {}'.format(vseq(1)))
-                    self._emit('.set v_in_iwo,              {}'.format(vseq(1)))
+                    if not(self.is_1x1):
+                        self._emit('.set v_in_in0,              {}'.format(vseq(1)))
+                        self._emit('.set v_in_iho,              {}'.format(vseq(1)))
+                        self._emit('.set v_in_iwo,              {}'.format(vseq(1)))
                     self._emit('.set v_in_ie,               {}'.format(vseq(1)))
                 else:
-                    self._emit('.set v_in_in0,              {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
-                    self._emit('.set v_in_iho,              {}'.format(self.tunable.num_accumulate_c_vgpr - 2))
-                    self._emit('.set v_in_iwo,              {}'.format(self.tunable.num_accumulate_c_vgpr - 3))
-                    self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 4))
+                    if self.is_1x1:
+                        self._emit('.set v_in_in0,              {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
+                        self._emit('.set v_in_iho,              {}'.format(self.tunable.num_accumulate_c_vgpr - 2))
+                        self._emit('.set v_in_iwo,              {}'.format(self.tunable.num_accumulate_c_vgpr - 3))
+                        self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 4))
+                    else:
+                        self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
 
                 if self.tunable.num_accumulate_c_vgpr <= 9:
                     self._emit('.set v_in_in1,              {}'.format(vseq(1)))
@@ -666,9 +685,11 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                     self._emit('.set v_gemm_in,             {}'.format(self.tunable.num_accumulate_c_vgpr - 13))
                     self._emit('.set v_gemm_im,             {}'.format(self.tunable.num_accumulate_c_vgpr - 14))
 
-                self._emit('.set v_idc,                 {}'.format(vseq(1)))
-                self._emit('.set v_idy,                 {}'.format(vseq(1)))
-                self._emit('.set v_idx,                 {}'.format(vseq(1)))
+                if not(self.is_1x1):
+                    self._emit('.set v_idc,                 {}'.format(vseq(1)))
+                    self._emit('.set v_idy,                 {}'.format(vseq(1)))
+                    self._emit('.set v_idx,                 {}'.format(vseq(1)))
+
                 if self.tunable.num_accumulate_c_vgpr <= 24:
                     self._emit('.set v_tmp,                 {}'.format(vseq(6)))
                     self._emit('.set v_end,                 {}'.format(vseq()))
@@ -685,164 +706,14 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code) 
 
     def name(self):
-        return igemm_encode_v4r1_kernel_name(self.tunable)
-    def __init__(self, mc, tunable, emit_unified_define = False):
+        return igemm_encode_v4r1_kernel_name(self.tunable, self.is_1x1)
+    def __init__(self, mc, tunable, emit_unified_define = False, is_1x1 = False):
         igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
         self.emit_unified_define = emit_unified_define
-        self.kernel_karg = self.kernel_karg_t(mc, tunable)
+        self.is_1x1 = is_1x1
+        self.kernel_karg = self.kernel_karg_t(mc, tunable, is_1x1)
         self.kernel_sgpr = self.kernel_sgpr_t(mc, tunable)
         self.kernel_vgpr = self.kernel_vgpr_t(mc, tunable)
-
-    def emit_kernel_define_karg(self):
-        # Note here, in this implementation, all kernel should be the same
-        # TODO: 1x1 is different
-        self._emit('; kernarg offset')
-        self._emit('.set k_p_in,                0')
-        self._emit('.set k_p_wei,               8')
-        self._emit('.set k_p_out,               16')
-        self._emit('.set k_hi,                  24')
-        self._emit('.set k_wi,                  28')
-        self._emit('.set k_n,                   32')
-        self._emit('.set k_k,                   36')
-        self._emit('.set k_c,                   40')
-        self._emit('.set k_ho,                  44')
-        self._emit('.set k_wo,                  48')
-        self._emit('.set k_stride_h,            52')
-        self._emit('.set k_stride_w,            56')
-        self._emit('.set k_dilation_h,          60')
-        self._emit('.set k_dilation_w,          64')
-        self._emit('.set k_pad_h,               68')
-        self._emit('.set k_pad_w,               72')
-        self._emit('.set k_y,                   76')
-        self._emit('.set k_x,                   80')
-        self._emit('.set k_end,                 84')
-        self._emit_empty_line()
-
-
-    def emit_kernel_define_sgpr(self):
-        # Note here, in this implementation, all kernel should be the same
-        # TODO: 1x1 is different
-        self._emit('; sgpr')
-        self._emit('.set s_ka,                  0')
-        self._emit('.set s_bx,                  2')
-        self._emit('.set s_p_in,                4')
-        self._emit('.set s_p_wei,               6')
-        self._emit('.set s_hi,                  8')
-        self._emit('.set s_wi,                  9')
-        self._emit('.set s_n,                   10')
-        self._emit('.set s_k,                   11')
-        self._emit('.set s_c,                   12')
-        self._emit('.set s_ho,                  13')
-        self._emit('.set s_wo,                  14')
-        self._emit('.set s_stride_h,            15')
-        self._emit('.set s_stride_w,            16')
-        self._emit('.set s_dilation_h,          17')
-        self._emit('.set s_dilation_w,          18')
-        self._emit('.set s_pad_h,               19')
-        self._emit('.set s_pad_w,               20')
-        self._emit('.set s_y,                   21')
-        self._emit('.set s_x,                   22')
-        self._emit('.set s_p_out,               24')
-        self._emit('.set s_block_ik,            26')
-        self._emit('.set s_block_ib,            27')
-        self._emit('.set s_in_stride_c,         28')
-        self._emit('.set s_in_stride_n2,        29')
-        self._emit('.set s_in_stride_n1,        30')
-        self._emit('.set s_in_ic,               31')
-        self._emit('.set s_in_iy,               32')
-        self._emit('.set s_in_ix,               33')
-        self._emit('.set s_wei_stride_c,        34')
-        self._emit('.set s_wei_stride_k,        35')
-        self._emit('.set s_wei_ic,              s_in_ic     ; weight&input ic, iy, ix from EPerBlock is the same')
-        self._emit('.set s_wei_iy,              s_in_iy')
-        self._emit('.set s_wei_ix,              s_in_ix')
-        self._emit('.set s_out_stride_k0,       36')
-        self._emit('.set s_out_stride_k1,       37')
-        self._emit('.set s_out_stride_n1,       38')
-        self._emit('.set s_out_stride_n2,       39')
-        self._emit('.set s_kitr,                0')
-        self._emit('.set s_tmp,                 40')
-        self._emit('.set s_p_buf_in,            s_p_in      ; 4 sgpr used for MUBUF')
-        self._emit('.set s_p_buf_wei,           44')
-        self._emit('.set s_p_buf_out,           s_p_out')
-        self._emit('.set s_end,                 48')
-        self._emit_empty_line()
-
-    def emit_kernel_define_vgpr(self):
-        vseq = gpr_sequencer_t()
-        self._emit('; vgpr')
-        self._emit('.set v_c,                   {}'.format(vseq(self.tunable.num_accumulate_c_vgpr)))
-        self._emit('.set v_a,                   {}'.format(vseq(self.tunable.num_accumulate_a_vgpr)))
-        self._emit('.set v_b,                   {}'.format(vseq(self.tunable.num_accumulate_b_vgpr)))
-        self._emit('.set v_gld_a,               {}'.format(vseq(self.tunable.num_global_load_a_vgpr)))
-        self._emit('.set v_gld_b,               {}'.format(vseq(self.tunable.num_global_load_b_vgpr)))
-        self._emit('.set v_in_os,               {}'.format(vseq(1)))
-        self._emit('.set v_wei_os,              {}'.format(vseq(1)))
-        self._emit('.set v_sst_a_os,            {}'.format(vseq(1)))
-        self._emit('.set v_sst_b_os,            {}'.format(vseq(1)))
-        self._emit('.set v_sld_a_os,            {}'.format(vseq(1)))
-        self._emit('.set v_sld_b_os,            {}'.format(vseq(1)))
-        self._emit('.set v_out_os,              {}'.format(vseq(1)))
-        self._emit('.set v_flag,                {}'.format(vseq(1)))
-        self._emit('.set v_in_ic,               {}'.format(vseq(1)))
-        self._emit('.set v_in_iy,               {}'.format(vseq(1)))
-        self._emit('.set v_in_ix,               {}'.format(vseq(1)))
-        self._emit('.set v_in_ihi,              {}'.format(vseq(1)))
-        self._emit('.set v_in_iwi,              {}'.format(vseq(1)))
-        self._emit('.set v_wei_ic,              {}'.format(vseq(1)))
-        self._emit('.set v_wei_iy,              {}'.format(vseq(1)))
-        self._emit('.set v_wei_ix,              {}'.format(vseq(1)))
-        if self.tunable.num_accumulate_c_vgpr <= 6:
-            self._emit('.set v_in_in0,              {}'.format(vseq(1)))
-            self._emit('.set v_in_iho,              {}'.format(vseq(1)))
-            self._emit('.set v_in_iwo,              {}'.format(vseq(1)))
-            self._emit('.set v_in_ie,               {}'.format(vseq(1)))
-        else:
-            self._emit('.set v_in_in0,              {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
-            self._emit('.set v_in_iho,              {}'.format(self.tunable.num_accumulate_c_vgpr - 2))
-            self._emit('.set v_in_iwo,              {}'.format(self.tunable.num_accumulate_c_vgpr - 3))
-            self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 4))
-
-        if self.tunable.num_accumulate_c_vgpr <= 9:
-            self._emit('.set v_in_in1,              {}'.format(vseq(1)))
-            self._emit('.set v_in_ib,               {}'.format(vseq(1)))
-            self._emit('.set v_in_in2,              {}'.format(vseq(1)))
-        else:
-            self._emit('.set v_in_in1,              {}'.format(self.tunable.num_accumulate_c_vgpr - 5))
-            self._emit('.set v_in_ib,               {}'.format(self.tunable.num_accumulate_c_vgpr - 6))
-            self._emit('.set v_in_in2,              {}'.format(self.tunable.num_accumulate_c_vgpr - 7))
-
-        if self.tunable.num_accumulate_c_vgpr <= 12:
-            self._emit('.set v_wei_ie,              {}'.format(vseq(1)))
-            self._emit('.set v_wei_ik,              {}'.format(vseq(1)))
-            self._emit('.set v_out_ik0,             {}'.format(vseq(1)))
-        else:
-            self._emit('.set v_wei_ie,              {}'.format(self.tunable.num_accumulate_c_vgpr - 8))
-            self._emit('.set v_wei_ik,              {}'.format(self.tunable.num_accumulate_c_vgpr - 9))
-            self._emit('.set v_out_ik0,             {}'.format(self.tunable.num_accumulate_c_vgpr - 10))
-
-        if self.tunable.num_accumulate_c_vgpr <= 16:
-            self._emit('.set v_out_ik1,             {}'.format(vseq(1)))
-            self._emit('.set v_out_ib,              {}'.format(vseq(1)))
-            self._emit('.set v_gemm_in,             {}'.format(vseq(1)))
-            self._emit('.set v_gemm_im,             {}'.format(vseq(1)))
-        else:
-            self._emit('.set v_out_ik1,             {}'.format(self.tunable.num_accumulate_c_vgpr - 11))
-            self._emit('.set v_out_ib,              {}'.format(self.tunable.num_accumulate_c_vgpr - 12))
-            self._emit('.set v_gemm_in,             {}'.format(self.tunable.num_accumulate_c_vgpr - 13))
-            self._emit('.set v_gemm_im,             {}'.format(self.tunable.num_accumulate_c_vgpr - 14))
-
-        self._emit('.set v_idc,                 {}'.format(vseq(1)))
-        self._emit('.set v_idy,                 {}'.format(vseq(1)))
-        self._emit('.set v_idx,                 {}'.format(vseq(1)))
-        if self.tunable.num_accumulate_c_vgpr <= 24:
-            self._emit('.set v_tmp,                 {}'.format(vseq(6)))
-            self._emit('.set v_end,                 {}'.format(vseq()))
-        else:
-            self._emit('.set v_tmp,                 {}'.format(self.tunable.num_accumulate_c_vgpr - 22))
-            self._emit('.set v_end,                 {}'.format(vseq()))
-        self._emit_empty_line()
-        # TODO out of occupancy check
 
     def get_kernel_code(self):
         kernel_code = amdgpu_kernel_code_t({
@@ -890,8 +761,11 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('s_load_dwordx2  s[s_p_out:s_p_out+1],       s[s_ka:s_ka+1],     0+k_p_out')
         self._emit('s_load_dwordx8  s[s_hi:s_hi+7],             s[s_ka:s_ka+1],     0+k_hi')
         self._emit('s_load_dwordx4  s[s_stride_w:s_stride_w+3], s[s_ka:s_ka+1],     0+k_stride_w')
-        self._emit('s_load_dwordx2  s[s_pad_w:s_pad_w+1],       s[s_ka:s_ka+1],     0+k_pad_w')
-        self._emit('s_load_dword    s[s_x],                     s[s_ka:s_ka+1],     0+k_x')
+        if self.is_1x1:
+            self._emit('s_load_dword  s[s_pad_w],                   s[s_ka:s_ka+1],     0+k_pad_w')
+        else:
+            self._emit('s_load_dwordx2  s[s_pad_w:s_pad_w+1],       s[s_ka:s_ka+1],     0+k_pad_w')
+            self._emit('s_load_dword    s[s_x],                     s[s_ka:s_ka+1],     0+k_x')
         self._emit_empty_line()
 
         # calculate cluster pattern of input, -> ib, in2, in1, ie
@@ -954,6 +828,10 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('v_lshlrev_b32 v[v_wei_ik], {}, v[v_wei_ik]'.format(igemm_log2(self.tunable.wei_block_copy_sub_lengths_k)))
         else:
             self._emit('v_mov_b32 v[v_wei_ik], 0')
+
+        # if 1x1 case set v_flag = 1
+        if self.is_1x1:
+            self._emit('v_mov_b32 v[v_flag], 1')
 
         self._emit('s_waitcnt lgkmcnt(0)')
         self._emit_empty_line()
@@ -1672,15 +1550,9 @@ def emit_v4r1_dynamic_kernel(mc, tunable_dicts):
 
         kernel_info_list.append(kernel.get_kernel_info())
 
-    emit_amd_metadata_t(mc, kernel_info_list).emit()
+        if 1:
+            kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), False, True)
+            kernel_1x1._emit_unique_macro()
+            kernel_info_list.append(kernel.get_kernel_info())
 
-        # if emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict)).name() == 'igemm_v4r1_dynamic_64x64x8_8x8_4x4x2x4x2x4_8x1x8x1_4x16':
-        #     #                         n,  g,  c, hi, wi,   k, y, x, py, px, sy, sx, dy, dx, ho, wo, direction
-        #     conv_param = conv_param_t(64, 1, 64, 56, 56, 256, 1, 1,  0,  0,  1,  1,  1,  1,  0,  0, CONV_DIRECTION_FWD)
-        #     conv_param.dump()
-        #     for tid in range(64):
-        #         dynamic_index = v4r1_dynamic_get_dynamic_index(igemm_tunable_parameter_t(tunable_dict), conv_param, tid, 0)
-        #         print('tid:{}, v_in_os:{}, v_wei_os:{}, v_out_os:{}, v_sst_a_os:{}, v_sst_b_os:{}, v_sld_a_os:{}, v_sld_b_os:{}'.format(
-        #             tid, dynamic_index.v_in_os, dynamic_index.v_wei_os, dynamic_index.v_out_os, dynamic_index.v_sst_a_os, dynamic_index.v_sst_b_os,
-        #             dynamic_index.v_sld_a_os, dynamic_index.v_sld_b_os
-        #         ))
+    emit_amd_metadata_t(mc, kernel_info_list).emit()

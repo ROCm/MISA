@@ -176,7 +176,7 @@ class igemm_tunable_parameter_t(object):
                 line_starter
 
 
-def igemm_encode_v4r1_kernel_name(tunable):
+def igemm_encode_v4r1_kernel_name(tunable, is_1x1 = False):
     if type(tunable) is igemm_tunable_parameter_t:
         tunable_dict = tunable.to_dict()
     else:
@@ -205,9 +205,17 @@ def igemm_encode_v4r1_kernel_name(tunable):
     thread_tile_m                     = gemm_m_repeat * gemm_m_per_thread_subc
     thread_tile_n                     = gemm_n_repeat * gemm_n_per_thread_subc
 
-    return 'igemm_v4r1_dynamic_' + '{}x{}x{}_{}x{}_{}x{}x{}x{}x{}x{}_{}x{}x{}x{}_{}x{}'.format(
-                k_per_block, b_per_block*gemm_n_repeat*gemm_n_per_thread_subc, e_per_block, 
-                thread_tile_m, thread_tile_n,
-                gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
-                in_block_copy_cluster_lengths_e,in_block_copy_cluster_lengths_n1,in_block_copy_cluster_lengths_b,in_block_copy_cluster_lengths_n2,
-                wei_block_copy_cluster_lengths_e,wei_block_copy_cluster_lengths_k)
+    if is_1x1:
+        return 'igemm_v4r1_dynamic_1x1_' + '{}x{}x{}_{}x{}_{}x{}x{}x{}x{}x{}_{}x{}x{}x{}_{}x{}'.format(
+                    k_per_block, b_per_block*gemm_n_repeat*gemm_n_per_thread_subc, e_per_block, 
+                    thread_tile_m, thread_tile_n,
+                    gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
+                    in_block_copy_cluster_lengths_e,in_block_copy_cluster_lengths_n1,in_block_copy_cluster_lengths_b,in_block_copy_cluster_lengths_n2,
+                    wei_block_copy_cluster_lengths_e,wei_block_copy_cluster_lengths_k)
+    else:
+        return 'igemm_v4r1_dynamic_' + '{}x{}x{}_{}x{}_{}x{}x{}x{}x{}x{}_{}x{}x{}x{}_{}x{}'.format(
+                    k_per_block, b_per_block*gemm_n_repeat*gemm_n_per_thread_subc, e_per_block, 
+                    thread_tile_m, thread_tile_n,
+                    gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
+                    in_block_copy_cluster_lengths_e,in_block_copy_cluster_lengths_n1,in_block_copy_cluster_lengths_b,in_block_copy_cluster_lengths_n2,
+                    wei_block_copy_cluster_lengths_e,wei_block_copy_cluster_lengths_k)
