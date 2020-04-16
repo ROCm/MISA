@@ -175,6 +175,25 @@ class igemm_tunable_parameter_t(object):
                 line_starter + 'thread_tile                      : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n' + \
                 line_starter
 
+    def serialize_as_init_list(self):
+        return '{{{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4},{:>4}}}'.format(
+                            self.b_per_block,
+                            self.k_per_block,
+                            self.e_per_block,
+                            self.gemm_n_repeat,
+                            self.gemm_m_per_thread_subc,
+                            self.gemm_n_per_thread_subc,
+                            self.gemm_m_level1_cluster,
+                            self.gemm_n_level1_cluster,
+                            self.gemm_m_level0_cluster,
+                            self.gemm_n_level0_cluster,
+                            self.in_block_copy_cluster_lengths_e,
+                            self.in_block_copy_cluster_lengths_n1,
+                            self.in_block_copy_cluster_lengths_b,
+                            self.in_block_copy_cluster_lengths_n2,
+                            self.wei_block_copy_cluster_lengths_e,
+                            self.wei_block_copy_cluster_lengths_k)
+
 
 def igemm_encode_v4r1_kernel_name(tunable):
     if type(tunable) is igemm_tunable_parameter_t:
