@@ -579,15 +579,22 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set s_p_out,               {}'.format(s_seq(2)))
                 self._emit('.set s_block_ik,            {}'.format(s_seq(1)))
                 self._emit('.set s_block_ib,            {}'.format(s_seq(1)))
-                self._emit('.set s_in_stride_c,         {}'.format(s_seq(1)))
+                if self.is_1x1:
+                    self._emit('.set s_in_stride,         {}'.format(s_seq(1)))
+                else:
+                    self._emit('.set s_in_stride_c,         {}'.format(s_seq(1)))
                 self._emit('.set s_in_stride_n2,        {}'.format(s_seq(1)))
                 self._emit('.set s_in_stride_n1,        {}'.format(s_seq(1)))
                 if not(self.is_1x1):
                     self._emit('.set s_in_ic,               {}'.format(s_seq(1)))
                     self._emit('.set s_in_iy,               {}'.format(s_seq(1)))
                     self._emit('.set s_in_ix,               {}'.format(s_seq(1)))
-                self._emit('.set s_wei_stride_c,        {}'.format(s_seq(1)))
-                self._emit('.set s_wei_stride_k,        {}'.format(s_seq(1)))
+
+                if self.is_1x1:
+                    self._emit('.set s_wei_stride,        {}'.format(s_seq(1)))
+                else:
+                    self._emit('.set s_wei_stride_c,        {}'.format(s_seq(1)))
+                    self._emit('.set s_wei_stride_k,        {}'.format(s_seq(1)))
                 if not(self.is_1x1):
                     self._emit('.set s_wei_ic,              s_in_ic     ; weight&input ic, iy, ix from EPerBlock is the same')
                     self._emit('.set s_wei_iy,              s_in_iy')
@@ -642,19 +649,15 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                     self._emit('.set v_wei_iy,              {}'.format(vseq(1)))
                     self._emit('.set v_wei_ix,              {}'.format(vseq(1)))
                 if self.tunable.num_accumulate_c_vgpr <= 6:
-                    if not(self.is_1x1):
-                        self._emit('.set v_in_in0,              {}'.format(vseq(1)))
-                        self._emit('.set v_in_iho,              {}'.format(vseq(1)))
-                        self._emit('.set v_in_iwo,              {}'.format(vseq(1)))
+                    self._emit('.set v_in_in0,              {}'.format(vseq(1)))
+                    self._emit('.set v_in_iho,              {}'.format(vseq(1)))
+                    self._emit('.set v_in_iwo,              {}'.format(vseq(1)))
                     self._emit('.set v_in_ie,               {}'.format(vseq(1)))
                 else:
-                    if self.is_1x1:
-                        self._emit('.set v_in_in0,              {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
-                        self._emit('.set v_in_iho,              {}'.format(self.tunable.num_accumulate_c_vgpr - 2))
-                        self._emit('.set v_in_iwo,              {}'.format(self.tunable.num_accumulate_c_vgpr - 3))
-                        self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 4))
-                    else:
-                        self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
+                    self._emit('.set v_in_in0,              {}'.format(self.tunable.num_accumulate_c_vgpr - 1))
+                    self._emit('.set v_in_iho,              {}'.format(self.tunable.num_accumulate_c_vgpr - 2))
+                    self._emit('.set v_in_iwo,              {}'.format(self.tunable.num_accumulate_c_vgpr - 3))
+                    self._emit('.set v_in_ie,               {}'.format(self.tunable.num_accumulate_c_vgpr - 4))
 
                 if self.tunable.num_accumulate_c_vgpr <= 9:
                     self._emit('.set v_in_in1,              {}'.format(vseq(1)))
@@ -712,8 +715,8 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self.emit_unified_define = emit_unified_define
         self.is_1x1 = is_1x1
         self.kernel_karg = self.kernel_karg_t(mc, tunable, is_1x1)
-        self.kernel_sgpr = self.kernel_sgpr_t(mc, tunable)
-        self.kernel_vgpr = self.kernel_vgpr_t(mc, tunable)
+        self.kernel_sgpr = self.kernel_sgpr_t(mc, tunable, is_1x1)
+        self.kernel_vgpr = self.kernel_vgpr_t(mc, tunable, is_1x1)
 
     def get_kernel_code(self):
         kernel_code = amdgpu_kernel_code_t({
@@ -845,8 +848,11 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('s_lshl_b32 s[s_out_stride_n1], s[s_out_stride_n2], {}'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
         self._emit('s_mul_i32 s[s_in_stride_c], s[s_hi], s[s_wi]')
         self._emit('s_mul_i32 s[s_in_stride_n2], s[s_c], s[s_in_stride_c]')
-        self._emit('s_mul_i32 s[s_wei_stride_c], s[s_y], s[s_x]')
-        self._emit('s_mul_i32 s[s_wei_stride_k], s[s_c], s[s_wei_stride_c]')
+        if self.is_1x1:
+            self._emit_empty_line()
+        else:
+            self._emit('s_mul_i32 s[s_wei_stride_c], s[s_y], s[s_x]')
+            self._emit('s_mul_i32 s[s_wei_stride_k], s[s_c], s[s_wei_stride_c]')
         self._emit('s_mov_b64 s[s_p_buf_wei:s_p_buf_wei+1], s[s_p_wei:s_p_wei+1]')
         self._emit('s_mov_b32 s[s_p_buf_in+2], 0xffffffff')
         self._emit('s_mov_b32 s[s_p_buf_in+3], 0x27000')
@@ -909,6 +915,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('v_sub_u32 v[v_in_iwo], v[v_tmp+4], v[v_tmp]')
         self._emit_empty_line()
         self._emit('; e_n1_b_n2:e')
+
         self._emit(';   1) transform e -> c*y*x')
         self._emit('.v_u32_div_vs v_in_ic, v_in_ie, s_wei_stride_c, v_tmp, s_tmp')
         self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_in_ic]')
@@ -917,49 +924,93 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('v_mul_lo_u32 v[v_tmp], s[s_x], v[v_in_iy]')
         self._emit('v_sub_u32 v[v_in_ix], v[v_tmp+4], v[v_tmp]')
         self._emit_empty_line()
+
         self._emit(';   2) transform iho, iwo, iy, ix -> hip, wip')
-        self._emit('v_mul_lo_u32 v[v_tmp], s[s_stride_h], v[v_in_iho]')
-        self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_stride_w], v[v_in_iwo]')
-        self._emit('v_mul_lo_u32 v[v_tmp+2], s[s_dilation_h], v[v_in_iy]')
-        self._emit('v_mul_lo_u32 v[v_tmp+3], s[s_dilation_w], v[v_in_ix]')
+        if self.is_1x1:
+            self._emit('v_mul_lo_u32 v[v_in_iho], s[s_stride_h], v[v_in_iho]')
+            self._emit('v_mul_lo_u32 v[v_in_iwo], s[s_stride_w], v[v_in_iwo]')
+        else:
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_stride_h], v[v_in_iho]')
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_stride_w], v[v_in_iwo]')
+            self._emit('v_mul_lo_u32 v[v_tmp+2], s[s_dilation_h], v[v_in_iy]')
+            self._emit('v_mul_lo_u32 v[v_tmp+3], s[s_dilation_w], v[v_in_ix]')
         self._emit_empty_line()
+
         self._emit(';   3) transform hip, wip -> hi, wi')
-        self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_tmp+2]')
-        self._emit('v_add_u32 v[v_tmp+1], v[v_tmp+1], v[v_tmp+3]')
-        self._emit('v_sub_i32 v[v_in_ihi], v[v_tmp], s[s_pad_h]')
-        self._emit('v_sub_i32 v[v_in_iwi], v[v_tmp+1], s[s_pad_w]')
+        if self.is_1x1:
+            self._emit('v_sub_i32 v[v_in_iho], v[v_in_iho], s[s_pad_h]')
+            self._emit('v_sub_i32 v[v_in_iwo], v[v_in_iwo], s[s_pad_w]')
+        else:
+            self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_tmp+2]')
+            self._emit('v_add_u32 v[v_tmp+1], v[v_tmp+1], v[v_tmp+3]')
+            self._emit('v_sub_i32 v[v_in_ihi], v[v_tmp], s[s_pad_h]')
+            self._emit('v_sub_i32 v[v_in_iwi], v[v_tmp+1], s[s_pad_w]')
+            
         self._emit_empty_line()
+        
         self._emit('; set input flag')
-        self._emit('.v_in_set_flag v_flag, v_in_ihi, v_in_iwi, s_hi, s_wi, s_tmp')
+        if self.is_1x1:
+            self._emit('.v_in_set_flag v_flag, v_in_iho, v_in_iwo, s_hi, s_wi, s_tmp')    
+        else:
+            self._emit('.v_in_set_flag v_flag, v_in_ihi, v_in_iwi, s_hi, s_wi, s_tmp')
         self._emit_empty_line()
+
         self._emit('; in offset: from ihi, iwi, ic, in, calculate v_in_os')
-        self._emit('v_mul_lo_u32 v[v_tmp], s[s_wi], v[v_in_ihi]')
-        self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_in_iwi]')
-        self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_in_stride_c], v[v_in_ic]')
-        self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_tmp+1]')
-        self._emit('v_lshl_add_u32 v[v_tmp+1], v[v_in_in0], {}, v[v_in_in2]'.format(igemm_log2(self.tunable.gemm_n_repeat) + igemm_log2(self.tunable.gemm_n_per_thread_subc)))
-        self._emit('v_lshl_add_u32 v[v_tmp+1], v[v_in_in1], {}, v[v_tmp+1]'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
-        self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_in_stride_n2], v[v_tmp+1]')
-        self._emit('v_add_lshl_u32 v[v_in_os], v[v_tmp], v[v_tmp+1], 2')
-        self._emit_empty_line()
-        self._emit('s_lshl_b32 s[s_in_stride_n2], s[s_in_stride_n2], 2')
-        self._emit('s_lshl_b32 s[s_in_stride_n1], s[s_in_stride_n2], {}'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
+        if self.is_1x1:
+            self._emit('v_mul_lo_u32 v[v_in_os], s[s_wi], v[v_in_iho]')
+            self._emit('s_mul_i32 s[s_tmp+1], s[s_wi], s[s_hi]')
+            self._emit('v_add_u32 v[v_in_os], v[v_in_os], v[v_in_iwo]')
+            self._emit('s_lshl_b32 s[s_in_stride], s[s_tmp+1], {}+2'.format(igemm_log2(self.tunable.e_per_block)))
+            self._emit('v_lshlrev_b32 v[11], 3, v[11]')
+            self._emit('s_mul_i32 s[s_in_stride_n2], s[s_tmp+1], s[s_c]')
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_in_stride_n2], v[11]')
+            self._emit('v_add_u32 v[v_in_os], v[v_in_os], v[v_tmp]')
+            self._emit(';   v_in_os: offset, v_flag: is valid')
+
+            self._emit('; 2. e_n1_b_n2:e')
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_tmp+1], v[v_in_ie]')
+            self._emit('v_add_u32 v[v_in_os], v[v_in_os], v[v_tmp+1]')
+
+            self._emit_empty_line()
+
+            self._emit('; in_offset, diff')
+            self._emit('s_lshl_b32 s[s_in_stride_n2], s[s_in_stride_n2], 2')
+            self._emit('v_lshlrev_b32 v[v_in_os], 2, v[v_in_os]')
+            self._emit('s_lshl_b32 s[s_in_stride_n1], s[s_in_stride_n2], 2')
+
+        else:
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_wi], v[v_in_ihi]')
+            self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_in_iwi]')
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_in_stride_c], v[v_in_ic]')
+            self._emit('v_add_u32 v[v_tmp], v[v_tmp], v[v_tmp+1]')
+            self._emit('v_lshl_add_u32 v[v_tmp+1], v[v_in_in0], {}, v[v_in_in2]'.format(igemm_log2(self.tunable.gemm_n_repeat) + igemm_log2(self.tunable.gemm_n_per_thread_subc)))
+            self._emit('v_lshl_add_u32 v[v_tmp+1], v[v_in_in1], {}, v[v_tmp+1]'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_in_stride_n2], v[v_tmp+1]')
+            self._emit('v_add_lshl_u32 v[v_in_os], v[v_tmp], v[v_tmp+1], 2')
+            self._emit_empty_line()
+            self._emit('s_lshl_b32 s[s_in_stride_n2], s[s_in_stride_n2], 2')
+            self._emit('s_lshl_b32 s[s_in_stride_n1], s[s_in_stride_n2], {}'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
 
         #; load input from global
         self._emit('; load input from global')
         self._emit(in_load('v_gld_b', 's_p_buf_in', 'v_in_os', 's_in_stride_n1', 's_in_stride_n2', 'v_flag', 's_tmp'))
         self._emit_empty_line()
 
-        self._emit('; calculate SliceWindow e=c*y*x. this is same for both input/weight')
-        self._emit('s_mov_b32 s[1], {}'.format(self.tunable.e_per_block))
-        self._emit('.v_u32_div_ss v_tmp+4, 1, s_wei_stride_c, v_tmp, s_tmp')
-        self._emit('v_readfirstlane_b32 s[s_in_ic], v[v_tmp+4]')
-        self._emit('s_mul_i32 s[s_tmp], s[s_wei_stride_c], s[s_in_ic]')
-        self._emit('s_sub_i32 s[1], s[1], s[s_tmp]')
-        self._emit('.v_u32_div_ss v_tmp+4, 1, s_x, v_tmp, s_tmp')
-        self._emit('v_readfirstlane_b32 s[s_in_iy], v[v_tmp+4]')
-        self._emit('s_mul_i32 s[s_tmp], s[s_x], s[s_in_iy]')
-        self._emit('s_sub_i32 s[s_in_ix], s[1], s[s_tmp]')
+        if self.is_1x1:
+            self._emit('; calculate SliceWindow e=c*y*x. for 1x1 case, it is not nacessary')
+        else:
+            self._emit('; calculate SliceWindow e=c*y*x. this is same for both input/weight')
+            self._emit('s_mov_b32 s[1], {}'.format(self.tunable.e_per_block))
+            self._emit('.v_u32_div_ss v_tmp+4, 1, s_wei_stride_c, v_tmp, s_tmp')
+            self._emit('v_readfirstlane_b32 s[s_in_ic], v[v_tmp+4]')
+            self._emit('s_mul_i32 s[s_tmp], s[s_wei_stride_c], s[s_in_ic]')
+            self._emit('s_sub_i32 s[1], s[1], s[s_tmp]')
+            self._emit('.v_u32_div_ss v_tmp+4, 1, s_x, v_tmp, s_tmp')
+            self._emit('v_readfirstlane_b32 s[s_in_iy], v[v_tmp+4]')
+            self._emit('s_mul_i32 s[s_tmp], s[s_x], s[s_in_iy]')
+            self._emit('s_sub_i32 s[s_in_ix], s[1], s[s_tmp]')
+
+        # 1x1 case is same as normal case for c thread mapping
         self._emit_empty_line()
         self._emit('; c thread mapping')
         self._emit('v_and_b32 v[v_tmp+4], {}, v0'.format((self.tunable.gemm_m_level0_cluster * self.tunable.gemm_n_level0_cluster) - 1))
@@ -976,6 +1027,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('v_lshlrev_b32 v[v_sld_a_os], {}, v[v_gemm_im]'.format(igemm_log2(self.tunable.gemm_m_per_thread_subc)+2))
         self._emit('v_add_u32 v[v_sld_a_os], {}, v[v_sld_a_os]'.format(self.tunable.byte_lds_b_np2))
         self._emit_empty_line()
+
         '''
         weight
     
@@ -1002,26 +1054,37 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             1) idx can only be 0 or possitive, idx, idy can be negative, possitive, 0
             2) ic, iy, ix need be updated to ic_new, iy_new, ix_new
         '''
-        self._emit('; calculate weight transform')
-        self._emit('; e_k: e->c*y*x')
-        self._emit('.v_u32_div_vs v_wei_ic, v_wei_ie, s_wei_stride_c, v_tmp, s_tmp')
-        self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_wei_ic]')
-        self._emit('v_sub_u32 v[v_tmp+4], v[v_wei_ie], v[v_tmp]')
-        self._emit('.v_u32_div_vs v_wei_iy, v_tmp+4, s_x, v_tmp, s_tmp')
-        self._emit('v_mul_lo_u32 v[v_tmp], s[s_x], v[v_wei_iy]')
-        self._emit('v_sub_u32 v[v_wei_ix], v[v_tmp+4], v[v_tmp]')
+        if self.is_1x1:
+            self._emit('; weight offset and diff')
+            self._emit('v_add_u32 v[v_tmp], s[s_block_ik], v[v_wei_ik]')
+            self._emit('v_mul_lo_u32 v[v_wei_os], s[s_c], v[v_tmp]')
+            self._emit('v_add_u32 v[v_tmp], v[v_wei_os], v[v_wei_ie]')
+            self._emit('v_lshlrev_b32 v[v_wei_os], 2, v[v_tmp]')
+            self._emit('s_lshl_b32 s[s_wei_stride_k], s[s_c], 2')
+            self._emit('s_mov_b32 s[s_wei_stride], {}*4'.format(self.tunable.e_per_block)) # maybe with tuning param 16*4 in origin
+
+        else:
+            self._emit('; calculate weight transform')
+            self._emit('; e_k: e->c*y*x')
+            self._emit('.v_u32_div_vs v_wei_ic, v_wei_ie, s_wei_stride_c, v_tmp, s_tmp')
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_wei_ic]')
+            self._emit('v_sub_u32 v[v_tmp+4], v[v_wei_ie], v[v_tmp]')
+            self._emit('.v_u32_div_vs v_wei_iy, v_tmp+4, s_x, v_tmp, s_tmp')
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_x], v[v_wei_iy]')
+            self._emit('v_sub_u32 v[v_wei_ix], v[v_tmp+4], v[v_tmp]')
+            self._emit_empty_line()
+            self._emit('; wei offset: from ic, iy, ix, ik, calculate v_wei_os')
+            self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_wei_ic]')
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_x], v[v_wei_iy]')
+            self._emit('v_add3_u32 v[v_wei_os], v[v_tmp], v[v_tmp+1], v[v_wei_ix]')
+            self._emit_empty_line()
+            self._emit('v_add_u32 v[v_tmp], s[s_block_ik], v[v_wei_ik]')
+            self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_wei_stride_k], v[v_tmp]')
+            self._emit('v_add_lshl_u32 v[v_wei_os], v[v_wei_os], v[v_tmp+1], 2')
+            self._emit_empty_line()
+            self._emit('s_lshl_b32 s[s_wei_stride_k], s[s_wei_stride_k], 2')
         self._emit_empty_line()
-        self._emit('; wei offset: from ic, iy, ix, ik, calculate v_wei_os')
-        self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_wei_ic]')
-        self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_x], v[v_wei_iy]')
-        self._emit('v_add3_u32 v[v_wei_os], v[v_tmp], v[v_tmp+1], v[v_wei_ix]')
-        self._emit_empty_line()
-        self._emit('v_add_u32 v[v_tmp], s[s_block_ik], v[v_wei_ik]')
-        self._emit('v_mul_lo_u32 v[v_tmp+1], s[s_wei_stride_k], v[v_tmp]')
-        self._emit('v_add_lshl_u32 v[v_wei_os], v[v_wei_os], v[v_tmp+1], 2')
-        self._emit_empty_line()
-        self._emit('s_lshl_b32 s[s_wei_stride_k], s[s_wei_stride_k], 2')
-        self._emit_empty_line()
+
         self._emit('; load wei from global')
         self._emit(wei_load('v_gld_a', 's_p_buf_wei', 'v_wei_os', 's_wei_stride_k', 's_tmp'))
         self._emit_empty_line()
@@ -1138,16 +1201,31 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit('s_waitcnt vmcnt(0)')
             self._emit(wei_sst('v_gld_a', 'v_sst_a_os'))
             self._emit_empty_line()
-            self._emit('; E = C * Y * X')
-            self._emit('s_mul_i32 s[s_tmp], s[s_c], s[s_wei_stride_c]')
-            self._emit('s_sub_i32 s[s_kitr], s[s_tmp], {}'.format(unroll_k))
-            self._emit('s_cmp_gt_i32 s[s_kitr], 0')
-            self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
+
+            if self.is_1x1:
+                self._emit('; E = C * 1 * 1')
+                self._emit('s_sub_i32 s[s_kitr], s[s_c], {}'.format(unroll_k))
+                self._emit('s_cmp_gt_i32 s[s_kitr], 0')
+                self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
+            else:
+                self._emit('; E = C * Y * X')
+                self._emit('s_mul_i32 s[s_tmp], s[s_c], s[s_wei_stride_c]')
+                self._emit('s_sub_i32 s[s_kitr], s[s_tmp], {}'.format(unroll_k))
+                self._emit('s_cmp_gt_i32 s[s_kitr], 0')
+                self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
+            
             self._emit_empty_line()
-            self._emit(in_move_slice_window('v_in_os', 'v_in_ic', 'v_in_iy', 'v_in_ix', 'v_in_ihi', 'v_in_iwi', 'v_flag',
-                        's_hi', 's_wi', 's_y', 's_x', 's_in_stride_c', 's_dilation_h', 's_dilation_w', 's_in_ic', 's_in_iy', 's_in_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
-            self._emit(wei_move_slice_window('v_wei_os', 'v_wei_ic', 'v_wei_iy', 'v_wei_ix',
-                        's_y', 's_x', 's_wei_stride_c', 's_wei_ic', 's_wei_iy', 's_wei_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
+            if self.is_1x1:
+                self._emit('s_add_u32 s[s_p_buf_in], s[s_p_buf_in], s[s_in_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_in+1], s[s_p_buf_in+1], 0')
+                self._emit('s_add_u32 s[s_p_buf_wei], s[s_p_buf_wei], s[s_wei_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_wei+1], s[s_p_buf_wei+1], 0')
+            else:
+                self._emit(in_move_slice_window('v_in_os', 'v_in_ic', 'v_in_iy', 'v_in_ix', 'v_in_ihi', 'v_in_iwi', 'v_flag',
+                            's_hi', 's_wi', 's_y', 's_x', 's_in_stride_c', 's_dilation_h', 's_dilation_w', 's_in_ic', 's_in_iy', 's_in_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
+                self._emit(wei_move_slice_window('v_wei_os', 'v_wei_ic', 'v_wei_iy', 'v_wei_ix',
+                            's_y', 's_x', 's_wei_stride_c', 's_wei_ic', 's_wei_iy', 's_wei_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
+
             self._emit('v_xor_b32 v[v_sst_b_os], {}, v[v_sst_b_os] ; switch double buffer b store'.format(hex(lds_single)))
             self._emit('v_xor_b32 v[v_sst_a_os], {}, v[v_sst_a_os] ; switch double buffer a store'.format(hex(lds_single)))
             self._emit('s_waitcnt lgkmcnt(0)')
@@ -1550,9 +1628,12 @@ def emit_v4r1_dynamic_kernel(mc, tunable_dicts):
 
         kernel_info_list.append(kernel.get_kernel_info())
 
-        if 1:
-            kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), False, True)
+    if 1:
+        first_kernel_1x1 = True
+        for tunable_dict in tunable_dicts:
+            kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel_1x1 else False, True)
             kernel_1x1._emit_unique_macro()
-            kernel_info_list.append(kernel.get_kernel_info())
+            first_kernel_1x1 = False
+            kernel_info_list.append(kernel_1x1.get_kernel_info())
 
     emit_amd_metadata_t(mc, kernel_info_list).emit()
