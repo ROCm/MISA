@@ -132,7 +132,7 @@ class igemm_v4r1_dynamic_driver_t {
   public:
     igemm_v4r1_dynamic_driver_t() {}
     ~igemm_v4r1_dynamic_driver_t() {}
-    std::string get_kernel_name(const igemm_v4r1_dynamic_tunable_t *tunable) {
+    std::string get_kernel_name(const igemm_v4r1_dynamic_tunable_t *tunable, const bool is_1x1) {
         int b_per_block = tunable->b_per_block;
         int k_per_block = tunable->k_per_block;
         int e_per_block = tunable->e_per_block;
@@ -165,7 +165,9 @@ class igemm_v4r1_dynamic_driver_t {
         int thread_tile_m = gemm_m_repeat * gemm_m_per_thread_subc;
         int thread_tile_n = gemm_n_repeat * gemm_n_per_thread_subc;
 
-        return std::string("igemm_v4r1_dynamic_") +
+        std::string kernel_prefix = is_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
+
+        return kernel_prefix +
                std::to_string(k_per_block) + "x" +
                std::to_string(b_per_block * gemm_n_repeat *
                               gemm_n_per_thread_subc) +
@@ -364,11 +366,7 @@ class igemm_v4r1_dynamic_driver_t {
             result.return_code = -1;
             return result;
         }
-        hipFunction_t kernel_func;
-        std::string kernel_name = get_kernel_name(tunable);
-        // printf("kernel:%s\n", kernel_name.c_str());
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+        
 
         igemm_v4r1_dynamic_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -401,6 +399,15 @@ class igemm_v4r1_dynamic_driver_t {
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
+
+        bool is_1x1 = false;
+        if ((karg.y == 1) && (karg.x == 1))
+            is_1x1 = true;
+        hipFunction_t kernel_func;
+        std::string kernel_name = get_kernel_name(tunable, is_1x1);
+        // printf("kernel:%s\n", kernel_name.c_str());
+        HIP_CALL(
+            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
         gpu_timer_t timer(NULL);
         for (int i = 0; i < warmup; i++) {
             HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,

@@ -286,6 +286,10 @@ int main(int argc, char **argv) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
+    bool is_1x1 = false;
+    if ((y == 1) && (x == 1))
+        is_1x1 = true;
+
     // init host side
     float *host_input = (float *)malloc(n * c * hi * wi * sizeof(float));
     float *host_weight = (float *)malloc(k * c * y * x * sizeof(float));
@@ -341,7 +345,7 @@ int main(int argc, char **argv) {
             // if(std::string("igemm_v4r1_dynamic_64x64x8_8x8_4x4x2x4x2x4_8x1x8x1_4x16")
             // != conv_driver.get_kernel_name(tunable))
             //    continue;
-            printf("  %s, ", conv_driver.get_kernel_name(tunable).c_str());
+            printf("  %s, ", conv_driver.get_kernel_name(tunable, is_1x1).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_output, 0,

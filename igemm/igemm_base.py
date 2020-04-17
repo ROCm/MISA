@@ -206,7 +206,7 @@ def igemm_encode_v4r1_kernel_name(tunable, is_1x1 = False):
     thread_tile_n                     = gemm_n_repeat * gemm_n_per_thread_subc
 
     if is_1x1:
-        return 'igemm_v4r1_dynamic_1x1_' + '{}x{}x{}_{}x{}_{}x{}x{}x{}x{}x{}_{}x{}x{}x{}_{}x{}'.format(
+        return 'igemm_v4r1_1x1_dynamic_' + '{}x{}x{}_{}x{}_{}x{}x{}x{}x{}x{}_{}x{}x{}x{}_{}x{}'.format(
                     k_per_block, b_per_block*gemm_n_repeat*gemm_n_per_thread_subc, e_per_block, 
                     thread_tile_m, thread_tile_n,
                     gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
