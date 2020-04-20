@@ -2,3 +2,4 @@ out/
 *.py[cod]
 __pycache__
 *.s
+.vscode/
