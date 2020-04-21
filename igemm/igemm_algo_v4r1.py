@@ -536,7 +536,11 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                     self._emit('.set k_x,                   80')
                     self._emit('.set k_end,                 84')
                 self._emit_empty_line()
-            return self._get_deferred(), igemm_next_mul(84, 8)   # TODO: karg alignment
+            if self.is_1x1:
+                k_args_size = igemm_next_mul(76, 8)
+            else:
+                k_args_size = igemm_next_mul(84, 8)
+            return self._get_deferred(), k_args_size   # TODO: karg alignment
         def get_count(self):
             _, cnt = self()
             return cnt
@@ -1632,19 +1636,16 @@ def emit_v4r1_dynamic_kernel(mc, tunable_dicts):
     first_kernel = True
     kernel_info_list = []
     for tunable_dict in tunable_dicts:
-        if 1:
-            kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel else False)
-            kernel._emit_unique_macro()
-            first_kernel = False
+        kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel else False)
+        kernel._emit_unique_macro()
+        first_kernel = False
+        kernel_info_list.append(kernel.get_kernel_info())
 
-            kernel_info_list.append(kernel.get_kernel_info())
-
-    if 1:
-        first_kernel_1x1 = True
-        for tunable_dict in tunable_dicts:
-            kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel_1x1 else False, True)
-            kernel_1x1._emit_unique_macro()
-            first_kernel_1x1 = False
-            kernel_info_list.append(kernel_1x1.get_kernel_info())
+    first_kernel_1x1 = True
+    for tunable_dict in tunable_dicts:
+        kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel_1x1 else False, True)
+        kernel_1x1._emit_unique_macro()
+        first_kernel_1x1 = False
+        kernel_info_list.append(kernel_1x1.get_kernel_info())
 
     emit_amd_metadata_t(mc, kernel_info_list).emit()
