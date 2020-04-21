@@ -362,7 +362,7 @@ int main(int argc, char **argv) {
                                        n * k * ho * wo * sizeof(float)));
                 result_t result =
                     conv_driver.run(&conv_args, tunable, module, device_input,
-                                    device_weight, device_output, warmup, repeat);
+                                    device_weight, device_output, warmup, repeat, is_1x1);
                 if (result.return_code != 0)
                     continue;
 

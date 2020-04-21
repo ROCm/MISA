@@ -360,7 +360,7 @@ class igemm_v4r1_dynamic_driver_t {
 
     result_t run(const args_t *arg, const igemm_v4r1_dynamic_tunable_t *tunable,
                  hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
+                 int warmup, int repeat, bool is_1x1) {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -400,12 +400,9 @@ class igemm_v4r1_dynamic_driver_t {
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
-        bool is_1x1 = false;
-        if ((karg.y == 1) && (karg.x == 1))
-            is_1x1 = true;
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable, is_1x1);
-        // printf("kernel:%s\n", kernel_name.c_str());
+        //printf("kernel:%s\n", kernel_name.c_str());
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
         gpu_timer_t timer(NULL);
