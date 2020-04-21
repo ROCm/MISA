@@ -289,7 +289,7 @@ int main(int argc, char **argv) {
     bool is_1x1 = false;
     if ((y == 1) && (x == 1))
     {
-        //is_1x1 = true;
+        is_1x1 = true;
     }
     // init host side
     float *host_input = (float *)malloc(n * c * hi * wi * sizeof(float));
