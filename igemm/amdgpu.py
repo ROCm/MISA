@@ -61,6 +61,115 @@ def amdgpu_string_to_codeobj(amdgpu_codeobj_string):
         return AMDGPU_CODEOBJECT_V3
     assert False
 
+def amdgpu_codeobj_to_string(amdgpu_codeobj):
+    if amdgpu_codeobj == AMDGPU_CODEOBJECT_V2:
+        return 'cov2'
+    if amdgpu_codeobj == AMDGPU_CODEOBJECT_V3:
+        return 'cov3'
+    assert False
+
+def amdgpu_precision_to_string(amdgpu_precision):
+    if amdgpu_precision == AMDGPU_PRECISION_FP32:
+        return 'fp32'
+    if amdgpu_precision == AMDGPU_PRECISION_FP16:
+        return 'fp16'
+    if amdgpu_precision == AMDGPU_PRECISION_BF16:
+        return 'bf16'
+    assert False
+
+def amdgpu_string_to_precision(amdgpu_precision_string):
+    if amdgpu_precision_string == 'fp32':
+        return AMDGPU_PRECISION_FP32
+    if amdgpu_precision_string == 'fp16':
+        return AMDGPU_PRECISION_FP16
+    if amdgpu_precision_string == 'bf16':
+        return AMDGPU_PRECISION_BF16
+    assert False
+
+def amdgpu_precision_data_byte(precision):
+    if type(precision) is str:
+        precision = amdgpu_precision_to_string(precision)
+    if precision == AMDGPU_PRECISION_FP32:
+        return 4
+    if precision == AMDGPU_PRECISION_FP16:
+        return 2
+    if precision == AMDGPU_PRECISION_BF16:
+        return 2
+    assert False
+
+class amdgpu_arch_detail_t(object):
+    '''
+    probe or hard code
+    '''
+    def __init__(self):
+        self.arch           = 0
+        self.num_cu         = 0
+        self.simd_per_cu    = 0
+        self.sclk_mhz       = 0
+        self.mclk_mhz       = 0
+        self.lds_size       = 0     # in byte
+        self.lds_banks      = 0
+        self.l1_size        = 0
+        self.l1_cache_line  = 0
+        self.l2_size        = 0
+        self.l2_cache_line  = 0
+        self.mem_channels   = 0
+        self.vgpr_per_cu    = 0
+        self.sgpr_per_cu    = 0
+        self.agpr_per_cu    = 0
+        self.wavefront_size = 64
+        self.max_waves_per_cu       = 0
+        self.fp32_fma_per_cycle     = 0
+        self.memory_op_per_cycle    = 0     # read write
+        self.memory_bus_width_bits  = 0    
+
+    def theoretical_fp32_gflops(self):
+        return self.num_cu * self.simd_per_cu * (self.sclk_mhz / 1000) * self.fp32_fma_per_cycle
+
+    def theoretical_bandwidth_gbps(self):
+        return (self.mclk_mhz / 1000) * (self.memory_bus_width_bits / 8) * self.memory_op_per_cycle
+
+def amdgpu_calculate_occupancy(arch_detail, vgpr_per_thread, block_size, lds_per_block):
+    vgpr_per_block = vgpr_per_thread * block_size
+    if vgpr_per_block > arch_detail.vgpr_per_cu:
+        print('vgpr required:{} is larger than hw vgpr:{}'.format(vgpr_per_block, arch_detail.vgpr_per_cu))
+        return 0
+    blocks_consider_vgpr = arch_detail.vgpr_per_cu // vgpr_per_block
+    if lds_per_block > arch_detail.lds_size:
+        print('lds required:{} is larger than hw vgpr:{}'.format(lds_per_block, arch_detail.lds_size))
+        return 0
+    blocks_consider_lds = arch_detail.lds_size // lds_per_block
+
+    return min(blocks_consider_vgpr, blocks_consider_lds)
+
+def amdgpu_valid_occupancy_with_max_waves(arch_detail, block_size, occupancy):
+    assert block_size >= arch_detail.wavefront_size and \
+            block_size % arch_detail.wavefront_size == 0
+    waves_per_block = block_size // arch_detail.wavefront_size
+    return waves_per_block * occupancy <= arch_detail.max_waves_per_cu
+
+def get_amdgpu_gfx906_60cu():
+    gfx906_60cu = amdgpu_arch_detail_t()
+    gfx906_60cu.arch            = AMDGPU_ARCH_GFX906
+    gfx906_60cu.num_cu          = 60
+    gfx906_60cu.simd_per_cu     = 64
+    gfx906_60cu.sclk_mhz        = 1725
+    gfx906_60cu.mclk_mhz        = 1000
+    gfx906_60cu.lds_size        = 65536
+    gfx906_60cu.lds_banks       = 32
+    gfx906_60cu.l1_size         = 16384
+    gfx906_60cu.l2_size         = 0
+    gfx906_60cu.mem_channels    = 0
+    gfx906_60cu.vgpr_per_cu     = 65536
+    gfx906_60cu.sgpr_per_cu     = 3200
+    gfx906_60cu.agpr_per_cu     = 0
+    gfx906_60cu.wavefront_size      = 64
+    gfx906_60cu.max_waves_per_cu    = 40
+    gfx906_60cu.fp32_fma_per_cycle  = 2
+    gfx906_60cu.memory_op_per_cycle = 2     # read write
+    gfx906_60cu.memory_bus_width_bits = 4096
+    return gfx906_60cu
+
 class amdgpu_arch_config_t(object):
     '''
     config some of arch related feature

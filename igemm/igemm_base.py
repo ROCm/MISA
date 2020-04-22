@@ -53,8 +53,11 @@ def igemm_next_mul(n, mul):
     d = d + (1 if (n % mul != 0) else 0)
     return d * mul
 
+def igemm_is_pow2(v):
+    return v and (not(v & (v - 1)))
+
 def igemm_log2(v):
-    assert (v and (not(v & (v - 1)))), 'v must be power of 2'
+    assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
     return int(np.log2(v))
 
 def igemm_get_epack_length(precision):
@@ -230,3 +233,56 @@ def igemm_encode_v4r1_kernel_name(tunable):
                 gemm_m_per_thread_subc,gemm_m_level0_cluster,gemm_m_level1_cluster,gemm_n_per_thread_subc,gemm_n_level0_cluster,gemm_n_level1_cluster,
                 in_block_copy_cluster_lengths_e,in_block_copy_cluster_lengths_n1,in_block_copy_cluster_lengths_b,in_block_copy_cluster_lengths_n2,
                 wei_block_copy_cluster_lengths_e,wei_block_copy_cluster_lengths_k)
+
+class igemm_kernel_detail_base_t(object):
+    # gemm problem details
+    def __init__(self):
+        self.vgpr_total = 0
+        self.sgpr_total = 0
+
+        self.thread_m = 0
+        self.thread_n = 0
+        self.block_m = 0
+        self.block_n = 0
+        self.unroll_k = 0
+        self.block_size = 0
+
+        self.vgpr_c_accumulate = 0
+        self.vgpr_a_accumulate = 0
+        self.vgpr_b_accumulate = 0
+        self.vgpr_a_global_fetch = 0
+        self.vgpr_b_global_fetch = 0
+        # if local fetch to accumulate directly, no extra local fetch gpr is needed
+        self.vgpr_a_local_fetch = 0
+        self.vgpr_b_local_fetch = 0
+        self.vgpr_other = 0
+
+        self.lds_total = 0
+        self.lds_buffers = 1        # single buffer, double buffer...
+        self.occupancy = 1
+
+        
+        # now hard code v4r1 tiling stratagy. in the future, this should be more flex
+        # wei->matrix_a, input->matrix_b
+        # wei: e_k, e is unroll_k
+
+        self.msg = ''
+
+    def serialize(self):
+        return  'thread_mxn          : {}x{}'.format(self.thread_m, self.thread_n) + '\n' + \
+                'block_mxn           : {}x{}'.format(self.block_m, self.block_n) + '\n' + \
+                'unroll_k            : {}'.format(self.unroll_k) + '\n' + \
+                'block_size          : {}'.format(self.block_size) + '\n' + \
+                'vgpr_total          : {}'.format(self.vgpr_total) + '\n' + \
+                'sgpr_total          : {}'.format(self.sgpr_total) + '\n' + \
+                'lds_total           : {}'.format(self.lds_total) + '\n' + \
+                'lds_buffers         : {}'.format(self.lds_buffers) + '\n' + \
+                'occupancy           : {}'.format(self.occupancy) + '\n' + \
+                'vgpr_c_accumulate   : {}'.format(self.vgpr_c_accumulate) + '\n' + \
+                'vgpr_a_accumulate   : {}'.format(self.vgpr_a_accumulate) + '\n' + \
+                'vgpr_b_accumulate   : {}'.format(self.vgpr_b_accumulate) + '\n' + \
+                'vgpr_a_global_fetch : {}'.format(self.vgpr_a_global_fetch) + '\n' + \
+                'vgpr_b_global_fetch : {}'.format(self.vgpr_b_global_fetch) + '\n' + \
+                'vgpr_a_local_fetch  : {}'.format(self.vgpr_a_local_fetch) + '\n' + \
+                'vgpr_b_local_fetch  : {}'.format(self.vgpr_b_local_fetch) + '\n' + \
+                'vgpr_other          : {}'.format(self.vgpr_other) + '\n'

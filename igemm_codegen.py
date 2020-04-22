@@ -77,7 +77,7 @@ def igemm_v4r1_emit(args, config_content):
 
     tunable_dicts = [t.to_dict() for t in config_content.get_section('v4r1_dynamic_kernel')]
 
-    # print(',\n'.join(igemm_tunable_parameter_t(td).serialize_as_init_list() for td in tunable_dicts))
+    print(',\n'.join(igemm_tunable_parameter_t(td).serialize_as_init_list() for td in tunable_dicts))
 
     # emit v4r1 related macros, with different tunable
     emit_v4r1_dynamic_macros(mc, tunable_dicts)
@@ -91,9 +91,14 @@ def igemm_v4r1_emit(args, config_content):
     if not rtn:
         assert False
 
+def igemm_v4r1_sequence(args, config_content):
+    kseq = v4r1_dynamic_kernel_sequencer_t(get_amdgpu_gfx906_60cu(),
+            config_content.get_section('v4r1_dynamic_kernel')[0].to_dict())
+    kseq()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", help="display a square of a given number")
+    parser.add_argument("config_file", help="config file as input")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
     args = parser.parse_args()
 
@@ -101,7 +106,12 @@ if __name__ == '__main__':
     config_content = config_parser()
     #config_content.dump()
 
-    shutil.rmtree(args.dir, ignore_errors=True)
-    os.mkdir(args.dir)
-    igemm_host_driver(args, config_content)
-    igemm_v4r1_emit(args, config_content)
+    if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
+        shutil.rmtree(args.dir, ignore_errors=True)
+        os.mkdir(args.dir)
+        igemm_host_driver(args, config_content)
+        igemm_v4r1_emit(args, config_content)
+
+    if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
+        # config_content.dump()
+        igemm_v4r1_sequence(args, config_content)
