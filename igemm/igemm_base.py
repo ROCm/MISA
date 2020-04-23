@@ -100,7 +100,8 @@ class igemm_tunable_parameter_t(object):
 
         self.block_size                          = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
 
-        assert self.in_block_copy_sub_lengths_e == 1 and self.in_block_copy_sub_lengths_b == 1
+        assert self.in_block_copy_sub_lengths_e == 1 and self.in_block_copy_sub_lengths_b == 1, \
+                'in_sub_e:{}, in_sub_b:{}'.format(self.in_block_copy_sub_lengths_e, self.in_block_copy_sub_lengths_b)
 
         self.in_block_copy_src_data_per_read_b   = igemm_get_vector_size(self.in_block_copy_sub_lengths_b)
         self.in_block_copy_dst_data_per_write_n2 = igemm_get_vector_size(self.in_block_copy_sub_lengths_n2)
@@ -267,6 +268,14 @@ class igemm_kernel_detail_base_t(object):
         # wei: e_k, e is unroll_k
 
         self.msg = ''
+
+    def getattrs(self):
+        attrs = [i for i in dir(self) if not callable(getattr(self,i)) and not i.startswith("__") and not i == 'msg']
+        return attrs
+
+    def key(self):
+        attrs = self.getattrs()
+        return '-'.join( [ str(getattr(self, attr)) for attr in attrs] ) 
 
     def serialize(self):
         return  'thread_mxn          : {}x{}'.format(self.thread_m, self.thread_n) + '\n' + \

@@ -1866,10 +1866,11 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             assert type(detail) is igemm_v4r1_kernel_detail_t
             # constrains:
             #   1) in_copy_block_e * in_copy_thread_e = unroll_k
-            #   2) in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 *
+            #   2) in_copy_block_b * in_copy_thread_b = b_per_block
+            #   3) in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 *
             #       in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 = block_n
-            #   3) in_copy_thread_e * in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 = vgpr_b_global_fetch
-            #   4) in_copy_block_e * in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 = block_size
+            #   4) in_copy_thread_e * in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 = vgpr_b_global_fetch
+            #   5) in_copy_block_e * in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 = block_size
             #
             #   if keep in_copy_thread_e=1, in_copy_thread_b=1, can have less variations
             #
@@ -1881,43 +1882,48 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             in_copy_thread_e = 1
             in_copy_thread_b = 1
             in_copy_block_e = detail.unroll_k
-            assert detail.block_size % detail.unroll_k == 0
-            in_copy_block_n1_b_n2 = detail.block_size // detail.unroll_k
+            in_copy_block_b = detail.b_per_block
+            #assert detail.block_size % detail.unroll_k == 0
+            #in_copy_block_n1_b_n2 = detail.block_size // detail.unroll_k
 
-            log2_list = [2**i for i in range(igemm_log2(in_copy_block_n1_b_n2)+1)]
+            if in_copy_block_e * in_copy_block_b > detail.block_size:
+                return kernel_detail_possible_in_list # empty
+
+            assert detail.block_size % in_copy_block_e == 0
+            assert detail.block_size % (in_copy_block_e * in_copy_block_b) == 0
+            in_copy_block_n1_n2 = detail.block_size // (in_copy_block_e * in_copy_block_b)
+
+            log2_list = [2**i for i in range(igemm_log2(in_copy_block_n1_n2)+1)]
 
             for ib in log2_list:
                 in_copy_block_n1 = ib
-                in_copy_block_b_n2 = in_copy_block_n1_b_n2 // ib
-                # print('block_size:{}, in_copy_block_n1_b_n2:{}, in_copy_block_b_n2:{}, ib:{}'.format(detail.block_size,in_copy_block_n1_b_n2,in_copy_block_b_n2, ib))
-                _log2_list = [2**j for j in range(igemm_log2(in_copy_block_b_n2)+1)]
-                for i2 in _log2_list:
-                    in_copy_block_b = i2
-                    in_copy_block_n2 = in_copy_block_b_n2 // i2
+                in_copy_block_n2 = in_copy_block_n1_n2 // ib
+                #print('block_size:{}, in_copy_block_n1_n2:{}, in_copy_block_n2:{}, in_copy_block_b:{}, in_copy_block_e:{}, ib:{}'.format(
+                #        detail.block_size,in_copy_block_n1_n2,in_copy_block_n2, in_copy_block_b, in_copy_block_e, ib))
 
-                    _log2_list_thrd = [2**k for k in range(igemm_log2(detail.vgpr_b_global_fetch)+1)]
-                    for i3 in _log2_list_thrd:
-                        in_copy_thread_n1 = i3
-                        in_copy_thread_n2 = detail.vgpr_b_global_fetch // i3
-                        # print("in_copy_block_n1:{}, in_copy_block_b:{}, in_copy_block_n2:{}, in_copy_thread_n1:{}, in_copy_thread_b:{}, in_copy_thread_n2:{}, block_n:{}".format(
-                        #     in_copy_block_n1, in_copy_block_b, in_copy_block_n2,
-                        #     in_copy_thread_n1, in_copy_thread_b, in_copy_thread_n2,\
-                        #     detail.block_n
-                        # ))
-                        if in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
-                            in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
-                                != detail.block_n:
-                            continue
-                        d = copy.deepcopy(detail)
-                        d.in_copy_block_e = in_copy_block_e
-                        d.in_copy_block_n1 = in_copy_block_n1
-                        d.in_copy_block_b = in_copy_block_b
-                        d.in_copy_block_n2 = in_copy_block_n2
-                        d.in_copy_thread_e = in_copy_thread_e
-                        d.in_copy_thread_n1 = in_copy_thread_n1
-                        d.in_copy_thread_b = in_copy_thread_b
-                        d.in_copy_thread_n2 = in_copy_thread_n2
-                        kernel_detail_possible_in_list.append(d)
+                _log2_list_thrd = [2**k for k in range(igemm_log2(detail.vgpr_b_global_fetch)+1)]
+                for i3 in _log2_list_thrd:
+                    in_copy_thread_n1 = i3
+                    in_copy_thread_n2 = detail.vgpr_b_global_fetch // i3
+                    # print("in_copy_block_n1:{}, in_copy_block_b:{}, in_copy_block_n2:{}, in_copy_thread_n1:{}, in_copy_thread_b:{}, in_copy_thread_n2:{}, block_n:{}".format(
+                    #     in_copy_block_n1, in_copy_block_b, in_copy_block_n2,
+                    #     in_copy_thread_n1, in_copy_thread_b, in_copy_thread_n2,\
+                    #     detail.block_n
+                    # ))
+                    if in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
+                        in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
+                            != detail.block_n:
+                        continue
+                    d = copy.deepcopy(detail)
+                    d.in_copy_block_e = in_copy_block_e
+                    d.in_copy_block_n1 = in_copy_block_n1
+                    d.in_copy_block_b = in_copy_block_b
+                    d.in_copy_block_n2 = in_copy_block_n2
+                    d.in_copy_thread_e = in_copy_thread_e
+                    d.in_copy_thread_n1 = in_copy_thread_n1
+                    d.in_copy_thread_b = in_copy_thread_b
+                    d.in_copy_thread_n2 = in_copy_thread_n2
+                    kernel_detail_possible_in_list.append(d)
             assert len(kernel_detail_possible_in_list) != 0
             return kernel_detail_possible_in_list
 
@@ -1973,7 +1979,6 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         kernel_detail.gemm_m_per_thread_subc = kernel_detail.thread_m // kernel_detail.gemm_m_repeat
         kernel_detail.gemm_n_per_thread_subc = kernel_detail.thread_n // kernel_detail.gemm_n_repeat
 
-        # if kernel_detail.block_n < kernel_detail.thread_n or 
         kernel_detail.b_per_block = kernel_detail.block_n // kernel_detail.thread_n
 
         gemm_m_clusters = kernel_detail.block_m // kernel_detail.thread_m
@@ -1986,12 +1991,15 @@ class v4r1_dynamic_kernel_sequencer_t(object):
 
         for kd in kernel_detail_block_mapping_list:
             kernel_detail_input_tiling_list = populate_input_tiling(kd)
+            if not kernel_detail_input_tiling_list:
+                continue
             for ki in kernel_detail_input_tiling_list:
                 kernel_detail_wei_tiling_list = populate_weight_tiling(ki)
                 possible_igemm_tiling_list.extend(kernel_detail_wei_tiling_list)
         return possible_igemm_tiling_list
 
     def __call__(self):
+        all_kernel_keys = set()
         all_kernel_details = []
         possible_gemms = self.step_gemm_kernel()
         # print('total:{}'.format(len(possible_gemms)))
@@ -2004,6 +2012,11 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         print('# generated {} gemm combinations, populated to {} igemm tilings'.format(len(possible_gemms),
             len(all_kernel_details)))
         for kernel_detail in all_kernel_details:
+            if kernel_detail.key() not in all_kernel_keys:
+                all_kernel_keys.add(kernel_detail.key())
+            else:
+                print("WARNING! duplicated key for this kernel")
+            print('[{}]'.format(igemm_encode_v4r1_kernel_name(kernel_detail.to_tunable())))
             print(kernel_detail.serialize())
             print('---------------------------')
 
