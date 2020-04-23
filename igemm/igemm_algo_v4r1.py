@@ -1838,7 +1838,7 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         return valid_gemm_kernel_detail_list
 
     def populate_possible_igemm_tiling(self, kernel_detail):
-        def populate_block_mapping_2d(detail, gemm_m_clusters, gemm_n_clusters):
+        def populate_thread_mapping_2d(detail, gemm_m_clusters, gemm_n_clusters):
             assert type(detail) is igemm_v4r1_kernel_detail_t
 
             gemm_m_clusters = gemm_m_clusters // detail.gemm_m_repeat
@@ -1876,17 +1876,15 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             #
             assert detail.block_size == detail.unroll_k * detail.block_n // detail.vgpr_b_global_fetch
             kernel_detail_possible_in_list = []
-            # block_log2_list = [2**i for i in range(igemm_log2(detail.block_size)+1)]
 
             # keep this factor to 1
             in_copy_thread_e = 1
             in_copy_thread_b = 1
             in_copy_block_e = detail.unroll_k
             in_copy_block_b = detail.b_per_block
-            #assert detail.block_size % detail.unroll_k == 0
-            #in_copy_block_n1_b_n2 = detail.block_size // detail.unroll_k
 
             if in_copy_block_e * in_copy_block_b > detail.block_size:
+                # print('in_copy_block_e:{}, in_copy_block_b:{}, block_size:{}'.format(in_copy_block_e, in_copy_block_b, detail.block_size))
                 return kernel_detail_possible_in_list # empty
 
             assert detail.block_size % in_copy_block_e == 0
@@ -1957,7 +1955,7 @@ class v4r1_dynamic_kernel_sequencer_t(object):
 
                 if wei_copy_thread_e * wei_copy_thread_k != detail.vgpr_a_global_fetch:
                     # though should not happen
-                    continue
+                    assert False
                 d = copy.deepcopy(detail)
                 d.wei_copy_block_e = wei_copy_block_e
                 d.wei_copy_block_k = wei_copy_block_k
@@ -1987,11 +1985,12 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         assert gemm_m_clusters * gemm_n_clusters == kernel_detail.block_size
 
         possible_igemm_tiling_list = []
-        kernel_detail_block_mapping_list = populate_block_mapping_2d(kernel_detail, gemm_m_clusters, gemm_n_clusters)
+        kernel_detail_thread_mapping_list = populate_thread_mapping_2d(kernel_detail, gemm_m_clusters, gemm_n_clusters)
 
-        for kd in kernel_detail_block_mapping_list:
+        for kd in kernel_detail_thread_mapping_list:
             kernel_detail_input_tiling_list = populate_input_tiling(kd)
             if not kernel_detail_input_tiling_list:
+                kernel_detail.msg = 'input_tiling_fail'
                 continue
             for ki in kernel_detail_input_tiling_list:
                 kernel_detail_wei_tiling_list = populate_weight_tiling(ki)
@@ -2002,23 +2001,41 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         all_kernel_keys = set()
         all_kernel_details = []
         possible_gemms = self.step_gemm_kernel()
-        # print('total:{}'.format(len(possible_gemms)))
-        for gemm_detail in possible_gemms:
-            #print(gemm_detail.serialize())
-            #print('---------------------------')
-            possible_igemm_tilings = self.populate_possible_igemm_tiling(gemm_detail)
-            all_kernel_details.extend(possible_igemm_tilings)
 
-        print('# generated {} gemm combinations, populated to {} igemm tilings'.format(len(possible_gemms),
-            len(all_kernel_details)))
+        for gemm_detail in possible_gemms:
+            possible_igemm_tilings = self.populate_possible_igemm_tiling(gemm_detail)
+            if len(possible_igemm_tilings) == 0:
+                #print('XXXXXXXXXXXXXXXXXXXX ')
+                #print(gemm_detail.serialize())
+                #print('msg: {}'.format(gemm_detail.msg))
+                pass
+            else:
+                all_kernel_details.extend(possible_igemm_tilings)
+
+        igemm_failed_cnt = 0
+        for gemm_detail in possible_gemms:
+            if gemm_detail.msg == 'input_tiling_fail':
+                igemm_failed_cnt += 1
+
+        print('# generated {} gemm combinations({} unable to igemm tile), populated to {} igemm tilings'.format(
+            len(possible_gemms), igemm_failed_cnt, len(all_kernel_details)))
         for kernel_detail in all_kernel_details:
             if kernel_detail.key() not in all_kernel_keys:
                 all_kernel_keys.add(kernel_detail.key())
             else:
-                print("WARNING! duplicated key for this kernel")
+                print("WARNING! duplicated key for this kernel, should not happen")
             print('[{}]'.format(igemm_encode_v4r1_kernel_name(kernel_detail.to_tunable())))
             print(kernel_detail.serialize())
+            print(kernel_detail.key())
             print('---------------------------')
+
+        # cnt = 0
+        # for gemm_detail in possible_gemms:
+        #     if gemm_detail.msg == 'input_tiling_fail':
+        #         print('[failed due to {}({})]'.format(gemm_detail.msg, cnt))
+        #         print(gemm_detail.serialize())
+        #         print('---------------------------')
+        #         cnt += 1
 
 
 def emit_v4r1_dynamic_macros(mc, tunable_dicts):
