@@ -28,6 +28,7 @@ from .igemm_base import *
 from .amdgpu import *
 from .codegen import *
 from .conv import *
+import copy
 class igemm_v4r1_dynamic_t(object):
     def __init__(self, mc, tunable):
         self.mc = mc
@@ -1617,6 +1618,378 @@ def v4r1_dynamic_get_dynamic_index(tunable, conv_param, tid, bid):
     dynamic_index.v_sld_a_os *= 4 # sizeof(float)
     dynamic_index.v_sld_a_os += tunable.byte_lds_b_np2
     return dynamic_index
+
+class igemm_v4r1_kernel_detail_t(igemm_kernel_detail_base_t):
+    def __init__(self):
+        super().__init__()
+        self.in_copy_block_e        = 0     # -> tunable
+        self.in_copy_block_n1       = 0     # -> tunable
+        self.in_copy_block_b        = 0     # -> tunable
+        self.in_copy_block_n2       = 0     # -> tunable
+        self.in_copy_thread_e       = 0
+        self.in_copy_thread_n1      = 0
+        self.in_copy_thread_b       = 0
+        self.in_copy_thread_n2      = 0
+
+        self.wei_copy_block_e       = 0     # -> tunable
+        self.wei_copy_block_k       = 0     # -> tunable
+        self.wei_copy_thread_e      = 0
+        self.wei_copy_thread_k      = 0
+
+        self.gemm_m_repeat          = 0
+        self.gemm_n_repeat          = 0     # -> tunable
+        self.gemm_m_per_thread_subc = 0     # -> tunable
+        self.gemm_n_per_thread_subc = 0     # -> tunable
+        self.gemm_m_level1_cluster  = 0     # -> tunable
+        self.gemm_n_level1_cluster  = 0     # -> tunable
+        self.gemm_m_level0_cluster  = 0     # -> tunable
+        self.gemm_n_level0_cluster  = 0     # -> tunable
+
+        self.b_per_block            = 0     # -> tunable
+        self.k_per_block            = 0     # -> tunable
+        self.e_per_block            = 0     # -> tunable
+
+    def serialize(self):
+        base_serialized = super().serialize()
+        return base_serialized + \
+                'b_per_block         : {}'.format(self.b_per_block) + '\n' + \
+                'k_per_block         : {}'.format(self.k_per_block) + '\n' + \
+                'e_per_block         : {}'.format(self.e_per_block) + '\n' + \
+                'in_copy_block_e_n1_b_n2  : {}x{}x{}x{}'.format(self.in_copy_block_e,
+                                    self.in_copy_block_n1,
+                                    self.in_copy_block_b,
+                                    self.in_copy_block_n2) + '\n' + \
+                'in_copy_thread_e_n1_b_n2 : {}x{}x{}x{}'.format(self.in_copy_thread_e,
+                                    self.in_copy_thread_n1,
+                                    self.in_copy_thread_b,
+                                    self.in_copy_thread_n2) + '\n' + \
+                'wei_copy_block_e_k       : {}x{}'.format(self.wei_copy_block_e, self.wei_copy_block_k) + '\n' + \
+                'wei_copy_thread_e_k      : {}x{}'.format(self.wei_copy_thread_e, self.wei_copy_thread_k) + '\n' + \
+                'gemm_m_repeat       : {}'.format(self.gemm_m_repeat) + '\n' + \
+                'gemm_m_subc_l0_l1   : {}x{}x{}'.format(self.gemm_m_per_thread_subc,
+                                                self.gemm_m_level0_cluster,
+                                                self.gemm_m_level1_cluster) + '\n' + \
+                'gemm_n_repeat       : {}'.format(self.gemm_n_repeat) + '\n' + \
+                'gemm_n_subc_l0_l1   : {}x{}x{}'.format(self.gemm_n_per_thread_subc,
+                                                self.gemm_n_level0_cluster,
+                                                self.gemm_n_level1_cluster) + '\n'
+    def to_tunable(self):
+        tunable_dict = dict()
+        tunable_dict['b_per_block']                      = self.b_per_block
+        tunable_dict['k_per_block']                      = self.k_per_block
+        tunable_dict['e_per_block']                      = self.e_per_block
+        tunable_dict['gemm_n_repeat']                    = self.gemm_n_repeat
+        tunable_dict['gemm_m_per_thread_subc']           = self.gemm_m_per_thread_subc
+        tunable_dict['gemm_n_per_thread_subc']           = self.gemm_n_per_thread_subc
+        tunable_dict['gemm_m_level1_cluster']            = self.gemm_m_level1_cluster
+        tunable_dict['gemm_n_level1_cluster']            = self.gemm_n_level1_cluster
+        tunable_dict['gemm_m_level0_cluster']            = self.gemm_m_level0_cluster
+        tunable_dict['gemm_n_level0_cluster']            = self.gemm_n_level0_cluster
+        tunable_dict['in_block_copy_cluster_lengths_e']  = self.in_copy_block_e
+        tunable_dict['in_block_copy_cluster_lengths_n1'] = self.in_copy_block_n1
+        tunable_dict['in_block_copy_cluster_lengths_b']  = self.in_copy_block_b
+        tunable_dict['in_block_copy_cluster_lengths_n2'] = self.in_copy_block_n2
+        tunable_dict['wei_block_copy_cluster_lengths_e'] = self.wei_copy_block_e
+        tunable_dict['wei_block_copy_cluster_lengths_k'] = self.wei_copy_block_k
+        return igemm_tunable_parameter_t(tunable_dict)
+
+class v4r1_dynamic_kernel_sequencer_t(object):
+    def __init__(self, arch_detail, seq_dict):
+        def wrap_to_list(v):
+            return v if type(v) is list else [v]
+        self.seq_dict = seq_dict
+        self.micro_tile_m   = seq_dict['micro_tile_m']
+        self.micro_tile_n   = seq_dict['micro_tile_n']
+        self.macro_tile_m   = seq_dict['macro_tile_m']
+        self.macro_tile_n   = seq_dict['macro_tile_n']
+        self.unroll_k       = seq_dict['unroll_k']
+        self.block_size     = seq_dict['block_size']
+        self.lds_buffers    = seq_dict['lds_buffers']
+        self.precision      = amdgpu_string_to_precision(seq_dict['precision'])
+        if 'occupancy' in seq_dict:
+            self.occupancy = seq_dict['occupancy']
+        else:
+            # this is just an upper bound, which hardly can achieve
+            self.occupancy = [x+1 for x in range(0, arch_detail.max_waves_per_cu)]
+        self.arch_detail    = arch_detail
+
+    def step_one_gemm_kernel(self, thread_m, thread_n, block_m, block_n, unroll_k, buffers):
+        '''
+        return true for valid, false for invalid
+        '''
+        d = igemm_v4r1_kernel_detail_t()
+        d.thread_m = thread_m
+        d.thread_n = thread_n
+        d.block_m  = block_m
+        d.block_n  = block_n
+        d.unroll_k = unroll_k
+
+        if block_m % thread_m !=0 or block_n % thread_n != 0:
+            d.msg = 'block m,n can not evenly divide thread m,n'
+            return d, False
+
+        block_size = (block_m // thread_m) * (block_n // thread_n)
+        if block_size not in self.block_size:
+            d.msg = 'target block_size:{} not in desired list'.format(block_size)
+            return d, False
+
+        d.block_size = block_size
+
+        d.vgpr_c_accumulate = thread_m * thread_n
+        d.vgpr_a_accumulate = thread_m
+        d.vgpr_b_accumulate = thread_n
+
+        fetch_a = block_m * unroll_k
+        if fetch_a < block_size or fetch_a % block_size != 0:
+            d.msg = 'fetch_a:{} can not evenly distributed among block:{}'.format(fetch_a, block_size)
+            return d, False
+
+        d.vgpr_a_global_fetch = fetch_a // block_size
+
+        fetch_b = block_n * unroll_k
+        if fetch_b < block_size or fetch_b % block_size != 0:
+            d.msg = 'fetch_b:{} can not evenly distributed among block:{}'.format(fetch_b, block_size)
+            return d, False
+
+        d.vgpr_b_global_fetch = fetch_b // block_size
+
+        # TODO: this number is to reserve vgpr used for index caculation, buffer, tmp register.
+        # need further fine grained number for this number
+        d.vgpr_other = 19
+
+        d.vgpr_total = d.vgpr_c_accumulate + d.vgpr_a_accumulate + d.vgpr_b_accumulate + \
+                    d.vgpr_a_global_fetch + d.vgpr_b_global_fetch + d.vgpr_other
+
+        # TODO: sgpr number is not a bound in most cases, so we ignore sgpr check in later calculation
+        d.sgpr_total = 48
+
+        data_byte = amdgpu_precision_data_byte(self.precision)
+        fetch_a_byte = fetch_a * data_byte
+        fetch_b_byte = fetch_b * data_byte
+        # TODO: here we use next pow2 to round up
+        lds_size_single = igemm_next_pow2(fetch_a_byte) + igemm_next_pow2(fetch_b_byte)
+
+        if lds_size_single > self.arch_detail.lds_size:
+            d.msg = 'require lds size:{}(single) larger than hw:{}'.format(lds_size_single, self.arch_detail.lds_size)
+            return d, False
+
+        d.lds_buffers = buffers
+
+        if buffers == 1:
+            d.lds_total = lds_size_single
+        else:
+            d.lds_total = buffers * igemm_next_pow2(lds_size_single)
+
+        if d.lds_total > self.arch_detail.lds_size:
+            d.msg = 'require lds size:{}({}) larger than hw:{}'.format(lds_size_single,
+                    buffers, self.arch_detail.lds_size)
+            return d, False
+
+        d.occupancy = amdgpu_calculate_occupancy(self.arch_detail, d.vgpr_total, d.block_size, d.lds_total)
+
+        if not amdgpu_valid_occupancy_with_max_waves(self.arch_detail, d.block_size, d.occupancy):
+            return d, False
+
+        # above is for gemm related details
+        return d, True
+
+    def step_gemm_kernel(self):
+        valid_gemm_kernel_detail_list = []
+        for tm in self.micro_tile_m:
+            for tn in self.micro_tile_n:
+                for bm in self.macro_tile_m:
+                    for bn in self.macro_tile_n:
+                        for uk in self.unroll_k:
+                            for lb in self.lds_buffers:
+                                (gemm_kernel_detail, is_valid) = \
+                                    self.step_one_gemm_kernel(tm, tn, bm, bn, uk, lb)
+                                if is_valid:
+                                    valid_gemm_kernel_detail_list.append(gemm_kernel_detail)
+        return valid_gemm_kernel_detail_list
+
+    def populate_possible_igemm_tiling(self, kernel_detail):
+        def populate_block_mapping_2d(detail, gemm_m_clusters, gemm_n_clusters):
+            assert type(detail) is igemm_v4r1_kernel_detail_t
+
+            gemm_m_clusters = gemm_m_clusters // detail.gemm_m_repeat
+            gemm_n_clusters = gemm_n_clusters // detail.gemm_n_repeat
+            # TODO: other tile size like 6x6 may not have pow2
+            assert igemm_is_pow2(gemm_m_clusters) and igemm_is_pow2(gemm_n_clusters)
+            m_log2_list = [2**i for i in range(igemm_log2(gemm_m_clusters)+1)]
+            n_log2_list = [2**i for i in range(igemm_log2(gemm_n_clusters)+1)]
+            detail_list = []
+            d = copy.deepcopy(detail)
+            for m in m_log2_list:
+                d.gemm_m_level0_cluster = m
+                d.gemm_m_level1_cluster = gemm_m_clusters // m
+                for n in n_log2_list:
+                    d.gemm_n_level0_cluster = n
+                    d.gemm_n_level1_cluster = gemm_n_clusters // n
+                    detail_list.append(copy.deepcopy(d))
+            assert len(detail_list) != 0
+            return detail_list
+
+        def populate_input_tiling(detail):
+            '''
+            e,n1,b,n2
+            '''
+            assert type(detail) is igemm_v4r1_kernel_detail_t
+            # constrains:
+            #   1) in_copy_block_e * in_copy_thread_e = unroll_k
+            #   2) in_copy_block_b * in_copy_thread_b = b_per_block
+            #   3) in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 *
+            #       in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 = block_n
+            #   4) in_copy_thread_e * in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 = vgpr_b_global_fetch
+            #   5) in_copy_block_e * in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 = block_size
+            #
+            #   if keep in_copy_thread_e=1, in_copy_thread_b=1, can have less variations
+            #
+            assert detail.block_size == detail.unroll_k * detail.block_n // detail.vgpr_b_global_fetch
+            kernel_detail_possible_in_list = []
+            # block_log2_list = [2**i for i in range(igemm_log2(detail.block_size)+1)]
+
+            # keep this factor to 1
+            in_copy_thread_e = 1
+            in_copy_thread_b = 1
+            in_copy_block_e = detail.unroll_k
+            in_copy_block_b = detail.b_per_block
+            #assert detail.block_size % detail.unroll_k == 0
+            #in_copy_block_n1_b_n2 = detail.block_size // detail.unroll_k
+
+            if in_copy_block_e * in_copy_block_b > detail.block_size:
+                return kernel_detail_possible_in_list # empty
+
+            assert detail.block_size % in_copy_block_e == 0
+            assert detail.block_size % (in_copy_block_e * in_copy_block_b) == 0
+            in_copy_block_n1_n2 = detail.block_size // (in_copy_block_e * in_copy_block_b)
+
+            log2_list = [2**i for i in range(igemm_log2(in_copy_block_n1_n2)+1)]
+
+            for ib in log2_list:
+                in_copy_block_n1 = ib
+                in_copy_block_n2 = in_copy_block_n1_n2 // ib
+                #print('block_size:{}, in_copy_block_n1_n2:{}, in_copy_block_n2:{}, in_copy_block_b:{}, in_copy_block_e:{}, ib:{}'.format(
+                #        detail.block_size,in_copy_block_n1_n2,in_copy_block_n2, in_copy_block_b, in_copy_block_e, ib))
+
+                _log2_list_thrd = [2**k for k in range(igemm_log2(detail.vgpr_b_global_fetch)+1)]
+                for i3 in _log2_list_thrd:
+                    in_copy_thread_n1 = i3
+                    in_copy_thread_n2 = detail.vgpr_b_global_fetch // i3
+                    # print("in_copy_block_n1:{}, in_copy_block_b:{}, in_copy_block_n2:{}, in_copy_thread_n1:{}, in_copy_thread_b:{}, in_copy_thread_n2:{}, block_n:{}".format(
+                    #     in_copy_block_n1, in_copy_block_b, in_copy_block_n2,
+                    #     in_copy_thread_n1, in_copy_thread_b, in_copy_thread_n2,\
+                    #     detail.block_n
+                    # ))
+                    if in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
+                        in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
+                            != detail.block_n:
+                        continue
+                    d = copy.deepcopy(detail)
+                    d.in_copy_block_e = in_copy_block_e
+                    d.in_copy_block_n1 = in_copy_block_n1
+                    d.in_copy_block_b = in_copy_block_b
+                    d.in_copy_block_n2 = in_copy_block_n2
+                    d.in_copy_thread_e = in_copy_thread_e
+                    d.in_copy_thread_n1 = in_copy_thread_n1
+                    d.in_copy_thread_b = in_copy_thread_b
+                    d.in_copy_thread_n2 = in_copy_thread_n2
+                    kernel_detail_possible_in_list.append(d)
+            assert len(kernel_detail_possible_in_list) != 0
+            return kernel_detail_possible_in_list
+
+        def populate_weight_tiling(detail):
+            '''
+            e,k
+            '''
+            assert type(detail) is igemm_v4r1_kernel_detail_t
+            # constrains:
+            #   1) wei_copy_block_e * wei_copy_thread_e  = unroll_k
+            #   2) wei_copy_block_k * wei_copy_thread_k  = block_m
+            #   3) wei_copy_thread_e * wei_copy_thread_k = vgpr_a_global_fetch
+            #   4) wei_copy_block_e * wei_copy_block_k   = block_size
+            #
+            #   -> no unique solution
+            # block_size * vgpr_a_global_fetch = unroll_k * block_m
+            assert detail.block_size == detail.unroll_k * detail.block_m // detail.vgpr_a_global_fetch
+            kernel_detail_possible_wei_list = []
+            block_log2_list = [2**i for i in range(igemm_log2(detail.block_size)+1)]
+
+            for ib in block_log2_list:
+                wei_copy_block_e = ib
+                wei_copy_block_k = detail.block_size // ib
+                if detail.unroll_k % wei_copy_block_e != 0:
+                    continue
+                wei_copy_thread_e = detail.unroll_k // wei_copy_block_e
+
+                if detail.block_m % wei_copy_block_k != 0:
+                    continue
+                wei_copy_thread_k = detail.block_m // wei_copy_block_k
+
+                if wei_copy_thread_e * wei_copy_thread_k != detail.vgpr_a_global_fetch:
+                    # though should not happen
+                    continue
+                d = copy.deepcopy(detail)
+                d.wei_copy_block_e = wei_copy_block_e
+                d.wei_copy_block_k = wei_copy_block_k
+                d.wei_copy_thread_e = wei_copy_thread_e
+                d.wei_copy_thread_k = wei_copy_thread_k
+                kernel_detail_possible_wei_list.append(d)
+            assert len(kernel_detail_possible_wei_list) != 0
+            return kernel_detail_possible_wei_list
+
+        assert type(kernel_detail) is igemm_v4r1_kernel_detail_t
+        kernel_detail.e_per_block = kernel_detail.unroll_k
+        kernel_detail.k_per_block = kernel_detail.block_m
+
+        # still assume 2x2 sub tiling, assert here.
+        assert kernel_detail.thread_m in (4,6,8) and kernel_detail.thread_n in (4,6,8)
+
+        kernel_detail.gemm_m_repeat = 2
+        kernel_detail.gemm_n_repeat = 2
+        kernel_detail.gemm_m_per_thread_subc = kernel_detail.thread_m // kernel_detail.gemm_m_repeat
+        kernel_detail.gemm_n_per_thread_subc = kernel_detail.thread_n // kernel_detail.gemm_n_repeat
+
+        kernel_detail.b_per_block = kernel_detail.block_n // kernel_detail.thread_n
+
+        gemm_m_clusters = kernel_detail.block_m // kernel_detail.thread_m
+        gemm_n_clusters = kernel_detail.block_n // kernel_detail.thread_n
+
+        assert gemm_m_clusters * gemm_n_clusters == kernel_detail.block_size
+
+        possible_igemm_tiling_list = []
+        kernel_detail_block_mapping_list = populate_block_mapping_2d(kernel_detail, gemm_m_clusters, gemm_n_clusters)
+
+        for kd in kernel_detail_block_mapping_list:
+            kernel_detail_input_tiling_list = populate_input_tiling(kd)
+            if not kernel_detail_input_tiling_list:
+                continue
+            for ki in kernel_detail_input_tiling_list:
+                kernel_detail_wei_tiling_list = populate_weight_tiling(ki)
+                possible_igemm_tiling_list.extend(kernel_detail_wei_tiling_list)
+        return possible_igemm_tiling_list
+
+    def __call__(self):
+        all_kernel_keys = set()
+        all_kernel_details = []
+        possible_gemms = self.step_gemm_kernel()
+        # print('total:{}'.format(len(possible_gemms)))
+        for gemm_detail in possible_gemms:
+            #print(gemm_detail.serialize())
+            #print('---------------------------')
+            possible_igemm_tilings = self.populate_possible_igemm_tiling(gemm_detail)
+            all_kernel_details.extend(possible_igemm_tilings)
+
+        print('# generated {} gemm combinations, populated to {} igemm tilings'.format(len(possible_gemms),
+            len(all_kernel_details)))
+        for kernel_detail in all_kernel_details:
+            if kernel_detail.key() not in all_kernel_keys:
+                all_kernel_keys.add(kernel_detail.key())
+            else:
+                print("WARNING! duplicated key for this kernel")
+            print('[{}]'.format(igemm_encode_v4r1_kernel_name(kernel_detail.to_tunable())))
+            print(kernel_detail.serialize())
+            print('---------------------------')
+
 
 def emit_v4r1_dynamic_macros(mc, tunable_dicts):
     def emit_per_macro(m):
