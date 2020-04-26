@@ -79,7 +79,7 @@ def igemm_v4r1_emit(args, config_content):
 
     tunable_dicts_kernel_1x1 = [t.to_dict() for t in config_content.get_section('v4r1_1x1_dynamic_kernel')]
 
-    print(',\n'.join(igemm_tunable_parameter_t(td).serialize_as_init_list() for td in tunable_dicts))
+    #print(',\n'.join(igemm_tunable_parameter_t(td).serialize_as_init_list() for td in tunable_dicts))
 
     # emit v4r1 related macros, with different tunable
     emit_v4r1_dynamic_macros(mc, tunable_dicts)
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config_parser = config_parser_t(args.config_file)
-    print(os.getcwd())
+    #print(os.getcwd())
     config_content = config_parser()
     #config_content.dump()
 
