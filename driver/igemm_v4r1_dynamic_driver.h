@@ -55,7 +55,7 @@ typedef struct {
     int wei_block_copy_cluster_lengths_e;
     int wei_block_copy_cluster_lengths_k;
 
-    // int OPT_1x1;
+    int OPT_1x1;
 } igemm_v4r1_dynamic_tunable_t;
 
 static inline std::vector<igemm_v4r1_dynamic_tunable_t>
@@ -92,6 +92,40 @@ igemm_v4r1_dynamic_tunable_from_config(const config_content_t &content) {
                 sec.at("wei_block_copy_cluster_lengths_e").get_int();
             tunable.wei_block_copy_cluster_lengths_k =
                 sec.at("wei_block_copy_cluster_lengths_k").get_int();
+            tunable.OPT_1x1 = 0;
+            tunables.push_back(tunable);
+        }
+        else if (sec.get_name() == "v4r1_1x1_dynamic_kernel") {
+            igemm_v4r1_dynamic_tunable_t tunable;
+            tunable.b_per_block = sec.at("b_per_block").get_int();
+            tunable.k_per_block = sec.at("k_per_block").get_int();
+            tunable.e_per_block = sec.at("e_per_block").get_int();
+            tunable.gemm_n_repeat = sec.at("gemm_n_repeat").get_int();
+            tunable.gemm_m_per_thread_subc =
+                sec.at("gemm_m_per_thread_subc").get_int();
+            tunable.gemm_n_per_thread_subc =
+                sec.at("gemm_n_per_thread_subc").get_int();
+            tunable.gemm_m_level0_cluster =
+                sec.at("gemm_m_level0_cluster").get_int();
+            tunable.gemm_n_level0_cluster =
+                sec.at("gemm_n_level0_cluster").get_int();
+            tunable.gemm_m_level1_cluster =
+                sec.at("gemm_m_level1_cluster").get_int();
+            tunable.gemm_n_level1_cluster =
+                sec.at("gemm_n_level1_cluster").get_int();
+            tunable.in_block_copy_cluster_lengths_e =
+                sec.at("in_block_copy_cluster_lengths_e").get_int();
+            tunable.in_block_copy_cluster_lengths_n1 =
+                sec.at("in_block_copy_cluster_lengths_n1").get_int();
+            tunable.in_block_copy_cluster_lengths_b =
+                sec.at("in_block_copy_cluster_lengths_b").get_int();
+            tunable.in_block_copy_cluster_lengths_n2 =
+                sec.at("in_block_copy_cluster_lengths_n2").get_int();
+            tunable.wei_block_copy_cluster_lengths_e =
+                sec.at("wei_block_copy_cluster_lengths_e").get_int();
+            tunable.wei_block_copy_cluster_lengths_k =
+                sec.at("wei_block_copy_cluster_lengths_k").get_int();
+            tunable.OPT_1x1 = 1;
             tunables.push_back(tunable);
         }
     }
@@ -132,7 +166,7 @@ class igemm_v4r1_dynamic_driver_t {
   public:
     igemm_v4r1_dynamic_driver_t() {}
     ~igemm_v4r1_dynamic_driver_t() {}
-    std::string get_kernel_name(const igemm_v4r1_dynamic_tunable_t *tunable, const bool is_1x1) {
+    std::string get_kernel_name(const igemm_v4r1_dynamic_tunable_t *tunable) {
         int b_per_block = tunable->b_per_block;
         int k_per_block = tunable->k_per_block;
         int e_per_block = tunable->e_per_block;
@@ -165,7 +199,9 @@ class igemm_v4r1_dynamic_driver_t {
         int thread_tile_m = gemm_m_repeat * gemm_m_per_thread_subc;
         int thread_tile_n = gemm_n_repeat * gemm_n_per_thread_subc;
 
-        std::string kernel_prefix = is_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
+
+
+        std::string kernel_prefix = tunable->OPT_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
 
         return kernel_prefix +
                std::to_string(k_per_block) + "x" +
@@ -360,7 +396,7 @@ class igemm_v4r1_dynamic_driver_t {
 
     result_t run(const args_t *arg, const igemm_v4r1_dynamic_tunable_t *tunable,
                  hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat, bool is_1x1) {
+                 int warmup, int repeat) {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -401,7 +437,7 @@ class igemm_v4r1_dynamic_driver_t {
         int grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
-        std::string kernel_name = get_kernel_name(tunable, is_1x1);
+        std::string kernel_name = get_kernel_name(tunable);
         //printf("kernel:%s\n", kernel_name.c_str());
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));

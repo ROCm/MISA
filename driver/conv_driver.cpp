@@ -337,59 +337,52 @@ int main(int argc, char **argv) {
 
     
     {
-        
         igemm_v4r1_dynamic_driver_t conv_driver;
         for (int i = 0; i < tunables.size(); i++) {
-            for (int i_test = 0; i_test < 2; i_test++)
+            bool kernel_1x1 = false;
+            if ((y == 1) && (x == 1))
             {
-                bool is_1x1 = false;
-                if (i_test > 0)
-                {
-                    if ((y == 1) && (x == 1))
-                    {
-                        is_1x1 = true;
-                    }
-                    else
-                    {
-                        continue;
-                    }
-                    
-                }
-            
-                igemm_v4r1_dynamic_tunable_t *tunable = &tunables[i];
-                // if(std::string("igemm_v4r1_dynamic_64x64x8_8x8_4x4x2x4x2x4_8x1x8x1_4x16")
-                // != conv_driver.get_kernel_name(tunable))
-                //    continue;
-                printf("  %s, ", conv_driver.get_kernel_name(tunable, is_1x1).c_str());
-
-                if (need_verify)
-                    HIP_CALL(hipMemset(device_output, 0,
-                                       n * k * ho * wo * sizeof(float)));
-                result_t result =
-                    conv_driver.run(&conv_args, tunable, module, device_input,
-                                    device_weight, device_output, warmup, repeat, is_1x1);
-                if (result.return_code != 0)
-                    continue;
-
-                double gflops = measured_fp32_conv_gflops(
-                    result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
-                    dilation_h, dilation_w, pad_h, pad_w);
-                printf("cost:%.3fms, gflops:%.1f(%.2f%%)", result.duration_ms,
-                       gflops, (gflops / fp32_gflops) * 100);
-                if (need_verify) {
-                    HIP_CALL(hipMemcpy(device_output_to_host, device_output,
-                                       n * k * ho * wo * sizeof(float),
-                                       hipMemcpyDeviceToHost));
-                    bool is_valid = valid_vector(host_output, device_output_to_host,
-                                                 n * k * ho * wo);
-                    printf(", valid:%s", is_valid ? "y" : "n");
-                    if (!is_valid) {
-                        printf("\n");
-                        break;
-                    }
-                }
-                printf("\n");
+                kernel_1x1 = true;
             }
+        
+            igemm_v4r1_dynamic_tunable_t *tunable = &tunables[i];
+            // if(std::string("igemm_v4r1_dynamic_64x64x8_8x8_4x4x2x4x2x4_8x1x8x1_4x16")
+            // != conv_driver.get_kernel_name(tunable))
+            //    continue;
+            if (tunable->OPT_1x1){
+                if (!kernel_1x1)
+                {
+                    continue;
+                }
+            }
+            printf("  %s, ", conv_driver.get_kernel_name(tunable).c_str());
+            if (need_verify)
+                HIP_CALL(hipMemset(device_output, 0,
+                                   n * k * ho * wo * sizeof(float)));
+            result_t result =
+                conv_driver.run(&conv_args, tunable, module, device_input,
+                                device_weight, device_output, warmup, repeat);
+            if (result.return_code != 0)
+                continue;
+            double gflops = measured_fp32_conv_gflops(
+                result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+            printf("cost:%.3fms, gflops:%.1f(%.2f%%)", result.duration_ms,
+                   gflops, (gflops / fp32_gflops) * 100);
+            if (need_verify) {
+                HIP_CALL(hipMemcpy(device_output_to_host, device_output,
+                                   n * k * ho * wo * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+                bool is_valid = valid_vector(host_output, device_output_to_host,
+                                             n * k * ho * wo);
+                printf(", valid:%s", is_valid ? "y" : "n");
+                if (!is_valid) {
+                    printf("\n");
+                    break;
+                }
+            }
+            printf("\n");
+            
         }
     }
 
