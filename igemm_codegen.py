@@ -77,13 +77,18 @@ def igemm_v4r1_emit(args, config_content):
 
     tunable_dicts = [t.to_dict() for t in config_content.get_section('v4r1_dynamic_kernel')]
 
+    tunable_dicts_kernel_1x1 = [t.to_dict() for t in config_content.get_section('v4r1_1x1_dynamic_kernel')]
+
     print(',\n'.join(igemm_tunable_parameter_t(td).serialize_as_init_list() for td in tunable_dicts))
 
     # emit v4r1 related macros, with different tunable
     emit_v4r1_dynamic_macros(mc, tunable_dicts)
 
     # emit the kernel
-    emit_v4r1_dynamic_kernel(mc, tunable_dicts)
+    kernel_1x1 = False
+    emit_v4r1_dynamic_kernel(mc, tunable_dicts, kernel_1x1)
+    kernel_1x1 = True
+    emit_v4r1_dynamic_kernel(mc, tunable_dicts_kernel_1x1, kernel_1x1)
 
 
     builder = amdgpu_build_asm_t(mc, asm_target)

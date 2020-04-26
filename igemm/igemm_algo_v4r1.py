@@ -2005,20 +2005,13 @@ def emit_v4r1_dynamic_macros(mc, tunable_dicts):
     emit_per_macro(emit_in_move_slice_window_t)
     emit_per_macro(emit_wei_move_slice_window_t)
 
-def emit_v4r1_dynamic_kernel(mc, tunable_dicts):
+def emit_v4r1_dynamic_kernel(mc, tunable_dicts, kernel_1x1=False):
     first_kernel = True
     kernel_info_list = []
     for tunable_dict in tunable_dicts:
-        kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel else False)
+        kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel else False, kernel_1x1)
         kernel._emit_unique_macro()
         first_kernel = False
         kernel_info_list.append(kernel.get_kernel_info())
-
-    first_kernel_1x1 = True
-    for tunable_dict in tunable_dicts:
-        kernel_1x1 = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel_1x1 else False, True)
-        kernel_1x1._emit_unique_macro()
-        first_kernel_1x1 = False
-        kernel_info_list.append(kernel_1x1.get_kernel_info())
 
     emit_amd_metadata_t(mc, kernel_info_list).emit()

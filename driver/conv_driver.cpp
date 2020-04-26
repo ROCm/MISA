@@ -349,6 +349,11 @@ int main(int argc, char **argv) {
                     {
                         is_1x1 = true;
                     }
+                    else
+                    {
+                        continue;
+                    }
+                    
                 }
             
                 igemm_v4r1_dynamic_tunable_t *tunable = &tunables[i];
