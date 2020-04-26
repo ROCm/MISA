@@ -55,7 +55,7 @@ typedef struct {
     int wei_block_copy_cluster_lengths_e;
     int wei_block_copy_cluster_lengths_k;
 
-    // int OPT_1x1;
+    int OPT_1x1;
 } igemm_v4r1_dynamic_tunable_t;
 
 static inline std::vector<igemm_v4r1_dynamic_tunable_t>
@@ -92,6 +92,40 @@ igemm_v4r1_dynamic_tunable_from_config(const config_content_t &content) {
                 sec.at("wei_block_copy_cluster_lengths_e").get_int();
             tunable.wei_block_copy_cluster_lengths_k =
                 sec.at("wei_block_copy_cluster_lengths_k").get_int();
+            tunable.OPT_1x1 = 0;
+            tunables.push_back(tunable);
+        }
+        else if (sec.get_name() == "v4r1_1x1_dynamic_kernel") {
+            igemm_v4r1_dynamic_tunable_t tunable;
+            tunable.b_per_block = sec.at("b_per_block").get_int();
+            tunable.k_per_block = sec.at("k_per_block").get_int();
+            tunable.e_per_block = sec.at("e_per_block").get_int();
+            tunable.gemm_n_repeat = sec.at("gemm_n_repeat").get_int();
+            tunable.gemm_m_per_thread_subc =
+                sec.at("gemm_m_per_thread_subc").get_int();
+            tunable.gemm_n_per_thread_subc =
+                sec.at("gemm_n_per_thread_subc").get_int();
+            tunable.gemm_m_level0_cluster =
+                sec.at("gemm_m_level0_cluster").get_int();
+            tunable.gemm_n_level0_cluster =
+                sec.at("gemm_n_level0_cluster").get_int();
+            tunable.gemm_m_level1_cluster =
+                sec.at("gemm_m_level1_cluster").get_int();
+            tunable.gemm_n_level1_cluster =
+                sec.at("gemm_n_level1_cluster").get_int();
+            tunable.in_block_copy_cluster_lengths_e =
+                sec.at("in_block_copy_cluster_lengths_e").get_int();
+            tunable.in_block_copy_cluster_lengths_n1 =
+                sec.at("in_block_copy_cluster_lengths_n1").get_int();
+            tunable.in_block_copy_cluster_lengths_b =
+                sec.at("in_block_copy_cluster_lengths_b").get_int();
+            tunable.in_block_copy_cluster_lengths_n2 =
+                sec.at("in_block_copy_cluster_lengths_n2").get_int();
+            tunable.wei_block_copy_cluster_lengths_e =
+                sec.at("wei_block_copy_cluster_lengths_e").get_int();
+            tunable.wei_block_copy_cluster_lengths_k =
+                sec.at("wei_block_copy_cluster_lengths_k").get_int();
+            tunable.OPT_1x1 = 1;
             tunables.push_back(tunable);
         }
     }
@@ -165,7 +199,11 @@ class igemm_v4r1_dynamic_driver_t {
         int thread_tile_m = gemm_m_repeat * gemm_m_per_thread_subc;
         int thread_tile_n = gemm_n_repeat * gemm_n_per_thread_subc;
 
-        return std::string("igemm_v4r1_dynamic_") +
+
+
+        std::string kernel_prefix = tunable->OPT_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
+
+        return kernel_prefix +
                std::to_string(k_per_block) + "x" +
                std::to_string(b_per_block * gemm_n_repeat *
                               gemm_n_per_thread_subc) +
@@ -364,11 +402,7 @@ class igemm_v4r1_dynamic_driver_t {
             result.return_code = -1;
             return result;
         }
-        hipFunction_t kernel_func;
-        std::string kernel_name = get_kernel_name(tunable);
-        // printf("kernel:%s\n", kernel_name.c_str());
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+        
 
         igemm_v4r1_dynamic_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -401,6 +435,12 @@ class igemm_v4r1_dynamic_driver_t {
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
+
+        hipFunction_t kernel_func;
+        std::string kernel_name = get_kernel_name(tunable);
+        //printf("kernel:%s\n", kernel_name.c_str());
+        HIP_CALL(
+            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
         gpu_timer_t timer(NULL);
         for (int i = 0; i < warmup; i++) {
             HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
