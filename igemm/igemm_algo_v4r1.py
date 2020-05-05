@@ -1712,6 +1712,8 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             # this is just an upper bound, which hardly can achieve
             self.occupancy = [x+1 for x in range(0, arch_detail.max_waves_per_cu)]
         self.arch_detail    = arch_detail
+        self.in_thread_copy_cal_from_block = True
+        self.wei_thread_copy_cal_from_block = True
 
     def step_one_gemm_kernel(self, thread_m, thread_n, block_m, block_n, unroll_k, buffers):
         '''
@@ -1811,8 +1813,8 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         def populate_thread_mapping_2d(detail, gemm_m_clusters, gemm_n_clusters):
             assert type(detail) is igemm_v4r1_kernel_detail_t
 
-            gemm_m_clusters = gemm_m_clusters // detail.gemm_m_repeat
-            gemm_n_clusters = gemm_n_clusters // detail.gemm_n_repeat
+            #gemm_m_clusters = gemm_m_clusters // detail.gemm_m_repeat
+            #gemm_n_clusters = gemm_n_clusters // detail.gemm_n_repeat
             # TODO: other tile size like 6x6 may not have pow2
             assert igemm_is_pow2(gemm_m_clusters) and igemm_is_pow2(gemm_n_clusters)
             m_log2_list = [2**i for i in range(igemm_log2(gemm_m_clusters)+1)]
@@ -1869,19 +1871,19 @@ class v4r1_dynamic_kernel_sequencer_t(object):
                 #print('block_size:{}, in_copy_block_n1_n2:{}, in_copy_block_n2:{}, in_copy_block_b:{}, in_copy_block_e:{}, ib:{}'.format(
                 #        detail.block_size,in_copy_block_n1_n2,in_copy_block_n2, in_copy_block_b, in_copy_block_e, ib))
 
-                _log2_list_thrd = [2**k for k in range(igemm_log2(detail.vgpr_b_global_fetch)+1)]
-                for i3 in _log2_list_thrd:
-                    in_copy_thread_n1 = i3
-                    in_copy_thread_n2 = detail.vgpr_b_global_fetch // i3
-                    # print("in_copy_block_n1:{}, in_copy_block_b:{}, in_copy_block_n2:{}, in_copy_thread_n1:{}, in_copy_thread_b:{}, in_copy_thread_n2:{}, block_n:{}".format(
-                    #     in_copy_block_n1, in_copy_block_b, in_copy_block_n2,
-                    #     in_copy_thread_n1, in_copy_thread_b, in_copy_thread_n2,\
-                    #     detail.block_n
-                    # ))
-                    if in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
-                        in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
-                            != detail.block_n:
+                if self.in_thread_copy_cal_from_block:
+                    #assert (detail.gemm_n_repeat % in_copy_block_n1) == 0
+                    #assert (detail.gemm_n_per_thread_subc % in_copy_block_n2) == 0
+                    if detail.gemm_n_repeat % in_copy_block_n1 != 0:
                         continue
+                    if detail.gemm_n_per_thread_subc % in_copy_block_n2 != 0:
+                        continue
+                    in_copy_thread_n1 = detail.gemm_n_repeat // in_copy_block_n1
+                    in_copy_thread_n2 = detail.gemm_n_per_thread_subc // in_copy_block_n2
+                    assert in_copy_thread_n1 * in_copy_thread_n2 == detail.vgpr_b_global_fetch
+                    assert in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
+                            in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
+                                == detail.block_n
                     d = copy.deepcopy(detail)
                     d.in_copy_block_e = in_copy_block_e
                     d.in_copy_block_n1 = in_copy_block_n1
@@ -1892,6 +1894,30 @@ class v4r1_dynamic_kernel_sequencer_t(object):
                     d.in_copy_thread_b = in_copy_thread_b
                     d.in_copy_thread_n2 = in_copy_thread_n2
                     kernel_detail_possible_in_list.append(d)
+                else:
+                    _log2_list_thrd = [2**k for k in range(igemm_log2(detail.vgpr_b_global_fetch)+1)]
+                    for i3 in _log2_list_thrd:
+                        in_copy_thread_n1 = i3
+                        in_copy_thread_n2 = detail.vgpr_b_global_fetch // i3
+                        # print("in_copy_block_n1:{}, in_copy_block_b:{}, in_copy_block_n2:{}, in_copy_thread_n1:{}, in_copy_thread_b:{}, in_copy_thread_n2:{}, block_n:{}".format(
+                        #     in_copy_block_n1, in_copy_block_b, in_copy_block_n2,
+                        #     in_copy_thread_n1, in_copy_thread_b, in_copy_thread_n2,\
+                        #     detail.block_n
+                        # ))
+                        if in_copy_block_n1 * in_copy_block_b * in_copy_block_n2 * \
+                            in_copy_thread_n1 * in_copy_thread_b * in_copy_thread_n2 \
+                                != detail.block_n:
+                            continue
+                        d = copy.deepcopy(detail)
+                        d.in_copy_block_e = in_copy_block_e
+                        d.in_copy_block_n1 = in_copy_block_n1
+                        d.in_copy_block_b = in_copy_block_b
+                        d.in_copy_block_n2 = in_copy_block_n2
+                        d.in_copy_thread_e = in_copy_thread_e
+                        d.in_copy_thread_n1 = in_copy_thread_n1
+                        d.in_copy_thread_b = in_copy_thread_b
+                        d.in_copy_thread_n2 = in_copy_thread_n2
+                        kernel_detail_possible_in_list.append(d)
             assert len(kernel_detail_possible_in_list) != 0
             return kernel_detail_possible_in_list
 
@@ -1913,25 +1939,28 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             block_log2_list = [2**i for i in range(igemm_log2(detail.block_size)+1)]
 
             for ib in block_log2_list:
-                wei_copy_block_e = ib
-                wei_copy_block_k = detail.block_size // ib
-                if detail.unroll_k % wei_copy_block_e != 0:
-                    continue
-                wei_copy_thread_e = detail.unroll_k // wei_copy_block_e
+                if self.wei_thread_copy_cal_from_block:
+                    wei_copy_block_e = ib
+                    wei_copy_block_k = detail.block_size // ib
+                    if detail.unroll_k % wei_copy_block_e != 0:
+                        continue
+                    wei_copy_thread_e = detail.unroll_k // wei_copy_block_e
 
-                if detail.block_m % wei_copy_block_k != 0:
-                    continue
-                wei_copy_thread_k = detail.block_m // wei_copy_block_k
+                    if detail.block_m % wei_copy_block_k != 0:
+                        continue
+                    wei_copy_thread_k = detail.block_m // wei_copy_block_k
 
-                if wei_copy_thread_e * wei_copy_thread_k != detail.vgpr_a_global_fetch:
-                    # though should not happen
-                    assert False
-                d = copy.deepcopy(detail)
-                d.wei_copy_block_e = wei_copy_block_e
-                d.wei_copy_block_k = wei_copy_block_k
-                d.wei_copy_thread_e = wei_copy_thread_e
-                d.wei_copy_thread_k = wei_copy_thread_k
-                kernel_detail_possible_wei_list.append(d)
+                    if wei_copy_thread_e * wei_copy_thread_k != detail.vgpr_a_global_fetch:
+                        # though should not happen
+                        assert False
+                    d = copy.deepcopy(detail)
+                    d.wei_copy_block_e = wei_copy_block_e
+                    d.wei_copy_block_k = wei_copy_block_k
+                    d.wei_copy_thread_e = wei_copy_thread_e
+                    d.wei_copy_thread_k = wei_copy_thread_k
+                    kernel_detail_possible_wei_list.append(d)
+                else:
+                    assert False, "not implemented"
             assert len(kernel_detail_possible_wei_list) != 0
             return kernel_detail_possible_wei_list
 
