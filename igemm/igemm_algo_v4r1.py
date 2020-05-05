@@ -1698,13 +1698,13 @@ class v4r1_dynamic_kernel_sequencer_t(object):
         def wrap_to_list(v):
             return v if type(v) is list else [v]
         self.seq_dict = seq_dict
-        self.micro_tile_m   = seq_dict['micro_tile_m']
-        self.micro_tile_n   = seq_dict['micro_tile_n']
-        self.macro_tile_m   = seq_dict['macro_tile_m']
-        self.macro_tile_n   = seq_dict['macro_tile_n']
-        self.unroll_k       = seq_dict['unroll_k']
-        self.block_size     = seq_dict['block_size']
-        self.lds_buffers    = seq_dict['lds_buffers']
+        self.micro_tile_m   = wrap_to_list(seq_dict['micro_tile_m'])
+        self.micro_tile_n   = wrap_to_list(seq_dict['micro_tile_n'])
+        self.macro_tile_m   = wrap_to_list(seq_dict['macro_tile_m'])
+        self.macro_tile_n   = wrap_to_list(seq_dict['macro_tile_n'])
+        self.unroll_k       = wrap_to_list(seq_dict['unroll_k'])
+        self.block_size     = wrap_to_list(seq_dict['block_size'])
+        self.lds_buffers    = wrap_to_list(seq_dict['lds_buffers'])
         self.precision      = amdgpu_string_to_precision(seq_dict['precision'])
         if 'occupancy' in seq_dict:
             self.occupancy = seq_dict['occupancy']
@@ -1797,6 +1797,7 @@ class v4r1_dynamic_kernel_sequencer_t(object):
 
     def step_gemm_kernel(self):
         valid_gemm_kernel_detail_list = []
+        invalid_gemm_kernel_detail_list = []
         for tm in self.micro_tile_m:
             for tn in self.micro_tile_n:
                 for bm in self.macro_tile_m:
@@ -1807,6 +1808,12 @@ class v4r1_dynamic_kernel_sequencer_t(object):
                                     self.step_one_gemm_kernel(tm, tn, bm, bn, uk, lb)
                                 if is_valid:
                                     valid_gemm_kernel_detail_list.append(gemm_kernel_detail)
+                                else:
+                                    invalid_gemm_kernel_detail_list.append(gemm_kernel_detail)
+        #for xd in invalid_gemm_kernel_detail_list:
+        #    print(xd.serialize())
+        #    print(xd.msg)
+        #    print('#####################')
         return valid_gemm_kernel_detail_list
 
     def populate_possible_igemm_tiling(self, kernel_detail):
@@ -1855,8 +1862,11 @@ class v4r1_dynamic_kernel_sequencer_t(object):
             in_copy_block_e = detail.unroll_k
             in_copy_block_b = detail.b_per_block
 
+            # TODO: since we force thread_e, thread_b to be 1, there will be some configuration not passed due to this constrains.
+            # it might be a good idea to relax this constrain to support more config, but the performance need clearly consider
+
             if in_copy_block_e * in_copy_block_b > detail.block_size:
-                # print('in_copy_block_e:{}, in_copy_block_b:{}, block_size:{}'.format(in_copy_block_e, in_copy_block_b, detail.block_size))
+                # print('XXX in fail in_copy_block_e:{}, in_copy_block_b:{}, block_size:{}'.format(in_copy_block_e, in_copy_block_b, detail.block_size))
                 return kernel_detail_possible_in_list # empty
 
             assert detail.block_size % in_copy_block_e == 0
