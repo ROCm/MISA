@@ -860,6 +860,8 @@ class emit_fma_mxn_t(amdgpu_asm_utils_t):
                 for idx_n in range(self.n):
                     self._emit(fma(reg_c(idx_m * self.stride + idx_n), reg_a(idx_m), reg_b(idx_n)))
 
+USE_HIP_CLANG = False
+
 class amdgpu_build_asm_t(object):
     def __init__(self, mc, asm_file_name, target_hsaco = ''):
         self.asm_file_name = asm_file_name
@@ -873,7 +875,10 @@ class amdgpu_build_asm_t(object):
         self.mc.close()
 
         arch_str = amdgpu_arch_to_string(self.mc.arch_config.arch)
-        cmd = ['/opt/rocm/hcc/bin/clang']
+        if USE_HIP_CLANG:
+            cmd = ['/opt/rocm/llvm/bin/clang++']
+        else:
+            cmd = ['/opt/rocm/hcc/bin/clang']
         cmd += ['-x', 'assembler']
         cmd += ['-target', 'amdgcn--amdhsa']
         cmd += ['-mcpu={}'.format(arch_str)]
@@ -910,24 +915,43 @@ class amdgpu_build_host_t(object):
         self.arch_config = arch_config
     def build(self, **kwargs):
         arch_str = amdgpu_arch_to_string(self.arch_config.arch)
-        cmd = ['g++']
-        # from `/opt/rocm/bin/hipconfig --cpp_config`
-        cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
-        cmd += ['-Wall','-O2', '-std=c++11']
-        if 'cflags' in kwargs:
-            cmd += kwargs['cflags']
-        if 'cxxflags' in kwargs:
-            cmd += kwargs['cxxflags']
-        if type(self.host_cpp) is str:
-            cmd += [self.host_cpp]
-        elif type(self.host_cpp) is list:
-            cmd += self.host_cpp     # for multiple files
+        if USE_HIP_CLANG:
+            cmd = ['g++']
+            cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
+            cmd += ['-Wall','-O2', '-std=c++11']
+            if 'cflags' in kwargs:
+                cmd += kwargs['cflags']
+            if 'cxxflags' in kwargs:
+                cmd += kwargs['cxxflags']
+            if type(self.host_cpp) is str:
+                cmd += [self.host_cpp]
+            elif type(self.host_cpp) is list:
+                cmd += self.host_cpp     # for multiple files
+            else:
+                assert False
+            cmd += ['-L/opt/rocm/lib', '-L/opt/rocm/lib64', '-Wl,-rpath=/opt/rocm/lib',
+                    '-ldl', '-lm', '-lpthread',
+                    '-Wl,--whole-archive', '-lamdhip64', '-lhsa-runtime64', '-lhsakmt', '-Wl,--no-whole-archive']
+            cmd += ['-o', self.target_exec]
         else:
-            assert False
-        cmd += ['-L/opt/rocm/hcc/lib', '-L/opt/rocm/lib', '-L/opt/rocm/lib64', '-Wl,-rpath=/opt/rocm/hcc/lib:/opt/rocm/lib',
-                '-ldl', '-lm', '-lpthread', '-lhc_am',
-                '-Wl,--whole-archive', '-lmcwamp', '-lhip_hcc', '-lhsa-runtime64', '-lhsakmt', '-Wl,--no-whole-archive']
-        cmd += ['-o', self.target_exec]
+            cmd = ['g++']
+            # from `/opt/rocm/bin/hipconfig --cpp_config`
+            cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
+            cmd += ['-Wall','-O2', '-std=c++11']
+            if 'cflags' in kwargs:
+                cmd += kwargs['cflags']
+            if 'cxxflags' in kwargs:
+                cmd += kwargs['cxxflags']
+            if type(self.host_cpp) is str:
+                cmd += [self.host_cpp]
+            elif type(self.host_cpp) is list:
+                cmd += self.host_cpp     # for multiple files
+            else:
+                assert False
+            cmd += ['-L/opt/rocm/hcc/lib', '-L/opt/rocm/lib', '-L/opt/rocm/lib64', '-Wl,-rpath=/opt/rocm/hcc/lib:/opt/rocm/lib',
+                    '-ldl', '-lm', '-lpthread', '-lhc_am',
+                    '-Wl,--whole-archive', '-lmcwamp', '-lhip_hcc', '-lhsa-runtime64', '-lhsakmt', '-Wl,--no-whole-archive']
+            cmd += ['-o', self.target_exec]
 
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
         try:
