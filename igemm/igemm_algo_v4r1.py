@@ -734,9 +734,60 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 })
         return kernel_code
 
+    def get_kernel_args(self):
+        '''
+        float *p_in;
+        float *p_wei;
+        float *p_out;
+        int hi;
+        int wi;
+        int n;
+        int k;
+        int c;
+        int ho;
+        int wo;
+        int stride_h;
+        int stride_w;
+        int dilation_h;
+        int dilation_w;
+        int pad_h;
+        int pad_w;
+        int y;
+        int x;
+        int __pack0;
+        '''
+        kas = []
+        # name: {}, .size: {}, .offset: {}, .value_kind: {}, .value_type
+        kas.append(amdgpu_kernel_arg_t('p_in'  , 8,  0, 'global_buffer','f32',address_space='global',is_const='true'))
+        kas.append(amdgpu_kernel_arg_t('p_wei' , 8,  8, 'global_buffer','f32',address_space='global',is_const='true'))
+        kas.append(amdgpu_kernel_arg_t('p_in'  , 8, 16, 'global_buffer','f32',address_space='global',is_const='false'))
+        kas.append(amdgpu_kernel_arg_t('hi'    , 4, 24, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('wi'    , 4, 28, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('n'     , 4, 32, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('k'     , 4, 36, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('c'     , 4, 40, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('ho'    , 4, 44, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('wo'    , 4, 48, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('stride_h'   , 4, 52, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('stride_w'   , 4, 56, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('dilation_h' , 4, 60, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('dilation_w' , 4, 64, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('pad_h' , 4, 68, 'by_value','i32'))
+        kas.append(amdgpu_kernel_arg_t('pad_w' , 4, 72, 'by_value','i32'))
+        if self.is_1x1:
+            kas.append(amdgpu_kernel_arg_t('__pack0' , 4, 76, 'by_value','i32'))
+            return kas
+        else:
+            kas.append(amdgpu_kernel_arg_t('y'     , 4, 76, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('x'     , 4, 80, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('__pack0' , 4, 84, 'by_value','i32'))
+            return kas
+
     def get_kernel_info(self):
         kernel_code = self.get_kernel_code()
-        kernel_info = amdgpu_kernel_info_t(kernel_code, self.name(), v4r1_dynamic_get_block_size(self.tunable))
+        kernel_args = self.get_kernel_args()
+        kernel_info = amdgpu_kernel_info_t(kernel_code, self.name(),\
+                v4r1_dynamic_get_block_size(self.tunable), kernel_args)
         return kernel_info
 
     def emit_kernel_amd_kernel_code_t(self):

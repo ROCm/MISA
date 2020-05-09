@@ -316,11 +316,32 @@ class amdgpu_kernel_code_t(object):
         '''
         return (self.wavefront_sgpr_count - 1) // 8
 
+class amdgpu_kernel_arg_t(object):
+    '''
+    http://llvm.org/docs/AMDGPUUsage.html#code-object-v3-metadata-mattr-code-object-v3
+    '''
+    def __init__(self, name, size, offset, value_kind, value_type, **misc):
+        self.name = name
+        self.size = size
+        self.offset = offset
+        self.value_kind = value_kind
+        self.value_type = value_type
+        self.misc = misc
+    def serialize_as_metadata(self):
+        misc_metadata = ''
+        if self.value_kind == 'global_buffer':
+            assert self.misc
+            misc_metadata += ', .address_space: {}'.format(self.misc['address_space'])
+            misc_metadata += ', .is_const: {}'.format(self.misc['is_const'])
+        return '    - {{ .name: {:>6}, .size: {}, .offset: {:>3}, .value_kind: {}, .value_type: {}{}}}'.format(
+            self.name, self.size, self.offset, self.value_kind, self.value_type, misc_metadata)
+
 class amdgpu_kernel_info_t(object):
-    def __init__(self, kernel_code, kernel_name, kernel_block_size):
+    def __init__(self, kernel_code, kernel_name, kernel_block_size, kernel_args):
         self.kernel_code = kernel_code
         self.kernel_name = kernel_name
         self.kernel_block_size = kernel_block_size
+        self.kernel_args = kernel_args
 
 class amdgpu_asm_utils_t(object):
     def __init__(self, mc):
@@ -435,6 +456,10 @@ class emit_amd_metadata_t(amdgpu_asm_utils_t):
                                                                                 ki_.kernel_block_size[1],ki_.kernel_block_size[2])))
         self._emit('    .max_flat_workgroup_size: {}'.format(       ki_.kernel_block_size if type(ki_.kernel_block_size) is int else \
                                                                     ki_.kernel_block_size[0]*ki_.kernel_block_size[1]*ki_.kernel_block_size[2]))
+        self._emit('    .args:')
+        assert ki_.kernel_args
+        for kern_arg in ki_.kernel_args:
+            self._emit(kern_arg.serialize_as_metadata())
 
     def emit(self):
         if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
@@ -860,7 +885,8 @@ class emit_fma_mxn_t(amdgpu_asm_utils_t):
                 for idx_n in range(self.n):
                     self._emit(fma(reg_c(idx_m * self.stride + idx_n), reg_a(idx_m), reg_b(idx_n)))
 
-USE_HIP_CLANG = False
+def amdgpu_check_hip_clang():
+    return os.path.exists('/opt/rocm/llvm/bin/clang++')
 
 class amdgpu_build_asm_t(object):
     def __init__(self, mc, asm_file_name, target_hsaco = ''):
@@ -875,7 +901,8 @@ class amdgpu_build_asm_t(object):
         self.mc.close()
 
         arch_str = amdgpu_arch_to_string(self.mc.arch_config.arch)
-        if USE_HIP_CLANG:
+        use_hip_clang = amdgpu_check_hip_clang()
+        if use_hip_clang:
             cmd = ['/opt/rocm/llvm/bin/clang++']
         else:
             cmd = ['/opt/rocm/hcc/bin/clang']
@@ -915,7 +942,8 @@ class amdgpu_build_host_t(object):
         self.arch_config = arch_config
     def build(self, **kwargs):
         arch_str = amdgpu_arch_to_string(self.arch_config.arch)
-        if USE_HIP_CLANG:
+        use_hip_clang = amdgpu_check_hip_clang()
+        if use_hip_clang:
             cmd = ['g++']
             cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
             cmd += ['-Wall','-O2', '-std=c++11']
