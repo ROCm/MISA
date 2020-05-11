@@ -1620,7 +1620,7 @@ def v4r1_dynamic_get_dynamic_index(tunable, conv_param, tid, bid):
 
     # output
     k1 = tunable.gemm_m_per_thread_subc * tunable.gemm_m_level0_cluster * tunable.gemm_m_level1_cluster
-    k_thread_data_on_global = dynamic_index.s_block_ik + (dynamic_index.v_gemm_im * tunable.gemm_n_per_thread_subc)
+    k_thread_data_on_global = dynamic_index.s_block_ik + (dynamic_index.v_gemm_im * tunable.gemm_m_per_thread_subc)
     dynamic_index.v_out_ik0 = k_thread_data_on_global // k1
     dynamic_index.v_out_ik1 = k_thread_data_on_global % k1
 
