@@ -333,7 +333,7 @@ class amdgpu_kernel_arg_t(object):
             assert self.misc
             misc_metadata += ', .address_space: {}'.format(self.misc['address_space'])
             misc_metadata += ', .is_const: {}'.format(self.misc['is_const'])
-        return '    - {{ .name: {:>6}, .size: {}, .offset: {:>3}, .value_kind: {}, .value_type: {}{}}}'.format(
+        return '    - {{ .name: {:<10}, .size: {}, .offset: {:>3}, .value_kind: {}, .value_type: {}{}}}'.format(
             self.name, self.size, self.offset, self.value_kind, self.value_type, misc_metadata)
 
 class amdgpu_kernel_info_t(object):

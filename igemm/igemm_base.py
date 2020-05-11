@@ -88,6 +88,7 @@ class igemm_tunable_parameter_t(object):
         self.in_block_copy_cluster_lengths_n2    = tunable_dict['in_block_copy_cluster_lengths_n2']
         self.wei_block_copy_cluster_lengths_e    = tunable_dict['wei_block_copy_cluster_lengths_e']
         self.wei_block_copy_cluster_lengths_k    = tunable_dict['wei_block_copy_cluster_lengths_k']
+        self.name                                = tunable_dict['name']
 
         self.gemm_m_repeat = self.k_per_block // (self.gemm_m_per_thread_subc * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
 
@@ -131,6 +132,9 @@ class igemm_tunable_parameter_t(object):
         self.thread_sub_tile_m                  = self.gemm_m_per_thread_subc
         self.thread_sub_tile_n                  = self.gemm_n_per_thread_subc
 
+    def is_1x1(self):
+        return self.name.endswith('1x1_dynamic_kernel')
+
     def to_dict(self):
         tunable_dict = {}
         tunable_dict['b_per_block']                       = self.b_per_block
@@ -149,6 +153,7 @@ class igemm_tunable_parameter_t(object):
         tunable_dict['in_block_copy_cluster_lengths_n2']  = self.in_block_copy_cluster_lengths_n2
         tunable_dict['wei_block_copy_cluster_lengths_e']  = self.wei_block_copy_cluster_lengths_e
         tunable_dict['wei_block_copy_cluster_lengths_k']  = self.wei_block_copy_cluster_lengths_k
+        tunable_dict['name']                              = self.name
         return tunable_dict
 
     def serialize(self, line_starter = '; '):
@@ -198,8 +203,7 @@ class igemm_tunable_parameter_t(object):
                             self.wei_block_copy_cluster_lengths_e,
                             self.wei_block_copy_cluster_lengths_k)
 
-
-def igemm_encode_v4r1_kernel_name(tunable, is_1x1 = False):
+def igemm_encode_v4r1_kernel_name(tunable):
     if type(tunable) is igemm_tunable_parameter_t:
         tunable_dict = tunable.to_dict()
     else:
@@ -228,7 +232,7 @@ def igemm_encode_v4r1_kernel_name(tunable, is_1x1 = False):
     thread_tile_m                     = gemm_m_repeat * gemm_m_per_thread_subc
     thread_tile_n                     = gemm_n_repeat * gemm_n_per_thread_subc
 
-    if is_1x1:
+    if tunable.is_1x1():
         name_prefix = 'igemm_v4r1_1x1_dynamic_'
     else:
         name_prefix = 'igemm_v4r1_dynamic_'

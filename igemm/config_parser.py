@@ -27,10 +27,9 @@ import sys
 
 class config_section_t(object):
     def __init__(self, name):
-        self.name = name
-        self.dict = {}
+        self.dict = {'name': name}
     def get_name(self):
-        return self.name
+        return self.dict['name']
     def __getitem__(self, key):
         return self.dict[key]
     def __setitem__(self, key, value):
@@ -68,6 +67,7 @@ class config_content_t(object):
         if len(section_list) == 0:
             print('no section with name {}'.format(section_name))
         return section_list
+
 
 class config_parser_t(object):
     def __init__(self, config_file):

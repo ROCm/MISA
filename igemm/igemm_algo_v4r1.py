@@ -506,9 +506,8 @@ class emit_wei_move_slice_window_t(igemm_v4r1_dynamic_t):
 
 class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
     class kernel_karg_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable, is_1x1 = False):
+        def __init__(self, mc, tunable):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
                 # Note here, in this implementation, all kernel should be the same
@@ -530,14 +529,14 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set k_dilation_w,          64')
                 self._emit('.set k_pad_h,               68')
                 self._emit('.set k_pad_w,               72')
-                if self.is_1x1:
+                if self.tunable.is_1x1():
                     self._emit('.set k_end,             76')
                 else:
                     self._emit('.set k_y,                   76')
                     self._emit('.set k_x,                   80')
                     self._emit('.set k_end,                 84')
                 self._emit_empty_line()
-            if self.is_1x1:
+            if self.tunable.is_1x1():
                 k_args_size = igemm_next_mul(76, 8)
             else:
                 k_args_size = igemm_next_mul(84, 8)
@@ -550,9 +549,8 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code)
 
     class kernel_sgpr_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable, is_1x1 = False):
+        def __init__(self, mc, tunable):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
                 s_seq = gpr_sequencer_t()
@@ -573,7 +571,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set s_dilation_h,          {}'.format(s_seq(1)))
                 self._emit('.set s_dilation_w,          {}'.format(s_seq(1)))
                 self._emit('.set s_pad_h,               {}'.format(s_seq(1)))
-                if self.is_1x1:
+                if self.tunable.is_1x1():
                     self._emit('.set s_pad_w,               {}'.format(s_seq(4)))
                 else:
                     self._emit('.set s_pad_w,               {}'.format(s_seq(1)))
@@ -582,24 +580,24 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set s_p_out,               {}'.format(s_seq(2)))
                 self._emit('.set s_block_ik,            {}'.format(s_seq(1)))
                 self._emit('.set s_block_ib,            {}'.format(s_seq(1)))
-                if self.is_1x1:
+                if self.tunable.is_1x1():
                     self._emit('.set s_in_stride,         {}'.format(s_seq(1)))
                 else:
                     self._emit('.set s_in_stride_c,         {}'.format(s_seq(1)))
                 self._emit('.set s_in_stride_n2,        {}'.format(s_seq(1)))
                 self._emit('.set s_in_stride_n1,        {}'.format(s_seq(1)))
-                if not(self.is_1x1):
+                if not(self.tunable.is_1x1()):
                     self._emit('.set s_in_ic,               {}'.format(s_seq(1)))
                     self._emit('.set s_in_iy,               {}'.format(s_seq(1)))
                     self._emit('.set s_in_ix,               {}'.format(s_seq(1)))
 
-                if self.is_1x1:
+                if self.tunable.is_1x1():
                     self._emit('.set s_wei_stride,        {}'.format(s_seq(1)))
                     self._emit('.set s_wei_stride_k,        {}'.format(s_seq(4)))
                 else:
                     self._emit('.set s_wei_stride_c,        {}'.format(s_seq(1)))
                     self._emit('.set s_wei_stride_k,        {}'.format(s_seq(1)))
-                if not(self.is_1x1):
+                if not(self.tunable.is_1x1()):
                     self._emit('.set s_wei_ic,              s_in_ic     ; weight&input ic, iy, ix from EPerBlock is the same')
                     self._emit('.set s_wei_iy,              s_in_iy')
                     self._emit('.set s_wei_ix,              s_in_ix')
@@ -623,9 +621,8 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code)
 
     class kernel_vgpr_t(igemm_v4r1_dynamic_t):
-        def __init__(self, mc, tunable, is_1x1 = False):
+        def __init__(self, mc, tunable):
             igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-            self.is_1x1 = is_1x1
         def __call__(self):
             with self._deferred_context():
                 vseq = gpr_sequencer_t()
@@ -643,7 +640,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('.set v_sld_b_os,            {}'.format(vseq(1)))
                 self._emit('.set v_out_os,              {}'.format(vseq(1)))
                 self._emit('.set v_flag,                {}'.format(vseq(1)))
-                if not(self.is_1x1):
+                if not(self.tunable.is_1x1()):
                     self._emit('.set v_in_ic,               {}'.format(vseq(1)))
                     self._emit('.set v_in_iy,               {}'.format(vseq(1)))
                     self._emit('.set v_in_ix,               {}'.format(vseq(1)))
@@ -692,7 +689,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                     self._emit('.set v_gemm_in,             {}'.format(self.tunable.num_accumulate_c_vgpr - 13))
                     self._emit('.set v_gemm_im,             {}'.format(self.tunable.num_accumulate_c_vgpr - 14))
 
-                if not(self.is_1x1):
+                if not(self.tunable.is_1x1()):
                     self._emit('.set v_idc,                 {}'.format(vseq(1)))
                     self._emit('.set v_idy,                 {}'.format(vseq(1)))
                     self._emit('.set v_idx,                 {}'.format(vseq(1)))
@@ -713,14 +710,12 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(code) 
 
     def name(self):
-        return igemm_encode_v4r1_kernel_name(self.tunable, self.is_1x1)
-    def __init__(self, mc, tunable, emit_unified_define = False, is_1x1 = False):
+        return igemm_encode_v4r1_kernel_name(self.tunable)
+    def __init__(self, mc, tunable):
         igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-        self.emit_unified_define = emit_unified_define
-        self.is_1x1 = is_1x1
-        self.kernel_karg = self.kernel_karg_t(mc, tunable, is_1x1)
-        self.kernel_sgpr = self.kernel_sgpr_t(mc, tunable, is_1x1)
-        self.kernel_vgpr = self.kernel_vgpr_t(mc, tunable, is_1x1)
+        self.kernel_karg = self.kernel_karg_t(mc, tunable)
+        self.kernel_sgpr = self.kernel_sgpr_t(mc, tunable)
+        self.kernel_vgpr = self.kernel_vgpr_t(mc, tunable)
 
     def get_kernel_code(self):
         kernel_code = amdgpu_kernel_code_t({
@@ -774,7 +769,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         kas.append(amdgpu_kernel_arg_t('dilation_w' , 4, 64, 'by_value','i32'))
         kas.append(amdgpu_kernel_arg_t('pad_h' , 4, 68, 'by_value','i32'))
         kas.append(amdgpu_kernel_arg_t('pad_w' , 4, 72, 'by_value','i32'))
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             kas.append(amdgpu_kernel_arg_t('__pack0' , 4, 76, 'by_value','i32'))
             return kas
         else:
@@ -819,7 +814,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('s_load_dwordx2  s[s_p_out:s_p_out+1],       s[s_ka:s_ka+1],     0+k_p_out')
         self._emit('s_load_dwordx8  s[s_hi:s_hi+7],             s[s_ka:s_ka+1],     0+k_hi')
         self._emit('s_load_dwordx4  s[s_stride_w:s_stride_w+3], s[s_ka:s_ka+1],     0+k_stride_w')
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('s_load_dword  s[s_pad_w],                   s[s_ka:s_ka+1],     0+k_pad_w')
         else:
             self._emit('s_load_dwordx2  s[s_pad_w:s_pad_w+1],       s[s_ka:s_ka+1],     0+k_pad_w')
@@ -888,7 +883,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit('v_mov_b32 v[v_wei_ik], 0')
 
         # if 1x1 case set v_flag = 1
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('v_mov_b32 v[v_flag], 1')
 
         self._emit('s_waitcnt lgkmcnt(0)')
@@ -902,7 +897,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit('s_mul_i32 s[s_out_stride_n2], s[s_k], s[s_out_stride_k1]')
         self._emit('s_lshl_b32 s[s_out_stride_n1], s[s_out_stride_n2], {}'.format(igemm_log2(self.tunable.gemm_n_per_thread_subc)))
         
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit_empty_line()
         else:
             self._emit('s_mul_i32 s[s_in_stride_c], s[s_hi], s[s_wi]')
@@ -973,7 +968,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit_empty_line()
         self._emit('; e_n1_b_n2:e')
 
-        if not(self.is_1x1):
+        if not(self.tunable.is_1x1()):
             self._emit(';   1) transform e -> c*y*x')
             self._emit('.v_u32_div_vs v_in_ic, v_in_ie, s_wei_stride_c, v_tmp, s_tmp')
             self._emit('v_mul_lo_u32 v[v_tmp], s[s_wei_stride_c], v[v_in_ic]')
@@ -984,7 +979,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit_empty_line()
 
         self._emit(';   2) transform iho, iwo, iy, ix -> hip, wip')
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('v_mul_lo_u32 v[v_in_iho], s[s_stride_h], v[v_in_iho]')
             self._emit('v_mul_lo_u32 v[v_in_iwo], s[s_stride_w], v[v_in_iwo]')
         else:
@@ -995,7 +990,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit_empty_line()
 
         self._emit(';   3) transform hip, wip -> hi, wi')
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('v_sub_i32 v[v_in_iho], v[v_in_iho], s[s_pad_h]')
             self._emit('v_sub_i32 v[v_in_iwo], v[v_in_iwo], s[s_pad_w]')
         else:
@@ -1007,14 +1002,14 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit_empty_line()
         
         self._emit('; set input flag')
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('.v_in_set_flag v_flag, v_in_iho, v_in_iwo, s_hi, s_wi, s_tmp')    
         else:
             self._emit('.v_in_set_flag v_flag, v_in_ihi, v_in_iwi, s_hi, s_wi, s_tmp')
         self._emit_empty_line()
 
         self._emit('; in offset: from ihi, iwi, ic, in, calculate v_in_os')
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('v_mul_lo_u32 v[v_in_os], s[s_wi], v[v_in_iho]')
             self._emit('s_mul_i32 s[s_tmp+1], s[s_wi], s[s_hi]')
             self._emit('v_add_u32 v[v_in_os], v[v_in_os], v[v_in_iwo]')
@@ -1055,7 +1050,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit(in_load('v_gld_b', 's_p_buf_in', 'v_in_os', 's_in_stride_n1', 's_in_stride_n2', 'v_flag', 's_tmp'))
         self._emit_empty_line()
 
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('; calculate SliceWindow e=c*y*x. for 1x1 case, it is not nacessary')
         else:
             self._emit('; calculate SliceWindow e=c*y*x. this is same for both input/weight')
@@ -1113,7 +1108,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             1) idx can only be 0 or possitive, idx, idy can be negative, possitive, 0
             2) ic, iy, ix need be updated to ic_new, iy_new, ix_new
         '''
-        if self.is_1x1:
+        if self.tunable.is_1x1():
             self._emit('; weight offset and diff')
             self._emit('v_add_u32 v[v_tmp], s[s_block_ik], v[v_wei_ik]')
             self._emit('v_mul_lo_u32 v[v_wei_os], s[s_c], v[v_tmp]')
@@ -1261,7 +1256,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(wei_sst('v_gld_a', 'v_sst_a_os'))
             self._emit_empty_line()
 
-            if self.is_1x1:
+            if self.tunable.is_1x1():
                 self._emit('; E = C * 1 * 1')
                 self._emit('s_sub_i32 s[s_kitr], s[s_c], {}'.format(unroll_k))
                 self._emit('s_cmp_gt_i32 s[s_kitr], 0')
@@ -1274,7 +1269,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
             
             self._emit_empty_line()
-            if self.is_1x1:
+            if self.tunable.is_1x1():
                 self._emit('s_add_u32 s[s_p_buf_in], s[s_p_buf_in], s[s_in_stride]')
                 self._emit('s_addc_u32 s[s_p_buf_in+1], s[s_p_buf_in+1], 0')
                 self._emit('s_add_u32 s[s_p_buf_wei], s[s_p_buf_wei], s[s_wei_stride]')
@@ -1356,7 +1351,7 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit('s_cbranch_scc0 {}'.format(label_fma_finishing))
 
             #       move slice window
-            if self.is_1x1:
+            if self.tunable.is_1x1():
                 self._emit('s_add_u32 s[s_p_buf_in], s[s_p_buf_in], s[s_in_stride]')
                 self._emit('s_addc_u32 s[s_p_buf_in+1], s[s_p_buf_in+1], 0')
                 self._emit('s_add_u32 s[s_p_buf_wei], s[s_p_buf_wei], s[s_wei_stride]')
@@ -1466,12 +1461,11 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
         self._emit(';----------------------------------------------------------')
         self._emit('; starting of kernel {}'.format(self.name()))
         self._emit(self.tunable.serialize())
-        if self.emit_unified_define:
-            #self.emit_kernel_define_karg()
-            self.kernel_karg.emit()
-            #self.emit_kernel_define_sgpr()  # TODO: for every v4r1, sgpr, karg is the same
-            self.kernel_sgpr.emit()
-        #self.emit_kernel_define_vgpr()
+
+        # TODO: for every v4r1, sgpr, karg is the same
+        self.kernel_karg.emit()
+        self.kernel_sgpr.emit()
+
         self.kernel_vgpr.emit()
         self.emit_kernel_header()
         with self._indent_context():
@@ -2112,13 +2106,11 @@ def emit_v4r1_dynamic_macros(mc, tunable_dicts):
     emit_per_macro(emit_in_move_slice_window_t)
     emit_per_macro(emit_wei_move_slice_window_t)
 
-def emit_v4r1_dynamic_kernel(mc, tunable_dicts, kernel_1x1=False):
-    first_kernel = True
+def emit_v4r1_dynamic_kernel(mc, tunable_dicts):
     kernel_info_list = []
     for tunable_dict in tunable_dicts:
-        kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict), True if first_kernel else False, kernel_1x1)
+        kernel = emit_v4r1_dynamic_kernel_t(mc, igemm_tunable_parameter_t(tunable_dict))
         kernel._emit_unique_macro()
-        first_kernel = False
         kernel_info_list.append(kernel.get_kernel_info())
 
     emit_amd_metadata_t(mc, kernel_info_list).emit()
