@@ -88,7 +88,10 @@ class igemm_tunable_parameter_t(object):
         self.in_block_copy_cluster_lengths_n2    = tunable_dict['in_block_copy_cluster_lengths_n2']
         self.wei_block_copy_cluster_lengths_e    = tunable_dict['wei_block_copy_cluster_lengths_e']
         self.wei_block_copy_cluster_lengths_k    = tunable_dict['wei_block_copy_cluster_lengths_k']
-        self.name                                = tunable_dict['name']
+        if 'name' in tunable_dict:
+            self.name                            = tunable_dict['name']
+        else:
+            self.name                            = 'n/a'
 
         self.gemm_m_repeat = self.k_per_block // (self.gemm_m_per_thread_subc * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
 
