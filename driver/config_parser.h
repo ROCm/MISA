@@ -320,17 +320,17 @@ struct section_meta_value_t<
         value_string.resize(buffer.size());
         for (int i = 0; i < (int)buffer.size(); i++)
             value_string[i] = static_cast<const char>(buffer[i]);
-        value_string.back() = '\0';
+        //value_string.back() = '\0';
         return value_string;
     }
     static void encode(std::vector<uint8_t> &buffer, std::string value) {
         std::string v = value.substr(1, value.length() - 2);
         strim(v);
-        buffer.resize(v.size() + 1);
+        buffer.resize(v.size());
         for (int i = 0; i < (int)v.size(); i++) {
             buffer[i] = static_cast<uint8_t>(v[i]);
         }
-        buffer.back() = static_cast<uint8_t>('\0');
+        //buffer.back() = static_cast<uint8_t>('\0');
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
         return std::string("\'") + decode(buffer) + std::string("\'");
