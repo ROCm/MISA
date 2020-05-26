@@ -797,8 +797,12 @@ class amdgpu_swap_sequencer_t(object):
 class gpr_sequencer_t(object):
     def __init__(self):
         self.cnt = 0
-    def __call__(self, step = 0):
+    def __call__(self, step = 0, alignment = 0):
         previous_cnt = self.cnt
+        if alignment:
+            aligned_cnt = ((previous_cnt + alignment - 1) // alignment) * alignment
+            self.cnt = aligned_cnt
+            previous_cnt = aligned_cnt
         self.cnt += step
         return previous_cnt
     def get(self):
