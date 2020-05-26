@@ -29,6 +29,9 @@ from .amdgpu import *
 from .codegen import *
 from .conv import *
 import copy
+
+IGEMM_EXPERIMENTAL_DOUBLE_LOCAL_PREFETCH = False
+
 class igemm_v4r1_dynamic_t(object):
     def __init__(self, mc, tunable):
         self.mc = mc
@@ -588,8 +591,14 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
                 vseq = gpr_sequencer_t()
                 self._emit('; vgpr')
                 self._emit('.set v_c,                   {}'.format(vseq(self.tunable.num_accumulate_c_vgpr)))
-                self._emit('.set v_a,                   {}'.format(vseq(self.tunable.num_accumulate_a_vgpr)))
-                self._emit('.set v_b,                   {}'.format(vseq(self.tunable.num_accumulate_b_vgpr)))
+                if IGEMM_EXPERIMENTAL_DOUBLE_LOCAL_PREFETCH:
+                    self._emit('.set v_a0,                   {}'.format(vseq(self.tunable.num_accumulate_a_vgpr)))
+                    self._emit('.set v_b0,                   {}'.format(vseq(self.tunable.num_accumulate_b_vgpr)))
+                    self._emit('.set v_a1,                   {}'.format(vseq(self.tunable.num_accumulate_a_vgpr)))
+                    self._emit('.set v_b1,                   {}'.format(vseq(self.tunable.num_accumulate_b_vgpr)))
+                else:
+                    self._emit('.set v_a,                   {}'.format(vseq(self.tunable.num_accumulate_a_vgpr)))
+                    self._emit('.set v_b,                   {}'.format(vseq(self.tunable.num_accumulate_b_vgpr)))
                 self._emit('.set v_gld_a,               {}'.format(vseq(self.tunable.num_global_load_a_vgpr)))
                 self._emit('.set v_gld_b,               {}'.format(vseq(self.tunable.num_global_load_b_vgpr)))
                 self._emit('.set v_in_os,               {}'.format(vseq(1)))
@@ -1389,7 +1398,356 @@ class emit_v4r1_dynamic_kernel_t(igemm_v4r1_dynamic_t):
             self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a(sub_tile_m), local_b(sub_tile_n)))
             self._emit_empty_line()
 
-        fma_main_loop_sub_2x2_double_buffer()
+        def fma_main_loop_sub_2x2_double_buffer_double_local_prefetch():
+            '''
+            implement fma main loop with 2x2 sub buffer, double local prefetch
+            4x4, 4x6, 4x8, 6x4, 6x6, 6x8, 8x4, 8x6, 8x8
+            other tile size may also useful, but can't form 2x2 sub buffer
+            '''
+            kernel_name = self.name()
+            label_fma_body = 'L_{}_fma_body'.format(kernel_name)
+            label_fma_finishing = 'L_{}_fma_finishing'.format(kernel_name)
+            label_fma_end = 'L_{}_end'.format(kernel_name)
+            wei_issues = self.tunable.wei_block_copy_sub_lengths_k
+            in_sst = emit_in_sst_e_n1_b_n2_t(self.mc, self.tunable)
+            wei_sst = emit_wei_sst_e_k_t(self.mc, self.tunable)
+            in_move_slice_window = emit_in_move_slice_window_t(self.mc, self.tunable)
+            wei_move_slice_window = emit_wei_move_slice_window_t(self.mc, self.tunable)
+            in_load = emit_in_load_e_n1_b_n2_t(self.mc, self.tunable)
+            wei_load = emit_wei_load_e_k_t(self.mc, self.tunable)
+            lds_width_m = 4 * self.tunable.gemm_m_repeat * self.tunable.gemm_m_per_thread_subc * self.tunable.gemm_m_level0_cluster * self.tunable.gemm_m_level1_cluster
+            lds_width_n = 4 * self.tunable.gemm_n_repeat * self.tunable.gemm_n_per_thread_subc * self.tunable.gemm_n_level0_cluster * self.tunable.gemm_n_level1_cluster
+            # lds_base_m = self.tunable.byte_lds_b_np2
+            lds_base_m = 0
+            lds_base_n = 0
+            unroll_k = self.tunable.e_per_block
+            assert unroll_k % 2 == 0
+
+            tile_m = self.tunable.thread_tile_m
+            tile_n = self.tunable.thread_tile_n
+            sub_tile_m = self.tunable.thread_sub_tile_m
+            sub_tile_n = self.tunable.thread_sub_tile_n
+            local_a0 = gpr_t('v_a0')
+            local_b0 = gpr_t('v_b0')
+            local_a1 = gpr_t('v_a1')
+            local_b1 = gpr_t('v_b1')
+            local_c = gpr_t('v_c')
+            lds_single = self.tunable.byte_lds_single
+
+            fma_sub_tile = emit_fma_mxn_t(self.mc, self.tunable.thread_sub_tile_m, self.tunable.thread_sub_tile_n, self.tunable.thread_tile_n)
+
+            assert tile_m == 4 or tile_m == 6 or tile_m == 8
+            assert tile_n == 4 or tile_n == 6 or tile_n == 8
+            assert tile_m == sub_tile_m * 2
+            assert tile_n == sub_tile_n * 2
+
+            ds_read_a = ds_read_t(sub_tile_m * 4)
+            ds_read_b = ds_read_t(sub_tile_n * 4)
+
+            # start emit
+            self._emit('; start FMA loop, {}x{} thread tile with {}x{} sub-tile'.format(
+                                tile_m, tile_n, sub_tile_m, sub_tile_n))
+            self._emit('s_waitcnt vmcnt({})'.format(wei_issues))
+
+            self._emit(in_sst('v_gld_b', 'v_sst_b_os'))
+            self._emit_empty_line()
+            self._emit('s_waitcnt vmcnt(0)')
+            self._emit(wei_sst('v_gld_a', 'v_sst_a_os'))
+            self._emit_empty_line()
+
+            if self.tunable.is_1x1():
+                self._emit('; E = C * 1 * 1')
+                self._emit('s_sub_i32 s[s_kitr], s[s_c], {}'.format(unroll_k))
+                self._emit('s_cmp_gt_i32 s[s_kitr], 0')
+                self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
+            else:
+                self._emit('; E = C * Y * X')
+                self._emit('s_mul_i32 s[s_tmp], s[s_c], s[s_wei_stride_c]')
+                self._emit('s_sub_i32 s[s_kitr], s[s_tmp], {}'.format(unroll_k))
+                self._emit('s_cmp_gt_i32 s[s_kitr], 0')
+                self._emit('s_cbranch_scc0 {}'.format(label_fma_end))
+            
+            self._emit_empty_line()
+            if self.tunable.is_1x1():
+                self._emit('s_add_u32 s[s_p_buf_in], s[s_p_buf_in], s[s_in_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_in+1], s[s_p_buf_in+1], 0')
+                self._emit('s_add_u32 s[s_p_buf_wei], s[s_p_buf_wei], s[s_wei_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_wei+1], s[s_p_buf_wei+1], 0')
+            else:
+                self._emit(in_move_slice_window('v_in_os', 'v_in_ic', 'v_in_iy', 'v_in_ix', 'v_in_ihi', 'v_in_iwi', 'v_flag',
+                            's_hi', 's_wi', 's_y', 's_x', 's_in_stride_c', 's_dilation_h', 's_dilation_w', 's_in_ic', 's_in_iy', 's_in_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
+                self._emit(wei_move_slice_window('v_wei_os', 's_wei_stride'))
+
+            self._emit('v_xor_b32 v[v_sst_b_os], {}, v[v_sst_b_os] ; switch double buffer b store'.format(hex(lds_single)))
+            self._emit('v_xor_b32 v[v_sst_a_os], {}, v[v_sst_a_os] ; switch double buffer a store'.format(hex(lds_single)))
+            self._emit('s_waitcnt lgkmcnt(0)')
+            self._emit('s_barrier')
+            self._emit_empty_line()
+            self._emit(in_load('v_gld_b', 's_p_buf_in', 'v_in_os', 's_in_stride_n1', 's_in_stride_n2', 'v_flag', 's_tmp'))
+            self._emit(wei_load('v_gld_a', 's_p_buf_wei', 'v_wei_os', 's_wei_stride_k', 's_tmp'))
+            self._emit_empty_line()
+
+            # Label: start of fma body
+            self._emit_front('{}:'.format(label_fma_body))
+            self._emit('; do fma accumulate with unroll {}'.format(unroll_k))
+            self._emit(ds_read_a(local_a0(), 'v_sld_a_os', lds_base_m))
+            self._emit(ds_read_b(local_b0(), 'v_sld_b_os', lds_base_n))
+            self._emit(ds_read_b(local_b0(sub_tile_n), 'v_sld_b_os', lds_base_n + lds_width_n//2 ))
+            self._emit(ds_read_a(local_a0(sub_tile_m), 'v_sld_a_os', lds_base_m + lds_width_m//2 ))
+            self._emit('.itr_k = 0')
+            self._emit('.rept {}'.format(unroll_k // 2 - 1))
+            with self._indent_context():
+                # fma a0, b0, load a1, b1
+                # 1st fma
+                self._emit(ds_read_a(local_a1(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(), local_a0(), local_b0()))
+                self._emit_empty_line()
+
+                # 2nd fma
+                self._emit(ds_read_b(local_b1(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_n), local_a0(), local_b0(sub_tile_n)))
+                self._emit_empty_line()
+
+                # 3rd fma
+                self._emit(ds_read_b(local_b1(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a0(sub_tile_m), local_b0()))
+                self._emit_empty_line()
+
+                # 4th fma
+                self._emit(ds_read_a(local_a1(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a0(sub_tile_m), local_b0(sub_tile_n)))
+                self._emit_empty_line()
+                self._emit('.itr_k = .itr_k + 1')
+
+                # fma a1, b1, load a0, b0
+                # 1st fma
+                self._emit(ds_read_a(local_a0(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(), local_a1(), local_b1()))
+                self._emit_empty_line()
+
+                # 2nd fma
+                self._emit(ds_read_b(local_b0(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_n), local_a1(), local_b1(sub_tile_n)))
+                self._emit_empty_line()
+
+                # 3rd fma
+                self._emit(ds_read_b(local_b0(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a1(sub_tile_m), local_b1()))
+                self._emit_empty_line()
+
+                # 4th fma
+                self._emit(ds_read_a(local_a0(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a1(sub_tile_m), local_b1(sub_tile_n)))
+                self._emit_empty_line()
+                self._emit('.itr_k = .itr_k + 1')
+
+            self._emit('.endr')
+            self._emit_empty_line()
+            # fma a0, b0, load a1, b1
+            # 1st fma
+            self._emit(ds_read_a(local_a1(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(), local_a0(), local_b0()))
+            self._emit_empty_line()
+
+            # 2nd fma
+            self._emit(ds_read_b(local_b1(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(sub_tile_n), local_a0(), local_b0(sub_tile_n)))
+            self._emit_empty_line()
+
+            # 3rd fma
+            self._emit(ds_read_b(local_b1(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a0(sub_tile_m), local_b0()))
+            self._emit_empty_line()
+
+            # 4th fma
+            self._emit(ds_read_a(local_a1(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a0(sub_tile_m), local_b0(sub_tile_n)))
+            self._emit_empty_line()
+
+            # fma a1, b1, last iteration
+            self._emit('; last unroll')
+            self._emit('v_xor_b32 v[v_sld_b_os], {}, v[v_sld_b_os] ; switch double buffer b load'.format(hex(lds_single)))
+            self._emit('v_xor_b32 v[v_sld_a_os], {}, v[v_sld_a_os] ; switch double buffer a load'.format(hex(lds_single)))
+            # 1st fma
+            self._emit('s_waitcnt lgkmcnt(2)')
+            self._emit(fma_sub_tile(local_c(), local_a1(), local_b1()))
+            self._emit_empty_line()
+
+            # 2nd fma
+            self._emit('s_waitcnt lgkmcnt(1)')
+            self._emit(fma_sub_tile(local_c(sub_tile_n), local_a1(), local_b1(sub_tile_n)))
+            self._emit_empty_line()
+
+            #       wait global and store to LDS
+            self._emit('s_waitcnt vmcnt({})'.format(wei_issues))
+            self._emit(in_sst('v_gld_b', 'v_sst_b_os'))
+            self._emit('s_waitcnt vmcnt(0)')
+            self._emit(wei_sst('v_gld_a', 'v_sst_a_os'))
+
+            #       iteration--
+            self._emit('s_sub_i32 s[s_kitr], s[s_kitr], {}'.format(unroll_k))
+            self._emit('s_cmp_gt_i32 s[s_kitr], 0')
+            self._emit('s_cbranch_scc0 {}'.format(label_fma_finishing))
+
+            #       move slice window
+            if self.tunable.is_1x1():
+                self._emit('s_add_u32 s[s_p_buf_in], s[s_p_buf_in], s[s_in_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_in+1], s[s_p_buf_in+1], 0')
+                self._emit('s_add_u32 s[s_p_buf_wei], s[s_p_buf_wei], s[s_wei_stride]')
+                self._emit('s_addc_u32 s[s_p_buf_wei+1], s[s_p_buf_wei+1], 0')
+
+            else:
+                self._emit(in_move_slice_window('v_in_os', 'v_in_ic', 'v_in_iy', 'v_in_ix', 'v_in_ihi', 'v_in_iwi', 'v_flag',
+                            's_hi', 's_wi', 's_y', 's_x', 's_in_stride_c', 's_dilation_h', 's_dilation_w', 's_in_ic', 's_in_iy', 's_in_ix', 'v_idc', 'v_idy', 'v_idx', 's_tmp'))
+                self._emit(wei_move_slice_window('v_wei_os', 's_wei_stride'))
+
+            # 3rd fma
+            self._emit('s_waitcnt lgkmcnt({})'.format(in_sst.get_issues() + wei_sst.get_issues()))
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a1(sub_tile_m), local_b1()))
+            self._emit_empty_line()
+
+            self._emit('v_xor_b32 v[v_sst_b_os], {}, v[v_sst_b_os] ; switch double buffer b store'.format(hex(lds_single)))
+            self._emit('v_xor_b32 v[v_sst_a_os], {}, v[v_sst_a_os] ; switch double buffer a store'.format(hex(lds_single)))
+            #       barrier here!
+            self._emit('s_waitcnt lgkmcnt(0)')
+            self._emit('s_barrier')
+
+            #       load next from global
+            self._emit(in_load('v_gld_b', 's_p_buf_in', 'v_in_os', 's_in_stride_n1', 's_in_stride_n2', 'v_flag', 's_tmp'))
+            self._emit(wei_load('v_gld_a', 's_p_buf_wei', 'v_wei_os', 's_wei_stride_k', 's_tmp'))
+
+            # 4th fma
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a1(sub_tile_m), local_b1(sub_tile_n)))
+            self._emit_empty_line()
+            self._emit('s_branch {}'.format(label_fma_body))
+
+            # Label: finishing of fma body
+            self._emit_front('{}:'.format(label_fma_finishing))
+            self._emit('s_waitcnt lgkmcnt({})'.format(in_sst.get_issues() + wei_sst.get_issues()))
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a1(sub_tile_m), local_b1()))
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a1(sub_tile_m), local_b1(sub_tile_n)))
+
+            # Label: end of fma body
+            self._emit_front('{}:'.format(label_fma_end))
+            self._emit('s_waitcnt lgkmcnt(0)')
+            self._emit('s_barrier')
+            self._emit(ds_read_a(local_a0(), 'v_sld_a_os', lds_base_m))
+            self._emit(ds_read_b(local_b0(), 'v_sld_b_os', lds_base_n))
+            self._emit(ds_read_b(local_b0(sub_tile_n), 'v_sld_b_os', lds_base_n + lds_width_n//2 ))
+            self._emit(ds_read_a(local_a0(sub_tile_m), 'v_sld_a_os', lds_base_m + lds_width_m//2 ))
+            self._emit('.itr_k = 0')
+            self._emit('.rept {}'.format(unroll_k // 2 - 1))
+            with self._indent_context():
+                # fma a0, b0, load a1, b1
+                # 1st fma
+                self._emit(ds_read_a(local_a1(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(), local_a0(), local_b0()))
+                self._emit_empty_line()
+
+                # 2nd fma
+                self._emit(ds_read_b(local_b1(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_n), local_a0(), local_b0(sub_tile_n)))
+                self._emit_empty_line()
+
+                # 3rd fma
+                self._emit(ds_read_b(local_b1(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a0(sub_tile_m), local_b0()))
+                self._emit_empty_line()
+
+                # 4th fma
+                self._emit(ds_read_a(local_a1(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a0(sub_tile_m), local_b0(sub_tile_n)))
+                self._emit_empty_line()
+                self._emit('.itr_k = .itr_k + 1')
+
+                # fma a1, b1, load a0, b0
+                # 1st fma
+                self._emit(ds_read_a(local_a0(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(), local_a1(), local_b1()))
+                self._emit_empty_line()
+
+                # 2nd fma
+                self._emit(ds_read_b(local_b0(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_n), local_a1(), local_b1(sub_tile_n)))
+                self._emit_empty_line()
+
+                # 3rd fma
+                self._emit(ds_read_b(local_b0(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+                self._emit('s_waitcnt lgkmcnt(3)')
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a1(sub_tile_m), local_b1()))
+                self._emit_empty_line()
+
+                # 4th fma
+                self._emit(ds_read_a(local_a0(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+                self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a1(sub_tile_m), local_b1(sub_tile_n)))
+                self._emit_empty_line()
+                self._emit('.itr_k = .itr_k + 1')
+
+            self._emit('.endr')
+            self._emit_empty_line()
+            # fma a0, b0, load a1, b1
+            # 1st fma
+            self._emit(ds_read_a(local_a1(), 'v_sld_a_os', '{}+(.itr_k+1)*{}'.format(lds_base_m, lds_width_m)))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(), local_a0(), local_b0()))
+            self._emit_empty_line()
+
+            # 2nd fma
+            self._emit(ds_read_b(local_b1(), 'v_sld_b_os', '{}+(.itr_k+1)*{}'.format(lds_base_n, lds_width_n)))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(sub_tile_n), local_a0(), local_b0(sub_tile_n)))
+            self._emit_empty_line()
+
+            # 3rd fma
+            self._emit(ds_read_b(local_b1(sub_tile_n), 'v_sld_b_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_n, lds_width_n, lds_width_n//2) ))
+            self._emit('s_waitcnt lgkmcnt(3)')
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a0(sub_tile_m), local_b0()))
+            self._emit_empty_line()
+
+            # 4th fma
+            self._emit(ds_read_a(local_a1(sub_tile_m), 'v_sld_a_os', '{}+(.itr_k+1)*{}+{}'.format(lds_base_m, lds_width_m, lds_width_m//2) ))
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a0(sub_tile_m), local_b0(sub_tile_n)))
+            self._emit_empty_line()
+
+            # fma a1, b1, last iteration
+            self._emit('; last unroll')
+            # 1st fma
+            self._emit('s_waitcnt lgkmcnt(2)')
+            self._emit(fma_sub_tile(local_c(), local_a1(), local_b1()))
+            self._emit_empty_line()
+
+            # 2nd fma
+            self._emit('s_waitcnt lgkmcnt(1)')
+            self._emit(fma_sub_tile(local_c(sub_tile_n), local_a1(), local_b1(sub_tile_n)))
+            self._emit_empty_line()
+
+            # 3rd fma
+            self._emit('s_waitcnt lgkmcnt(0)')
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n), local_a1(sub_tile_m), local_b1()))
+            self._emit_empty_line()
+
+            # 4th fma
+            self._emit(fma_sub_tile(local_c(sub_tile_m*tile_n+sub_tile_n), local_a1(sub_tile_m), local_b1(sub_tile_n)))
+            self._emit_empty_line()
+
+        if IGEMM_EXPERIMENTAL_DOUBLE_LOCAL_PREFETCH:
+            fma_main_loop_sub_2x2_double_buffer_double_local_prefetch()
+        else:
+            fma_main_loop_sub_2x2_double_buffer()
 
     def emit_kernel_writeout(self):
         out_write = emit_out_write_k0_k1_n1_b_n2_t(self.mc, self.tunable)
