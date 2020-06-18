@@ -33,7 +33,7 @@ from igemm.igemm_base import *
 from igemm.igemm_algo_v4r1 import *
 from igemm.config_parser import *
 
-OUT_DIR='out'
+OUT_DIR='out_ori'
 CPP_DIR='driver'
 
 def igemm_host_driver(args, config_content):

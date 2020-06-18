@@ -32,6 +32,9 @@
 #include <unistd.h>
 #include <vector>
 
+#define CONV_FWD 1
+#define CONV_WRW 4
+
 typedef struct {
     int b_per_block;
     int k_per_block;
@@ -199,9 +202,8 @@ class igemm_v4r1_dynamic_driver_t {
         int thread_tile_m = gemm_m_repeat * gemm_m_per_thread_subc;
         int thread_tile_n = gemm_n_repeat * gemm_n_per_thread_subc;
 
-
-
-        std::string kernel_prefix = tunable->OPT_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
+        // std::string kernel_prefix = tunable->OPT_1x1 ? std::string("igemm_v4r1_1x1_dynamic_") : std::string("igemm_v4r1_dynamic_");
+        std::string kernel_prefix = std::string("igemm_v4r1_dynamic_wrw_");
 
         return kernel_prefix +
                std::to_string(k_per_block) + "x" +
@@ -260,6 +262,24 @@ class igemm_v4r1_dynamic_driver_t {
         int b = n0 * ho * wo;
 
         int grid_size = (b / b_per_block) * (k / k_per_block);
+        return grid_size;
+    }
+    int get_grid_size_wrw(const igemm_v4r1_dynamic_karg_t *karg,
+                          const igemm_v4r1_dynamic_tunable_t *tunable) {
+        int b_per_block = tunable->b_per_block;
+        int k_per_block = tunable->k_per_block;
+
+        int gemm_n_repeat = tunable->gemm_n_repeat;
+        int gemm_n_per_thread_subc = tunable->gemm_n_per_thread_subc;
+
+        int n1 = gemm_n_repeat;
+        int n2 = gemm_n_per_thread_subc;
+
+        int n0 = karg->n / (n1 * n2);
+
+        int b = n0 * karg->ho * karg->wo;
+
+        int grid_size = (b / b_per_block) * (karg->k / k_per_block);
         return grid_size;
     }
     int get_lds_size(const igemm_v4r1_dynamic_tunable_t *tunable) {
@@ -396,73 +416,160 @@ class igemm_v4r1_dynamic_driver_t {
 
     result_t run(const args_t *arg, const igemm_v4r1_dynamic_tunable_t *tunable,
                  hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
+                 int warmup, int repeat, int dir) {
+
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
             return result;
         }
         
+        if (CONV_FWD == dir) {
+            igemm_v4r1_dynamic_karg_t karg;
+            size_t karg_size = sizeof(karg);
+            karg.p_in = p_in;
+            karg.p_wei = p_wei;
+            karg.p_out = p_out;
+            karg.hi = arg->get_int("in_h");
+            karg.wi = arg->get_int("in_w");
+            karg.n = arg->get_int("batchsize");
+            karg.k = arg->get_int("out_channels");
+            karg.c = arg->get_int("in_channels");
 
-        igemm_v4r1_dynamic_karg_t karg;
-        size_t karg_size = sizeof(karg);
-        karg.p_in = p_in;
-        karg.p_wei = p_wei;
-        karg.p_out = p_out;
-        karg.hi = arg->get_int("in_h");
-        karg.wi = arg->get_int("in_w");
-        karg.n = arg->get_int("batchsize");
-        karg.k = arg->get_int("out_channels");
-        karg.c = arg->get_int("in_channels");
+            karg.stride_h = arg->get_int("conv_stride_h");
+            karg.stride_w = arg->get_int("conv_stride_w");
+            karg.dilation_h = arg->get_int("dilation_h");
+            karg.dilation_w = arg->get_int("dilation_w");
+            karg.pad_h = arg->get_int("pad_h");
+            karg.pad_w = arg->get_int("pad_w");
+            karg.y = arg->get_int("fil_h");
+            karg.x = arg->get_int("fil_w");
 
-        karg.stride_h = arg->get_int("conv_stride_h");
-        karg.stride_w = arg->get_int("conv_stride_w");
-        karg.dilation_h = arg->get_int("dilation_h");
-        karg.dilation_w = arg->get_int("dilation_w");
-        karg.pad_h = arg->get_int("pad_h");
-        karg.pad_w = arg->get_int("pad_w");
-        karg.y = arg->get_int("fil_h");
-        karg.x = arg->get_int("fil_w");
+            karg.ho = conv_out_size(karg.hi, karg.pad_h, karg.dilation_h, karg.y,
+                                    karg.stride_h);
+            karg.wo = conv_out_size(karg.wi, karg.pad_w, karg.dilation_w, karg.x,
+                                    karg.stride_w);
 
-        karg.ho = conv_out_size(karg.hi, karg.pad_h, karg.dilation_h, karg.y,
-                                karg.stride_h);
-        karg.wo = conv_out_size(karg.wi, karg.pad_w, karg.dilation_w, karg.x,
-                                karg.stride_w);
+            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
+                            HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
+                            HIP_LAUNCH_PARAM_END};
 
-        void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
-                          HIP_LAUNCH_PARAM_END};
+            int block_size = get_block_size(tunable);
+            int grid_size = get_grid_size(arg, tunable);
 
-        int block_size = get_block_size(tunable);
-        int grid_size = get_grid_size(arg, tunable);
+            hipFunction_t kernel_func;
+            std::string kernel_name = get_kernel_name(tunable);
+            //printf("kernel:%s\n", kernel_name.c_str());
+            HIP_CALL(
+                hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+            gpu_timer_t timer(NULL);
+            for (int i = 0; i < warmup; i++) {
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+            }
+            timer.start();
+            for (int i = 0; i < repeat; i++) {
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+            }
+            timer.stop();
+            float duration_ms = timer.duration();
 
-        hipFunction_t kernel_func;
-        std::string kernel_name = get_kernel_name(tunable);
-        //printf("kernel:%s\n", kernel_name.c_str());
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
-        gpu_timer_t timer(NULL);
-        for (int i = 0; i < warmup; i++) {
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                           block_size, 1, 1, 0, 0, NULL,
-                                           (void **)&config));
+            usleep(1000 * 10);
+
+            result_t result;
+            result.return_code = 0;
+            result.duration_ms = duration_ms / repeat;
+            result.kernel_name = kernel_name;
+            return result;
         }
-        timer.start();
-        for (int i = 0; i < repeat; i++) {
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                           block_size, 1, 1, 0, 0, NULL,
-                                           (void **)&config));
+
+        else if (CONV_WRW == dir) {
+            igemm_v4r1_dynamic_karg_t karg;
+            size_t karg_size = sizeof(karg);
+            karg.p_in = p_in;
+            karg.p_wei = p_out;
+            karg.p_out = p_wei;
+            karg.hi = arg->get_int("in_h");
+            karg.wi = arg->get_int("in_w");
+            karg.n = arg->get_int("in_channels");
+            karg.k = arg->get_int("out_channels");
+            karg.c = arg->get_int("batchsize");
+
+            int stride_h = arg->get_int("conv_stride_h");
+            int stride_w = arg->get_int("conv_stride_w");
+            int dilation_h = arg->get_int("dilation_h");
+            int dilation_w = arg->get_int("dilation_w");
+            karg.pad_h = arg->get_int("pad_h");
+            karg.pad_w = arg->get_int("pad_w");
+            int y = arg->get_int("fil_h");
+            int x = arg->get_int("fil_w");
+
+            int ho = conv_out_size(karg.hi, karg.pad_h, dilation_h, y,
+                                   stride_h);
+            int wo = conv_out_size(karg.wi, karg.pad_w, dilation_w, x,
+                                   stride_w);
+
+            karg.y = ho;
+            karg.x = wo;
+
+            karg.ho = y;
+            karg.wo = x;
+
+            karg.dilation_h = stride_h;
+            karg.dilation_w = stride_w;
+            karg.stride_h = dilation_h;
+            karg.stride_w = dilation_w;
+
+            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
+                            HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
+                            HIP_LAUNCH_PARAM_END};
+
+            int block_size = get_block_size(tunable);
+            int grid_size = get_grid_size_wrw(&karg, tunable);
+
+            printf("\r\ngrid_size is: %d\r\n", grid_size);
+            printf("block_size is: %d\r\n", block_size);
+
+            printf("kernel args cyx=[%d, %d, %d]\r\n", karg.c, karg.y, karg.x);
+            printf("kernel args nkhowo=[%d, %d, %d, %d]\r\n", karg.n, karg.k, karg.ho, karg.wo);
+
+            hipFunction_t kernel_func;
+            std::string kernel_name = get_kernel_name(tunable);
+            //printf("kernel:%s\n", kernel_name.c_str());
+            HIP_CALL(
+                hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+            gpu_timer_t timer(NULL);
+            for (int i = 0; i < warmup; i++) {
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+            }
+            timer.start();
+            for (int i = 0; i < repeat; i++) {
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+            }
+            timer.stop();
+            float duration_ms = timer.duration();
+
+            usleep(1000 * 10);
+
+            result_t result;
+            result.return_code = 0;
+            result.duration_ms = duration_ms / repeat;
+            result.kernel_name = kernel_name;
+            return result;
         }
-        timer.stop();
-        float duration_ms = timer.duration();
-
-        usleep(1000 * 10);
-
-        result_t result;
-        result.return_code = 0;
-        result.duration_ms = duration_ms / repeat;
-        result.kernel_name = kernel_name;
-        return result;
+        else {
+            printf("not supported direction\r\n");
+            result_t result;
+            result.return_code = -1;
+            return result;
+        }
     }
 };
 

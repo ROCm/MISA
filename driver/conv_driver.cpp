@@ -137,7 +137,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 
 #define WARMUP 3
 #define REPEAT 6
-#define SCLK_MHZ 1725
+#define SCLK_MHZ 1138
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -193,7 +193,7 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
 }
 
 #define PER_PIXEL_CHECK
-#define PER_PIXEL_CHECK_PRINT
+#define PER_PIXEL_CHECK_PRINT 1
 
 static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
@@ -212,9 +212,11 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
 #ifdef PER_PIXEL_CHECK
         double delta = ABS(ri - pi) / ri;
-        if (delta > 3e-5) {
-#ifdef PER_PIXEL_CHECK_PRINT
-            if (pp_err < 100)
+        if (delta > 3e-5) 
+        //if (i > 255)
+        {
+#if PER_PIXEL_CHECK_PRINT
+            if (pp_err < 10)
                 printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
                        pi, ((uint32_t *)pred)[i], delta);
 #endif
@@ -255,8 +257,8 @@ void dump_arg(const args_t *arg) {
 }
 
 int main(int argc, char **argv) {
-    char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
-    char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
+    char *hsaco = env_get_str("IGEMM_HSACO", (char*)IGEMM_HSACO);
+    char *config_file = env_get_str("IGEMM_CONFIG_FILE", (char*)IGEMM_CONFIG_FILE);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
@@ -274,6 +276,9 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
+    int conv_dir = conv_args.get_int("forw");
+
+    printf("conv_dir is %d\r\n", conv_dir);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
@@ -307,17 +312,49 @@ int main(int argc, char **argv) {
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
 
     if (need_verify) {
-        // gen rand
-        gen_rand_vector<float>(host_input, n * c * hi * wi, 0.0, 1.0);
-        gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
-        // gen_rand_vector<float>(host_input, n*c*hi*wi, 1.0, 1.0);
-        // gen_rand_vector<float>(host_weight, k*c*y*x, 0.5, 0.5);
+        // forward 1, 0
+        if ((1 == conv_dir) || (0 == conv_dir))
+        {
+            // gen rand
+            gen_rand_vector<float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
+            // gen_rand_vector<float>(host_input, n*c*hi*wi, 1.0, 1.0);
+            // gen_rand_vector<float>(host_weight, k*c*y*x, 0.5, 0.5);
 
-        // TODO: other direction
-        // TODO: This is slow. try mkl_conv.h
-        naive_conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
-                            k, x, y, pad_w, pad_h, stride_w, stride_h,
-                            dilation_h, dilation_w);
+            // TODO: other direction
+            // TODO: This is slow. try mkl_conv.h
+            naive_conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_h, dilation_w);
+        }
+        // data gradient(backward data) 2, 0
+        if ((2 == conv_dir) || (0 == conv_dir))
+        {
+            // gen rand
+            gen_rand_vector<float>(host_output, n * c * ho * wo, 0.0, 1.0);
+            gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
+            // gen_rand_vector<float>(host_input, n*c*hi*wi, 1.0, 1.0);
+            // gen_rand_vector<float>(host_weight, k*c*y*x, 0.5, 0.5);
+
+            // TODO: other direction
+            // TODO: This is slow. try mkl_conv.h
+            naive_conv_bwd_d_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_h, dilation_w);
+        }
+        // weight gradient(backward weights) 4, 0
+        if ((4 == conv_dir) || (0 == conv_dir))
+        {
+            // gen rand
+            gen_rand_vector<float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float>(host_output, n * k * ho * wo, -0.5, 0.5);
+
+            // TODO: other direction
+            // TODO: This is slow. try mkl_conv.h
+            naive_conv_bwd_f_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_h, dilation_w);
+        }
     }
 
     float *device_input;
@@ -325,20 +362,23 @@ int main(int argc, char **argv) {
     float *device_output;
     float *device_output_to_host =
         (float *)malloc(n * k * ho * wo * sizeof(float));
+    float *device_weight_to_host =
+        (float *)malloc(k * c * y * x * sizeof(float));
 
     HIP_CALL(hipSetDevice(0));
     HIP_CALL(hipMalloc(&device_input, n * c * hi * wi * sizeof(float)));
     HIP_CALL(hipMalloc(&device_weight, k * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, n * k * ho * wo * sizeof(float)));
-    HIP_CALL(hipMemcpy(device_input, host_input,
-                       n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
-    HIP_CALL(hipMemcpy(device_weight, host_weight,
-                       k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
-    
+    if ((1 == conv_dir) || (0 == conv_dir))
     {
+        HIP_CALL(hipMemcpy(device_input, host_input,
+                           n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+        HIP_CALL(hipMemcpy(device_weight, host_weight,
+                           k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+
         igemm_v4r1_dynamic_driver_t conv_driver;
-        for (int i = 0; i < tunables.size(); i++) {
+        for (size_t i = 0; i < tunables.size(); i++) {
             bool kernel_1x1 = false;
             if ((y == 1) && (x == 1))
             {
@@ -361,7 +401,7 @@ int main(int argc, char **argv) {
                                    n * k * ho * wo * sizeof(float)));
             result_t result =
                 conv_driver.run(&conv_args, tunable, module, device_input,
-                                device_weight, device_output, warmup, repeat);
+                                device_weight, device_output, warmup, repeat, CONV_FWD);
             if (result.return_code != 0)
                 continue;
             double gflops = measured_fp32_conv_gflops(
@@ -382,7 +422,57 @@ int main(int argc, char **argv) {
                 }
             }
             printf("\n");
-            
+        }
+    }
+
+    if ((4 == conv_dir) || (0 == conv_dir))
+    {
+        HIP_CALL(hipMemcpy(device_input, host_input,
+                           n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+        HIP_CALL(hipMemcpy(device_output, host_output,
+                           n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+
+        igemm_v4r1_dynamic_driver_t conv_driver;
+        for (size_t i = 0; i < tunables.size(); i++) {
+        
+            igemm_v4r1_dynamic_tunable_t *tunable = &tunables[i];
+            printf("  %s, ", conv_driver.get_kernel_name(tunable).c_str());
+            if (need_verify)
+                HIP_CALL(hipMemset(device_weight, 0,
+                                   k * c * y * x * sizeof(float)));
+            result_t result =
+                conv_driver.run(&conv_args, tunable, module, device_input,
+                                device_weight, device_output, warmup, repeat, CONV_WRW);
+            if (result.return_code != 0)
+                continue;
+            double gflops = measured_fp32_conv_gflops(
+                result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+            printf("cost:%.3fms, gflops:%.1f(%.2f%%)", result.duration_ms,
+                   gflops, (gflops / fp32_gflops) * 100);
+            if (need_verify) {
+                HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
+                                   k * c * y * x * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+
+                //printf("var to monitor:[%f, %f, %f, %f]\r\n", device_weight_to_host[0], device_weight_to_host[1], device_weight_to_host[2], device_weight_to_host[3]);
+                //printf("var to monitor:[%d, %d, %d, %d]\r\n", ((int *)device_weight_to_host)[0], ((int *)device_weight_to_host)[1], 
+                //                                ((int *)device_weight_to_host)[2], ((int *)device_weight_to_host)[3]);
+                printf("\r\n");
+                for (int i_check = 0; i_check < (0+8); i_check++)
+                {
+                    printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, device_weight_to_host[i_check], ((int *)device_weight_to_host)[i_check]);
+                }
+
+                bool is_valid = valid_vector(host_weight, device_weight_to_host,
+                                             k * c * y * x);
+                printf(", valid:%s", is_valid ? "y" : "n");
+                if (!is_valid) {
+                    printf("\n");
+                    break;
+                }
+            }
+            printf("\n");
         }
     }
 

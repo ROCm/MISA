@@ -1,5 +1,6 @@
-out/
+out_ast/
+out_ori/
 *.py[cod]
 __pycache__
-*.s
+#*.s
 .vscode/
