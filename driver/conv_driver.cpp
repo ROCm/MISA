@@ -131,13 +131,17 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define IGEMM_HSACO "igemm_v4r1_dynamic.hsaco"
 #endif
 
+#ifndef REDUCTION_HSACO
+#define REDUCTION_HSACO "wrw_reduction_hip.hip.cc.o.hsaco"
+#endif
+
 #ifndef IGEMM_CONFIG_FILE
 #define IGEMM_CONFIG_FILE "igemm_v4r1_dynamic.config"
 #endif
 
 #define WARMUP 3
 #define REPEAT 6
-#define SCLK_MHZ 1138
+#define SCLK_MHZ 1800
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -183,7 +187,8 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
                     std::hash<std::thread::id>()(std::this_thread::get_id()));
                 std::uniform_real_distribution<float> distribution(fmin, fmax);
                 for (int i = tid; i < total_size; i += block_size) {
-                    p[i] = distribution(rng);
+                    p[i] = floor(distribution(rng) * 10);
+                    //p[i] = distribution(rng);
                 }
             },
             vec, t, num_threads, vec_size, fmin, fmax));
@@ -258,6 +263,7 @@ void dump_arg(const args_t *arg) {
 
 int main(int argc, char **argv) {
     char *hsaco = env_get_str("IGEMM_HSACO", (char*)IGEMM_HSACO);
+    char *hsaco_reduction = env_get_str("REDUCTION_HSACO", (char*)REDUCTION_HSACO);
     char *config_file = env_get_str("IGEMM_CONFIG_FILE", (char*)IGEMM_CONFIG_FILE);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
@@ -268,6 +274,9 @@ int main(int argc, char **argv) {
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
+
+    hipModule_t module_reduction;
+    HIP_CALL(hipModuleLoad(&module_reduction, hsaco_reduction));
 
     args_t conv_args = create_conv_args(argc, argv);
     dump_arg(&conv_args);
@@ -400,7 +409,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemset(device_output, 0,
                                    n * k * ho * wo * sizeof(float)));
             result_t result =
-                conv_driver.run(&conv_args, tunable, module, device_input,
+                conv_driver.run(&conv_args, tunable, module, module_reduction, device_input,
                                 device_weight, device_output, warmup, repeat, CONV_FWD);
             if (result.return_code != 0)
                 continue;
@@ -441,7 +450,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemset(device_weight, 0,
                                    k * c * y * x * sizeof(float)));
             result_t result =
-                conv_driver.run(&conv_args, tunable, module, device_input,
+                conv_driver.run(&conv_args, tunable, module, module_reduction, device_input,
                                 device_weight, device_output, warmup, repeat, CONV_WRW);
             if (result.return_code != 0)
                 continue;
@@ -461,7 +470,7 @@ int main(int argc, char **argv) {
                 printf("\r\n");
                 for (int i_check = 0; i_check < (0+8); i_check++)
                 {
-                    printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, device_weight_to_host[i_check], ((int *)device_weight_to_host)[i_check]);
+                    //printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, device_weight_to_host[i_check], ((int *)device_weight_to_host)[i_check]);
                 }
 
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,

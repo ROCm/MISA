@@ -14,5 +14,20 @@ driver/conv_driver.cpp -L/opt/rocm/hcc/lib -L/opt/rocm/lib \
 #-DIGEMM_HSACO="igemm_v4r1_dynamic.hsaco" \
 
 # device compilation
-/opt/rocm-3.5.0/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=gfx900 out/igemm_v4r1_dynamic.s -o out/igemm_v4r1_dynamic.hsaco
-#/home/shaowang/llvm_local/bin/clang -x assembler -target amdgcn--amdhsa -mcpu=gfx900 out/igemm_v4r1_dynamic.s -o out/igemm_v4r1_dynamic.hsaco
+/opt/rocm-3.5.0/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=gfx906 out/igemm_v4r1_dynamic.s -o out/igemm_v4r1_dynamic.hsaco
+
+/opt/rocm-3.5.0/llvm/bin/clang++  -std=c++14 -mcpu=gfx906 -Werror -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
+-Wno-conversion -Wno-double-promotion -Wno-exit-time-destructors -Wno-extra-semi -Wno-float-conversion \
+-Wno-gnu-anonymous-struct -Wno-gnu-zero-variadic-macro-arguments -Wno-missing-prototypes -Wno-nested-anon-types \
+-Wno-padded -Wno-return-std-move-in-c++11 -Wno-shorten-64-to-32 -Wno-sign-conversion -Wno-unknown-warning-option \
+-Wno-unused-command-line-argument -Wno-weak-vtables -Wno-covered-switch-default -Wno-disabled-macro-expansion \
+-Wno-undefined-reinterpret-cast --cuda-gpu-arch=gfx906 --cuda-device-only -c -O3  -Wno-unused-command-line-argument \
+-I. -x hip --hip-device-lib-path=/opt/rocm/lib -mllvm -amdgpu-early-inline-all=true -mllvm \
+-amdgpu-function-calls=false -D__HIP_ROCclr__=1 -isystem /opt/rocm-3.5.0/hip/../include \
+-isystem /opt/rocm/llvm/lib/clang/11.0.0/include/.. -D__HIP_PLATFORM_HCC__=1 -D__HIP_ROCclr__=1 \
+-isystem /opt/rocm-3.5.0/hip/include -isystem /opt/rocm/include --hip-device-lib-path=/opt/rocm/lib \
+--hip-link -mllvm -amdgpu-enable-global-sgpr-addr -mllvm --amdgpu-spill-vgpr-to-agpr=0 \
+out/wrw_reduction_hip.hip.cc -o out/wrw_reduction_hip.hip.cc.o -Wno-old-style-cast -Wno-cast-align
+
+/opt/rocm-3.5.0/llvm/bin/clang-offload-bundler --type=o --targets=hip-amdgcn-amd-amdhsa-gfx906 \
+--inputs=out/wrw_reduction_hip.hip.cc.o --outputs=out/wrw_reduction_hip.hip.cc.o.hsaco --unbundle
