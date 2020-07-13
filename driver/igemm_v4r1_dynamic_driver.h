@@ -555,7 +555,7 @@ class igemm_v4r1_dynamic_driver_t {
             int grid_size = get_grid_size_wrw(&karg, tunable);
 
             // groups to reduction
-            int gemmk_groups = 32;
+            int gemmk_groups = 2;
             grid_size *= gemmk_groups;
 
             karg.gemmk_groups = (int)(log2f(gemmk_groups));
@@ -617,9 +617,9 @@ class igemm_v4r1_dynamic_driver_t {
                 HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config));
-                //HIP_CALL(hipModuleLaunchKernel(reduction_func, karg.n * karg.k * y * x / (reduction_per_thread * 256), 1, 1,
-                //                            256, 1, 1, 0, 0, NULL,
-                //                            (void **)&config_reduction));
+                HIP_CALL(hipModuleLaunchKernel(reduction_func, karg.n * karg.k * y * x / (reduction_per_thread * 256), 1, 1,
+                                            256, 1, 1, 0, 0, NULL,
+                                            (void **)&config_reduction));
             }
             timer.stop();
             float duration_ms = timer.duration();
