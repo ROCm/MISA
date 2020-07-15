@@ -26,7 +26,6 @@
  *******************************************************************************/
 #include "args.h"
 #include "config_parser.h"
-#include "naive_conv.h"
 #include <chrono>
 #include <functional>
 #include <hip/hip_runtime.h>
@@ -36,6 +35,8 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+#define NAIVE_CONV_THREADED
+#include "naive_conv.h"
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
                                    size_t ksize, size_t stride) {
     return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
@@ -52,13 +53,13 @@ class gpu_timer_t {
         hipEventDestroy(evt_1);
     }
     void start() {
-        hipDeviceSynchronize();
+        // hipDeviceSynchronize();
         hipEventRecord(evt_0, stream);
     }
     void stop() {
-        hipEventRecord(evt_1, NULL);
+        hipEventRecord(evt_1, stream);
         hipEventSynchronize(evt_1);
-        hipDeviceSynchronize();
+        // hipDeviceSynchronize();
     }
     float duration() {
         float ms;
@@ -185,6 +186,7 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
                 std::uniform_real_distribution<float> distribution(fmin, fmax);
                 for (int i = tid; i < total_size; i += block_size) {
                     p[i] = distribution(rng);
+                    // p[i] = (T)((int)(10 * distribution(rng)) - 5);
                 }
             },
             vec, t, num_threads, vec_size, fmin, fmax));
@@ -301,8 +303,7 @@ int main(int argc, char **argv) {
     int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
     int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
     int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
-    
-    
+
     // init host side
     float *host_input = (float *)malloc(n * c * hi * wi * sizeof(float));
     float *host_weight = (float *)malloc(k * c * y * x * sizeof(float));
@@ -311,7 +312,7 @@ int main(int argc, char **argv) {
     float *device_input;
     float *device_weight;
     float *device_output;
-    HIP_CALL(hipSetDevice(0));
+
     HIP_CALL(hipMalloc(&device_input, n * c * hi * wi * sizeof(float)));
     HIP_CALL(hipMalloc(&device_weight, k * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, n * k * ho * wo * sizeof(float)));
@@ -338,8 +339,6 @@ int main(int argc, char **argv) {
             // gen rand
             gen_rand_vector<float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
-            // gen_rand_vector<float>(host_input, n*c*hi*wi, 1.0, 1.0);
-            // gen_rand_vector<float>(host_weight, k*c*y*x, 0.5, 0.5);
 
             // TODO: other direction
             // TODO: This is slow. try mkl_conv.h
@@ -396,8 +395,8 @@ int main(int argc, char **argv) {
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
-            printf("cost:%.3fms, gflops:%.1f(%.2f%%)", result.duration_ms,
-                   gflops, (gflops / fp32_gflops) * 100);
+            printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_input_to_host, device_input,
                                    n * c * hi * wi * sizeof(float),

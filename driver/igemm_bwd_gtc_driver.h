@@ -338,7 +338,7 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        // printf("kernel:%s\n", kernel_name.c_str());
+        // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -369,17 +369,17 @@ public:
             }
         };
 
-        gpu_timer_t timer(NULL);
         for (int i = 0; i < warmup; i++) {
             launch_bwd();
         }
+        gpu_timer_t timer(NULL);
         timer.start();
         for (int i = 0; i < repeat; i++) {
             launch_bwd();
         }
+       
         timer.stop();
         float duration_ms = timer.duration();
-
         usleep(1000 * 10);
 
         result_t result;

@@ -499,6 +499,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
             ctrl_out_gld.vector_d1 = t_b1 if t_b1 != 1 else 1
+            # ctrl_out_gld.src_order = 0
         elif self.out_thread_copy_nd == 1:
             ctrl_out_gld.length_d0 = 1
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
