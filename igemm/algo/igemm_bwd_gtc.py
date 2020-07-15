@@ -756,7 +756,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             elif c_x0 == 1 and c_x1 != 1:
                 pass
             elif c_x0 != 1 and c_x1 == 1:
-                self._emit(f"v_lshlrev_b32 v[{v_x1()}], {igemm_log2(n_x1)}, v[{v_x0()}]")
+                if n_x1 == 1:
+                    self._emit(f"v_mov_b32 v[{v_x1()}], v[{v_x0()}]")
+                else:
+                    self._emit(f"v_lshlrev_b32 v[{v_x1()}], {igemm_log2(n_x1)}, v[{v_x0()}]")
             else:
                 self._emit(f"v_lshl_or_b32 v[{v_x1()}], v[{v_x0()}], {igemm_log2(n_x1)}, v[{v_x1()}]")
 
@@ -1067,13 +1070,22 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_stride_dslice_yx()}], s[{s.s_k()}]")
 
-        self._emit(f"s_lshl_b32 s[{s.s_out_move_slice_stride_k()}], s[{s.s_out_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block)} ; {self.tunable.gemm_k_per_block}x")
-        self._emit(f"s_lshl_b32 s[{s.s_wei_move_slice_stride_k()}], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block)} ; {self.tunable.gemm_k_per_block}x")
+        if s_out_stride_d0 == s.s_out_stride_k or s_out_stride_d1 == s.s_out_stride_k:
+            # stride K is already mul by data_byte above. TODO: better logic
+            self._emit(f"s_lshl_b32 s[{s.s_out_move_slice_stride_k()}], s[{s.s_out_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block)} ; {self.tunable.gemm_k_per_block}x")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_out_move_slice_stride_k()}], s[{s.s_out_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block * data_byte)} ; {self.tunable.gemm_k_per_block}x")
+
+        if s_wei_stride_d0 == s.s_wei_stride_k or s_wei_stride_d1 == s.s_wei_stride_k:
+            # stride K is already mul by data_byte above. TODO: better logic
+            self._emit(f"s_lshl_b32 s[{s.s_wei_move_slice_stride_k()}], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block)} ; {self.tunable.gemm_k_per_block}x")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_wei_move_slice_stride_k()}], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_k_per_block * data_byte)} ; {self.tunable.gemm_k_per_block}x")
+
         self._emit(f"s_mov_b32 s[{s.s_move_slice_k_ik()}], 0")
         self._emit(f"s_mov_b32 s[{s.s_move_slice_k_idsy()}], 0")
         self._emit(f"s_mov_b32 s[{s.s_move_slice_k_idsx()}], 0")
         self._emit_empty_line()
-
 
     def emit_kernel_fma_main_loop(self):
         s = self.sgpr
