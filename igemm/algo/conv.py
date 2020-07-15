@@ -23,17 +23,34 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .amdgpu import *
 
 CONV_DIRECTION_FWD = 0      # forward
 CONV_DIRECTION_BWD = 1      # backward data
 CONV_DIRECTOIN_WRW = 2      # backward weight
 
+def conv_string_to_direction(direction_string):
+    if direction_string == 'fwd':
+        return CONV_DIRECTION_FWD
+    if direction_string == 'bwd':
+        return CONV_DIRECTION_BWD
+    if direction_string == 'wrw':
+        return CONV_DIRECTOIN_WRW
+    assert False
+
+def conv_direction_to_string(direction):
+    if direction == CONV_DIRECTION_FWD:
+        return 'fwd'
+    if direction == CONV_DIRECTION_BWD:
+        return 'bwd'
+    if direction == CONV_DIRECTOIN_WRW:
+        return 'wrw'
+    assert False
+
 def conv_out_size(in_size, pad, dilation,  ksize,  stride):
      return (in_size + 2*pad- dilation*(ksize-1) - 1) // stride + 1
 
 class conv_param_t:
-    def __init__(self, n, g, c, hi, wi, k, y, x, py, px, sy, sx, dy, dx, ho, wo, direction, precision = AMDGPU_PRECISION_FP32):
+    def __init__(self, n, g, c, hi, wi, k, y, x, py, px, sy, sx, dy, dx, ho, wo, direction, precision):
         self.n = n
         self.g = g
         self.c = c
