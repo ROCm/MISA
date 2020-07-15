@@ -29,6 +29,7 @@ from .fma_main_loop import *
 from .igemm_base import *
 from .global_memory import *
 from .shared_memory import *
+from .utility import *
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -161,6 +162,13 @@ class igemm_bwd_gtc_t(mc_base_t):
         self.global_load_wei = self.global_load_wei_t(mc, self)
         self.shared_store_out = self.shared_store_out_t(mc, self)
         self.shared_store_wei = self.shared_store_wei_t(mc, self)
+
+        out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
+        self.out_thread_copy_nd = len(out_thread_copy_index)
+        self.wei_thread_copy_nd = len(wei_thread_copy_index)
+        assert self.out_thread_copy_nd in (1, 2)
+        assert self.wei_thread_copy_nd in (1, 2)
+
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable)
 
@@ -368,7 +376,6 @@ class igemm_bwd_gtc_t(mc_base_t):
         def __init__(self, mc, tunable):
             mc_base_t.__init__(self, mc)
             self.tunable            = tunable
-            # self.v_c             = sym_t("v_c"            ,0)
             self.v_c             = sym_t("v_c"            ,0)
             self.v_a             = sym_t("v_a"            ,64)
             self.v_b             = sym_t("v_b"            ,72)
@@ -435,8 +442,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         _, _, _, t_c0, t_c1 = t_ta[0], t_ta[1], t_ta[2], t_ta[3], t_ta[4]
 
         assert t_e == 1, 'currently e dimension always not do load'
-        assert (t_k0, t_k1, t_e, t_n0, t_n1, t_b0, t_b1).count(1) == 5, 'currently only support 2 dimension is non-1'
-        assert (t_k0, t_k1, t_e, t_c0, t_c1).count(1) == 3, 'currently only support 2 dimension is non-1'
+        assert (t_k0, t_k1, t_e, t_n0, t_n1, t_b0, t_b1).count(1) in (5, 6), 'currently only support at most 2 dimension is non-1'
+        assert (t_k0, t_k1, t_e, t_c0, t_c1).count(1) in (3, 4), 'currently only support at most 2 dimension is non-1'
 
         return t_c0, t_c1, t_k0, t_k1, t_e, t_n0, t_n1, t_b0, t_b1 # M, K, N
 
@@ -465,7 +472,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         out_thread_copy_index   = _find_non_1_index_in_list(out_thread_copy_dims)
         wei_thread_copy_index   = _find_non_1_index_in_list(wei_thread_copy_dims)
-        assert len(out_thread_copy_index) == 2 and len(wei_thread_copy_index) == 2,\
+        assert len(out_thread_copy_index) in (1, 2) and len(wei_thread_copy_index) in (1, 2),\
                 f'out_thread_copy_dims:{out_thread_copy_dims} wei_thread_copy_dims:{wei_thread_copy_dims}'
         return out_thread_copy_index, wei_thread_copy_index
 
@@ -475,14 +482,29 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
 
         ctrl_out_gld = ctrl_2d_global_load_t()
-        ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
-        ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-        ctrl_out_gld.vector_d1 = t_b1 if t_b1 != 1 else 1
-
         ctrl_wei_gld = ctrl_2d_global_load_t()
-        ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-        ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-        ctrl_wei_gld.vector_d1 = 1
+
+        if self.out_thread_copy_nd == 2:
+            ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
+            ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            ctrl_out_gld.vector_d1 = t_b1 if t_b1 != 1 else 1
+        elif self.out_thread_copy_nd == 1:
+            ctrl_out_gld.length_d0 = 1
+            ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            ctrl_out_gld.vector_d1 = t_b1 if t_b1 != 1 else 1
+        else:
+            assert False
+
+        if self.wei_thread_copy_nd == 2:
+            ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+            ctrl_wei_gld.vector_d1 = 1
+        elif self.wei_thread_copy_nd == 1:
+            ctrl_wei_gld.length_d0 = 1
+            ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            ctrl_wei_gld.vector_d1 = 1
+        else:
+            assert False
 
         return macro_igemm_2d_global_load_t(self.mc, ctrl_out_gld),  macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld)
 
@@ -495,28 +517,43 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
         n_c0, n_c1, n_k0, n_k1, n_e, n_n0, n_n1, n_b0, n_b1 = self.get_dims_lengths()
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+
         # K0xK1xExN0xB0xB1xN1 n_k0, n_k1, n_e, n_n0, n_b0, n_b1, n_n1
         out_stride_list = [n_k1*n_e*n_n0*n_b0*n_b1*n_n1, n_e*n_n0*n_b0*n_b1*n_n1, n_n0*n_b0*n_b1*n_n1, n_b0*n_b1*n_n1, n_b1*n_n1, n_n1, 1]
         out_reorder_list = [0, 1, 2, 3, 6, 4, 5]
-
-        # K0xK1xExN0xB0xB1xN1
-        out_sst_ctrl = ctrl_2d_shared_store_t()
-        out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
-        out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-        out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-        out_sst_ctrl.stride_d0 = out_stride_list[out_reorder_list[out_thread_copy_index[0]]] * data_byte
-        #out_sst_ctrl.precision = 'fp32'      # 'fp32', 'fp16', ...
-        #out_sst_ctrl.src_order = 0  # 0-d0,d1, 1-d1,d0
-
         # K0xK1xExC0xC1, n_k0, n_k1, n_e, n_c0, n_c1
         wei_stride_list = [n_k1*n_e*n_c0*n_c1, n_e*n_c0*n_c1, n_c0*n_c1, n_c1, 1]
         wei_reorder_list = [0, 1, 2, 3, 4]
 
+        # K0xK1xExN0xB0xB1xN1
+        out_sst_ctrl = ctrl_2d_shared_store_t()
         wei_sst_ctrl = ctrl_2d_shared_store_t()
-        wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-        wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-        wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-        wei_sst_ctrl.stride_d0 = wei_stride_list[wei_reorder_list[wei_thread_copy_index[0]]] * data_byte
+
+        if self.out_thread_copy_nd == 2:
+            out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
+            out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            out_sst_ctrl.stride_d0 = out_stride_list[out_reorder_list[out_thread_copy_index[0]]] * data_byte
+        elif self.out_thread_copy_nd == 1:
+            out_sst_ctrl.length_d0 = 1
+            out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            out_sst_ctrl.stride_d0 = 1
+        else:
+            assert False
+
+        if self.wei_thread_copy_nd == 2:
+            wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+            wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+            wei_sst_ctrl.stride_d0 = wei_stride_list[wei_reorder_list[wei_thread_copy_index[0]]] * data_byte
+        elif self.wei_thread_copy_nd == 1:
+            wei_sst_ctrl.length_d0 = 1
+            wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            wei_sst_ctrl.stride_d0 = 1
+        else:
+            assert False
 
         return macro_igemm_2d_shared_store_t(self.mc, out_sst_ctrl), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl)
 
@@ -549,10 +586,24 @@ class igemm_bwd_gtc_t(mc_base_t):
         wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy, s.s_wei_stride_k, s_dummy,
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy, s.s_wei_stride_c]
 
-        s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
-        s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[1]]
-        s_wei_stride_d0 = wei_stride_gprs[wei_thread_copy_index[0]]
-        s_wei_stride_d1 = wei_stride_gprs[wei_thread_copy_index[1]]
+        if self.out_thread_copy_nd == 2:
+            s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
+            s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[1]]
+        elif self.out_thread_copy_nd == 1:
+            s_out_stride_d0 = s_dummy
+            s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[0]]
+        else:
+            assert False
+
+        if self.wei_thread_copy_nd == 2:
+            s_wei_stride_d0 = wei_stride_gprs[wei_thread_copy_index[0]]
+            s_wei_stride_d1 = wei_stride_gprs[wei_thread_copy_index[1]]
+        elif self.wei_thread_copy_nd == 1:
+            s_wei_stride_d0 = s_dummy
+            s_wei_stride_d1 = wei_stride_gprs[wei_thread_copy_index[0]]
+        else:
+            assert False
+
         return s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1
 
 
@@ -826,7 +877,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
 
         self._emit_empty_line()
-        self._emit(f"s_lshl_b32 s[{s_out_stride_d0()}], s[{s_out_stride_d0()}], {igemm_log2(data_byte)}")
+        if self.out_thread_copy_nd != 1:
+            self._emit(f"s_lshl_b32 s[{s_out_stride_d0()}], s[{s_out_stride_d0()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s_out_stride_d1()}], s[{s_out_stride_d1()}], {igemm_log2(data_byte)}")
         self._emit_empty_line()
 
@@ -849,7 +901,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_add_lshl_u32 v[{v.v_wei_os_base()}], v[{v.v_tmp()}], v[{v.v_tmp()}+1], {igemm_log2(data_byte)}")
         self._emit(m_wei_update_os(v.v_wei_os(), v.v_wei_os_base(), v.v_wei_iy(), v.v_wei_ix(), s.s_x(), v.v_tmp()))
         self._emit_empty_line()
-        self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
+        if self.wei_thread_copy_nd != 1:
+            self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s_wei_stride_d1()}], s[{s_wei_stride_d1()}], {igemm_log2(data_byte)}")
         self._emit_empty_line()
         # load wei
@@ -1068,8 +1121,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         fctrl.global_load_b_functor       = self.global_load_out
         fctrl.shared_store_a_functor      = self.shared_store_wei
         fctrl.shared_store_b_functor      = self.shared_store_out
-        fctrl.shared_load_a_functor       = ds_read_t(self.tunable.thread_sub_tile_m * 4)
-        fctrl.shared_load_b_functor       = ds_read_t(self.tunable.thread_sub_tile_n * 4)
+        fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
+        fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
         fctrl.move_slice_window_a_functor = move_slice_window_a
         fctrl.move_slice_window_b_functor = move_slice_window_b
 

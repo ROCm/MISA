@@ -90,7 +90,7 @@ class igemm_codegen_driver_t(mc_base_t):
 
     def emit_metadata(self):
         kernel_info_list = [kernel.get_kernel_info() for kernel in self.kernel_list]
-        amd_metadata_t(self.mc, kernel_info_list).emit()
+        amdgpu_metadata_t(self.mc, kernel_info_list).emit()
 
     def do_emit(self):
         self.emit_hsa_header()

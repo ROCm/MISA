@@ -26,7 +26,19 @@
 # pylint: disable=maybe-no-member
 
 from ..codegen import *
-# from ..amdgpu import *
+from .utility import *
+
+class inst_fma_t(object):
+    def __init__(self, arch_config):
+        self.arch_config = arch_config
+    def __call__(self, reg_c, reg_a, reg_b):
+        if self.arch_config.data_type == AMDGPU_PRECISION_FP32:
+            if self.arch_config.arch == AMDGPU_ARCH_GFX906:
+                if self.arch_config.use_dlops:
+                    return 'v_fmac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
+            return 'v_mac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
+        # xdlops
+        assert False, 'unimplemented fma type'
 
 class macro_v_fma_mxn_t(mc_base_t):
     '''
@@ -46,7 +58,7 @@ class macro_v_fma_mxn_t(mc_base_t):
     def __call__(self, c, a, b):
         return '{} {},{},{}'.format(self.name(), c, a, b)
     def emit(self):
-        fma = fma_inst_t(self.mc.arch_config)
+        fma = inst_fma_t(self.mc.arch_config)
         reg_a = msym_t(sym_t('a'))
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))

@@ -27,4 +27,3 @@ from .compile import *
 from .config_parser import *
 from .amdgpu import *
 from .mc import *
-from .util import *

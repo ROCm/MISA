@@ -30,3 +30,4 @@ from .global_memory import *
 from .shared_memory import *
 from .igemm_base import *
 from .igemm_bwd_gtc import *
+from .utility import *

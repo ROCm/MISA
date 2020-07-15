@@ -26,6 +26,7 @@
 # pylint: disable=maybe-no-member
 import os
 import subprocess
+from .mc import *
 
 AMDGPU_PRECISION_FP32   = (0 << 20)
 AMDGPU_PRECISION_FP16   = (1 << 20)
@@ -350,3 +351,129 @@ class amdgpu_kernel_info_t(object):
         self.kernel_name = kernel_name
         self.kernel_block_size = kernel_block_size
         self.kernel_args = kernel_args
+
+class amd_kernel_code_t(mc_base_t):
+    def __init__(self, mc, kernel_info):
+        mc_base_t.__init__(self, mc)
+        self.ki = kernel_info
+
+    def emit(self):
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
+            self._emit('.amd_kernel_code_t')
+            with self._indent_context():
+                if self.ki.kernel_code.enable_sgpr_private_segment_buffer:
+                    self._emit('enable_sgpr_private_segment_buffer = {}'.format(    self.ki.kernel_code.enable_sgpr_private_segment_buffer))
+                if self.ki.kernel_code.enable_sgpr_dispatch_ptr:
+                    self._emit('enable_sgpr_dispatch_ptr = {}'.format(              self.ki.kernel_code.enable_sgpr_dispatch_ptr))
+                if self.ki.kernel_code.enable_sgpr_queue_ptr:
+                    self._emit('enable_sgpr_queue_ptr = {}'.format(                 self.ki.kernel_code.enable_sgpr_queue_ptr))
+                self._emit('enable_sgpr_kernarg_segment_ptr = {}'.format(           self.ki.kernel_code.enable_sgpr_kernarg_segment_ptr))
+                if self.ki.kernel_code.enable_sgpr_dispatch_id:
+                    self._emit('enable_sgpr_dispatch_id'.format(                    self.ki.kernel_code.enable_sgpr_dispatch_id))
+                # other sgpr related to be implemented 
+                self._emit('user_sgpr_count = {}'.format(                           self.ki.kernel_code.user_sgpr_count))
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_x:
+                    self._emit('enable_sgpr_workgroup_id_x = {}'.format(            self.ki.kernel_code.enable_sgpr_workgroup_id_x))
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_y:
+                    self._emit('enable_sgpr_workgroup_id_y = {}'.format(            self.ki.kernel_code.enable_sgpr_workgroup_id_y))
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_z:
+                    self._emit('enable_sgpr_workgroup_id_z = {}'.format(            self.ki.kernel_code.enable_sgpr_workgroup_id_z))
+                self._emit('enable_vgpr_workitem_id = {}'.format(                   self.ki.kernel_code.enable_vgpr_workitem_id))
+                self._emit('is_ptr64 = {}'.format(                                  self.ki.kernel_code.is_ptr64))
+                self._emit('float_mode = {}'.format(                                self.ki.kernel_code.float_mode))
+                self._emit('workgroup_group_segment_byte_size = {}'.format(         self.ki.kernel_code.workgroup_group_segment_byte_size))
+                self._emit('kernarg_segment_byte_size = {}'.format(                 self.ki.kernel_code.kernarg_segment_byte_size))
+                self._emit('wavefront_sgpr_count = {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count))
+                self._emit('workitem_vgpr_count = {}'.format(                       self.ki.kernel_code.workitem_vgpr_count))
+                self._emit('granulated_workitem_vgpr_count = {}'.format(            self.ki.kernel_code.granulated_workitem_vgpr_count))
+                self._emit('granulated_wavefront_sgpr_count = {}'.format(           self.ki.kernel_code.granulated_wavefront_sgpr_count))
+            self._emit('.end_amd_kernel_code_t')
+        elif self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
+            self._emit('.rodata')   # v3 is 64 byte rodata for each kerenl
+            self._emit('.p2align 6')
+            self._emit('.amdhsa_kernel {}'.format(self.ki.kernel_name))
+            with self._indent_context():
+                if self.ki.kernel_code.kernarg_segment_byte_size > 0:
+                    self._emit('.amdhsa_group_segment_fixed_size {}'.format(        self.ki.kernel_code.workgroup_group_segment_byte_size))
+                if self.ki.kernel_code.enable_sgpr_dispatch_ptr:
+                    self._emit('.amdhsa_user_sgpr_dispatch_ptr {}'.format(          self.ki.kernel_code.enable_sgpr_dispatch_ptr))
+
+                self._emit('.amdhsa_user_sgpr_kernarg_segment_ptr {}'.format(       self.ki.kernel_code.enable_sgpr_kernarg_segment_ptr))
+
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_x:
+                    self._emit('.amdhsa_system_sgpr_workgroup_id_x {}'.format(      self.ki.kernel_code.enable_sgpr_workgroup_id_x))
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_y:
+                    self._emit('.amdhsa_system_sgpr_workgroup_id_y {}'.format(      self.ki.kernel_code.enable_sgpr_workgroup_id_y))
+                if self.ki.kernel_code.enable_sgpr_workgroup_id_z:
+                    self._emit('.amdhsa_system_sgpr_workgroup_id_z {}'.format(      self.ki.kernel_code.enable_sgpr_workgroup_id_z))
+
+                self._emit('.amdhsa_system_vgpr_workitem_id {}'.format(             self.ki.kernel_code.enable_vgpr_workitem_id))
+                self._emit('.amdhsa_next_free_vgpr {}'.format(                      self.ki.kernel_code.workitem_vgpr_count))
+                self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count))
+
+                self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
+                self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
+            self._emit('.end_amdhsa_kernel')
+        else:
+            assert False
+
+class amdgpu_metadata_t(mc_base_t):
+    '''
+    only implement in cov3
+    '''
+    def __init__(self, mc, kernel_info):
+        mc_base_t.__init__(self, mc)
+        self.ki = kernel_info
+
+    def emit_one_kernel_metadata(self, ki_):
+        self._emit('  - .name: {}'.format(                          ki_.kernel_name))
+        self._emit('    .symbol: {}.kd'.format(                     ki_.kernel_name))
+        self._emit('    .sgpr_count: {}'.format(                    ki_.kernel_code.wavefront_sgpr_count))
+        self._emit('    .vgpr_count: {}'.format(                    ki_.kernel_code.workitem_vgpr_count))
+        self._emit('    .kernarg_segment_align: {}'.format(         8))     # default set to 8
+        self._emit('    .kernarg_segment_size: {}'.format(          ki_.kernel_code.kernarg_segment_byte_size))
+        self._emit('    .group_segment_fixed_size: {}'.format(      ki_.kernel_code.workgroup_group_segment_byte_size))
+        self._emit('    .private_segment_fixed_size: {}'.format(    0))     # hard code to 0
+        self._emit('    .wavefront_size: {}'.format(                64))
+        self._emit('    .reqd_workgroup_size : [{}]'.format(        '{}, 1, 1'.format( ki_.kernel_block_size) \
+                                                                                if type(ki_.kernel_block_size) is int else \
+                                                                    '{}, {}, {}'.format(ki_.kernel_block_size[0],
+                                                                                ki_.kernel_block_size[1],ki_.kernel_block_size[2])))
+        self._emit('    .max_flat_workgroup_size: {}'.format(       ki_.kernel_block_size if type(ki_.kernel_block_size) is int else \
+                                                                    ki_.kernel_block_size[0]*ki_.kernel_block_size[1]*ki_.kernel_block_size[2]))
+        self._emit('    .args:')
+        assert ki_.kernel_args
+        for kern_arg in ki_.kernel_args:
+            self._emit(kern_arg.serialize_as_metadata())
+
+    def emit(self):
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
+            self._emit('.amdgpu_metadata')
+            self._emit('---')
+            self._emit('amdhsa.version: [ 1, 0 ]')
+            self._emit('amdhsa.kernels:')
+            if type(self.ki) is list:
+                for k in self.ki:
+                    self.emit_one_kernel_metadata(k)
+            else:
+                self.emit_one_kernel_metadata(self.ki)
+            self._emit('...')
+            self._emit('.end_amdgpu_metadata')
+
+class hsa_header_t(mc_base_t):
+    '''
+    only used in cov2
+    '''
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def emit(self):
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
+            self._emit(".hsa_code_object_version 2,1")
+            self._emit(".hsa_code_object_isa")
+            self._emit_empty_line()
+
+class hsa_footer_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def emit(self):
+        pass

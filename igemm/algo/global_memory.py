@@ -27,9 +27,52 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
+
+class inst_buffer_load_dword_t(object):
+    ''' TODO: this implementation always offen '''
+    def __init__(self, dwords):
+        self.dwords = dwords
+
+    def __call__(self, vdst, vaddr, srsrc, soffset, offset):
+        if type(soffset) is int and soffset == 0:
+            soffset_str = "0"
+        else:
+            soffset_str = f"s[{soffset}]"
+
+        if self.dwords == 1:
+            return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 2:
+            return f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 3:
+            return f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 4:
+            return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False
+
+class inst_buffer_store_dword_t(object):
+    ''' TODO: this implementation always offen '''
+    def __init__(self, dwords):
+        self.dwords = dwords
+
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+        if type(soffset) is int and soffset == 0:
+            soffset_str = "0"
+        else:
+            soffset_str = f"s[{soffset}]"
+
+        if self.dwords == 1:
+            return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 2:
+            return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 3:
+            return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.dwords == 4:
+            return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False
+
 class ctrl_2d_global_load_t(object):
     def __init__(self):
-        self.length_d0 = 1
+        self.length_d0 = 1           # if d0 is 1, it is indeed 1d access
         self.length_d1 = 1
         self.vector_d1 = 1
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
@@ -69,7 +112,7 @@ class macro_igemm_2d_global_load_t(mc_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = buffer_load_dword_t(ctrl.vector_d1)
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
         with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
             self._emit(".v_clear_nc \\v_dst, 8")
             i_dst = 0

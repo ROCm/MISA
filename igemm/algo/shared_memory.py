@@ -28,7 +28,127 @@ import sys
 
 from ..codegen import *
 
-class ds_write2_likely_t(mc_base_t):
+
+class amdgpu_swap_sequencer_t(object):
+    '''
+    partial-transpose 2d matrix in register, by using swap.
+    currently only consider continus register in same col, aka col major
+
+    after transpose, the num of col/row should be the same
+
+    And be aware that, this method still is not straight-forward and not optimal,
+    for v_swap_b32 have half speed. In this case better use several tmp register serve as vector buffer
+    Hopefully in the future could have full speed v_swap_b32
+
+        k0 k1 k2 k3          k0 k1 k2 k3
+    e0 0  2  4  6    =>  e0 0  1  2  3
+    e1 1  3  5  7        e1 4  5  6  7
+
+        k0 k1 k2 k3         k0 k1 k2 k3
+    e0  0  4  8  c       e0 0  1  2  3
+    e1  1  5  9  d   =>  e1 4  5  6  7
+    e2  2  6  a  e       e2 8  9  a  b
+    e3  3  7  b  f       e3 c  d  e  f
+    '''
+    def create_2d_swap(self):
+        def init_2d_indice(row, col):
+            indice_2d = []
+            for r in range(row):
+                indice_2d.append([r+c*row for c in range(col)])
+            return indice_2d
+        def check_row_can_omit_swap(indice_2d, cur_row):
+            '''
+            if current row already fit in vector pattern, can omit out
+            '''
+            row = len(indice_2d)
+            col = len(indice_2d[0])
+            targeting_vector_pattern = []
+            for c in range(col):
+                targeting_vector_pattern.append(c)
+            vector_diff = []
+            for c in range(col):
+                vector_diff.append(abs(indice_2d[cur_row][c] - targeting_vector_pattern[c]))
+            lasf_diff = vector_diff[0]
+            #print('xxx {}'.format(vector_diff))
+            if lasf_diff % 2 != 0:
+                return False
+            for c in range(1, col):
+                if lasf_diff != vector_diff[c]:
+                    return False
+            return True
+        def scan_2d_indice(indice_2d):
+            def locate_indice(indice_2d, target_indice, start_row):
+                row = len(indice_2d)
+                col = len(indice_2d[0])
+                (tr, tc) = (start_row, 0)
+                found = False
+                for tr in range(start_row, row):
+                    for tc in range(0, col):
+                        #print(target_indice, indice_2d[tr][tc])
+                        if target_indice == indice_2d[tr][tc]:
+                            found = True
+                            break
+                    if found:
+                        break
+                assert found
+                return (tr, tc)
+            swap_list = []
+            row = len(indice_2d)
+            col = len(indice_2d[0])
+
+            class touch_row_t(object):
+                def __init__(self, row):
+                    self.row = row
+                    self.row_touched = [ 0 for r in range(row)]
+                    self.row_touched_index = 0
+                def next_untouched_row(self):
+                    for r in range(self.row_touched_index, self.row):
+                        if self.row_touched[r] == 0:
+                            self.row_touched_index = r
+                            return r
+                    assert False
+                def touch(self, row_index):
+                    self.row_touched[row_index] = 1
+            touch_row = touch_row_t(row)
+            for r in range(row):
+                if check_row_can_omit_swap(indice_2d, r):
+                    swap_list.append('unified for row {}'.format(r))
+                    touch_row.touch( indice_2d[r][0] // col)
+                    continue
+                swap_list_per_row = []
+                for c in range(col):
+                    target_indice = touch_row.next_untouched_row()*col + c
+                    origin_indice = indice_2d[r][c]
+                    if origin_indice == target_indice:
+                        continue
+                    #print('to find:{}'.format(target_indice))
+                    (tr, tc) = locate_indice(indice_2d, target_indice, r)
+                    # swap and record indice
+                    indice_2d[tr][tc] = origin_indice
+                    indice_2d[r][c] = target_indice
+                    #print('swapper:{}'.format(indice_2d))
+                    swap_list_per_row.append((origin_indice, target_indice))
+                swap_list.append(swap_list_per_row)
+                touch_row.touch(r)
+            return swap_list
+        indice_2d = init_2d_indice(self.row, self.col)
+        #print(indice_2d)
+        swap_list = scan_2d_indice(indice_2d)
+        return swap_list
+
+    def __init__(self, row, col):
+        assert col != 1 and row != 1
+        self.col = col
+        self.row = row
+        self.swap_list = self.create_2d_swap()
+
+    def __call__(self):
+        '''
+        return list of tuple of the row row_idx what swap should take
+        '''
+        return self.swap_list
+
+class inst_ds_write2_likely_t(mc_base_t):
     '''
     generate ds_write2 if possible. otherwise fallback to ds_write.
     Design this not as macro, but inlined into other LDS store operation
@@ -172,7 +292,7 @@ class ds_write2_likely_t(mc_base_t):
                 return self.t_n_vec // 2
         return self.t_n_vec
 
-class ds_read_t(object):
+class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
     def get_offset(self, offset):
@@ -190,7 +310,7 @@ class ds_read_t(object):
     def get_issues(self):
         return 1
 
-class ds_write_t(object):
+class inst_ds_write_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
 
@@ -220,7 +340,7 @@ class ctrl_2d_shared_store_t(object):
     d0xd1
     '''
     def __init__(self):
-        self.length_d0 = 1
+        self.length_d0 = 1        # is d0 is 1, it is indeed 1d access
         self.length_d1 = 1
         self.vector_d1 = 1
         # self.offset_d1 = 0      # base offset
@@ -252,15 +372,17 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
             assert False
 
         assert ctrl.length_d1 == ctrl.vector_d1
-        #n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_st{ctrl.stride_d0}"
+
+        return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}" + \
+                ("" if ctrl.length_d0 == 1 else f"_st{ctrl.stride_d0}")
+
     def __call__(self, v_src, v_sst_os):
         return '{} {}, {}'.format(self.name(), v_src, v_sst_os)
     def emit(self):
         ctrl = self.ctrl
         assert ctrl.length_d1 == ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        ds_write = ds_write_t(ctrl.vector_d1 * 4)
+        ds_write = inst_ds_write_t(ctrl.vector_d1 * 4)
         with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
             if ctrl.src_order == 0:
                 for i_d0 in range(ctrl.length_d0):
