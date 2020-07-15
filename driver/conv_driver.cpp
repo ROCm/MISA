@@ -216,7 +216,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
 #ifdef PER_PIXEL_CHECK
-        double delta = ABS(ri - pi) / ri;
+        double delta = ABS(ABS(ri - pi) / ri);
         if (delta > 3e-5) 
         //if (i > 255)
         {
@@ -229,7 +229,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         }
 #endif
     }
-    // printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+    printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -478,7 +478,7 @@ int main(int argc, char **argv) {
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if (!is_valid) {
                     printf("\n");
-                    break;
+                    //break;
                 }
             }
             printf("\n");
