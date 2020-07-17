@@ -107,6 +107,8 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # TODO: better specify
         self.block_size                         = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
+        assert self.block_size == _flatten_list_product(self.tensor_a_cluster_lengths)
+        assert self.block_size == _flatten_list_product(self.tensor_b_cluster_lengths)
 
         # vector global/lds implicit here
 
@@ -120,6 +122,9 @@ class igemm_gtc_tunable_parameter_t(object):
         self.num_vgpr_global_load_a             = _flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = _flatten_list_product(self.tensor_b_thread_lengths)
 
+        assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
+        assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
+
         # LDS size
         self.lds_a                              = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block
         self.lds_b                              = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block
@@ -127,6 +132,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_b_np2                          = igemm_next_pow2( self.lds_b)
         self.lds_single                         = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2)
         self.lds_total                          = (2*self.lds_single)
+        # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
         # some parameter not in modular_conv
@@ -172,7 +178,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_starter + 'tensor_a_cluster_lengths   : {}'.format(self.tensor_a_cluster_lengths) + '\n' + \
                 line_starter + 'tensor_b_thread_lengths    : {}'.format(self.tensor_b_thread_lengths) + '\n' + \
                 line_starter + 'tensor_b_cluster_lengths   : {}'.format(self.tensor_b_cluster_lengths) + '\n' + \
-                line_starter + 'direction                  : {}'.format(self.tensor_b_cluster_lengths) + '\n' + \
+                line_starter + 'direction                  : {}'.format(self.direction) + '\n' + \
                 line_starter + 'precision                  : {}'.format(self.precision) + '\n' + \
                 line_starter + 'opt_1x1                    : {}'.format(self.opt_1x1) + '\n' + \
                 line_starter + '\n' + \

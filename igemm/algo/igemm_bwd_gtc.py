@@ -567,6 +567,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             assert False
 
+        # print(f"out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
+
         return macro_igemm_2d_shared_store_t(self.mc, out_sst_ctrl), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl)
 
     def get_macro_shared_load(self):
@@ -818,14 +820,18 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_stride_dslice_hw()}],  s[{s.s_dslice_h()}], s[{s.s_dslice_w()}]")
         self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
         if t_k0 != 1:
-            self._emit(f"s_lshl_b32 s[{s.s_out_stride_k0}], s[{s.s_out_stride_k}], {igemm_log2(t_k0)}")
-            self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k0}], s[{s.s_wei_stride_k}], {igemm_log2(t_k0)}")
+            self._emit(f"s_lshl_b32 s[{s.s_out_stride_k0()}], s[{s.s_out_stride_k()}], {igemm_log2(n_k1)}")
+            self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k0()}], s[{s.s_wei_stride_k()}], {igemm_log2(n_k1)}")
         if t_b0 != 1:
-            self._emit(f"s_mov_b32 s[{s.s_out_stride_b0}], {t_b0}")
+            self._emit(f"s_mov_b32 s[{s.s_out_stride_b0()}], {t_b0}")
         if t_n0 != 1:
-            self._emit(f"s_lshl_b32 s[{s.s_out_stride_n0}], s[{s.s_out_stride_n()}], {igemm_log2(t_n0)}")
+            # print(f"n_n1:{n_n1}")
+            # print(f"t:{self.get_thread_lengths()}")
+            # print(f"c:{self.get_cluster_lengths()}")
+            # print(f"n:{self.get_dims_lengths()}")
+            self._emit(f"s_lshl_b32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], {igemm_log2(n_n1)}")
         if t_c0 != 1:
-            self._emit(f"s_lshl_b32 s[{s.s_wei_stride_c0}], s[{s.s_wei_stride_c()}], {igemm_log2(t_c0)}")
+            self._emit(f"s_lshl_b32 s[{s.s_wei_stride_c0()}], s[{s.s_wei_stride_c()}], {igemm_log2(n_c1)}")
         self._emit_empty_line()
         self._emit(f"; N0xN1xB0xB1, gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], s[{s.s_n()}]")
@@ -834,7 +840,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_readfirstlane_b32 s[{s.s_tmp()}+4], v[{v.v_tmp()}+5]                  ; gemm_m,")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}+2], s[{s.s_tmp()}+4], s[0]")
         self._emit(f"s_sub_i32 s[{s.s_tmp()}+5], s[{s.s_bx()}], s[{s.s_tmp()}+2]                   ; gemm_n, cnt")
-        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_tmp()}+4], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_tmp()}+4], {igemm_log2(self.tunable.gemm_m_per_block)}")
 
         if n_b != 1:
             self._emit(f"s_lshr_b32 s[0], s[{s.s_stride_dslice_hw()}], {igemm_log2(n_b)}          ; B:{n_b} per block, total num of B")
@@ -1055,8 +1061,13 @@ class igemm_bwd_gtc_t(mc_base_t):
         if n_n0 != 1:
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_nr()}], s[{s.s_in_stride_n()}], {igemm_log2( (n_n0 * n_n1) // 2)}")
         else:
-            assert n_b0 != 1
-            self._emit(f"s_mov_b32 s[{s.s_in_stride_nr()}], {(n_b0 * n_b1 * data_byte) // 2}")
+            if n_b0 * n_b1 != 1:
+                # NOTICE HERE!!!!!
+                # If B dimension is not continue (non-1x1, with stride/padding), this is not correct!
+                self._emit(f"s_mov_b32 s[{s.s_in_stride_nr()}], {(n_b0 * n_b1 * data_byte) // 2}")
+                # self._emit(f"s_mov_b32 s[{s.s_in_stride_nr()}], 4")
+            else:
+                assert False
         self._emit_empty_line()
         self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s.s_in_stride_cr()}], s[{s.s_in_stride_c()}], {igemm_log2( (n_c0*n_c1) // 2)}")
@@ -1181,12 +1192,6 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_mov_b32 s[{s.s_tmp()}+2], 0")
         self._emit(f"s_mov_b32 s[{s.s_tmp()}+3], 0")
 
-        # self._emit(f"_iii = 0")
-        # self._emit(f".rept 64")
-        # self._emit(f"v_mov_b32 v[_iii], 3.0")
-        # self._emit(f"_iii = _iii + 1")
-        # self._emit(f".endr")
-
         self._emit(in_global_store(v.v_c(), s.s_p_in(), v.v_in_os(), s.s_in_stride_n(), s.s_in_stride_nr(), s.s_in_stride_c(), s.s_in_stride_cr(), s.s_tmp(),
             self.tunable.gemm_n_per_thread, self.tunable.gemm_n_repeat, self.tunable.gemm_m_per_thread, self.tunable.gemm_m_repeat))
 
@@ -1211,6 +1216,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
             self._emit('.amdgpu_hsa_kernel {}'.format(kernel_name))
         self._emit('{}:'.format(kernel_name))
+
     def emit_kernel_body(self):
         self.emit_kernel_prologue()
         self.emit_kernel_fma_main_loop()
@@ -1223,8 +1229,3 @@ class igemm_bwd_gtc_t(mc_base_t):
     def emit_kernel_amd_kernel_code_t(self):
         amd_kernel_code_t(self.mc, self.get_kernel_info()).emit()
 
-
-    # def emit_kernel(self):
-    #     self.emit_kernel_prologue()
-    #     self.emit_kernel_fma_main_loop()
-    #     self.emit_kernel_epilogue()
