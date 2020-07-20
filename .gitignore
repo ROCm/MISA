@@ -4,3 +4,4 @@ out_ori/
 __pycache__
 #*.s
 .vscode/
+*.hsaco
