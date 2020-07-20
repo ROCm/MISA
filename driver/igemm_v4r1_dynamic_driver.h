@@ -555,7 +555,7 @@ class igemm_v4r1_dynamic_driver_t {
             int grid_size = get_grid_size_wrw(&karg, tunable);
 
             // groups to reduction
-            int gemmk_groups = 1;
+            int gemmk_groups = 4;
             grid_size *= gemmk_groups;
 
             karg.gemmk_groups = (int)(log2f(gemmk_groups));
