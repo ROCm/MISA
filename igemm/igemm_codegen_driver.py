@@ -36,7 +36,7 @@ class igemm_codegen_driver_t(mc_base_t):
         kernel_list = []
 
         # gtc bwd
-        kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+        kernel_list.extend([igemm_bwd_gtc_deprecated_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
         self.kernel_list = kernel_list
 

@@ -41,6 +41,8 @@ class _dict_with_default_t(object):
     def __init__(self, d):
         self.d = d
     def __call__(self, key, default_value):
+        if self.d is None:
+            return default_value
         if key in self.d:
             return self.d[key]
         return default_value

@@ -38,7 +38,7 @@ def igemm_get_vector_size(v):
         pass
     return vec_size
 
-    # compute next power of 2
+# compute next power of 2
 def igemm_next_pow2(n):
     if n == 0:
         return 1
@@ -70,6 +70,13 @@ def igemm_get_epack_length(precision):
             epack = 2
         return epack
 
+def igemm_gcd(a, b):
+    # math.gcd new in python 3.5
+    return math.gcd(a, b)
+
+def igemm_lcm(a, b):
+    return abs(a * b) // math.gcd(a, b)
+
 def _flatten_list_product(x):
     assert type(x) is list
     from functools import reduce
@@ -77,7 +84,7 @@ def _flatten_list_product(x):
 
 class igemm_gtc_tunable_parameter_t(object):
     '''
-    generic tensor contraction for bwd
+    generic tensor contraction
     '''
     def __init__(self, tunable_dict):
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
@@ -95,20 +102,46 @@ class igemm_gtc_tunable_parameter_t(object):
         self.tensor_b_cluster_lengths           = tunable_dict['tensor_b_cluster_lengths']    # list!
         self.direction                          = tunable_dict['direction']
         self.precision                          = tunable_dict['precision']
-        self.opt_1x1                            = tunable_dict['opt_1x1']
+        #self.opt_1x1                            = tunable_dict['opt_1x1']
+        self.nxb                                = tunable_dict['nxb']           # multiplier of b
+        self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
 
-        assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list and \
-                        len(self.tensor_a_thread_lengths) == len(self.tensor_a_cluster_lengths)
-        assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list and \
-                        len(self.tensor_b_thread_lengths) == len(self.tensor_b_cluster_lengths)
+        assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
+        assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
         assert self.precision in ('fp32', 'fp16', 'bf16')
+        assert self.nxb in (1,4,16,64,256)
+        assert self.nxe in (0,1)
 
         # TODO: better specify
         self.block_size                         = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
         assert self.block_size == _flatten_list_product(self.tensor_a_cluster_lengths)
         assert self.block_size == _flatten_list_product(self.tensor_b_cluster_lengths)
+
+
+        def _unmerge_x1_from_e(unroll_k, nxe):
+            if nxe == 0:
+                return 1        # not used
+            if unroll_k % nxe == 0:
+                return unroll_k // nxe
+            return unroll_k
+
+        if self.direction == 'fwd':
+            assert self.gemm_n_per_block % self.nxb == 0
+            self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
+            self.unmerge_sub_k = 1                             # not used
+            self.unmerge_sub_c = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
+        elif self.direction == 'bwd':
+            assert self.gemm_n_per_block % self.nxb == 0
+            self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
+            self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
+            self.unmerge_sub_c = 1                             # not used
+        else:
+            # TODO: wrw maybe different
+            self.unmerge_sub_n = 1
+            self.unmerge_sub_k = 1
+            self.unmerge_sub_c = 1
 
         # vector global/lds implicit here
 
@@ -141,10 +174,14 @@ class igemm_gtc_tunable_parameter_t(object):
         self.thread_sub_tile_m                  = self.gemm_m_per_thread
         self.thread_sub_tile_n                  = self.gemm_n_per_thread
 
+        # number of loops at least needed for final coalescing store, dicided by LDS size
+        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
+                (2 * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
+
     def to_dict(self):
         tunable_dict = {}
         tunable_dict['gemm_m_per_block']                = self.gemm_m_per_block
-        tunable_dict['gemm_n_per_block']                = self.gemm_n_per_block 
+        tunable_dict['gemm_n_per_block']                = self.gemm_n_per_block
         tunable_dict['gemm_k_per_block']                = self.gemm_k_per_block
         tunable_dict['gemm_m_per_thread']               = self.gemm_m_per_thread_subc
         tunable_dict['gemm_m_level0_cluster']           = self.gemm_m_level0_cluster
@@ -158,7 +195,10 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['tensor_b_cluster_lengths']        = self.tensor_b_cluster_lengths
         tunable_dict['direction']                       = self.direction
         tunable_dict['precision']                       = self.precision
-        tunable_dict['opt_1x1']                         = self.tunable_dict
+        #tunable_dict['opt_1x1']                         = self.opt_1x1
+        tunable_dict['nxb']                             = self.nxb
+        tunable_dict['nxe']                             = self.nxe
+
         return tunable_dict
 
     def is_opt_1x1(self):
@@ -180,13 +220,13 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_starter + 'tensor_b_cluster_lengths   : {}'.format(self.tensor_b_cluster_lengths) + '\n' + \
                 line_starter + 'direction                  : {}'.format(self.direction) + '\n' + \
                 line_starter + 'precision                  : {}'.format(self.precision) + '\n' + \
-                line_starter + 'opt_1x1                    : {}'.format(self.opt_1x1) + '\n' + \
+                line_starter + 'nxb                        : {}'.format(self.nxb) + '\n' + \
+                line_starter + 'nxe                        : {}'.format(self.nxe) + '\n' + \
                 line_starter + '\n' + \
                 line_starter + 'block_size                 : {}'.format(self.block_size) + '\n' + \
                 line_starter + 'thread_tile                : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n' + \
                 line_starter + 'lds_total                  : {}'.format(self.lds_total) + '\n' + \
                 line_starter
-
 
 def igemm_gtc_get_block_size(tunable):
     assert type(tunable) is igemm_gtc_tunable_parameter_t

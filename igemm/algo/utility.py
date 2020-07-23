@@ -183,7 +183,7 @@ class macro_int_div_rem_ss_t(mc_base_t):
     def __init__(self, mc):
         mc_base_t.__init__(self, mc)
 
-    def __call__(self, s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4)
+    def __call__(self, s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}, {}'.format(self.name(), s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4) 
 
     def emit(self):

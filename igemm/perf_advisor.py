@@ -23,12 +23,12 @@
 #  SOFTWARE.
 # 
 ################################################################################
+# pylint: disable=maybe-no-member
 
-from .conv import *
-from .fma_main_loop import *
-from .global_memory import *
-from .shared_memory import *
-from .igemm_base import *
-from .igemm_bwd_gtc import *
-from .utility import *
-from .thread_mapping import *
+class perf_advisor_t(object):
+    '''
+    for amdgpu
+    '''
+    def __init__(self):
+        pass
+    def advise_occupancy():

@@ -27,7 +27,7 @@ from __future__ import print_function
 import sys
 
 from ..codegen import *
-
+from .utility import *
 
 class amdgpu_swap_sequencer_t(object):
     '''
@@ -148,49 +148,167 @@ class amdgpu_swap_sequencer_t(object):
         '''
         return self.swap_list
 
-class inst_ds_write2_likely_t(mc_base_t):
+class inst_ds_read2_likely_t(mc_base_t):
     '''
-    generate ds_write2 if possible. otherwise fallback to ds_write.
+    generate ds_read2 if possible. otherwise fallback to ds_read
     Design this not as macro, but inlined into other LDS store operation
     So need upper caller to make sure the uniqueness
-
-    For wei load from global is {k, e}, and store to LDS is {e, k}, so need consider swap
     '''
-    
     def name(self):
         return ''
-    def __init__(self, mc, tunable, t_n_vec, t_vec_size, t_vec_stride, t_sst_base):
-        igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-        self.t_n_vec        = t_n_vec
-        self.t_vec_size     = t_vec_size
-        self.t_vec_stride   = t_vec_stride
-        self.t_sst_base     = t_sst_base
-    def likely_write2_b32(self):
-        if self.t_n_vec % 2 != 0:
+
+    def __init__(self, mc, vec_count, vec_byte, vec_stride, sld_base = 0):
+        mc_base_t.__init__(self, mc)
+        self.vec_count = vec_count
+        self.vec_byte = vec_byte
+        #assert vec_byte in (4, 8)
+        self.vec_stride = vec_stride
+        self.sld_base = sld_base
+    
+    def likely_read2_b32(self):
+        if self.vec_byte != 4:
             return False
-        if (self.t_sst_base % 4 == 0) and (self.t_vec_stride % 4 == 0):
-            if (self.t_sst_base // 4) + (self.t_vec_stride // 4) * (self.t_n_vec - 1) < 256:
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sld_base % 4 == 0) and (self.vec_stride % 4 == 0):
+            if (self.sld_base // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_read2st64_b32(self):
+        if self.vec_byte != 4:
+            return False
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sld_base % (4*64) == 0) and (self.vec_stride % 4 == 0):
+            if (self.sld_base // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_read2_b64(self):
+        if self.vec_byte != 8:
+            return False
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sld_base % 8 == 0) and (self.vec_stride % 8 == 0):
+            if (self.sld_base // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_read2st64_b64(self):
+        if self.vec_byte != 8:
+            return False
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sld_base % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
+            if (self.sld_base // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def __call__(self, v_dst, v_sld_os):
+        v_dst = sym_t(v_dst)
+        v_sld_os = sym_t(v_sld_os)
+        def emit_read2_fallback():
+            sldx1 = inst_ds_read_t(self.vec_byte)
+            with self._deferred_context():
+                for n in range(self.vec_count):
+                    self._emit(sldx1(v_dst(n*(self.vec_byte // 4)), v_sld_os(), self.sld_base + n * self.vec_stride))
+                #if self.vec_byte == 4:
+                #    for n in range(self.vec_count):
+                #        self._emit(f'ds_read_b32 v[{v_dst(n)}], v[{v_sld_os()}] offset:{self.sld_base + n * self.vec_stride}')
+                #elif self.vec_byte == 8:
+                #    for n in range(self.vec_count):
+                #        self._emit(f'ds_read_b64 v[{v_dst((2*n, 2*n + 1))}], v[{v_sld_os()}] offset:{self.sld_base + n * self.vec_stride}')
+#
+                #elif self.vec_byte == 16:
+                #    for n in range(self.vec_count):
+                #        self._emit(f'ds_read_b128 v[{v_dst((4*n, 4*n + 3))}], v[{v_sld_os()}] offset:{self.sld_base + n * self.vec_stride}')
+                #else:
+                #    assert False, 'unsupported vector size'
+            return self._get_deferred()
+
+        def emit_read2_b32():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_read2_b32 v[{v_dst((2*n, 2*n+1))}], v[{v_sld_os()}], offset0:{(self.sld_base//4)+2*n*(self.vec_stride//4)}, offset1:{(self.sld_base//4)+(2*n+1)*(self.vec_stride//4)}')
+            return self._get_deferred()
+
+        def emit_read2st64_b32():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_read2st64_b32 v[{v_dst((2*n,2*n+1))}], v[{v_sld_os()}], offset0:{(self.sld_base//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{(self.sld_base//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
+            return self._get_deferred()
+
+        def emit_read2_b64():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_read2_b64 v[{v_dst((4*n, 4*n+3))}], v[{v_sld_os()}], offset0:{(self.sld_base//8)+2*n*(self.vec_stride//8)}, offset1:{(self.sld_base//8)+(2*n+1)*(self.vec_stride//8)}')
+            return self._get_deferred()
+
+        def emit_read2st64_b64():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_read2st64_b64 v[{v_dst((4*n,4*n+3))}], v[{v_sld_os()}], offset0:{(self.sld_base//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{(self.sld_base//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+            return self._get_deferred()
+
+        def likely_emit():
+            if self.vec_byte == 4:
+                if self.likely_read2_b32():
+                    return emit_read2_b32()
+                if self.likely_read2st64_b32():
+                    return emit_read2st64_b32()
+                return emit_read2_fallback()
+            if self.vec_byte == 8:
+                if self.likely_read2_b64():
+                    return emit_read2_b64()
+                if self.likely_read2st64_b64():
+                    return emit_read2st64_b64()
+                return emit_read2_fallback()
+            return emit_read2_fallback()
+
+        return likely_emit()
+    def emit(self):
+        assert False, 'dont use emit of this'
+    def get_issues(self):
+        if self.vec_byte == 4:
+            if self.likely_read2_b32() or self.likely_read2st64_b32():
+                return self.vec_count // 2
+        if self.vec_byte == 8:
+            if self.likely_read2_b64() or self.likely_read2st64_b64():
+                return self.vec_count // 2
+        return self.vec_count
+'''
+class inst_ds_write2_likely_t(mc_base_t):   
+    def name(self):
+        return ''
+    def __init__(self, mc, tunable, vec_count, vec_byte, vec_stride, sst_base):
+        igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
+        self.vec_count        = vec_count
+        self.vec_byte     = vec_byte
+        self.vec_stride   = vec_stride
+        self.sst_base     = sst_base
+    def likely_write2_b32(self):
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sst_base % 4 == 0) and (self.vec_stride % 4 == 0):
+            if (self.sst_base // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_write2st64_b32(self):
-        if self.t_n_vec % 2 != 0:
+        if self.vec_count % 2 != 0:
             return False
-        if (self.t_sst_base % (4*64) == 0) and (self.t_vec_stride % 4 == 0):
-            if (self.t_sst_base // (4*64)) + (self.t_vec_stride // (4*64)) * (self.t_n_vec - 1) < 256:
+        if (self.sst_base % (4*64) == 0) and (self.vec_stride % 4 == 0):
+            if (self.sst_base // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_write2_b64(self):
-        if self.t_n_vec % 2 != 0:
+        if self.vec_count % 2 != 0:
             return False
-        if (self.t_sst_base % 8 == 0) and (self.t_vec_stride % 8 == 0):
-            if (self.t_sst_base // 8) + (self.t_vec_stride // 8) * (self.t_n_vec - 1) < 256:
+        if (self.sst_base % 8 == 0) and (self.vec_stride % 8 == 0):
+            if (self.sst_base // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_write2st64_b64(self):
-        if self.t_n_vec % 2 != 0:
+        if self.vec_count % 2 != 0:
             return False
-        if (self.t_sst_base % (8*64) == 0) and (self.t_vec_stride % (8*64) == 0):
-            if (self.t_sst_base // (8*64)) + (self.t_vec_stride // (8*64)) * (self.t_n_vec - 1) < 256:
+        if (self.sst_base % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
+            if (self.sst_base // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
     def __call__(self, v_src, v_sst):
@@ -198,81 +316,81 @@ class inst_ds_write2_likely_t(mc_base_t):
         v_sst = sym_t(v_sst)
         def emit_write2_fallback():
             with self._deferred_context():
-                if self.t_vec_size == 1:
-                    for n in range(self.t_n_vec):
-                        self._emit('ds_write_b32 v[{}], v[{}] offset:{}'.format(v_sst(), v_src(n), self.t_sst_base + n * self.t_vec_stride))
-                elif self.t_vec_size == 2:
-                    if self.t_n_vec == 1:
-                        self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), self.t_sst_base ))
+                if self.vec_byte == 1:
+                    for n in range(self.vec_count):
+                        self._emit('ds_write_b32 v[{}], v[{}] offset:{}'.format(v_sst(), v_src(n), self.sst_base + n * self.vec_stride))
+                elif self.vec_byte == 2:
+                    if self.vec_count == 1:
+                        self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), self.sst_base ))
                     else:
-                        swap_start = (self.t_n_vec*self.t_vec_size) // 2
-                        for n in range(self.t_n_vec // 2):
+                        swap_start = (self.vec_count*self.vec_byte) // 2
+                        for n in range(self.vec_count // 2):
                             self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n + 1), v_src(2*n + swap_start)))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), self.t_sst_base + 2*n * self.t_vec_stride))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), self.t_sst_base + (2*n+1) * self.t_vec_stride))
-                elif self.t_vec_size == 4:
-                    if self.t_n_vec == 1:
-                        self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), self.t_sst_base ))
+                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), self.sst_base + 2*n * self.vec_stride))
+                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), self.sst_base + (2*n+1) * self.vec_stride))
+                elif self.vec_byte == 4:
+                    if self.vec_count == 1:
+                        self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), self.sst_base ))
                     else:
                         # though we use algorithm in swap_seq to interleave swap with ds_write, but it is still wise to use extra tmp register for swap is half speed
-                        swap_list = amdgpu_swap_sequencer_t(self.t_n_vec , self.t_vec_size)()
-                        # print('self.t_n_vec:{}, self.t_vec_size:{}, {}'.format(self.t_n_vec , self.t_vec_size, swap_list))
-                        for n in range(self.t_n_vec):
+                        swap_list = amdgpu_swap_sequencer_t(self.vec_count , self.vec_byte)()
+                        # print('self.vec_count:{}, self.vec_byte:{}, {}'.format(self.vec_count , self.vec_byte, swap_list))
+                        for n in range(self.vec_count):
                             sw = swap_list[n]
                             if type(sw) is str:
                                 pass
                             else:
                                 for sw_item in sw:
                                     self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(sw_item[0]) , v_src(sw_item[1]) ))
-                            self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(4*n), v_src(4*n + 3), self.t_sst_base + n * self.t_vec_stride))
+                            self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(4*n), v_src(4*n + 3), self.sst_base + n * self.vec_stride))
                 else:
                     assert False, 'unsupported vector size'
             return self._get_deferred()
 
         def emit_write2_b32():
             with self._deferred_context():
-                for n in range(self.t_n_vec // 2):
+                for n in range(self.vec_count // 2):
                     self._emit('ds_write2_b32 v[{}], v[{}], v[{}], offset0:{}, offset1:{}'.format(v_sst(),
                                 v_src(2*n), v_src(2*n+1),
-                                (self.t_sst_base//4)+2*n*(self.t_vec_stride//4), (self.t_sst_base//4)+(2*n+1)*(self.t_vec_stride//4)))
+                                (self.sst_base//4)+2*n*(self.vec_stride//4), (self.sst_base//4)+(2*n+1)*(self.vec_stride//4)))
             return self._get_deferred()
 
         def emit_write2st64_b32():
             with self._deferred_context():
-                for n in range(self.t_n_vec // 2):
+                for n in range(self.vec_count // 2):
                     self._emit('ds_write2st64_b32 v[{}], v[{}], v[{}], offset0:{}, offset1:{}'.format(v_sst(),
                                 v_src(2*n), v_src(2*n+1),
-                                (self.t_sst_base//(4*64))+2*n*(self.t_vec_stride//(4*64)), (self.t_sst_base//(4*64))+(2*n+1)*(self.t_vec_stride//(4*64))))
+                                (self.sst_base//(4*64))+2*n*(self.vec_stride//(4*64)), (self.sst_base//(4*64))+(2*n+1)*(self.vec_stride//(4*64))))
             return self._get_deferred()
 
         def emit_write2_b64():
-            swap_start = (self.t_n_vec*self.t_vec_size) // 2
+            swap_start = (self.vec_count*self.vec_byte) // 2
             with self._deferred_context():
-                for n in range(self.t_n_vec // 2):
+                for n in range(self.vec_count // 2):
                     self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n+1), v_src(2*n+swap_start)))
                     self._emit('ds_write2_b64 v[{}], v[{}:{}], v[{}:{}], offset0:{}, offset1:{}'.format(v_sst(),
                             v_src(2*n), v_src(2*n+1), v_src(2*n+swap_start), v_src(2*n+swap_start+1),
-                            (self.t_sst_base//8)+2*n*(self.t_vec_stride//8), (self.t_sst_base//8)+(2*n+1)*(self.t_vec_stride//8)))
+                            (self.sst_base//8)+2*n*(self.vec_stride//8), (self.sst_base//8)+(2*n+1)*(self.vec_stride//8)))
             return self._get_deferred()
 
         def emit_write2st64_b64():
-            swap_start = (self.t_n_vec*self.t_vec_size) // 2
+            swap_start = (self.vec_count*self.vec_byte) // 2
             with self._deferred_context():
-                for n in range(self.t_n_vec // 2):
+                for n in range(self.vec_count // 2):
                     self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n+1), v_src(2*n+swap_start)))
                     self._emit('ds_write2st64_b64 v[{}], v[{}:{}], v[{}:{}], offset0:{}, offset1:{}'.format(v_sst(),
                             v_src(2*n), v_src(2*n+1), v_src(2*n+swap_start), v_src(2*n+swap_start+1),
-                            (self.t_sst_base//(8*64))+2*n*(self.t_vec_stride//(8*64)), (self.t_sst_base//(8*64))+(2*n+1)*(self.t_vec_stride//(8*64))))
+                            (self.sst_base//(8*64))+2*n*(self.vec_stride//(8*64)), (self.sst_base//(8*64))+(2*n+1)*(self.vec_stride//(8*64))))
             return self._get_deferred()
 
         def likely_emit():
-            if self.t_vec_size == 1:
+            if self.vec_byte == 1:
                 if self.likely_write2_b32():
                     return emit_write2_b32()
                 if self.likely_write2st64_b32():
                     return emit_write2st64_b32()
                 return emit_write2_fallback()
-            if self.t_vec_size == 2:
+            if self.vec_byte == 2:
                 if self.likely_write2_b64():
                     return emit_write2_b64()
                 if self.likely_write2st64_b64():
@@ -284,13 +402,113 @@ class inst_ds_write2_likely_t(mc_base_t):
     def emit(self):
         assert False, 'dont use emit of this'
     def get_issues(self):
-        if self.t_vec_size == 1:
+        if self.vec_byte == 1:
             if self.likely_write2_b32() or self.likely_write2st64_b32():
-                return self.t_n_vec // 2
-        if self.t_vec_size == 2:
+                return self.vec_count // 2
+        if self.vec_byte == 2:
             if self.likely_write2_b64() or self.likely_write2st64_b64():
-                return self.t_n_vec // 2
-        return self.t_n_vec
+                return self.vec_count // 2
+        return self.vec_count
+'''
+
+class inst_ds_write2_likely_t(mc_base_t):   
+    def name(self):
+        return ''
+    def __init__(self, mc, vec_count, vec_byte, vec_stride, sst_base=0):
+        mc_base_t.__init__(self, mc)
+        self.vec_count    = vec_count
+        self.vec_byte     = vec_byte
+        self.vec_stride   = vec_stride
+        self.sst_base     = sst_base
+    def likely_write2_b32(self):
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sst_base % 4 == 0) and (self.vec_stride % 4 == 0):
+            if (self.sst_base // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_write2st64_b32(self):
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sst_base % (4*64) == 0) and (self.vec_stride % 4 == 0):
+            if (self.sst_base // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_write2_b64(self):
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sst_base % 8 == 0) and (self.vec_stride % 8 == 0):
+            if (self.sst_base // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def likely_write2st64_b64(self):
+        if self.vec_count % 2 != 0:
+            return False
+        if (self.sst_base % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
+            if (self.sst_base // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
+                return True
+        return False
+    def __call__(self, v_sst, v_src):
+        v_src = sym_t(v_src)
+        v_sst = sym_t(v_sst)
+        def emit_write2_fallback():
+            sstx1 = inst_ds_write_t(self.vec_byte)
+            with self._deferred_context():
+                for n in range(self.vec_count):
+                    self._emit(sstx1(v_sst(), v_src(n*(self.vec_byte // 4)), self.sst_base + n * self.vec_stride))
+            return self._get_deferred()
+
+        def emit_write2_b32():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_write2_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{(self.sst_base//4)+2*n*(self.vec_stride//4)}, offset1:{(self.sst_base//4)+(2*n+1)*(self.vec_stride//4)}')
+            return self._get_deferred()
+
+        def emit_write2st64_b32():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_write2st64_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{(self.sst_base//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{(self.sst_base//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
+            return self._get_deferred()
+
+        def emit_write2_b64():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{(self.sst_base//8)+2*n*(self.vec_stride//8)}, offset1:{(self.sst_base//8)+(2*n+1)*(self.vec_stride//8)}')
+            return self._get_deferred()
+
+        def emit_write2st64_b64():
+            with self._deferred_context():
+                for n in range(self.vec_count // 2):
+                    self._emit(f'ds_write2st64_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{(self.sst_base//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{(self.sst_base//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+            return self._get_deferred()
+
+        def likely_emit():
+            if self.vec_byte == 4:
+                if self.likely_write2_b32():
+                    return emit_write2_b32()
+                if self.likely_write2st64_b32():
+                    return emit_write2st64_b32()
+                return emit_write2_fallback()
+            if self.vec_byte == 8:
+                if self.likely_write2_b64():
+                    return emit_write2_b64()
+                if self.likely_write2st64_b64():
+                    return emit_write2st64_b64()
+                return emit_write2_fallback()
+            return emit_write2_fallback()
+        return likely_emit()
+
+    def emit(self):
+        assert False, 'dont use emit of this'
+    def get_issues(self):
+        if self.vec_byte == 4:
+            if self.likely_write2_b32() or self.likely_write2st64_b32():
+                return self.vec_count // 2
+        if self.vec_byte == 8:
+            if self.likely_write2_b64() or self.likely_write2st64_b64():
+                return self.vec_count // 2
+        return self.vec_count
+
 
 class inst_ds_read_t(object):
     def __init__(self, bytes):
