@@ -77,10 +77,15 @@ def igemm_gcd(a, b):
 def igemm_lcm(a, b):
     return abs(a * b) // math.gcd(a, b)
 
-def _flatten_list_product(x):
+def igemm_flatten_list_product(x):
     assert type(x) is list
     from functools import reduce
     return reduce(lambda a, b: a*b, x)
+
+def igemm_flatten_list_accumulate(x):
+    assert type(x) is list
+    from functools import reduce
+    return reduce(lambda a, b: a+b, x)
 
 class igemm_gtc_tunable_parameter_t(object):
     '''
@@ -116,8 +121,8 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # TODO: better specify
         self.block_size                         = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
-        assert self.block_size == _flatten_list_product(self.tensor_a_cluster_lengths)
-        assert self.block_size == _flatten_list_product(self.tensor_b_cluster_lengths)
+        assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths)
+        assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths)
 
 
         def _unmerge_x1_from_e(unroll_k, nxe):
@@ -152,8 +157,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.num_vgpr_accumulate_a              = (self.gemm_m_repeat*self.gemm_m_per_thread)
         self.num_vgpr_accumulate_b              = (self.gemm_n_repeat*self.gemm_n_per_thread)
 
-        self.num_vgpr_global_load_a             = _flatten_list_product(self.tensor_a_thread_lengths)
-        self.num_vgpr_global_load_b             = _flatten_list_product(self.tensor_b_thread_lengths)
+        self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
+        self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
 
         assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
         assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
