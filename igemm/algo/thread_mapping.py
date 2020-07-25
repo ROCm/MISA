@@ -88,25 +88,27 @@ class igemm_thread_mapping_t(mc_base_t):
 
         assert c_mr == 1 and c_nr == 1
         assert t_m1 == 1 and t_n1 == 1
-        self._emit(f"; c thread mapping ")
-        self._emit(f"; ->            MR x  NR x ML1 x NL1 x ML0 x NL0")
-        self._emit(f";  cluster       1 x   1 x  {c_m1}  x  {c_n1}  x  {c_m0}  x  {c_n0}")
-        self._emit(f";  perthrd       {t_mr} x   {t_nr} x  1  x  1  x  {t_m0}  x  {t_n0}")
+        with self._deferred_context():
+            self._emit(f"; c thread mapping ")
+            self._emit(f"; ->            MR x  NR x ML1 x NL1 x ML0 x NL0")
+            self._emit(f";  cluster       1 x   1 x  {c_m1}  x  {c_n1}  x  {c_m0}  x  {c_n0}")
+            self._emit(f";  perthrd       {t_mr} x   {t_nr} x  1  x  1  x  {t_m0}  x  {t_n0}")
 
-        self._emit(f"v_and_b32 v[{v_tmp4}], {c_n0 - 1}, v[{v_tid_shifter}]")
-        self._emit(f"v_lshlrev_b32 v[{v_tmp4}], {igemm_log2(t_n0)}, v[{v_tmp4}]         ; => iNL0")
-        self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_n0)}, v[{v_tid_shifter}]")
+            self._emit(f"v_and_b32 v[{v_tmp4}], {c_n0 - 1}, v[{v_tid_shifter}]")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp4}], {igemm_log2(t_n0)}, v[{v_tmp4}]         ; => iNL0")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_n0)}, v[{v_tid_shifter}]")
 
-        self._emit(f"v_and_b32 v[{v_tmp4}+1], {c_m0 - 1}, v[{v_tid_shifter}]")
-        self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(t_m0)}, v[{v_tmp4}+1]     ; => iML0")
-        self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_m0)}, v[{v_tid_shifter}]")
+            self._emit(f"v_and_b32 v[{v_tmp4}+1], {c_m0 - 1}, v[{v_tid_shifter}]")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(t_m0)}, v[{v_tmp4}+1]     ; => iML0")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_m0)}, v[{v_tid_shifter}]")
 
-        self._emit(f"v_and_b32 v[{v_tmp4}+2],   {c_n1 - 1}, v[{v_tid_shifter}]       ; => iNL1")
-        self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_n1)}, v[{v_tid_shifter}]")
-        self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tmp4}+5]       ; => iML1")
+            self._emit(f"v_and_b32 v[{v_tmp4}+2],   {c_n1 - 1}, v[{v_tid_shifter}]       ; => iNL1")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_n1)}, v[{v_tid_shifter}]")
+            self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tmp4}+5]       ; => iML1")
 
-        self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {igemm_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
-        self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]")
-    
+            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {igemm_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
+            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]")
+        return self._get_deferred()
+
     def emit(self):
         assert False

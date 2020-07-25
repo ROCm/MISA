@@ -85,6 +85,10 @@ class mc_emit_to_string_t(object):
         self.indent.dec()
     def get_buffer(self):
         return self.string_buffer
+    def set_indent(self, level):
+        self.indent.set(level)
+    def get_indent(self):
+        return self.indent.get()
 
 class mc_emit_to_iostream_t(object):
     def __init__(self, indent = _mc_indent_t(4)):
@@ -101,6 +105,10 @@ class mc_emit_to_iostream_t(object):
         self.indent.inc()
     def dec_indent(self):
         self.indent.dec()
+    def set_indent(self, level):
+        self.indent.set(level)
+    def get_indent(self):
+        return self.indent.get()
 
 class mc_emit_to_file_t(object):
     # TODO: exception check
