@@ -320,18 +320,18 @@ class igemm_kernel_detail_base_t(object):
                 'vgpr_b_local_fetch  : {}'.format(self.vgpr_b_local_fetch) + '\n' + \
                 'vgpr_other          : {}'.format(self.vgpr_other) + '\n'
 
-
 class igemm_thread_cluster_index_dispatcher_t(mc_base_t):
     def __init__(self, mc):
         mc_base_t.__init__(self, mc)
     
-    def __call__(self, v_x, v_tid_shifter, c_x, t_x):
+    def __call__(self, v_x, v_tid_shifter, c_x, t_x, is_last = False):
         with self._deferred_context():
             if c_x == 1:
                 pass
             else:
                 self._emit(f"v_and_b32 v[{v_x}], {c_x - 1}, v[{v_tid_shifter}]")
-                self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
+                if not is_last:
+                    self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
                 if t_x != 0:
                     self._emit(f"v_lshlrev_b32 v[{v_x}], {igemm_log2(t_x)}, v[{v_x}]")
         return self._get_deferred()

@@ -235,17 +235,18 @@ class igemm_coalescing_store_t(mc_base_t):
         return self._get_deferred()
 
 
-    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m_stride, s_tmp):
-        # if no need s_out_offset, currently beter set 0 to a sgpr and parse in as s_out_offset
+    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m_stride, s_tmp4, v_store_flag = 0):
+        # if no need s_out_offset, set to integer 0
         ctrl = self.ctrl
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
-        s_tmp = sym_t(s_tmp)
+        s_tmp4 = sym_t(s_tmp4)
         g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.ctrl.get_subgroups()
         assert g_m1 == 1 and g_nr == 1 and g_n1 == 1 and g_n0 == 1
         l_mr = ctrl.ctm.t_mr() // g_mr
         l_m0 = ctrl.ctm.t_m0() // g_m0
+        no_s_out_offset = type(s_out_offset) is int and s_out_offset == 0
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
         inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
@@ -254,8 +255,8 @@ class igemm_coalescing_store_t(mc_base_t):
         # self, vdata, vaddr, srsrc, soffset, offset):
         inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
 
-        s_out_offset_itr = sym_t(s_tmp(0))
-        s_thread_m_stride = sym_t(s_tmp(1))
+        s_out_offset_itr = sym_t(s_tmp4(0))
+        s_thread_m_stride = sym_t(s_tmp4(1))
 
         m_index_per_group = ctrl.get_m_index_per_group()
         thread_m_stride = ctrl.get_thread_m_stride()
@@ -291,14 +292,27 @@ class igemm_coalescing_store_t(mc_base_t):
                     self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
                     issue_list.append(inst_sld.get_issues(sld_offset))
 
+                if type(v_store_flag) is str:
+                    self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
+                    #self._emit(f"s_cbranch_execz {label_prefix}_co_{i_group}")
+
                 self._emit(f";   store to global, m index start from {m_index_start_per_group}")
                 if m_index_start_per_group == 0:
-                    self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
+                    if no_s_out_offset:
+                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0")
+                    else:
+                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
                 elif m_index_start_per_group == 1:
-                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}], s[{s_out_offset}]")
+                    if no_s_out_offset:
+                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}]")
+                    else:
+                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}], s[{s_out_offset}]")
                 else:
-                    self._emit(f"s_mul_i32 s[{s_tmp(3)}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
-                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp(3)}], s[{s_out_offset}]")
+                    if no_s_out_offset:
+                        self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
+                    else:
+                        self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
+                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]")
                 for i_gst in range(ctrl.get_num_dword_per_group() // ctrl.vector_write_out):
                     if i_gst % 2 == 0:
                         i_issues =  (i_gst // 2) + 1
@@ -309,6 +323,8 @@ class igemm_coalescing_store_t(mc_base_t):
                     self._emit(inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                         self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
+                if type(v_store_flag) is str:
+                    self._emit(f"s_mov_b64 exec, -1")
         return self._get_deferred()
 '''
         for i_group_in_m_repeat in range(self.coalescing_groups_in_m_repeat):
