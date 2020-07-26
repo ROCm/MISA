@@ -325,10 +325,31 @@ class igemm_thread_cluster_index_dispatcher_t(mc_base_t):
     def __init__(self, mc):
         mc_base_t.__init__(self, mc)
     
-    def __call__(self, v_x,  v_tid_shifter, c_x, t_x):
+    def __call__(self, v_x, v_tid_shifter, c_x, t_x):
         with self._deferred_context():
-            if c_x == 0:
+            if c_x == 1:
                 pass
             else:
-                
+                self._emit(f"v_and_b32 v[{v_x}], {c_x - 1}, v[{v_tid_shifter}]")
+                self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
+                if t_x != 0:
+                    self._emit(f"v_lshlrev_b32 v[{v_x}], {igemm_log2(t_x)}, v[{v_x}]")
+        return self._get_deferred()
+
+class igemm_thread_cluster_index_accumulator_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+
+    def __call__(self, v_dst, v_x0, v_x1, c_x0, c_x1, n_x0, n_x1):
+        assert not (c_x0 == 1 and c_x1 == 1)
+        with self._deferred_context():
+            if c_x0 != 1 and c_x1 != 1:
+                self._emit(f"v_lshl_or_b32 v[{v_dst}], v[{v_x0}], {igemm_log2(n_c1)}, v[{v_x1}]")
+            elif c_x0 == 1 and c_x1 != 1:
+                self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x1}]")
+            elif c_x0 != 1 and c_x1 == 1:
+                if n_c1 == 1:
+                    self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x0}]")
+                else:
+                    self._emit(f"v_lshlrev_b32 v[{v_dst}], {igemm_log2(n_c1)}, v[{v_x0}]")
         return self._get_deferred()
