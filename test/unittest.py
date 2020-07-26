@@ -21,25 +21,23 @@ def unittest_share_memory():
 def unittest_coalescing_store():
 
     mc = get_default_mc()
+    ctm = ctrl_thread_mapping_t()
+    ctm.thread_lengths = [2,2,1,1,4,4]
+    ctm.cluster_lengths = [1,1,4,4,4,4]
+
     ctrl = ctrl_coalescing_store_t()
-
+    ctrl.ctm = ctm
     ctrl.coalescing_groups = 2
-    ctrl.gemm_m_repeat = 2
-    ctrl.gemm_m_per_thread = 4
-    ctrl.gemm_n_repeat = 2
-    ctrl.gemm_n_per_thread = 4
-
-    ctrl.gemm_m_length = 128  # in unit of dword
-    ctrl.gemm_n_length = 128  # in unit of dword
     ctrl.data_byte = 4
 
     ctrl.vector_write_out = 1
     ctrl.block_size = 256
 
-
     coalescing_store = igemm_coalescing_store_t(mc, ctrl)
 
-    mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m_stride', 's_tmp'))
+
+    mc.emit(coalescing_store.init_co_lds_offset('v_co_sst', 'v_co_sld', 'v_gemm_im', 'v_gemm_in', 'v0', 'v_tmp'))
+    mc.emit(coalescing_store.init_co_sub_m_index('v_co_sub_m_index', 'v_tid', 'v_tmp'))
     mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m_stride', 's_tmp'))
     print(mc.emitter.get_buffer())
 

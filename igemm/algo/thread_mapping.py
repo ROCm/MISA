@@ -74,6 +74,26 @@ class ctrl_thread_mapping_t(object):
         self.valid_cluster_lengths()
         return self.cluster_lengths[0]
 
+    def n_n0(self):
+        return self.t_n0()*self.c_n0()
+    def n_m0(self):
+        return self.t_m0()*self.c_m0()
+    def n_n1(self):
+        return self.t_n1()*self.c_n1()
+    def n_m1(self):
+        return self.t_m1()*self.c_m1()
+    def n_nr(self):
+        return self.t_nr()*self.c_nr()
+    def n_mr(self):
+        return self.t_mr()*self.c_mr()
+
+    def n_n_total(self):
+        return self.n_n0() * self.n_n1() * self.n_nr()
+    def n_m_total(self):
+        return self.n_m0() * self.n_m1() * self.n_mr()
+
+    def dump(self):
+        print(f"thread:{utility_list_to_string(self.thread_lengths)}, cluster:{utility_list_to_string(self.cluster_lengths)}")
 
 class igemm_thread_mapping_t(mc_base_t):
     def name(self):

@@ -259,3 +259,7 @@ class msym_t(object):
 
     def __call__(self, index = 0):
         return self.sym.expr(self.label_in_macro, index)
+
+def utility_list_to_string(arr):
+    assert type(arr) is list
+    return 'x'.join(f'{itm}' for itm in arr)
