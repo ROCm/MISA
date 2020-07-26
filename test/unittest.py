@@ -27,7 +27,7 @@ def unittest_coalescing_store():
 
     ctrl = ctrl_coalescing_store_t()
     ctrl.ctm = ctm
-    ctrl.coalescing_groups = 2
+    ctrl.coalescing_groups = 4
     ctrl.data_byte = 4
 
     ctrl.vector_write_out = 1
@@ -41,10 +41,19 @@ def unittest_coalescing_store():
     mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m_stride', 's_tmp'))
     print(mc.emitter.get_buffer())
 
+def unittest_thread_mapping():
+    mc = get_default_mc()
+    ctm = ctrl_thread_mapping_t()
+    ctm.thread_lengths = [2,2,1,1,4,4]
+    ctm.cluster_lengths = [1,1,4,4,4,4]
+    thread_mapping = igemm_thread_mapping_t(mc, ctm)
+    mc.emit(thread_mapping( 'v_gemm_in', 'v_gemm_im', 'v_tid_shifter', 'v_tmp'))
+    print(mc.emitter.get_buffer())
 
 def run_all_unittest():
     # unittest_share_memory()
     unittest_coalescing_store()
+    unittest_thread_mapping()
 
 if __name__ == '__main__':
     run_all_unittest()

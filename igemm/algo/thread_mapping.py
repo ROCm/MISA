@@ -25,6 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
+from .igemm_base import *
 
 class ctrl_thread_mapping_t(object):
     def __init__(self):
@@ -99,7 +100,7 @@ class igemm_thread_mapping_t(mc_base_t):
     def name(self):
         return ''
     def __init__(self, mc, ctrl):
-        mc_base_t.__init__(mc)
+        mc_base_t.__init__(self, mc)
         self.ctrl = ctrl
     def __call__(self, v_gemm_in, v_gemm_im, v_tid_shifter, v_tmp4):
         ctrl = self.ctrl
@@ -127,7 +128,7 @@ class igemm_thread_mapping_t(mc_base_t):
             self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tmp4}+5]       ; => iML1")
 
             self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {igemm_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
-            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]")
+            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]              ; im  (without repeat)")
         return self._get_deferred()
 
     def emit(self):

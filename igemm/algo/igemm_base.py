@@ -319,3 +319,16 @@ class igemm_kernel_detail_base_t(object):
                 'vgpr_a_local_fetch  : {}'.format(self.vgpr_a_local_fetch) + '\n' + \
                 'vgpr_b_local_fetch  : {}'.format(self.vgpr_b_local_fetch) + '\n' + \
                 'vgpr_other          : {}'.format(self.vgpr_other) + '\n'
+
+
+class igemm_thread_cluster_index_dispatcher_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    
+    def __call__(self, v_x,  v_tid_shifter, c_x, t_x):
+        with self._deferred_context():
+            if c_x == 0:
+                pass
+            else:
+                
+        return self._get_deferred()

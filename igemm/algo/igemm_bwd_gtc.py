@@ -185,7 +185,25 @@ class igemm_bwd_gtc_t(mc_base_t):
         self.wei_thread_copy_ndim = len(wei_thread_copy_index)
         assert self.out_thread_copy_ndim in (1, 2)
         assert self.wei_thread_copy_ndim in (1, 2)
+
+        ctrl_thread_mapping = ctrl_thread_mapping_t()
+                #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
+        ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
+        ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
+        self.thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
+
+
+
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
+        ctrl_coalescing_store = ctrl_coalescing_store_t()
+        ctrl_coalescing_store.ctm = ctrl_thread_mapping
+        ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
+        ctrl_coalescing_store.data_byte = self.tunable.data_byte
+
+        ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
+        ctrl_coalescing_store.block_size = self.tunable.block_size
+
+        coalescing_store = igemm_coalescing_store_t(mc, ctrl)
 
         '''
          in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1
@@ -830,12 +848,6 @@ class igemm_bwd_gtc_t(mc_base_t):
         m_int_div_rem_vs = macro_int_div_rem_vs_t(self.mc)
         m_int_div_rem_ss = macro_int_div_rem_ss_t(self.mc)
 
-        ctrl_thread_mapping = ctrl_thread_mapping_t()
-                #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
-        ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
-        ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
-        thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
-
 
         self._emit(f"s_load_dwordx2  s[{s.s_p_in((0,1))}],       s[{s.s_ka((0, 1))}],    0+{k.k_p_in()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_wei((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_wei()}")
@@ -900,8 +912,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], s[{s.s_n()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(m_int_div_rem_ss(s.s_tmp(5), s.s_tmp(4), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
-        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_tmp(4)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(m_int_div_rem_ss(s.s_block_in(), s.s_block_im(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_block_im()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
         #self._emit(f"s_lshl_b32 s[{s.s_block_gtc_i}]")
 
         if unmerge_sub_n1 == 1:
@@ -909,7 +921,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], {igemm_log2(unmerge_sub_n1)}     ; total number of n1b")
             self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(n_n1b)}")
-        self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_tmp(5), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_block_in(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         if n_n1b != 1:
             self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in1b()}], s[{s.s_block_gtc_in1b()}], {igemm_log2(n_n1b)}")
         if n_n0 != 1:
@@ -981,7 +993,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
-        self._emit(thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+        self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
 
         self._emit(f"; LDS store, order out: k0,k1e,n0,n1b: {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, {c_k0}x{c_k1e}x{c_n0}x{c_n1b}")
         if c_n1b == 1:
@@ -1021,6 +1033,31 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
+
+        self._emit(coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), 'v0', v.v_tmp()))
+        self._emit(coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index() 'v0', v.v_tmp()))
+        self._emit(coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index() 'v0', v.v_tmp()))
+        self._emit_empty_line()
+
+        self._emit(f"; input offset")
+        self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_in()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}+3]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp()}+1], s[{s.s_in_stride_n()}], s[{s.s_tmp()}+3]")
+        self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_in()}+1], s[{s.s_p_in()}+1], s[{s.s_tmp()}+1]")
+        self._emit_empty_line()
+        self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ic()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_in_stride_c()}], s[{s.s_tmp()}+3]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp()}+1], s[{s.s_in_stride_c()}], s[{s.s_tmp()}+3]")
+        self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_in()}+1], s[{s.s_p_in()}+1], s[{s.s_tmp()}+1]")
+        self._emit_empty_line()
+        self._emit(f"; transform n0 n1b")
+
+
+
+
+
 
 
         self._emit(f"; move slice stride")

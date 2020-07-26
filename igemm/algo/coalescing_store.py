@@ -183,7 +183,7 @@ class igemm_coalescing_store_t(mc_base_t):
         g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.ctrl.get_subgroups()
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset")
-            gemm_m_shrink = ctrl.ctm.t_m0() // g_m0
+            gemm_m_shrink = g_m0
             if gemm_m_shrink != 1:
                 self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
@@ -201,16 +201,42 @@ class igemm_coalescing_store_t(mc_base_t):
         g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = ctrl.get_subgroups()
         assert g_m1 == 1
         # sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
+        l_mr = ctrl.ctm.t_mr() // g_mr
+        l_m0 = ctrl.ctm.t_m0() // g_m0
+
         with self._deferred_context():
-            self._emit(f" init_co_sub_m_index")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
-            self._emit(f"v_and_b32 v[{v_tmp2}], {g_m0 - 1}, v[{v_co_sub_m_index}]")
-            self._emit(f"v_lshrrev_b32 v[{v_tmp2}'+1'], {igemm_log2(g_m0)}, v[{v_co_sub_m_index}]")
-            self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}] v[{v_tmp2}'+1'], {igemm_log2(ctrl.ctm.t_m0())}, v[{v_tmp2}]")
+            self._emit(f"; init_co_sub_m_index")
+            if ctrl.vector_write_out == 1:
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
+
+            self._emit(f"v_and_b32 v[{v_tmp2}], {l_m0 - 1}, v[{v_co_sub_m_index}]")
+            self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(l_m0)}, v[{v_co_sub_m_index}]")
+            self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}] v[{v_tmp2}+1], {igemm_log2(ctrl.ctm.t_m0())}, v[{v_tmp2}]")
         return self._get_deferred()
 
+    def init_co_sub_n_index(self, v_co_sub_n_index, v_tid, v_tmp2):
+        ctrl = self.ctrl
+        # need use v_co_sub_n_index to calculate v offset in n direction
+        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = ctrl.get_subgroups()
+        assert g_m1 == 1
+        l_mr = ctrl.ctm.t_mr() // g_mr
+        l_m0 = ctrl.ctm.t_m0() // g_m0
+
+        with self._deferred_context():
+            self._emit(f"; init_co_sub_n_index")
+            if ctrl.vector_write_out == 1:
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
+        return self._get_deferred()
+
+
     def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m_stride, s_tmp):
+        # if no need s_out_offset, currently beter set 0 to a sgpr and parse in as s_out_offset
         ctrl = self.ctrl
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
@@ -222,7 +248,7 @@ class igemm_coalescing_store_t(mc_base_t):
         l_m0 = ctrl.ctm.t_m0() // g_m0
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() // 2)
+        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
         inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):
@@ -234,7 +260,6 @@ class igemm_coalescing_store_t(mc_base_t):
         m_index_per_group = ctrl.get_m_index_per_group()
         thread_m_stride = ctrl.get_thread_m_stride()
 
-
         assert len(m_index_per_group) == ctrl.coalescing_groups
 
         with self._deferred_context():
@@ -242,11 +267,14 @@ class igemm_coalescing_store_t(mc_base_t):
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}")
             self._emit(f"; coalescing_groups_in_m_repeat:{g_mr}, group_length_in_m_repeat:{l_mr}, coalescing_groups_in_m_per_thread:{g_m0}, group_length_in_m_per_thread:{l_m0}")
             # emit some pre index
-            self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m_stride}]")
+            self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m_stride}]    ; init per thread stride in m dimension")
 
             for i_group in range(ctrl.coalescing_groups):
+                m_index_start_per_group = m_index_per_group[i_group][0][0]
+                
                 c_group_start_index = i_group * l_mr * l_m0 * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
                 current_m_index = m_index_per_group[i_group]
+                self._emit(f"; start group {i_group}, m index start from {m_index_start_per_group}")
                 self._emit(f"s_barrier")
                 for i_sub_length in range(l_mr * l_m0):
                     c_sub_start_index = c_group_start_index + i_sub_length * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
@@ -255,7 +283,7 @@ class igemm_coalescing_store_t(mc_base_t):
 
                 self._emit(f"s_waitcnt lgkmcnt(0)")
                 self._emit(f"s_barrier")
-
+                self._emit(f";   load from lds")
                 issue_list = []
                 for i_d in range(ctrl.get_num_dword_per_group() // (2 * ctrl.vector_write_out)):
                     c_sub_start_index = c_group_start_index + i_d * 2 * ctrl.vector_write_out
@@ -263,14 +291,13 @@ class igemm_coalescing_store_t(mc_base_t):
                     self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
                     issue_list.append(inst_sld.get_issues(sld_offset))
 
-                m_index_start_per_group = m_index_per_group[i_group][0][0]
-                self._emit(f"; start group {i_group}, m index start from {m_index_start_per_group}")
+                self._emit(f";   store to global, m index start from {m_index_start_per_group}")
                 if m_index_start_per_group == 0:
                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
                 elif m_index_start_per_group == 1:
-                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset}]")
+                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}], s[{s_out_offset}]")
                 else:
-                    self._emit(f"s_mul_i32 s[{s_tmp(3)}], {m_index_start_per_group}, s[{s_thread_m_stride()}]")
+                    self._emit(f"s_mul_i32 s[{s_tmp(3)}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp(3)}], s[{s_out_offset}]")
                 for i_gst in range(ctrl.get_num_dword_per_group() // ctrl.vector_write_out):
                     if i_gst % 2 == 0:
@@ -279,7 +306,7 @@ class igemm_coalescing_store_t(mc_base_t):
                         i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                         self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
-                    inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0)
+                    self._emit(inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                         self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
         return self._get_deferred()
