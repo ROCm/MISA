@@ -325,7 +325,7 @@ class igemm_thread_cluster_index_dispatcher_t(mc_base_t):
                 self._emit(f"v_mov_b32 v[{v_x}], 0")
             else:
                 self._emit(f"v_and_b32 v[{v_x}], {c_x - 1}, v[{v_tid_shifter}]")
-                if t_x != 0:
+                if t_x != 1:
                     self._emit(f"v_lshlrev_b32 v[{v_x}], {igemm_log2(t_x)}, v[{v_x}]")
                 if not is_last:
                     self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
