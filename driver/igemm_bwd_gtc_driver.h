@@ -127,7 +127,8 @@ public:
         auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
         auto direction                = tunable->direction;
         auto precision                = tunable->precision;
-        auto opt_1x1                  = tunable->opt_1x1;
+        auto nxb                      = tunable->nxb;
+        auto nxe                      = tunable->nxe;
 
         assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
         assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
@@ -139,8 +140,9 @@ public:
 
         assert(direction == "bwd");
 
-        std::string kernel_prefix = tunable->opt_1x1 ? std::string("igemm_bwd_gtcu_") : std::string("igemm_bwd_gtc_");
-
+        std::string kernel_prefix = std::string(igemm_) + direction + std::string("_gtc_") + precision +
+                std::string("_bx") + std::to_string(nxb) + 
+                std::string("_ex") + std::to_string(nxe) + "_";
         std::string kernel_name =
             kernel_prefix +
                "bt" +

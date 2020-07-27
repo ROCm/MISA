@@ -50,7 +50,8 @@ typedef struct {
     std::vector<int> tensor_b_cluster_lengths;
     std::string direction;
     std::string precision;
-    int opt_1x1;
+    int nxb;
+    int nxe;
 } igemm_gtc_tunable_t;
 
 static inline std::vector<igemm_gtc_tunable_t>
@@ -77,7 +78,8 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.tensor_b_cluster_lengths = sec.at("tensor_b_cluster_lengths").get_list_int();
             tunable.direction                = sec.at("direction").get_string();
             tunable.precision                = sec.at("precision").get_int();
-            tunable.opt_1x1                  = sec.at("opt_1x1").get_int();
+            tunable.nxb                      = sec.at("nxb").get_int();
+            tunable.nxe                      = sec.at("nxe").get_int();
 
             tunables.push_back(tunable);
         }

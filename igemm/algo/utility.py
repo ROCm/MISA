@@ -211,8 +211,8 @@ class macro_c_clear_t(mc_base_t):
             self._emit(".endr")
 
 class gpr_sequencer_t(object):
-    def __init__(self):
-        self.cnt = 0
+    def __init__(self, cnt = 0):
+        self.cnt = cnt
     def __call__(self, step = 0, alignment = 0):
         previous_cnt = self.cnt
         if alignment:

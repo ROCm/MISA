@@ -107,7 +107,6 @@ class igemm_gtc_tunable_parameter_t(object):
         self.tensor_b_cluster_lengths           = tunable_dict['tensor_b_cluster_lengths']    # list!
         self.direction                          = tunable_dict['direction']
         self.precision                          = tunable_dict['precision']
-        #self.opt_1x1                            = tunable_dict['opt_1x1']
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
 
@@ -124,13 +123,12 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths)
         assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths)
 
-
         def _unmerge_x1_from_e(unroll_k, nxe):
             if nxe == 0:
-                return 1        # not used
+                return 1        # not used, 1x1 special
             if unroll_k % nxe == 0:
                 return unroll_k // nxe
-            return unroll_k
+            return unroll_k     # not used
 
         if self.direction == 'fwd':
             assert self.gemm_n_per_block % self.nxb == 0
@@ -149,7 +147,6 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_c = 1
 
         # vector global/lds implicit here
-
         self.gemm_m_repeat                      = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
         self.gemm_n_repeat                      = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
         # register for a,b,c buffer
@@ -244,10 +241,8 @@ def igemm_gtc_encode_kernel_name(tunable):
         return "x".join( [f"{x}" for x in lengths] )
 
     assert type(tunable) is igemm_gtc_tunable_parameter_t
-    if tunable.is_opt_1x1():
-        name_prefix = f"igemm_{tunable.direction}_gtcu_"
-    else:
-        name_prefix = f"igemm_{tunable.direction}_gtc_"
+
+    name_prefix = f"igemm_{tunable.direction}_gtc_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
 
     kernel_name = name_prefix + f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_" +\
                          f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
@@ -327,13 +322,13 @@ class igemm_thread_cluster_index_dispatcher_t(mc_base_t):
     def __call__(self, v_x, v_tid_shifter, c_x, t_x, is_last = False):
         with self._deferred_context():
             if c_x == 1:
-                pass
+                self._emit(f"v_mov_b32 v[{v_x}], 0")
             else:
                 self._emit(f"v_and_b32 v[{v_x}], {c_x - 1}, v[{v_tid_shifter}]")
-                if not is_last:
-                    self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
                 if t_x != 0:
                     self._emit(f"v_lshlrev_b32 v[{v_x}], {igemm_log2(t_x)}, v[{v_x}]")
+                if not is_last:
+                    self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_x)}, v[{v_tid_shifter}]")
         return self._get_deferred()
 
 class igemm_thread_cluster_index_accumulator_t(mc_base_t):

@@ -59,7 +59,7 @@ class macro_igemm_bwd_gtc_out_update_hw_t(mc_base_t):
     def __init__(self, mc):
         mc_base_t.__init__(self, mc)
     def name(self):
-        return '.v_bwd_gtc_out_update_hw_vv'
+        return '.v_bwd_gtc_out_update_hw'
     def __call__(self, v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg):
         return '{} {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
             v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg)
@@ -466,37 +466,43 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_dslice_w                = sym_t("s_dslice_w"               ,42)
             self.s_dslice_h_left           = sym_t("s_dslice_h_left"          ,43)
             self.s_dslice_w_left           = sym_t("s_dslice_w_left"          ,44)
+            sseq                           = gpr_sequencer_t(44)
+            self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
+            self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
+            self.s_out_stride_n            = sym_t("s_out_stride_n"           ,sseq(1))
+            self.s_out_stride_n0           = sym_t("s_out_stride_n0"          ,sseq(1))
 
-            self.s_out_stride_k            = sym_t("s_out_stride_k"           ,45)
-            self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,46)
-            self.s_out_stride_n            = sym_t("s_out_stride_n"           ,47)
-            self.s_out_stride_n0           = sym_t("s_out_stride_n0"          ,48)
-            self.s_out_stride_b0           = sym_t("s_out_stride_b0"          ,49)
-            self.s_out_move_slice_stride_k = sym_t("s_out_move_slice_stride_k",50)
-            self.s_in_stride_c             = sym_t("s_in_stride_c"            ,51)
-            self.s_in_stride_cr            = sym_t("s_in_stride_cr"           ,52)
-            self.s_in_stride_n             = sym_t("s_in_stride_n"            ,53)
-            self.s_in_stride_nr            = sym_t("s_in_stride_nr"           ,54)
+            self.s_in_stride_c             = sym_t("s_in_stride_c"            ,sseq(1))
+            self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
 
-            self.s_wei_stride_c            = sym_t("s_wei_stride_c"           ,55)
-            self.s_wei_stride_c0           = sym_t("s_wei_stride_c0"          ,56)
-            self.s_wei_stride_k            = sym_t("s_wei_stride_k"           ,57)
-            self.s_wei_stride_k0           = sym_t("s_wei_stride_k0"          ,58)
-            self.s_wei_move_slice_stride_k = sym_t("s_wei_move_slice_stride_k",59)
-            self.s_stride_dslice_hw        = sym_t("s_stride_dslice_hw"       ,60)
-            self.s_stride_dslice_yx        = sym_t("s_stride_dslice_yx"       ,61)
+            self.s_wei_stride_c            = sym_t("s_wei_stride_c"           ,sseq(1))
+            self.s_wei_stride_c0           = sym_t("s_wei_stride_c0"          ,sseq(1))
+            self.s_wei_stride_k            = sym_t("s_wei_stride_k"           ,sseq(1))
+            self.s_wei_stride_k0           = sym_t("s_wei_stride_k0"          ,sseq(1))
 
-            self.s_block_gtc_ib            = sym_t("s_block_gtc_ib"           ,62)
-            self.s_block_gtc_ic            = sym_t("s_block_gtc_ic"           ,63)
-            self.s_block_gtc_in            = sym_t("s_block_gtc_in"           ,64)
-            self.s_knum                    = sym_t("s_knum"                   ,self.s_k.value)
+            self.s_stride_dslice_hw        = sym_t("s_stride_dslice_hw"       ,sseq(1))
+            self.s_stride_dslice_yx        = sym_t("s_stride_dslice_yx"       ,sseq(1))
+            self.s_out_stride_k_k1         = sym_t("s_out_stride_k_k1"        ,sseq(1))
+            self.s_out_stride_k_k0_k1_diff = sym_t("s_out_stride_k_k0_k1_diff",sseq(1))
+            self.s_wei_stride_k_k1         = sym_t("s_wei_stride_k_k1"        ,sseq(1))
+            self.s_wei_stride_k_k0_k1_diff = sym_t("s_wei_stride_k_k0_k1_diff",sseq(1))
+            self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,sseq(1))
+            self.s_move_slice_k_dsy        = sym_t("s_move_slice_k_dsy"       ,sseq(1))
+            self.s_move_slice_k_dsx        = sym_t("s_move_slice_k_dsx"       ,sseq(1))
 
-            self.s_move_slice_k_idsy       = sym_t("s_move_slice_k_idsy"      ,0)
-            self.s_move_slice_k_idsx       = sym_t("s_move_slice_k_idsx"      ,1)
-            self.s_move_slice_k_ik         = sym_t("s_move_slice_k_ik"        ,2)
+            self.s_block_gtc_ib            = sym_t("s_block_gtc_ib"           ,sseq(1))          
+            self.s_block_gtc_ic            = sym_t("s_block_gtc_ic"           ,sseq(1))       
+            self.s_block_gtc_in            = sym_t("s_block_gtc_in"           ,sseq(1))
+            self.s_block_gtc_in0           = sym_t("s_block_gtc_in0"          ,sseq(1))
+            self.s_block_gtc_in1b          = sym_t("s_block_gtc_in1b"         ,sseq(1))
+
+            self.s_knum                    = sym_t("s_knum"                   ,sseq(1))
+            self.s_dtile_dy_neg            = sym_t("s_dtile_dy_neg"           ,sseq(1))
+            self.s_dtile_dx_neg            = sym_t("s_dtile_dx_neg"           ,sseq(1))
+
             self.s_kitr                    = sym_t("s_kitr"                   ,3)
-            self.s_tmp                     = sym_t("s_tmp"                    ,66)
-            self.s_end                     = sym_t("s_end"                    ,72)
+            self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
+            self.s_end                     = sym_t("s_end"                    ,sseq())
 
         def get_count(self):
             return self.s_end.value
@@ -510,7 +516,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         def __init__(self, mc, tunable):
             mc_base_t.__init__(self, mc)
             vseq = gpr_sequencer_t()
-            self.tunable            = tunable
+            self.tunable         = tunable
             self.v_c             = sym_t("v_c"            ,vseq(tunable.num_vgpr_accumulate_c))
             v_c_num              = vseq()
             self.v_a             = sym_t("v_a"            ,vseq(tunable.num_vgpr_accumulate_a))
@@ -534,63 +540,48 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.v_wei_os        = sym_t("v_wei_os"       ,vseq(1))
             self.v_wei_os_base   = sym_t("v_wei_os_base"  ,vseq(1))
             self.v_out_flag      = sym_t("v_out_flag"     ,vseq(1))
+            self.v_co_sst        = sym_t("v_out_flag"     ,vseq(1))
+            self.v_co_sld        = sym_t("v_out_flag"     ,vseq(1))
             self.v_in_flag       = sym_t("v_in_flag"      ,vseq(1))
             self.v_in_os         = sym_t("v_in_os"        ,vseq(1))
+            self.v_gtc_ik1       = sym_t("v_gtc_ik1"      ,vseq(1))
+            self.v_gtc_dslice_iy = sym_t("v_gtc_dslice_iy",vseq(1))
+            self.v_gtc_dslice_ix = sym_t("v_gtc_dslice_ix",vseq(1))
+            self.v_move_slice_k_ik1  = sym_t("v_move_slice_k_ik1" , v_gtc_ik1.value))
+            self.v_move_slice_k_idsy = sym_t("v_move_slice_k_idsy", v_gtc_dslice_iy.value)
+            self.v_move_slice_k_idsx = sym_t("v_move_slice_k_idsx", v_gtc_dslice_ix.value)
 
             self.v_gtc_ic0       = sym_t("v_gtc_ic0"      ,v_c_num - 1)
             self.v_gtc_ic1       = sym_t("v_gtc_ic1"      ,v_c_num - 2)
             self.v_gtc_ik0       = sym_t("v_gtc_ik0"      ,v_c_num - 3)
-            self.v_gtc_ik1       = sym_t("v_gtc_ik1"      ,v_c_num - 4)
-            self.v_gtc_ie        = sym_t("v_gtc_ie"       ,v_c_num - 5)
-            self.v_gtc_ik1e      = sym_t("v_gtc_ik1e"     ,v_c_num - 6)
-            self.v_gtc_in0       = sym_t("v_gtc_in0"      ,v_c_num - 7)
-            self.v_gtc_in1       = sym_t("v_gtc_in1"      ,v_c_num - 8)
-            self.v_gtc_ib        = sym_t("v_gtc_ib"       ,v_c_num - 9)
-            self.v_gtc_in1b      = sym_t("v_gtc_in1b"     ,v_c_num - 10)
+            self.v_gtc_ik1e      = sym_t("v_gtc_ik1e"     ,v_c_num - 4)
 
-            #self.v_gtc_in0       = sym_t("v_gtc_in0"      ,v_c_num - 3)
-            #self.v_gtc_in1       = sym_t("v_gtc_in1"      ,v_c_num - 4)
-            #self.v_gtc_ib0       = sym_t("v_gtc_ib0"      ,v_c_num - 5)
-            #self.v_gtc_ib1       = sym_t("v_gtc_ib1"      ,v_c_num - 6)
-            #self.v_gtc_ik0       = sym_t("v_gtc_ik0"      ,v_c_num - 7)
-            #self.v_gtc_ik1       = sym_t("v_gtc_ik1"      ,v_c_num - 8)
-            #self.v_gtc_ie        = sym_t("v_gtc_ie"       ,v_c_num - 9)
-            #self.v_gemm_in       = sym_t("v_gemm_in"      ,v_c_num - 10)
-            #self.v_gemm_im       = sym_t("v_gemm_im"      ,v_c_num - 11)
-            #self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 12)
-            #self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 13)
-            #self.v_in_ib0        = sym_t("v_in_ib0"       ,v_c_num - 14)
-
+            self.v_gtc_in0       = sym_t("v_gtc_in0"      ,v_c_num - 8)
+            self.v_gtc_in1b      = sym_t("v_gtc_in1b"     ,v_c_num - 9)
+            self.v_gtc_in1       = sym_t("v_gtc_in1"      ,v_c_num - 10)
             self.v_gemm_in       = sym_t("v_gemm_in"      ,v_c_num - 11)
             self.v_gemm_im       = sym_t("v_gemm_im"      ,v_c_num - 12)
 
-            self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 12)
-            self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 13)
-            self.v_in_ib         = sym_t("v_in_ib"        ,v_c_num - 14)
-            self.v_in_ic0        = sym_t("v_in_ic0"       ,vseq(1))
-            self.v_in_ic1        = sym_t("v_in_ic1"       ,vseq(1))
-            self.v_in_ihi        = sym_t("v_in_ihi"       ,vseq(1))
-            self.v_in_iwi        = sym_t("v_in_iwi"       ,vseq(1))
-            self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,vseq(1))
-            self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,vseq(1))
-
-
-            # if v_c_num < 16:
-            #     self.v_in_ib1        = sym_t("v_in_ib1"       ,vseq(1))
-            #     self.v_in_ic0        = sym_t("v_in_ic0"       ,vseq(1))
-            #     self.v_in_ic1        = sym_t("v_in_ic1"       ,vseq(1))
-            #     self.v_in_ihi        = sym_t("v_in_ihi"       ,vseq(1))
-            #     self.v_in_iwi        = sym_t("v_in_iwi"       ,vseq(1))
-            #     self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,vseq(1))
-            #     self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,vseq(1))
-            # else:
-            #     self.v_in_ib1        = sym_t("v_in_ib1"       ,v_c_num - 15)
-            #     self.v_in_ic0        = sym_t("v_in_ic0"       ,v_c_num - 16)
-            #     self.v_in_ic1        = sym_t("v_in_ic1"       ,v_c_num - 17)
-            #     self.v_in_ihi        = sym_t("v_in_ihi"       ,v_c_num - 18)
-            #     self.v_in_iwi        = sym_t("v_in_iwi"       ,v_c_num - 19)
-            #     self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,v_c_num - 20)
-            #     self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,v_c_num - 21)
+            if v_c_num < 16:
+                self.v_in_in0        = sym_t("v_in_in0"       ,vseq(1))
+                self.v_in_in1b       = sym_t("v_in_in1b"      ,vseq(1))
+                self.v_in_in1        = sym_t("v_in_in1"       ,vseq(1))
+                self.v_in_ihi        = sym_t("v_in_ihi"       ,vseq(1))
+                self.v_in_iwi        = sym_t("v_in_iwi"       ,vseq(1))
+                self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,vseq(1))
+                self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,vseq(1))
+                self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
+                self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
+            else:
+                self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 13)
+                self.v_in_in1b       = sym_t("v_in_in1b"      ,v_c_num - 14)
+                self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 15)
+                self.v_in_ihi        = sym_t("v_in_ihi"       ,v_c_num - 16)
+                self.v_in_iwi        = sym_t("v_in_iwi"       ,v_c_num - 17)
+                self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,v_c_num - 18)
+                self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,v_c_num - 19)
+                self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 20)
+                self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 21)
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
             self.v_end           = sym_t("v_end"          ,vseq())
@@ -947,7 +938,6 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_load_dwordx4  s[{s.s_dslice_x((0,3))}],   s[{s.s_ka((0, 1))}],    0+{k.k_dslice_x()}")
         self._emit(f"s_load_dword    s[{s.s_dslice_w_left()}],   s[{s.s_ka((0, 1))}],    0+{k.k_dslice_w_left()}")
 
-        # output: K0xK1xExN0xN1xB0xB1
         self._emit(f"; output, thread(k0,k1e,n0,n1b): {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, cluster(k0,k1e,n0,n1b): {c_k0}x{c_k1e}x{c_n0}x{c_n1b}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
         self._emit(tc_index_dispatcher(v.v_gtc_in1b(),  v.v_tmp(), c_n1b(), t_n1b()))      # merged dimension no need to do shift per thread here, do shift later
@@ -1002,7 +992,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], s[{s.s_n()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(m_int_div_rem_ss(s.s_block_in(), s.s_block_im(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_block_gtc_in(), s.s_block_im(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_block_im()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
         #self._emit(f"s_lshl_b32 s[{s.s_block_gtc_i}]")
 
@@ -1011,7 +1001,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], {igemm_log2(unmerge_sub_n1)}     ; total number of n1b")
             self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(n_n1b)}")
-        self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_block_in(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_block_gtc_in(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         if n_n1b != 1:
             self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in1b()}], s[{s.s_block_gtc_in1b()}], {igemm_log2(n_n1b)}")
         if n_n0 != 1:
@@ -1195,8 +1185,6 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_add3_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_tmp(1)}], v[{v.v_in_iwi()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_in_os()}], {igemm_log2(data_byte)}, v[{v.v_in_os()}]")
 
-
-
         self._emit(f"; move slice stride")
         assert n_k0 * n_k1e == self.tunable.gemm_k_per_block
         if n_k0 != 1:
@@ -1205,6 +1193,11 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_k1(), s.s_stride_dslice_yx(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         self._emit(m_int_div_rem_ss(s.s_move_slice_k_dsx(), s.s_move_slice_k_dsy(), s.s_tmp(4), s.s.s_dslice_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         self._emit_empty_line()
+
+        m_move_slice_window = self.get_macro_move_slice_window()
+
+        self._emit(m_move_slice_window.init_stride_k(s.s_out_stride_k(), s.s_wei_stride_k(), s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(),
+                                                        s.s_out_stride_k0_k1_diff(), s.s_wei_stride_k0_k1_diff(), s.s_move_slice_k_k1()))
 
 
 
@@ -1230,11 +1223,12 @@ class igemm_bwd_gtc_t(mc_base_t):
             m_out_update_os       = self.get_macro_out_update_os()
             m_out_update_hw       = self.get_macro_out_update_hw()
             m_set_flag_hw         = self.get_macro_set_flag_hw()
-            k_step_k, k_step_dsy, k_step_dsx  =  self.tunable.gemm_k_per_block, 1, 1
+            # k_step_k, k_step_dsy, k_step_dsx  =  self.tunable.gemm_k_per_block, 1, 1
             with self._deferred_context():
-                self._emit(m_move_slice_window(s.s_move_slice_k_ik(), s.s_move_slice_k_idsy(), s.s_move_slice_k_idsx(), s.s_dslice_y(), s.s_dslice_x(),
-                        k_step_k, k_step_dsy, k_step_dsx, v.v_out_os_base(), v.v_wei_os_base(), s.s_out_move_slice_stride_k(), s.s_wei_move_slice_stride_k()))
-                self._emit(m_out_update_hw(v.v_out_iho(), v.v_out_iwo(), v.v_out_dslice_ih(), v.v_out_dslice_iw(), s.s_move_slice_k_idsy(), s.s_move_slice_k_idsx(), s.s_dtile_dy(), s.s_dtile_dx(), s.s_tmp()))
+                self._emit(m_move_slice_window(v.v_move_slice_k_ik1(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_gemm_k_num_k1(), s.s_gemm_k_num_dsy(), s.s_gemm_k_num_dsx(),
+                        s.s_move_slice_k_k1(), s.s_move_slice_k_dsy(), s.s_move_slice_k_dsx(), v.v_out_os_base(), v.v_wei_os_base(),
+                        s.s_out_stride_k(), s.s_wei_stride_k(), s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(), s.s_out_stride_k0_k1_diff(), s.s_wei_stride_k0_k1_diff()))
+                self._emit(m_out_update_hw(v.v_out_iho(), v.v_out_iwo(), v.v_out_dslice_ih(), v.v_out_dslice_iw(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_dy(), s.s_dtile_dx(), s.s_tmp()))
                 self._emit(m_out_update_os(v.v_out_os(), v.v_out_os_base(), v.v_out_iho(), v.v_out_iwo(), s.s_wo(), v.v_tmp()))
                 self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
             return self._get_deferred()
@@ -1243,7 +1237,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             m_wei_update_os   = self.get_macro_wei_update_os()
             m_wei_update_yx   = self.get_macro_wei_update_yx()
             with self._deferred_context():
-                self._emit(m_wei_update_yx(v.v_wei_iy(), v.v_wei_ix(), s.s_move_slice_k_idsy(), s.s_move_slice_k_idsx(), s.s_dtile_y(), s.s_dtile_x(), v.v_dtile_iy(), v.v_dtile_ix(), s.s_tmp()))
+                self._emit(m_wei_update_yx(v.v_wei_iy(), v.v_wei_ix(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_y(), s.s_dtile_x(), v.v_dtile_iy(), v.v_dtile_ix(), s.s_tmp()))
                 self._emit(m_wei_update_os(v.v_wei_os(), v.v_wei_os_base(), v.v_wei_iy(), v.v_wei_ix(), s.s_x(), v.v_tmp()))
             return self._get_deferred()
 
