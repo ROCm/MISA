@@ -140,7 +140,7 @@ public:
 
         assert(direction == "bwd");
 
-        std::string kernel_prefix = std::string(igemm_) + direction + std::string("_gtc_") + precision +
+        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + precision +
                 std::string("_bx") + std::to_string(nxb) + 
                 std::string("_ex") + std::to_string(nxe) + "_";
         std::string kernel_name =

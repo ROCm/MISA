@@ -75,7 +75,7 @@ class macro_int_div_rem_vv_t(mc_base_t):
     def __call__(self, v_r, v_q, v_n, v_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, v_d, v_tmp4, s_tmp4)
     def emit(self):
-        int_div_vv = macro_int_div_vv_t()
+        int_div_vv = macro_int_div_vv_t(self.mc)
         with self._emit_macro_indented(".macro {} v_r, v_q, v_n, v_d, v_tmp4, s_tmp4".format(self.name())):
             self._emit(int_div_vv("\\v_q", "\\v_n", "\\v_d", "\\v_tmp4", "\\s_tmp4"))
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], v[\\v_d], v[\\v_q]")
@@ -130,7 +130,7 @@ class macro_int_div_rem_vs_t(mc_base_t):
     def __call__(self, v_r, v_q, v_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
-        int_div_vs = macro_int_div_vs_t()
+        int_div_vs = macro_int_div_vs_t(self.mc)
         with self._emit_macro_indented(".macro {} v_r, v_q, v_n, s_d, v_tmp4, s_tmp4".format(self.name())):
             self._emit(int_div_vs("\\v_q", "\\v_n", "\\s_d", "\\v_tmp4", "\\s_tmp4"))
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], s[\\s_d], v[\\v_q]")
@@ -187,7 +187,7 @@ class macro_int_div_rem_ss_t(mc_base_t):
         return '{} {}, {}, {}, {}, {}, {}, {}'.format(self.name(), s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4) 
 
     def emit(self):
-        int_div_ss = macro_int_div_ss_t()
+        int_div_ss = macro_int_div_ss_t(self.mc)
         with self._emit_macro_indented(".macro {} s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4".format(self.name())):
             self._emit(int_div_ss("\\v_q", "\\s_n", "\\s_d", "\\v_tmp4", "\\s_tmp4"))
             self._emit(f"v_readfirstlane_b32 s[\\s_q], v[\\v_q]")

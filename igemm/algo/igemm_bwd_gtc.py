@@ -31,6 +31,7 @@ from .global_memory import *
 from .shared_memory import *
 from .utility import *
 from .thread_mapping import *
+from .coalescing_store import *
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -169,12 +170,13 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
         assert type(tunable) is igemm_gtc_tunable_parameter_t
         mc_base_t.__init__(self, mc)
         self.tunable = tunable
+
     def name(self):
         return '.s_bwd_gtc_move_slice_window_k_dsy_dsx'
-    def __call__(self, v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k0_k1_diff, s_wei_stride_k0_k1_diff):
+    def __call__(self, v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff):
         return '{} {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k0_k1_diff, s_wei_stride_k0_k1_diff)
-    def init_stride_k(self, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k0_k1_diff, s_wei_stride_k0_k1_diff, s_move_slice_k_k1):
+            v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff)
+    def init_stride_k(self, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff, s_move_slice_k_k1):
         '''
         s_out_stride_k, s_wei_stride_k, s_move_slice_k_k1 is known value, want to compute other
         '''
@@ -193,20 +195,24 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
         _   ,    _,  t_n0, t_n1b = t_tb[0], t_tb[1], t_tb[2], t_tb[3]
 
         n_k0, n_k1e = c_k0 * t_k0, c_k1e * t_k1e
-        unmerge_sub_k1 = self.tunable.unmerge_sub_k1
+        unmerge_sub_k = self.tunable.unmerge_sub_k
+        assert unmerge_sub_k % n_k0 == 0
+        unmerge_sub_k1 = unmerge_sub_k // n_k0
+        assert n_k1e % unmerge_sub_k1 == 0
+
         diff_k0_k1 = self.tunable.gemm_k_per_block - unmerge_sub_k1 + 1
 
         with self._deferred_context():
-            self._emit(f"s_mul_i32 s[{s_out_stride_k0_k1_diff}], {diff_k0_k1}, s[{s_out_stride_k}]")
-            self._emit(f"s_mul_i32 s[{s_wei_stride_k0_k1_diff}], {diff_k0_k1}, s[{s_wei_stride_k}]")
+            self._emit(f"s_mul_i32 s[{s_out_stride_k_k0_k1_diff}], {diff_k0_k1}, s[{s_out_stride_k}]")
+            self._emit(f"s_mul_i32 s[{s_wei_stride_k_k0_k1_diff}], {diff_k0_k1}, s[{s_wei_stride_k}]")
             self._emit(f"s_mul_i32 s[{s_out_stride_k_k1}], s[{s_move_slice_k_k1}], s[{s_out_stride_k}]  ; might be 0 or larger")
             self._emit(f"s_mul_i32 s[{s_wei_stride_k_k1}], s[{s_move_slice_k_k1}], s[{s_wei_stride_k}]  ; might be 0 or larger")
 
         return self._get_deferred()
 
     def emit(self):
-        unmerge_sub_k1 = self.tunable.unmerge_sub_k1
-        with self._emit_macro_indented('.macro {} v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k0_k1_diff, s_wei_stride_k0_k1_diff'.format(self.name())):
+        # unmerge_sub_k1 = self.unmerge_sub_k1
+        with self._emit_macro_indented('.macro {} v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff'.format(self.name())):
             # k0, k1e is unmerge.  k1e is merged from k1, e
             self._emit(f"v_add_u32 v[\\v_move_slice_k_idsx], s[\\s_move_slice_k_dsx], v[\\v_move_slice_k_idsx]")
             self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_dsx], v[\\v_move_slice_k_idsx]")
@@ -227,8 +233,8 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
             self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k_k1], v[\\v_wei_os_base]")
             self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
             self._emit(f"v_mov_b32 v[\\v_move_slice_k_ik1], 0")
-            self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k0_k1_diff], v[\\v_out_os_base]")
-            self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k0_k1_diff], v[\\v_wei_os_base]")
+            self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k_k0_k1_diff], v[\\v_out_os_base]")
+            self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k_k0_k1_diff], v[\\v_wei_os_base]")
             self._emit(f"s_mov_b64 exec, -1")
             self._emit_empty_line()
 
@@ -289,12 +295,12 @@ class igemm_bwd_gtc_t(mc_base_t):
         ctrl_coalescing_store = ctrl_coalescing_store_t()
         ctrl_coalescing_store.ctm = ctrl_thread_mapping
         ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
-        ctrl_coalescing_store.data_byte = self.tunable.data_byte
+        ctrl_coalescing_store.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
         ctrl_coalescing_store.block_size = self.tunable.block_size
 
-        coalescing_store = igemm_coalescing_store_t(mc, ctrl)
+        self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
 
         '''
          in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1
@@ -492,11 +498,15 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             self.s_block_gtc_ib            = sym_t("s_block_gtc_ib"           ,sseq(1))          
             self.s_block_gtc_ic            = sym_t("s_block_gtc_ic"           ,sseq(1))       
+            self.s_block_gtc_im            = sym_t("s_block_gtc_im"           ,sseq(1))
             self.s_block_gtc_in            = sym_t("s_block_gtc_in"           ,sseq(1))
             self.s_block_gtc_in0           = sym_t("s_block_gtc_in0"          ,sseq(1))
             self.s_block_gtc_in1b          = sym_t("s_block_gtc_in1b"         ,sseq(1))
 
             self.s_knum                    = sym_t("s_knum"                   ,sseq(1))
+            self.s_gemm_k_num_k1           = sym_t("s_gemm_k_num_k1"          ,sseq(1))
+            self.s_gemm_k_num_dsy          = sym_t("s_gemm_k_num_dsy"         ,self.s_dslice_y.value)
+            self.s_gemm_k_num_dsx          = sym_t("s_gemm_k_num_dsx"         ,self.s_dslice_x.value)
             self.s_dtile_dy_neg            = sym_t("s_dtile_dy_neg"           ,sseq(1))
             self.s_dtile_dx_neg            = sym_t("s_dtile_dx_neg"           ,sseq(1))
 
@@ -547,9 +557,9 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.v_gtc_ik1       = sym_t("v_gtc_ik1"      ,vseq(1))
             self.v_gtc_dslice_iy = sym_t("v_gtc_dslice_iy",vseq(1))
             self.v_gtc_dslice_ix = sym_t("v_gtc_dslice_ix",vseq(1))
-            self.v_move_slice_k_ik1  = sym_t("v_move_slice_k_ik1" , v_gtc_ik1.value))
-            self.v_move_slice_k_idsy = sym_t("v_move_slice_k_idsy", v_gtc_dslice_iy.value)
-            self.v_move_slice_k_idsx = sym_t("v_move_slice_k_idsx", v_gtc_dslice_ix.value)
+            self.v_move_slice_k_ik1  = sym_t("v_move_slice_k_ik1" , self.v_gtc_ik1.value)
+            self.v_move_slice_k_idsy = sym_t("v_move_slice_k_idsy", self.v_gtc_dslice_iy.value)
+            self.v_move_slice_k_idsx = sym_t("v_move_slice_k_idsx", self.v_gtc_dslice_ix.value)
 
             self.v_gtc_ic0       = sym_t("v_gtc_ic0"      ,v_c_num - 1)
             self.v_gtc_ic1       = sym_t("v_gtc_ic1"      ,v_c_num - 2)
@@ -649,7 +659,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         ctrl_out_gld = ctrl_2d_global_load_t()
         ctrl_wei_gld = ctrl_2d_global_load_t()
 
-        ctrl_out_gld.vector_d1 = igemm_gcd(t_b, 4) if t_b != 1 else 1
+        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4) if t_n1b != 1 else 1
         ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1e, 4) if self.tunable.nxe == 0 else 1
 
         if self.out_thread_copy_ndim == 2:
@@ -680,7 +690,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
         n_c0, n_c1, n_k0, n_k1e, n_n0, n_n1b = self.get_dims_lengths()
-        t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths_merged()
+        t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths()
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         # t_k0, t_k1e, t_n0, t_n1b
@@ -716,7 +726,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
             wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-            wei_sst_ctrl.stride_d0 = wei_stride_list[wei_reorder_list[wei_thread_copy_index[0]]] * data_byte
+            wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -739,11 +749,11 @@ class igemm_bwd_gtc_t(mc_base_t):
         return None
 
     def get_macro_out_update_os(self):
-        return macro_igemm_bwd_gtc_out_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.data_type))
+        return macro_igemm_bwd_gtc_out_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision))
     def get_macro_out_update_hw(self):
         return macro_igemm_bwd_gtc_out_update_hw_t(self.mc)
     def get_macro_wei_update_os(self):
-        return macro_igemm_bwd_gtc_wei_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.data_type))
+        return macro_igemm_bwd_gtc_wei_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision))
     def get_macro_wei_update_yx(self):
         return macro_igemm_bwd_gtc_wei_update_yx_t(self.mc)
     def get_macro_set_flag_hw(self):
@@ -929,7 +939,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         m_int_div_rem_vs = macro_int_div_rem_vs_t(self.mc)
         m_int_div_rem_ss = macro_int_div_rem_ss_t(self.mc)
 
-
+        self._emit(f"; unmerge_sub_k:{unmerge_sub_k}, unmerge_sub_k1:{unmerge_sub_k1}, unmerge_sub_n:{unmerge_sub_n}, unmerge_sub_n1:{unmerge_sub_n1}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_in((0,1))}],       s[{s.s_ka((0, 1))}],    0+{k.k_p_in()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_wei((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_wei()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_out((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_out()}")
@@ -940,15 +950,15 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         self._emit(f"; output, thread(k0,k1e,n0,n1b): {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, cluster(k0,k1e,n0,n1b): {c_k0}x{c_k1e}x{c_n0}x{c_n1b}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
-        self._emit(tc_index_dispatcher(v.v_gtc_in1b(),  v.v_tmp(), c_n1b(), t_n1b()))      # merged dimension no need to do shift per thread here, do shift later
-        self._emit(tc_index_dispatcher(v.v_gtc_in0(),   v.v_tmp(), c_n0(),  t_n0()))
-        self._emit(tc_index_dispatcher(v.v_gtc_ik1e(),  v.v_tmp(), c_k1e(), t_k1e()))      # merged dimension no need to do shift per thread here, do shift later
-        self._emit(tc_index_dispatcher(v.v_gtc_ik0(),   v.v_tmp(), c_k0(),  t_k0(), True))
+        self._emit(tc_index_dispatcher(v.v_gtc_in1b(),  v.v_tmp(), c_n1b, t_n1b))      # merged dimension no need to do shift per thread here, do shift later
+        self._emit(tc_index_dispatcher(v.v_gtc_in0(),   v.v_tmp(), c_n0,  t_n0))
+        self._emit(tc_index_dispatcher(v.v_gtc_ik1e(),  v.v_tmp(), c_k1e, t_k1e))      # merged dimension no need to do shift per thread here, do shift later
+        self._emit(tc_index_dispatcher(v.v_gtc_ik0(),   v.v_tmp(), c_k0,  t_k0, True))
         self._emit_empty_line()
         self._emit(f"; wei, thread(k0,k1e,c0,c1): {t_k0}x{t_k1e}x{t_c0}x{t_c1}, cluster(k0,k1e,c0,c1) {c_k0}x{c_k1e}x{c_c0}x{c_c1}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
-        self._emit(tc_index_dispatcher(v.v_gtc_ic1(), v.v_tmp(), c_c1(), t_c1()))
-        self._emit(tc_index_dispatcher(v.v_gtc_ic0(), v.v_tmp(), c_c0(), t_c0(), True))
+        self._emit(tc_index_dispatcher(v.v_gtc_ic1(), v.v_tmp(), c_c1, t_c1))
+        self._emit(tc_index_dispatcher(v.v_gtc_ic0(), v.v_tmp(), c_c0, t_c0, True))
         self._emit_empty_line()
         self._emit(f"s_mov_b32 s[{s.s_p_in(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], 0x27000")
@@ -992,8 +1002,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_stride_dslice_hw()}], s[{s.s_n()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(m_int_div_rem_ss(s.s_block_gtc_in(), s.s_block_im(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
-        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_block_im()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(m_int_div_rem_ss(s.s_block_gtc_in(), s.s_block_gtc_im(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_block_gtc_im()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
         #self._emit(f"s_lshl_b32 s[{s.s_block_gtc_i}]")
 
         if unmerge_sub_n1 == 1:
@@ -1005,7 +1015,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         if n_n1b != 1:
             self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in1b()}], s[{s.s_block_gtc_in1b()}], {igemm_log2(n_n1b)}")
         if n_n0 != 1:
-            self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in0}], s[{s.s_block_gtc_in0}], {igemm_log2(n_n0)}")
+            self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in0()}], s[{s.s_block_gtc_in0()}], {igemm_log2(n_n0)}")
         self._emit_empty_line()
 
         self._emit(f"; n1b transform")
@@ -1085,9 +1095,9 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in0()}], {igemm_log2(n_n1b)}, v[{v.v_gtc_in1b()}]")
         if c_k1e != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1e}], {igemm_log2(n_n0*n_n1b)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1e()}], {igemm_log2(n_n0*n_n1b)}, v[{v.v_tmp()}]")
         if c_k0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0}], {igemm_log2(n_k1e*n_n0*n_n1b)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_n0*n_n1b)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
         self._emit_empty_line()
@@ -1102,9 +1112,9 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic0()}], {igemm_log2(n_c1)}, v[{v.v_gtc_ic1()}]")
         if c_k1e != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1e}], {igemm_log2(n_c0*n_c1)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1e()}], {igemm_log2(n_c0*n_c1)}, v[{v.v_tmp()}]")
         if c_k0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0}], {igemm_log2(n_k1e*n_c0*n_c1)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_c0*n_c1)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
@@ -1114,9 +1124,9 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
 
-        self._emit(coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), 'v0', v.v_tmp()))
-        self._emit(coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index() 'v0', v.v_tmp()))
-        self._emit(coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index() 'v0', v.v_tmp()))
+        self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))
+        self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), '0', v.v_tmp()))
+        self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
         self._emit_empty_line()
 
         self._emit(f"; input offset")
@@ -1134,7 +1144,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"; compute v_co_sub_n_index along n0 x n1b : {n_n0}x{n_n1b}")
         if n_n1b != 1:
-            self._emit(f"v_and_b32 v[{v.v_in_in1b()}], {n_n1b - 1)}, v[{v.v_co_sub_n_index()}]     ; => N1B")
+            self._emit(f"v_and_b32 v[{v.v_in_in1b()}], {n_n1b - 1}, v[{v.v_co_sub_n_index()}]     ; => N1B")
             if n_n0 != 1:
                 self._emit(f"v_lshrrev_b32 v[{v.v_in_in0()}], {igemm_log2(n_n1b)}, v[{v.v_co_sub_n_index()}]  ; => N0")
         else:
@@ -1178,7 +1188,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[{v.v_in_os()}], s[{s.s_in_stride_n()}], v[{v.v_in_in1()}]")
 
         self._emit(f"; add i_c")
-        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_c}], v[{v.v_co_sub_m_index()}]")
+        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_c()}], v[{v.v_co_sub_m_index()}]")
         self._emit(f"v_add_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_tmp()}]")
         self._emit(f"; add hi, wi")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_wi()}], v[{v.v_in_ihi()}]")
@@ -1187,31 +1197,21 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         self._emit(f"; move slice stride")
         assert n_k0 * n_k1e == self.tunable.gemm_k_per_block
-        if n_k0 != 1:
-            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
+        #if n_k0 != 1:
+        #    self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
         self._emit(f"s_mov_b32 s[0], {n_k1e}")
-        self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_k1(), s.s_stride_dslice_yx(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-        self._emit(m_int_div_rem_ss(s.s_move_slice_k_dsx(), s.s_move_slice_k_dsy(), s.s_tmp(4), s.s.s_dslice_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_k1(), '0', s.s_stride_dslice_yx(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_move_slice_k_dsx(), s.s_move_slice_k_dsy(), s.s_tmp(4), s.s_dslice_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         self._emit_empty_line()
 
         m_move_slice_window = self.get_macro_move_slice_window()
 
         self._emit(m_move_slice_window.init_stride_k(s.s_out_stride_k(), s.s_wei_stride_k(), s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(),
-                                                        s.s_out_stride_k0_k1_diff(), s.s_wei_stride_k0_k1_diff(), s.s_move_slice_k_k1()))
+                                                        s.s_out_stride_k_k0_k1_diff(), s.s_wei_stride_k_k0_k1_diff(), s.s_move_slice_k_k1()))
 
 
+        self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}, s[{s.s_in_stride_c()}]")
 
-        # if n_k0 != 1:
-        #     self._emit(f"v_mov_b32 v[{v.v_gtc_ik0}], 0")
-        #     self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
-        # self._emit(f"s_mov_b32 s[0], {n_k1}")
-        # self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_k1(), '0', s.s_stride_dslice_yx(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-        # self._emit(m_int_div_rem_ss(s.s_move_slice_k_dsx(), s.s_move_slice_k_dsy(), s.s_tmp(4), s.s.s_dslice_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-        # self._emit_empty_line()
-
-        #self._emit(f"s_mov_b32 s[{s.s_move_slice_k_ik()}], 0")
-        #self._emit(f"s_mov_b32 s[{s.s_move_slice_k_idsy()}], 0")
-        #self._emit(f"s_mov_b32 s[{s.s_move_slice_k_idsx()}], 0")
         self._emit_empty_line()
 
     def emit_kernel_fma_main_loop(self):
@@ -1227,8 +1227,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             with self._deferred_context():
                 self._emit(m_move_slice_window(v.v_move_slice_k_ik1(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_gemm_k_num_k1(), s.s_gemm_k_num_dsy(), s.s_gemm_k_num_dsx(),
                         s.s_move_slice_k_k1(), s.s_move_slice_k_dsy(), s.s_move_slice_k_dsx(), v.v_out_os_base(), v.v_wei_os_base(),
-                        s.s_out_stride_k(), s.s_wei_stride_k(), s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(), s.s_out_stride_k0_k1_diff(), s.s_wei_stride_k0_k1_diff()))
-                self._emit(m_out_update_hw(v.v_out_iho(), v.v_out_iwo(), v.v_out_dslice_ih(), v.v_out_dslice_iw(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_dy(), s.s_dtile_dx(), s.s_tmp()))
+                        s.s_out_stride_k(), s.s_wei_stride_k(), s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(), s.s_out_stride_k_k0_k1_diff(), s.s_wei_stride_k_k0_k1_diff()))
+                self._emit(m_out_update_hw(v.v_out_iho(), v.v_out_iwo(), v.v_out_dslice_ih(), v.v_out_dslice_iw(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_dy_neg(), s.s_dtile_dx_neg()))
                 self._emit(m_out_update_os(v.v_out_os(), v.v_out_os_base(), v.v_out_iho(), v.v_out_iwo(), s.s_wo(), v.v_tmp()))
                 self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
             return self._get_deferred()
@@ -1237,7 +1237,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             m_wei_update_os   = self.get_macro_wei_update_os()
             m_wei_update_yx   = self.get_macro_wei_update_yx()
             with self._deferred_context():
-                self._emit(m_wei_update_yx(v.v_wei_iy(), v.v_wei_ix(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_y(), s.s_dtile_x(), v.v_dtile_iy(), v.v_dtile_ix(), s.s_tmp()))
+                self._emit(m_wei_update_yx(v.v_wei_iy(), v.v_wei_ix(), v.v_move_slice_k_idsy(), v.v_move_slice_k_idsx(), s.s_dtile_y(), s.s_dtile_x(), v.v_dtile_iy(), v.v_dtile_ix()))
                 self._emit(m_wei_update_os(v.v_wei_os(), v.v_wei_os_base(), v.v_wei_iy(), v.v_wei_ix(), s.s_x(), v.v_tmp()))
             return self._get_deferred()
 
@@ -1287,8 +1287,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         v = self.vgpr
         label_out = f"L_{self.name()}_out"
 
-        self._emit(f"s_lshl_b32 s[{s.s_in_stride_c}], {igemm_log2(data_byte)}, s[{s.s_in_stride_c}]")
-        self._emit(coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_in_stride_c, s.s_tmp(), v.v_in_flag()) )
+        self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_in_stride_c(), s.s_tmp(), v.v_in_flag()) )
 
         self._emit_front(f"{label_out}:")
 

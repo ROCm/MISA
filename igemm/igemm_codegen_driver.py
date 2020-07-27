@@ -36,7 +36,7 @@ class igemm_codegen_driver_t(mc_base_t):
         kernel_list = []
 
         # gtc bwd
-        kernel_list.extend([igemm_bwd_gtc_deprecated_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+        kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
         self.kernel_list = kernel_list
 
@@ -54,6 +54,9 @@ class igemm_codegen_driver_t(mc_base_t):
         macro_int_div_vv_t(self.mc).emit()
         macro_int_div_vs_t(self.mc).emit()
         macro_int_div_ss_t(self.mc).emit()
+        macro_int_div_rem_vv_t(self.mc).emit()
+        macro_int_div_rem_vs_t(self.mc).emit()
+        macro_int_div_rem_ss_t(self.mc).emit()
         # emit_write_4d_strided_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         self._emit_fma_macro()
