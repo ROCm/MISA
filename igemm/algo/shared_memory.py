@@ -418,7 +418,7 @@ class inst_ds_write2_likely_t(mc_base_t):
     def likely_write2st64_b32(self, sst_offset = 0):
         if self.vec_count % 2 != 0:
             return False
-        if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % 4 == 0):
+        if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
             if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
@@ -550,7 +550,8 @@ class ctrl_2d_shared_store_t(object):
         self.length_d1 = 1
         self.vector_d1 = 1
         # self.offset_d1 = 0      # base offset
-        self.stride_d0 = 0      # stride
+        self.stride_d0 = 1        # stride
+        self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0  # 0-d0,d1, 1-d1,d0
 
@@ -559,6 +560,7 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
         assert type(ctrl) is ctrl_2d_shared_store_t
         mc_base_t.__init__(self, mc)
         self.ctrl = ctrl
+        self.issue_cnt = 0
     def name(self):
         ctrl = self.ctrl
         if ctrl.precision == "fp32":
@@ -577,7 +579,7 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
         else:
             assert False
 
-        assert ctrl.length_d1 == ctrl.vector_d1
+        # assert ctrl.length_d1 == ctrl.vector_d1
 
         return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}" + \
                 ("" if ctrl.length_d0 == 1 else f"_st{ctrl.stride_d0}")
@@ -586,14 +588,38 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
         return '{} {}, {}'.format(self.name(), v_src, v_sst_os)
     def emit(self):
         ctrl = self.ctrl
-        assert ctrl.length_d1 == ctrl.vector_d1
+        # assert ctrl.length_d1 == ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        ds_write = inst_ds_write_t(ctrl.vector_d1 * 4)
+        
+        issue_cnt = 0
         with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
-            if ctrl.src_order == 0:
-                for i_d0 in range(ctrl.length_d0):
-                    self._emit(ds_write('\\v_sst_os', f'\\v_src+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+            if ctrl.length_d1 == ctrl.vector_d1:
+                ds_write = inst_ds_write_t(ctrl.vector_d1 * 4)
+                if ctrl.src_order == 0:
+                    for i_d0 in range(ctrl.length_d0):
+                        self._emit(ds_write('\\v_sst_os', f'\\v_src+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+                        issue_cnt += ds_write.get_issues()
+                else:
+                    assert "unimplemented"
             else:
-                assert "unimplemented"
+                assert ctrl.length_d1 % ctrl.vector_d1 == 0
+                assert ctrl.stride_d1 != 1
+                num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
+                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * 4, ctrl.stride_d1)
+                if ctrl.src_order == 0:
+                    for i_d0 in range(ctrl.length_d0):
+                        for i_d1 in range(num_vector_d1 // 2):
+                            i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                            self._emit(ds_write2('\\v_sst_os',
+                                    f'\\v_src+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
+                                    i_offset))
+                            issue_cnt += ds_write2.get_issues(i_offset)
+                else:
+                    assert "unimplemented"
+        self.issue_cnt = issue_cnt
     def get_issues(self):
-        return self.ctrl.length_d0
+        #assert False, "tobe implemented"
+        #return self.ctrl.length_d0
+        with self._deferred_context():
+            self.emit()
+        return self.issue_cnt

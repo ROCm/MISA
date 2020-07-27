@@ -699,21 +699,25 @@ class igemm_bwd_gtc_t(mc_base_t):
         # t_k0, t_k1e, t_c0, t_c1
         wei_stride_list = [n_k1e*n_c0*n_c1, n_c0*n_c1, n_c1, 1]
 
-        # K0xK1xExN0xB0xB1xN1
         out_sst_ctrl = ctrl_2d_shared_store_t()
         wei_sst_ctrl = ctrl_2d_shared_store_t()
 
         if self.out_thread_copy_ndim == 2:
             out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-            out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            #out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            out_sst_ctrl.vector_d1 = t_n1b
             out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte
+            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
-            out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            #out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            out_sst_ctrl.vector_d1 = t_n1b
             out_sst_ctrl.stride_d0 = 1
+            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte
             if out_sst_ctrl.length_d1 == 8:
+                assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 out_sst_ctrl.length_d0 = 2
                 out_sst_ctrl.length_d1 = 4
@@ -725,14 +729,19 @@ class igemm_bwd_gtc_t(mc_base_t):
         if self.wei_thread_copy_ndim == 2:
             wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-            wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+            #wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+            wei_sst_ctrl.vector_d1 = t_c1
             wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
+            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            #wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            wei_sst_ctrl.vector_d1 = t_c1
             wei_sst_ctrl.stride_d0 = 1
+            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
             if wei_sst_ctrl.length_d1 == 8:
+                assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
                 wei_sst_ctrl.length_d1 = 4
@@ -1214,8 +1223,12 @@ class igemm_bwd_gtc_t(mc_base_t):
                                                         s.s_out_stride_k_k0_k1_diff(), s.s_wei_stride_k_k0_k1_diff(), s.s_move_slice_k_k1()))
 
 
+        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k1()}], {igemm_log2(data_byte)}, s[{s.s_out_stride_k_k1()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k1()}], {igemm_log2(data_byte)}, s[{s.s_wei_stride_k_k1()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}, s[{s.s_out_stride_k_k0_k1_diff()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}, s[{s.s_wei_stride_k_k0_k1_diff()}]")
         self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}, s[{s.s_in_stride_c()}]")
-
+        self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_k1()}], {unmerge_sub_k1}")
         self._emit_empty_line()
 
     def emit_kernel_fma_main_loop(self):
