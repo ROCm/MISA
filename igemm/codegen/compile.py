@@ -70,6 +70,46 @@ class compile_asm_t(object):
             print('err:{}'.format(e))
             return False
 
+class compile_disass_t(object):
+    def __init__(self, mc, hsaco_file_name, target_disass = ''):
+        self.hsaco_file_name = hsaco_file_name
+        if target_disass == '':
+            self.target_disass = os.path.splitext(hsaco_file_name)[0] + '.disass.s'
+        else:
+            self.target_disass = target_disass
+        self.mc = mc
+    def compile(self, **kwargs):
+        arch_str = amdgpu_arch_to_string(self.mc.arch_config.arch)
+        use_hip_clang = _check_hip_clang()
+        if use_hip_clang:
+            cmd = ['/opt/rocm/llvm/bin/llvm-objdump']
+            cmd += ['--disassemble']
+            cmd += ['--mcpu={}'.format(arch_str)]
+        else:
+            cmd = ['/opt/rocm/hcc/bin/llvm-objdump']
+            cmd += ['-disassemble']
+            cmd += ['-mcpu={}'.format(arch_str)]
+
+        cmd += ['{}'.format(self.hsaco_file_name)]
+        # cmd += ['>', '{}'.format(self.target_disass)]
+        try:
+            fp = open(self.target_disass, "w")
+            p = subprocess.Popen(cmd, stdout=fp)
+            try:
+                (out, _) = p.communicate()
+                if p.returncode != 0:
+                    print('build fail:{}'.format(cmd))
+                    print('{}'.format(out.decode('utf-8')))
+                    return False
+                return True
+            except Exception as e:
+                print('fail to run cmd:{}'.format(cmd))
+                print('err:{}'.format(e))
+                return False
+        except IOError as e:
+                print("can't open file:{}({})".format(self.target_disass, e))
+                sys.exit()
+
 class compile_host_t(object):
     def __init__(self, arch_config, host_cpp, target_exec = ''):
         self.host_cpp = host_cpp

@@ -103,8 +103,13 @@ class igemm_codegen_driver_t(mc_base_t):
         self.emit_metadata()
 
     def do_compile(self):
-        builder = compile_asm_t(self.mc, self.mc.emitter.file_name)
-        rtn = builder.compile()
+        ass = compile_asm_t(self.mc, self.mc.emitter.file_name)
+        rtn = ass.compile()
+        if not rtn:
+            assert False
+
+        disass = compile_disass_t(self.mc, ass.target_hsaco)
+        rtn = disass.compile()
         if not rtn:
             assert False
 
