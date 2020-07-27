@@ -225,7 +225,7 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
             self._emit(f"v_add_u32 v[\\v_move_slice_k_ik1], s[\\s_move_slice_k_k1], v[\\v_move_slice_k_ik1]")
             self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k_k1], v[\\v_out_os_base]")
             self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k_k1], v[\\v_wei_os_base]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]"")
+            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
             self._emit(f"v_mov_b32 v[\\v_move_slice_k_ik1], 0")
             self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k0_k1_diff], v[\\v_out_os_base]")
             self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k0_k1_diff], v[\\v_wei_os_base]")
