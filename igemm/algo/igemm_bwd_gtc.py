@@ -328,6 +328,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load output")
+                self._emit(f".v_clear_nc {v.v_gld_b()}, {m_out_2d_global_load.ctrl.length_d0 * m_out_2d_global_load.ctrl.length_d1}")
                 self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_out_flag()}]")
                 self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                 self._emit(m_out_2d_global_load(v.v_gld_b(), s.s_p_out(), v.v_out_os(), s_out_stride_d0(), s_out_stride_d1(), s.s_tmp()))
@@ -472,7 +473,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_dslice_w                = sym_t("s_dslice_w"               ,42)
             self.s_dslice_h_left           = sym_t("s_dslice_h_left"          ,43)
             self.s_dslice_w_left           = sym_t("s_dslice_w_left"          ,44)
-            sseq                           = gpr_sequencer_t(44)
+            sseq                           = gpr_sequencer_t(44 + 1)
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
             self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
             self.s_out_stride_n            = sym_t("s_out_stride_n"           ,sseq(1))

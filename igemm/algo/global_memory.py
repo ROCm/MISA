@@ -116,7 +116,7 @@ class macro_igemm_2d_global_load_t(mc_base_t):
         assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
         with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
-            self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
+            # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
             if ctrl.src_order == 0 and ctrl.dst_order == 0:
                 i_dst = 0
                 for i_d0 in range(ctrl.length_d0):
