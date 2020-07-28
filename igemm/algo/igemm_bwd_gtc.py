@@ -1224,12 +1224,13 @@ class igemm_bwd_gtc_t(mc_base_t):
                                                         s.s_out_stride_k_k0_k1_diff(), s.s_wei_stride_k_k0_k1_diff(), s.s_move_slice_k_k1()))
 
 
-        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k1()}], {igemm_log2(data_byte)}, s[{s.s_out_stride_k_k1()}]")
-        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k1()}], {igemm_log2(data_byte)}, s[{s.s_wei_stride_k_k1()}]")
-        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}, s[{s.s_out_stride_k_k0_k1_diff()}]")
-        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}, s[{s.s_wei_stride_k_k0_k1_diff()}]")
-        self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}, s[{s.s_in_stride_c()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k1()}], s[{s.s_out_stride_k_k1()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k1()}], s[{s.s_wei_stride_k_k1()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k0_k1_diff()}], s[{s.s_out_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k0_k1_diff()}], s[{s.s_wei_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_k1()}], {unmerge_sub_k1}")
+        self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_stride_dslice_yx()}], s[{s.s_k()}]")
         self._emit_empty_line()
 
     def emit_kernel_fma_main_loop(self):
