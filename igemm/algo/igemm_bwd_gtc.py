@@ -200,7 +200,7 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
         unmerge_sub_k1 = unmerge_sub_k // n_k0
         assert n_k1e % unmerge_sub_k1 == 0
 
-        diff_k0_k1 = self.tunable.gemm_k_per_block - unmerge_sub_k1 + 1
+        diff_k0_k1 = self.tunable.gemm_k_per_block - unmerge_sub_k1 # !!! the diff of 2 unmerged dimension (like K=K0*K1)
 
         with self._deferred_context():
             self._emit(f"s_mul_i32 s[{s_out_stride_k_k0_k1_diff}], {diff_k0_k1}, s[{s_out_stride_k}]")
@@ -1228,6 +1228,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k1()}], s[{s.s_wei_stride_k_k1()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s.s_out_stride_k_k0_k1_diff()}], s[{s.s_out_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k_k0_k1_diff()}], s[{s.s_wei_stride_k_k0_k1_diff()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_out_stride_k()}], s[{s.s_out_stride_k()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k()}], s[{s.s_wei_stride_k()}], {igemm_log2(data_byte)}")
         self._emit(f"s_lshl_b32 s[{s.s_in_stride_c()}], s[{s.s_in_stride_c()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_k1()}], {unmerge_sub_k1}")
         self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_stride_dslice_yx()}], s[{s.s_k()}]")
