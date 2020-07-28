@@ -228,10 +228,10 @@ class igemm_coalescing_store_t(mc_base_t):
         with self._deferred_context():
             self._emit(f"; init_co_sub_n_index")
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
 
