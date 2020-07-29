@@ -167,7 +167,7 @@ template <typename T> T gen_rand(T fmin, T fmax) {
 }
 
 template <typename T>
-void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
+void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax, T scale = 1) {
     int num_threads = std::thread::hardware_concurrency();
     if (num_threads < 4)
         num_threads = 4;
@@ -176,7 +176,7 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
     for (int t = 0; t < num_threads; t++) {
         threads.push_back(std::thread(
             // thread function
-            [](float *p, int tid, int block_size, int total_size, float fmin,
+            [scale](float *p, int tid, int block_size, int total_size, float fmin,
                float fmax) {
                 std::mt19937 rng(
                     std::chrono::system_clock::now()
@@ -185,7 +185,7 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
                     std::hash<std::thread::id>()(std::this_thread::get_id()));
                 std::uniform_real_distribution<float> distribution(fmin, fmax);
                 for (int i = tid; i < total_size; i += block_size) {
-                    p[i] = distribution(rng);
+                    p[i] = scale * distribution(rng);
                     // p[i] = (T)((int)(10 * distribution(rng)) - 5);
                 }
             },
@@ -195,7 +195,7 @@ void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax) {
         th.join();
 }
 
-#define PER_PIXEL_CHECK
+// #define PER_PIXEL_CHECK
 #define PER_PIXEL_CHECK_PRINT
 
 static inline bool valid_vector(const float *ref, const float *pred, int n,
