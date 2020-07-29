@@ -202,9 +202,9 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-#ifdef PER_PIXEL_CHECK
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int pp_err = 0;
-#endif
+
     for (int i = 0; i < n; ++i) {
         double ri = (double)ref[i];
         double pi = (double)pred[i];
@@ -213,18 +213,19 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         double rr = 2.0 * ri * ri;
         s0 += dd;
         s1 += rr;
-#ifdef PER_PIXEL_CHECK
-        double delta = ABS(ri - pi) / ri;
-        // printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
-        if (delta > 3e-5) {
+        if(igemm_per_pixel_check){
+            double delta = ABS(ri - pi) / ri;
+            // printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            if (delta > 3e-5) {
 #ifdef PER_PIXEL_CHECK_PRINT
-            if (pp_err < 100)
-                printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
-                       pi, ((uint32_t *)pred)[i], delta);
+                if (pp_err < 100)
+                    printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
+                        pi, ((uint32_t *)pred)[i], delta);
 #endif
-            pp_err++;
+                pp_err++;
+            }
+
         }
-#endif
     }
     // printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)

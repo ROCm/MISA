@@ -212,6 +212,40 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
 
     def emit(self):
         # unmerge_sub_k1 = self.unmerge_sub_k1
+        '''
+        This is indeed a multi-dimension add-carry operation
+        e.g. if want to compute a 3d (merged) dimension index [iz, iy, ix], with dimension length of [nz, ny, nx] in each.
+        suppose we want to add a specific value this merged dimension.
+        1) if want to add 1, it is simple.
+            ix += 1
+            if ix >= nx:
+                ix = 0
+                iy += 1     # carry to iy
+            if iy >= ny:
+                iy = 0
+                iz += 1     # carry to iz
+            if iz >= nz:
+                pass        # the final dimension indeed can be ignored
+        
+        2) if we want to add N
+            # first, find out how many steps in each dimension needed to add
+            stride_x = N % nx               # -> usually can store in sgpr
+            stride_y = (N//nx) % ny         # -> usually can store in sgpr
+            stride_z = (N//(nx*ny)) % nz    # -> usually can store in sgpr
+
+            # then do the add-carry
+            ix += stride_x
+            if ix >= nx:
+                ix -= nx    # ! note here, no longer set 0
+                iy += 1     # carry to iy
+            iy += stride_y
+            if iy >= ny:
+                iy -= ny    # ! note here, no longer set 0
+                iz += 1     # carry to iz
+            iz += stride_z
+            if iz >= nz:
+                pass        # the final dimension indeed can be ignored
+        '''
         with self._emit_macro_indented('.macro {} v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff'.format(self.name())):
             # k0, k1e is unmerge.  k1e is merged from k1, e
             self._emit(f"v_add_u32 v[\\v_move_slice_k_idsx], s[\\s_move_slice_k_dsx], v[\\v_move_slice_k_idsx]")
