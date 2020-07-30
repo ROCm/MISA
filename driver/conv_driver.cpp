@@ -167,29 +167,47 @@ template <typename T> T gen_rand(T fmin, T fmax) {
 }
 
 template <typename T>
-void gen_rand_vector(T *vec, size_t vec_size, T fmin, T fmax, T scale = 1) {
+struct distribution_t{
+};
+
+template <>
+struct distribution_t<int>{
+    distribution_t(int min, int max) : distribution(min, max) {}
+    template<class URNG>
+    int operator()(URNG & rng){ return distribution(rng);}
+    std::uniform_int_distribution<int> distribution;
+};
+template <>
+struct distribution_t<float>{
+    distribution_t(float min, float max) : distribution(min, max) {}
+    template<class URNG>
+    float operator()(URNG & rng){ return distribution(rng);}
+    std::uniform_real_distribution<float> distribution;
+};
+
+template <typename Dst_T, typename Src_T>
+void block_wise_rand_generator(Dst_T *p, int tid, int block_size, int total_size, Src_T min, Src_T max, Src_T scale)
+{
+    std::mt19937 rng(std::chrono::system_clock::now()
+                        .time_since_epoch()
+                        .count() +
+                    std::hash<std::thread::id>()(std::this_thread::get_id()));
+    distribution_t<Src_T> distribution(min,max);
+    for (int i = tid; i < total_size; i += block_size) {
+        p[i] = static_cast<Dst_T>(scale * distribution(rng));
+    }
+}
+
+template <typename Dst_T, typename Src_T>
+void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T scale = 1) {
     int num_threads = std::thread::hardware_concurrency();
     if (num_threads < 4)
         num_threads = 4;
     // printf("total threads:%d\n",num_threads);
     std::vector<std::thread> threads;
     for (int t = 0; t < num_threads; t++) {
-        threads.push_back(std::thread(
-            // thread function
-            [scale](float *p, int tid, int block_size, int total_size, float fmin,
-               float fmax) {
-                std::mt19937 rng(
-                    std::chrono::system_clock::now()
-                        .time_since_epoch()
-                        .count() +
-                    std::hash<std::thread::id>()(std::this_thread::get_id()));
-                std::uniform_real_distribution<float> distribution(fmin, fmax);
-                for (int i = tid; i < total_size; i += block_size) {
-                    p[i] = scale * distribution(rng);
-                    // p[i] = (T)((int)(10 * distribution(rng)) - 5);
-                }
-            },
-            vec, t, num_threads, vec_size, fmin, fmax));
+        threads.push_back(std::thread(block_wise_rand_generator<Dst_T, Src_T>,
+            vec, t, num_threads, vec_size, fmin, fmax, scale));
     }
     for (auto &th : threads)
         th.join();
@@ -338,8 +356,8 @@ int main(int argc, char **argv) {
         float *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
 
             // TODO: other direction
             // TODO: This is slow. try mkl_conv.h
@@ -362,8 +380,10 @@ int main(int argc, char **argv) {
         float *device_input_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            gen_rand_vector<float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -5, 5);
 
             // TODO: This is slow. try mkl_conv.h
             naive_conv_bwd_d_nchw(host_input, host_weight, host_output, n,
