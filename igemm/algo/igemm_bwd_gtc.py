@@ -799,13 +799,15 @@ class igemm_bwd_gtc_t(mc_base_t):
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
-            out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
-            #out_sst_ctrl.vector_d1 = t_n1b
+            if (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and t_n1b != 1) or \
+                (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 and t_n0 != 1):
+                out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            else:
+                out_sst_ctrl.vector_d1 = 1
             out_sst_ctrl.stride_d0 = 1
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte
-            #out_sst_ctrl.stride_d1 = 1
-            if out_sst_ctrl.length_d1 == 8:
-                assert False
+            if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
+                # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 out_sst_ctrl.length_d0 = 2
                 out_sst_ctrl.length_d1 = 4
@@ -827,12 +829,17 @@ class igemm_bwd_gtc_t(mc_base_t):
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            #wei_sst_ctrl.vector_d1 = t_c1
+
+            if (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 and t_c1 != 1) or \
+                (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 and t_c0 != 1):
+                wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            else:
+                wei_sst_ctrl.vector_d1 = 1
+
             wei_sst_ctrl.stride_d0 = 1
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
-            if wei_sst_ctrl.length_d1 == 8:
-                assert False
+            if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
+                # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
                 wei_sst_ctrl.length_d1 = 4

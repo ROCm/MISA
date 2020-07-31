@@ -582,7 +582,7 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
         # assert ctrl.length_d1 == ctrl.vector_d1
 
         return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}" + \
-                ("" if ctrl.length_d0 == 1 else f"_st{ctrl.stride_d0}")
+                f"_st{ctrl.stride_d0}x{ctrl.stride_d1}"
 
     def __call__(self, v_src, v_sst_os):
         return '{} {}, {}'.format(self.name(), v_src, v_sst_os)
