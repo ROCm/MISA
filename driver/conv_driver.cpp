@@ -35,8 +35,20 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+
+#ifdef USE_XDNN
+#include "xdnn_conv.h"
+#define conv_fwd_nchw xdnn_conv_fwd_nchw
+#define conv_bwd_d_nchw xdnn_conv_bwd_d_nchw
+#define conv_bwd_f_nchw xdnn_conv_bwd_f_nchw
+#else
 #define NAIVE_CONV_THREADED
 #include "naive_conv.h"
+#define conv_fwd_nchw naive_conv_fwd_nchw
+#define conv_bwd_d_nchw naive_conv_bwd_d_nchw
+#define conv_bwd_f_nchw naive_conv_bwd_f_nchw
+#endif
+
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
                                    size_t ksize, size_t stride) {
     return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
@@ -359,9 +371,7 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
 
-            // TODO: other direction
-            // TODO: This is slow. try mkl_conv.h
-            naive_conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h);
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
@@ -371,7 +381,6 @@ int main(int argc, char **argv) {
                        n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-        
 
         if (need_verify)
             free(device_output_to_host);
@@ -385,8 +394,7 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, -5, 5);
 
-            // TODO: This is slow. try mkl_conv.h
-            naive_conv_bwd_d_nchw(host_input, host_weight, host_output, n,
+            conv_bwd_d_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h);
             device_input_to_host = (float *)malloc(n * c * hi * wi * sizeof(float));
