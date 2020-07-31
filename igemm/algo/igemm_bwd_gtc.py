@@ -738,7 +738,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         if self.out_thread_copy_ndim == 2:
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-            # ctrl_out_gld.src_order = 0
+            #if t_n0 != 1 and t_n1b == 1:
+            #    ctrl_out_gld.src_order = 1              # this reorder seems have little impact...
         elif self.out_thread_copy_ndim == 1:
             ctrl_out_gld.length_d0 = 1
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]

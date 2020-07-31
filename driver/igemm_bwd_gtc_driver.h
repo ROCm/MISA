@@ -34,6 +34,8 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include <algorithm>
+#include <numeric>
 
 typedef struct {
     float *p_in;
@@ -374,19 +376,29 @@ public:
         for (int i = 0; i < warmup; i++) {
             launch_bwd();
         }
-        gpu_timer_t timer(NULL);
-        timer.start();
+        std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
+            gpu_timer_t timer(NULL);
+            timer.start();
             launch_bwd();
+            timer.stop();
+            float d = timer.duration();
+            duration_list.push_back(d);
         }
-       
-        timer.stop();
-        float duration_ms = timer.duration();
-        usleep(1000 * 10);
+
+        // remove min and max from list, then do average
+        auto imin = std::min_element(begin(duration_list), end(duration_list));
+        duration_list.erase(imin);
+        auto imax = std::max_element(begin(duration_list), end(duration_list));
+        duration_list.erase(imax);
+        assert(duration_list.size() == (repeat - 2));
+        float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
+
+        usleep(1000 * 5);
 
         result_t result;
         result.return_code = 0;
-        result.duration_ms = duration_ms / repeat;
+        result.duration_ms = avg_duration;
         result.kernel_name = kernel_name;
         return result;
     }

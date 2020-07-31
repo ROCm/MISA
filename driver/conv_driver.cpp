@@ -150,7 +150,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #endif
 
 #define WARMUP 3
-#define REPEAT 6
+#define REPEAT 8
 #define SCLK_MHZ 1725
 
 static inline int env_get_int(const char *var_name, int default_int) {
