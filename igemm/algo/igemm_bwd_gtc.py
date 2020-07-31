@@ -1077,15 +1077,16 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
         if self.tunable.multihead:
-            self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0xff")
+            self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0xffff")
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()
 
         if self.tunable.multihead:
             #label_mh_dispatch_end = f"L_{self.name()}_mh_dispatch_end"
             self._emit(f"; multihead dispatch code start")
-            self._emit(f"s_lshr_b32 s[0], s[{s.s_dtile_iy()}], 8        ; normal gridsize. gridsize / num_gemms")
-            self._emit(f"s_and_b32 s[{s.s_dtile_iy()}], s[{s.s_tmp()}], s[{s.s_dtile_iy()}]")
+            self._emit(f"s_mov_b32 s[0], s[{s.s_dtile_iy()}]        ; normal gridsize. gridsize / num_gemms")
+            self._emit(f"s_lshr_b32 s[{s.s_dtile_iy()}], s[{s.s_dtile_ix()}], 16")
+            self._emit(f"s_and_b32 s[{s.s_dtile_ix()}], s[{s.s_tmp()}], s[{s.s_dtile_ix()}]")
             self._emit(m_int_div_rem_ss(s.s_tmp(5), '1', s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
             #self._emit(m_int_div_rem_ss('1', s.s_tmp(5), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
             self._emit(f"; s1:i_y_tilda*i_x_tilda  s_tmp+5: normal s_bx")

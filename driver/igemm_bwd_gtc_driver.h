@@ -380,11 +380,10 @@ public:
         };
 
         auto launch_bwd_multihead = [&](){
-            // karg.dtile_iy = y_dot | ((grid_size/num_of_gemm) << 16);
+            // if 1x1 and stride/dilation > 1, will have empty gemms which will waste launch grid. better ignore that case at runtime
             int origin_grid_size = grid_size/num_of_gemm;
-            assert(origin_grid_size < (1<<24));
-            karg.dtile_iy = y_dot | ( origin_grid_size << 8);
-            karg.dtile_ix = x_dot;
+            karg.dtile_iy = origin_grid_size;
+            karg.dtile_ix = x_dot | (y_dot<<16);
             karg.dslice_y = y % y_dot;
             karg.dslice_x = x % x_dot;
             // printf("start launch id:%d(%d), block:%d, grid:%d\n", gemm_id, is_gemm_not_empty?1:0, block_size, grid_size);
