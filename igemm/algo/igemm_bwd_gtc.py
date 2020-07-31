@@ -359,6 +359,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         assert (self.tunable.gemm_m_per_thread * self.tunable.gemm_m_repeat) % self.coalescing_store_groups == 0, \
             f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
 
+        self.label_out = f"L_{self.name()}_out"
+
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable)
 
@@ -1074,8 +1076,39 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
         self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
+        if self.tunable.multihead:
+            self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0xff")
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()
+
+        if self.tunable.multihead:
+            #label_mh_dispatch_end = f"L_{self.name()}_mh_dispatch_end"
+            self._emit(f"; multihead dispatch code start")
+            self._emit(f"s_lshr_b32 s[0], s[{s.s_dtile_iy()}], 8        ; normal gridsize. gridsize / num_gemms")
+            self._emit(f"s_and_b32 s[{s.s_dtile_iy()}], s[{s.s_tmp()}], s[{s.s_dtile_iy()}]")
+            self._emit(m_int_div_rem_ss(s.s_tmp(5), '1', s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+            #self._emit(m_int_div_rem_ss('1', s.s_tmp(5), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+            self._emit(f"; s1:i_y_tilda*i_x_tilda  s_tmp+5: normal s_bx")
+            self._emit(f"s_mov_b32 s[{s.s_bx()}], s[{s.s_tmp(5)}]")
+            self._emit(m_int_div_rem_ss(s.s_tmp(5), s.s_tmp(4), '1', s.s_dtile_x(), v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+            self._emit(f"; s_tmp+4:dtile_iy, s_tmp+5:dtile_ix")
+            self._emit(f"s_add_u32 s[{s.s_tmp()}], 1, s[{s.s_tmp(4)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dtile_iy()}], s[{s.s_tmp()}]  ; (i_y_tilda + 1) * y_dot ")
+            self._emit(f"s_add_u32 s[{s.s_tmp(1)}], 1, s[{s.s_tmp(5)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dtile_ix()}], s[{s.s_tmp(1)}] ; (i_x_tilda + 1) * x_dot")
+            self._emit(f"s_cmp_le_u32 s[{s.s_tmp()}], s[{s.s_y()}]")
+            self._emit(f"s_cmov_b32 s[{s.s_dslice_y()}], s[{s.s_dtile_iy()}]")
+            self._emit(f"s_cmp_le_u32 s[{s.s_tmp(1)}], s[{s.s_x()}]")
+            self._emit(f"s_cmov_b32 s[{s.s_dslice_x()}], s[{s.s_dtile_ix()}]")
+            self._emit(f"s_mov_b32 s[{s.s_dtile_iy()}], s[{s.s_tmp(4)}]")
+            self._emit(f"s_mov_b32 s[{s.s_dtile_ix()}], s[{s.s_tmp(5)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_k()}], s[{s.s_tmp(1)}]        ; gemm_k, check empty")
+            self._emit(f"s_cmp_gt_u32 s[{s.s_tmp()}], 0")
+            self._emit(f"s_cbranch_scc0 {self.label_out}        ; early exit if current gemm_k is zero, only happen when filter is 1x1 and have stride or dilation. better not jump")
+            self._emit(f"; multihead dispatch code end")
+            self._emit_empty_line()
+
         self._emit(f"; calculate index")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}],      s[{s.s_ho()}],       s[{s.s_wo()}]")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}],      s[{s.s_k()}],        s[{s.s_out_stride_k()}]")
@@ -1455,11 +1488,11 @@ class igemm_bwd_gtc_t(mc_base_t):
     def emit_kernel_epilogue(self):
         s = self.sgpr
         v = self.vgpr
-        label_out = f"L_{self.name()}_out"
+        #label_out = f"L_{self.name()}_out"
 
         self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_in_stride_c(), s.s_tmp(), v.v_in_flag()) )
 
-        self._emit_front(f"{label_out}:")
+        self._emit_front(f"{self.label_out}:")
 
     def emit_kernel_symbol(self):
         self.karg.emit()

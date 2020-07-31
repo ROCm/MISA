@@ -263,3 +263,13 @@ class msym_t(object):
 def utility_list_to_string(arr):
     assert type(arr) is list
     return 'x'.join(f'{itm}' for itm in arr)
+
+class utility_dict_with_default_t(object):
+    def __init__(self, d):
+        self.d = d
+    def __call__(self, key, default_value):
+        if self.d is None:
+            return default_value
+        if key in self.d:
+            return self.d[key]
+        return default_value

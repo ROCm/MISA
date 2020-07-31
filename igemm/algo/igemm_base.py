@@ -27,6 +27,7 @@ from __future__ import print_function
 import sys
 import math
 from ..codegen import *
+from .utility import *
 
 def igemm_get_vector_size(v):
     vec_size = 1
@@ -109,6 +110,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.precision                          = tunable_dict['precision']
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
+        self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -199,7 +201,6 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['tensor_b_cluster_lengths']        = self.tensor_b_cluster_lengths
         tunable_dict['direction']                       = self.direction
         tunable_dict['precision']                       = self.precision
-        #tunable_dict['opt_1x1']                         = self.opt_1x1
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
 
@@ -252,6 +253,8 @@ def igemm_gtc_encode_kernel_name(tunable):
                          f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_" +\
                          "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\
                          "tb" + lengths_str(tunable.tensor_b_thread_lengths) + "_" + lengths_str(tunable.tensor_b_cluster_lengths)
+    if tunable.multihead:
+        kernel_name += "_mh"
 
     return kernel_name
 

@@ -265,6 +265,27 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         ;
 }
 
+static inline double get_fwd_nrms()
+{
+    return 1e-6;
+}
+static inline double get_bwd_nrms()
+{
+#ifdef USE_XDNN
+    return 5e-5;
+#else
+    return 1e-6;
+#endif
+}
+static inline double get_wrw_nrms()
+{
+#ifdef USE_XDNN
+    return 1e-4;
+#else
+    return 1e-6;
+#endif
+}
+
 void dump_arg(const args_t *arg) {
     int hi = arg->get_int("in_h");
     int wi = arg->get_int("in_w");
@@ -408,6 +429,7 @@ int main(int argc, char **argv) {
         
 
         igemm_bwd_gtc_t conv_bwd_driver;
+        double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -431,7 +453,7 @@ int main(int argc, char **argv) {
                                    n * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
                 bool is_valid = valid_vector(host_input, device_input_to_host,
-                                            n * c * hi * wi);
+                                            n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if (!is_valid) {
                     printf("\n");

@@ -131,6 +131,7 @@ public:
         auto precision                = tunable->precision;
         auto nxb                      = tunable->nxb;
         auto nxe                      = tunable->nxe;
+        auto multihead                = tunable->multihead;
 
         assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
         assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
@@ -167,6 +168,8 @@ public:
                "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
                       utility_int_list_to_string(tensor_b_cluster_lengths);
         // printf("[%s]\n",kernel_name.c_str());
+        if(multihead)
+            kernel_name += std::string("_mh");
         return kernel_name;
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
@@ -226,6 +229,9 @@ public:
 
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        int num_of_gemm = y_tilda * x_tilda;
+        if(tunable->multihead)
+            grid_size *= num_of_gemm;
         return grid_size;
     }
 
@@ -373,14 +379,41 @@ public:
             }
         };
 
+        auto launch_bwd_multihead = [&](){
+            // karg.dtile_iy = y_dot | ((grid_size/num_of_gemm) << 16);
+            int origin_grid_size = grid_size/num_of_gemm;
+            assert(origin_grid_size < (1<<24));
+            karg.dtile_iy = y_dot | ( origin_grid_size << 8);
+            karg.dtile_ix = x_dot;
+            karg.dslice_y = y % y_dot;
+            karg.dslice_x = x % x_dot;
+            // printf("start launch id:%d(%d), block:%d, grid:%d\n", gemm_id, is_gemm_not_empty?1:0, block_size, grid_size);
+            // dump_bwd_karg(&karg);
+
+            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
+                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
+                        HIP_LAUNCH_PARAM_END};
+
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+        };
+
+        auto launch_bwd_driver = [&](){
+            if(tunable->multihead)
+                launch_bwd_multihead();
+            else
+                launch_bwd();
+        };
+
         for (int i = 0; i < warmup; i++) {
-            launch_bwd();
+            launch_bwd_driver();
         }
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
             gpu_timer_t timer(NULL);
             timer.start();
-            launch_bwd();
+            launch_bwd_driver();
             timer.stop();
             float d = timer.duration();
             duration_list.push_back(d);

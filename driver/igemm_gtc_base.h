@@ -52,6 +52,7 @@ typedef struct {
     std::string precision;
     int nxb;
     int nxe;
+    int multihead;
 } igemm_gtc_tunable_t;
 
 static inline std::vector<igemm_gtc_tunable_t>
@@ -80,6 +81,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.precision                = sec.at("precision").get_string();
             tunable.nxb                      = sec.at("nxb").get_int();
             tunable.nxe                      = sec.at("nxe").get_int();
+            tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
 
             tunables.push_back(tunable);
         }
