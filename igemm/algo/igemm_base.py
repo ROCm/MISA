@@ -127,7 +127,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         def _unmerge_x1_from_e(unroll_k, nxe):
             if nxe == 0:
-                return 1        # not used, 1x1 special
+                return unroll_k # not used, 1x1 special
             if unroll_k % nxe == 0:
                 return unroll_k // nxe
             return unroll_k     # not used
