@@ -249,6 +249,11 @@ class sym_t(object):
 
     def __call__(self, index = 0):
         return self.expr(self.label, index)
+    
+    def __eq__(self, other):
+        return self.label == other.label and self.value == other.value
+    def __ne__(self, other):
+        return not self == other
 
 class msym_t(object):
     """ reference a symbol inside macro """

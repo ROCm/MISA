@@ -287,6 +287,7 @@ class igemm_coalescing_store_t(mc_base_t):
 
     def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m_stride, s_tmp4, v_store_flag = 0):
         # if no need s_out_offset, set to integer 0
+        # if no need flag to dicide store, set v_store_flag to 0
         ctrl = self.ctrl
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
