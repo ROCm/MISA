@@ -423,9 +423,20 @@ class igemm_bwd_gtc_t(mc_base_t):
             f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
 
         self.label_out = f"L_{self.name()}_out"
+        self.dict_shifted_stride = dict()
+
 
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable)
+
+    def try_shift_stride(self, gpr):
+        assert type(gpr) is sym_t
+        data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+        with self._deferred_context():
+            if gpr.label not in self.dict_shifted_stride:
+                self.dict_shifted_stride[gpr.label] = gpr
+                self._emit(f"s_lshl_b32 s[{gpr()}], s[{gpr()}], {igemm_log2(data_byte)}")
+        return self._get_deferred()
 
     def get_lds_gemm_m_gemm_n_order(self):
         def need_reverse_order(x0, x1):
@@ -588,31 +599,34 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_n                       = sym_t("s_n"                      ,18)
             self.s_k                       = sym_t("s_k"                      ,19)
             self.s_c                       = sym_t("s_c"                      ,20)
-            self.s_ho                      = sym_t("s_ho"                     ,21)
-            self.s_wo                      = sym_t("s_wo"                     ,22)
-            self.s_stride_h                = sym_t("s_stride_h"               ,23)
-            self.s_stride_w                = sym_t("s_stride_w"               ,24)
-            self.s_dilation_h              = sym_t("s_dilation_h"             ,25)
-            self.s_dilation_w              = sym_t("s_dilation_w"             ,26)
-            self.s_pad_h                   = sym_t("s_pad_h"                  ,27)
-            self.s_pad_w                   = sym_t("s_pad_w"                  ,28)
-            self.s_y                       = sym_t("s_y"                      ,29)
-            self.s_x                       = sym_t("s_x"                      ,30)
-            self.s_dtile_iy                = sym_t("s_dtile_iy"               ,31)
-            self.s_dtile_ix                = sym_t("s_dtile_ix"               ,32)
-            self.s_dtile_dy                = sym_t("s_dtile_dy"               ,33)
-            self.s_dtile_dx                = sym_t("s_dtile_dx"               ,34)
-            self.s_dtile_y                 = sym_t("s_dtile_y"                ,35)
-            self.s_dtile_x                 = sym_t("s_dtile_x"                ,36)
-            self.s_dtile_h                 = sym_t("s_dtile_h"                ,37)
-            self.s_dtile_w                 = sym_t("s_dtile_w"                ,38)
-            self.s_dslice_y                = sym_t("s_dslice_y"               ,39)
-            self.s_dslice_x                = sym_t("s_dslice_x"               ,40)
-            self.s_dslice_h                = sym_t("s_dslice_h"               ,41)
-            self.s_dslice_w                = sym_t("s_dslice_w"               ,42)
-            self.s_dslice_h_left           = sym_t("s_dslice_h_left"          ,43)
-            self.s_dslice_w_left           = sym_t("s_dslice_w_left"          ,44)
-            sseq                           = gpr_sequencer_t(44 + 1)
+            if self.tunable.nxe != 0:
+                self.s_ho                  = sym_t("s_ho"                     ,21)
+                self.s_wo                  = sym_t("s_wo"                     ,22)
+                self.s_stride_h            = sym_t("s_stride_h"               ,23)
+                self.s_stride_w            = sym_t("s_stride_w"               ,24)
+                self.s_dilation_h          = sym_t("s_dilation_h"             ,25)
+                self.s_dilation_w          = sym_t("s_dilation_w"             ,26)
+                self.s_pad_h               = sym_t("s_pad_h"                  ,27)
+                self.s_pad_w               = sym_t("s_pad_w"                  ,28)
+                self.s_y                   = sym_t("s_y"                      ,29)
+                self.s_x                   = sym_t("s_x"                      ,30)
+                self.s_dtile_iy            = sym_t("s_dtile_iy"               ,31)
+                self.s_dtile_ix            = sym_t("s_dtile_ix"               ,32)
+                self.s_dtile_dy            = sym_t("s_dtile_dy"               ,33)
+                self.s_dtile_dx            = sym_t("s_dtile_dx"               ,34)
+                self.s_dtile_y             = sym_t("s_dtile_y"                ,35)
+                self.s_dtile_x             = sym_t("s_dtile_x"                ,36)
+                self.s_dtile_h             = sym_t("s_dtile_h"                ,37)
+                self.s_dtile_w             = sym_t("s_dtile_w"                ,38)
+                self.s_dslice_y            = sym_t("s_dslice_y"               ,39)
+                self.s_dslice_x            = sym_t("s_dslice_x"               ,40)
+                self.s_dslice_h            = sym_t("s_dslice_h"               ,41)
+                self.s_dslice_w            = sym_t("s_dslice_w"               ,42)
+                self.s_dslice_h_left       = sym_t("s_dslice_h_left"          ,43)
+                self.s_dslice_w_left       = sym_t("s_dslice_w_left"          ,44)
+                sseq                       = gpr_sequencer_t(44 + 1)
+            else:
+                sseq                       = gpr_sequencer_t(20 + 1)
             if self.tunable.nxe != 0:
                 self.s_out_stride_k        = sym_t("s_out_stride_k"           ,sseq(1))
             else:
@@ -688,8 +702,9 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.v_sld_b_os          = sym_t("v_sld_b_os"     ,vseq(1))
             self.v_out_iho           = sym_t("v_out_iho"      ,vseq(1))
             self.v_out_iwo           = sym_t("v_out_iwo"      ,vseq(1))
-            self.v_out_dslice_ih     = sym_t("v_out_dslice_ih",vseq(1))
-            self.v_out_dslice_iw     = sym_t("v_out_dslice_iw",vseq(1))
+            if self.tunable.nxe != 0:
+                self.v_out_dslice_ih     = sym_t("v_out_dslice_ih",vseq(1))
+                self.v_out_dslice_iw     = sym_t("v_out_dslice_iw",vseq(1))
             self.v_out_os            = sym_t("v_out_os"       ,vseq(1))
             if self.tunable.nxe != 0:
                 self.v_out_os_base   = sym_t("v_out_os_base"  ,vseq(1))
@@ -846,6 +861,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             assert False
 
+        # print(f"wei ndim:{self.wei_thread_copy_ndim}, d0:{ctrl_wei_gld.length_d0}, d1:{ctrl_wei_gld.length_d1}")
         return macro_igemm_2d_global_load_t(self.mc, ctrl_out_gld),  macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld)
 
     def get_macro_global_store(self):
@@ -973,9 +989,12 @@ class igemm_bwd_gtc_t(mc_base_t):
         s = self.sgpr
         s_dummy = sym_t("s_dummy")
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
-        out_stride_gprs = [s.s_out_stride_k0 if t_k0 != 1 else s_dummy, s_dummy,
-                    s.s_out_stride_n0 if t_n0 != 1 else s_dummy, s_dummy]
-        wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy, s_dummy,
+        out_stride_gprs = [s.s_out_stride_k0 if t_k0 != 1 else s_dummy,
+                    s_dummy if self.tunable.nxe != 0 else s.s_stride_hw,
+                    s.s_out_stride_n0 if t_n0 != 1 else s_dummy,
+                    s_dummy]
+        wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy,
+                    s_dummy if self.tunable.nxe != 0 else s.s_c,
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy,
                     s.s_wei_stride_c if self.tunable.nxe != 0 else s_dummy]
 
@@ -1311,7 +1330,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit_empty_line()
         else:
             self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in1(), v.v_tmp(5), s.s_stride_hw(), v.v_tmp(), s.s_tmp()))
-            self._emit(m_int_div_rem_vs(v.v_out_iho(), v.v_out_iwo(), v.v_tmp(4), s.s_dslice_w(), v.v_tmp(), s.s_tmp()))
+            self._emit(m_int_div_rem_vs(v.v_out_iwo(), v.v_out_iho(),  v.v_tmp(4), s.s_wi(), v.v_tmp(), s.s_tmp()))
 
         self._emit(f"; calculate output offset")
         self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_in0()}], {igemm_log2(unmerge_sub_n1 * data_byte)}")
@@ -1335,7 +1354,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
         else:
             self._emit(f"v_add_lshl_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
-            self._emit(m_out_update_os(v.v_out_os(), v.v_tmp(4), v.v_out_iho(), v.v_out_iwo(), s.s_wo(), v.v_tmp()))
+            self._emit(m_out_update_os(v.v_out_os(), v.v_tmp(4), v.v_out_iho(), v.v_out_iwo(), s.s_wi(), v.v_tmp()))
         self._emit_empty_line()
 
         if self.out_thread_copy_ndim != 1:
