@@ -508,12 +508,14 @@ class igemm_bwd_gtc_t(mc_base_t):
         t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths()
 
         gemm_n_order = IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B
-        if IGEMM_BWD_GTC_ALLOW_LDS_REORDER:
+        #if IGEMM_BWD_GTC_ALLOW_LDS_REORDER:
+        if self.tunable.allow_lds_reorder:
             if need_reverse_order(t_n0, t_n1b):
                 gemm_n_order = IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0
 
         gemm_m_order = IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1
-        if IGEMM_BWD_GTC_ALLOW_LDS_REORDER:
+        #if IGEMM_BWD_GTC_ALLOW_LDS_REORDER:
+        if self.tunable.allow_lds_reorder:
             if need_reverse_order(t_c0, t_c1):
                 gemm_m_order = IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0
 
@@ -724,7 +726,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             self.s_knum                    = sym_t("s_knum"                   ,sseq(1))
             #if not self.is_1d_move_slice_k():
-            self.s_gemm_k_num_k1       = sym_t("s_gemm_k_num_k1"          ,sseq(1))
+            self.s_gemm_k_num_k1           = sym_t("s_gemm_k_num_k1"          ,sseq(1))
             if self.tunable.nxe != 0:
                 self.s_gemm_k_num_dsy      = sym_t("s_gemm_k_num_dsy"         ,self.s_dslice_y.value)
                 self.s_gemm_k_num_dsx      = sym_t("s_gemm_k_num_dsx"         ,self.s_dslice_x.value)

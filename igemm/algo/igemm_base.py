@@ -29,6 +29,11 @@ import math
 from ..codegen import *
 from .utility import *
 
+
+IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
+IGEMM_GTC_FEAT_PRECATCH_SOFFSET = 1
+
+
 def igemm_get_vector_size(v):
     vec_size = 1
     if v % 4 == 0:
@@ -111,6 +116,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
+        self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
+        self.precatch_soffset                   = utility_dict_with_default_t(tunable_dict)('precatch_soffset', IGEMM_GTC_FEAT_PRECATCH_SOFFSET)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list

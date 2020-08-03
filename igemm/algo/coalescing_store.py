@@ -141,11 +141,11 @@ class ctrl_coalescing_store_t(object):
                 for idx in range(len(_list) - 1):
                     diff_m = _list[idx+1] - _list[idx]
                     if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
-                        assert diff_m == thread_m_stride
+                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
                     else:
                         if thread_m_stride == -1:
                             thread_m_stride = diff_m
-                        assert diff_m == thread_m_stride
+                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
 
         return thread_m_stride
 
