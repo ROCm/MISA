@@ -1782,7 +1782,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         if self.tunable.nxe != 0:
             self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_in_stride_c(), s.s_tmp(), v.v_in_flag()))
         else:
-            self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_stride_hw(), s.s_tmp()))
+            self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), 0, s.s_in_stride_c(), s.s_tmp()))
 
         self._emit_front(f"{self.label_out}:")
 
