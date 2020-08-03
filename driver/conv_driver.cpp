@@ -225,14 +225,12 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
         th.join();
 }
 
-// #define PER_PIXEL_CHECK
-#define PER_PIXEL_CHECK_PRINT
-
 static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
     for (int i = 0; i < n; ++i) {
@@ -245,13 +243,13 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ri - pi) / ri;
-            // printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
-#ifdef PER_PIXEL_CHECK_PRINT
-                if (pp_err < 100)
-                    printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
-                        pi, ((uint32_t *)pred)[i], delta);
-#endif
+                if(igemm_per_pixel_check_print){
+                    if (pp_err < 100)
+                        printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
+                            pi, ((uint32_t *)pred)[i], delta);
+                }
                 pp_err++;
             }
 
@@ -413,7 +411,7 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
             conv_bwd_d_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
