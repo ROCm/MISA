@@ -174,9 +174,7 @@ class fma_main_loop_t(mc_base_t):
         v_fma = macro_v_fma_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n)
 
         # start emit
-        self._emit(f".v_clear_nc {v_c()}, {thread_m * thread_n}")
         self._emit(f"; start FMA loop, {thread_m}x{thread_n} thread tile with {thread_sub_m}x{thread_sub_n} sub-tile")
-
         self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
 
         self._emit(f_sst_b())
@@ -184,6 +182,8 @@ class fma_main_loop_t(mc_base_t):
         self._emit(f"s_waitcnt vmcnt(0)")
         self._emit(f_sst_a())
         self._emit_empty_line()
+
+        self._emit(f".v_clear_nc {v_c()}, {thread_m * thread_n}")
 
         # decrese k
         self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_knum()}], {unroll_k}")
