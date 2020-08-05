@@ -23,13 +23,12 @@
 #  SOFTWARE.
 # 
 ################################################################################
-# igemm module
+# pylint: disable=maybe-no-member
 
-import sys
-from .codegen import *
-from .algo import *
-from .igemm_codegen_driver import *
-
-if sys.hexversion < 0x30600f0:
-    print("must use python 3.6+. current is {}".format(sys.version))
-    sys.exit(-1)
+class perf_advisor_t(object):
+    '''
+    for amdgpu
+    '''
+    def __init__(self):
+        pass
+    def advise_occupancy():

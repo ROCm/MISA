@@ -87,6 +87,12 @@ class config_parser_t(object):
             if line[0] == '#' or line[0] == ';':
                 return True
             return False
+        def remove_trailing_comment(line):
+            if '#' in line:
+                return line.split('#')[0]
+            if ';' in line:
+                return line.split(';')[0]
+            return line
         def is_value_int(value):
             try:
                 int(value)
@@ -186,7 +192,7 @@ class config_parser_t(object):
             current_section = None
             lines = f.readlines()
             for x in lines:
-                line = x.strip()
+                line = remove_trailing_comment(x).strip()
                 if is_empty(line):
                     continue
                 if is_comment(line):

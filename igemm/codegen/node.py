@@ -23,13 +23,36 @@
 #  SOFTWARE.
 # 
 ################################################################################
-# igemm module
+# simple implementation of node, used for better organize and schedule
+# basically, every instruction arg to be accept is string
 
-import sys
-from .codegen import *
-from .algo import *
-from .igemm_codegen_driver import *
 
-if sys.hexversion < 0x30600f0:
-    print("must use python 3.6+. current is {}".format(sys.version))
-    sys.exit(-1)
+class node_t(object):
+    '''
+    base class for all node
+    '''
+    pass
+
+
+
+class operand_t(node_t):
+    '''
+    can be sgpr, vgpr, immediate, modifier
+    '''
+
+
+
+class stmt_t(node_t):
+    '''
+    statement can be a single 
+    '''
+    def __init__(self):
+
+class inst_t(node_t):
+    def __init__(self, name):
+        assert type(name) is str
+        self.name = name
+    def __call__(self, *args):
+        return
+    def emit(self):
+        

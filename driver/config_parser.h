@@ -56,6 +56,15 @@ static inline std::string &srtrim(std::string &s) {
 
 static inline std::string &strim(std::string &s) { return sltrim(srtrim(s)); }
 
+static inline std::string remove_trailing_comment(std::string & s)
+{
+    size_t pos = s.find_first_of(";#");
+    if(std::string::npos != pos) {
+        s = s.erase(pos, std::string::npos);
+    }
+    return s;
+}
+
 static inline std::vector<std::string> ssplit(const std::string &s,
                                               char delim) {
     std::stringstream ss(s);
@@ -101,12 +110,14 @@ struct section_meta_value_t<
     typedef int type;
     static type decode(const std::vector<uint8_t> &buffer) {
         assert(buffer.size() == 4);
-        return *reinterpret_cast<const int *>(buffer.data());
+        int res;
+        memcpy(&res, buffer.data(), 4);
+        return res;
     }
     static void encode(std::vector<uint8_t> &buffer, std::string value) {
         buffer.resize(4);
-        int v = std::stoi(value);
-        *reinterpret_cast<int *>(buffer.data()) = v;
+        int res = std::stoi(value);
+        memcpy(buffer.data(), &res, 4);
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
         int value = decode(buffer);
@@ -120,12 +131,14 @@ struct section_meta_value_t<
     typedef float type;
     static type decode(const std::vector<uint8_t> &buffer) {
         assert(buffer.size() == 4);
-        return *reinterpret_cast<const float *>(buffer.data());
+        float res;
+        memcpy(&res, buffer.data(), 4);
+        return res;
     }
     static void encode(std::vector<uint8_t> &buffer, std::string value) {
         buffer.resize(4);
-        float v = std::stof(value);
-        *reinterpret_cast<float *>(buffer.data()) = v;
+        float res = std::stof(value);
+        memcpy(buffer.data(), &res, 4);
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
         float value = decode(buffer);
@@ -143,8 +156,9 @@ struct section_meta_value_t<
         std::vector<int> range_index;
         range_index.resize(range_index_length);
         for (int i = 0; i < range_index_length; i++) {
-            range_index[i] =
-                *reinterpret_cast<const int *>(buffer.data() + 4 * i);
+            int res;
+            memcpy(&res, buffer.data()+ 4 * i, 4);
+            range_index[i] = res;
         }
         return range_index;
     }
@@ -178,7 +192,8 @@ struct section_meta_value_t<
 
         buffer.resize(4 * range_index.size());
         for (int i = 0; i < (int)range_index.size(); i++) {
-            *reinterpret_cast<int *>(buffer.data() + 4 * i) = range_index[i];
+            int res = range_index[i];
+            memcpy(buffer.data() + 4 * i, &res, 4);
         }
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
@@ -202,9 +217,10 @@ struct section_meta_value_t<
         assert(buffer.size() != 0 && buffer.size() % 4 == 0);
         std::vector<int> list_value;
         list_value.resize(buffer.size() / 4);
-        for (int i = 0; i < (int)buffer.size(); i++) {
-            list_value[i] =
-                *reinterpret_cast<const int *>(buffer.data() + 4 * i);
+        for (int i = 0; i < (int)(buffer.size() / 4); i++) {
+            int res;
+            memcpy(&res, buffer.data()+ 4 * i, 4);
+            list_value[i] = res;
         }
         return list_value;
     }
@@ -213,8 +229,8 @@ struct section_meta_value_t<
         std::vector<std::string> list_string = ssplit(v, ',');
         buffer.resize(4 * list_string.size());
         for (int i = 0; i < (int)list_string.size(); i++) {
-            *reinterpret_cast<int *>(buffer.data() + 4 * i) =
-                std::stoi(list_string[i]);
+            int res = std::stoi(list_string[i]);
+            memcpy(buffer.data() + 4 * i, &res, 4);
         }
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
@@ -225,7 +241,7 @@ struct section_meta_value_t<
             str += std::string(",");
             str += std::to_string(value[i]);
         }
-        str += "]";
+        str += std::string("]");
         return str;
     }
 };
@@ -238,9 +254,10 @@ struct section_meta_value_t<
         assert(buffer.size() != 0 && buffer.size() % 4 == 0);
         std::vector<float> list_value;
         list_value.resize(buffer.size() / 4);
-        for (int i = 0; i < (int)buffer.size(); i++) {
-            list_value[i] =
-                *reinterpret_cast<const float *>(buffer.data() + 4 * i);
+        for (int i = 0; i < (int)(buffer.size() / 4); i++) {
+            float res;
+            memcpy(&res, buffer.data() + 4 * i, 4);
+            list_value[i] = res;
         }
         return list_value;
     }
@@ -249,8 +266,8 @@ struct section_meta_value_t<
         std::vector<std::string> list_string = ssplit(v, ',');
         buffer.resize(4 * list_string.size());
         for (int i = 0; i < (int)list_string.size(); i++) {
-            *reinterpret_cast<float *>(buffer.data() + 4 * i) =
-                std::stof(list_string[i]);
+            float res = std::stof(list_string[i]);
+            memcpy(buffer.data() + 4 * i, &res, 4);
         }
     }
     static std::string serialize(const std::vector<uint8_t> &buffer) {
@@ -665,6 +682,7 @@ class config_parser_t {
             exit(-1);
         }
         for (std::string line; std::getline(fs, line);) {
+            remove_trailing_comment(line);
             strim(line);
             // printf("[%d], line:\"%s\"\n", __LINE__, line.c_str());
             if (is_empty(line) || is_comment(line))

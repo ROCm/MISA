@@ -64,6 +64,8 @@ static inline void naive_conv_blockwise_in_parallel(naive_conv_threadwise_conv_t
 {
     int num_threads = std::thread::hardware_concurrency();
     std::vector<std::thread> threads(num_threads);
+    // printf("hw concurrency:%d\n", num_threads);
+    // fflush(stdout);
     for(size_t tid = 0; tid < num_threads; tid++)
         threads[tid] = std::thread(naive_conv_blockwise_4d_t(f), tid, num_threads, d0, d1, d2, d3);
     for(size_t tid = 0; tid < num_threads; tid++)
