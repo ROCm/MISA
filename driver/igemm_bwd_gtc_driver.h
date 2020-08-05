@@ -131,6 +131,9 @@ public:
         auto precision                = tunable->precision;
         auto nxb                      = tunable->nxb;
         auto nxe                      = tunable->nxe;
+        auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
+        auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
+        auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
         auto multihead                = tunable->multihead;
 
         assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
@@ -168,6 +171,12 @@ public:
                "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
                       utility_int_list_to_string(tensor_b_cluster_lengths);
         // printf("[%s]\n",kernel_name.c_str());
+        if(gemm_m_unmerge_cluster)
+            kernel_name += std::string("_mc");
+        if(gemm_n_unmerge_cluster)
+            kernel_name += std::string("_nc");
+        if(gemm_k_unmerge_cluster)
+            kernel_name += std::string("_kc");
         if(multihead)
             kernel_name += std::string("_mh");
         return kernel_name;

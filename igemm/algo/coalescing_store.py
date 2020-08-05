@@ -42,12 +42,16 @@ class ctrl_coalescing_store_t(object):
         self.vector_store_size = 1
         self.data_byte = 1
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
-        self.gemm_m_m0_m1 = []      # if order is M0_M1, then this filed is not used indeed.
+        self.gemm_m_m0_m1 = []
         # for simplicity, if order is IGEMM_COALESCING_GEMM_M_ORDER_M1_M0, coalescing_groups must be multiply of t_m0
+        # use adjust_optimal_coalescing_groups() to do this.
+
+        # self.s_unmerge_cluster_stride_m0 = None     # if not none, means M0*M1 is not continous
 
     def adjust_optimal_coalescing_groups(self):
         '''
         if coalescing_groups is not multiply of t_m0, we will be very hard to calculate thread stride after load from LDS
+        this can help make easy index calculation, performance should be no impact
         '''
         if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M1_M0:
             cg = self.coalescing_groups
@@ -160,6 +164,16 @@ class ctrl_coalescing_store_t(object):
         sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
         return sub_m0_offset
         #print(" i_c_m0 >> igemm_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
+
+    def get_m0_m1_index(self, m_index):
+        assert len(self.gemm_m_m0_m1) != 0
+        m0, m1 = self.gemm_m_m0_m1[0], self.gemm_m_m0_m1[1]
+        # print(f"m0:{m0}, m1:{m1}")
+        assert m_index < m0 * m1, f"m_index:{m_index} larger than gemm_m_m0_m1:{self.gemm_m_m0_m1}, please check"
+        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+            return m_index // m1, m_index % m1
+        else:
+            return m_index % m0, m_index // m0
 
     def get_m_index_per_group(self):
         num_dword_per_group = self.get_num_dword_per_group()
@@ -285,7 +299,7 @@ class igemm_coalescing_store_t(mc_base_t):
         return self._get_deferred()
 
 
-    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m_stride, s_tmp4, v_store_flag = 0):
+    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
         ctrl = self.ctrl
@@ -297,7 +311,7 @@ class igemm_coalescing_store_t(mc_base_t):
         assert g_m1 == 1 and g_nr == 1 and g_n1 == 1 and g_n0 == 1
         l_mr = ctrl.ctm.t_mr() // g_mr
         l_m0 = ctrl.ctm.t_m0() // g_m0
-        no_s_out_offset = type(s_out_offset) is int and s_out_offset == 0
+        no_s_out_offset = s_out_offset is None
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
         inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
@@ -317,15 +331,20 @@ class igemm_coalescing_store_t(mc_base_t):
 
         assert len(m_index_per_group) == ctrl.coalescing_groups
 
+
         with self._deferred_context():
             self._emit(f"; coalescing store, gemm_mxn:{ctrl.ctm.n_m_total()}x{ctrl.ctm.n_n_total()}, block:{ctrl.block_size}, m_repeatxm_perthread:{ctrl.ctm.t_mr()}x{ctrl.ctm.t_m0()}, n_repeatxn_perthread:{ctrl.ctm.t_nr()}x{ctrl.ctm.t_n0()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}")
             self._emit(f"; coalescing_groups_in_m_repeat:{g_mr}, group_length_in_m_repeat:{l_mr}, coalescing_groups_in_m_per_thread:{g_m0}, group_length_in_m_per_thread:{l_m0}")
             # emit some pre index
-            self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m_stride}]    ; init per thread stride in m dimension")
+            if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M1_M0 and s_gemm_m0_stride is not None:
+                self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m0_stride}]    ; init per thread stride in m dimension")
+            else:
+                self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m1_stride}]    ; init per thread stride in m dimension")
 
             for i_group in range(ctrl.coalescing_groups):
                 m_index_start_per_group = m_index_per_group[i_group][0][0]
+                m0_index_start_per_group, m1_index_start_per_group = ctrl.get_m0_m1_index(m_index_start_per_group)
 
                 c_group_start_index = i_group * l_mr * l_m0 * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
                 current_m_index = m_index_per_group[i_group]
@@ -346,27 +365,33 @@ class igemm_coalescing_store_t(mc_base_t):
                     self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
                     issue_list.append(inst_sld.get_issues(sld_offset))
 
-                if type(v_store_flag) is str:
+                if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
                     #self._emit(f"s_cbranch_execz {label_prefix}_co_{i_group}")
 
-                self._emit(f";   store to global, m index start from {m_index_start_per_group}")
-                if m_index_start_per_group == 0:
-                    if no_s_out_offset:
-                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0")
-                    else:
-                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
-                elif m_index_start_per_group == 1:
-                    if no_s_out_offset:
-                        self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}]")
-                    else:
-                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m_stride}], s[{s_out_offset}]")
+                self._emit(f";   store to global, m index start from {m_index_start_per_group}, m0:{m0_index_start_per_group}, m1:{m1_index_start_per_group}")
+                if s_gemm_m0_stride is not None:
+                    self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {m0_index_start_per_group}, s[{s_gemm_m0_stride}]")
+                    self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m1_index_start_per_group}, s[{s_gemm_m1_stride}]")
+                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
                 else:
-                    if no_s_out_offset:
-                        self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
+                    if m_index_start_per_group == 0:
+                        if no_s_out_offset:
+                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0")
+                        else:
+                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
+                    elif m_index_start_per_group == 1:
+                        if no_s_out_offset:
+                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]")
+                        else:
+                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]")
                     else:
-                        self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m_index_start_per_group}, s[{s_gemm_m_stride}]")
-                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]")
+                        if no_s_out_offset:
+                            self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {m_index_start_per_group}, s[{s_gemm_m1_stride}]")
+                        else:
+                            self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m_index_start_per_group}, s[{s_gemm_m1_stride}]")
+                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]")
+                i_m0_start, i_m1_start =  m0_index_start_per_group, m1_index_start_per_group
                 for i_gst in range(ctrl.get_num_dword_per_group() // ctrl.vector_write_out):
                     if i_gst % 2 == 0:
                         i_issues =  (i_gst // 2) + 1
@@ -376,40 +401,28 @@ class igemm_coalescing_store_t(mc_base_t):
                     # vdata, vaddr, srsrc, soffset, offset
                     self._emit(inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
-                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
-                if type(v_store_flag) is str:
+                        if s_gemm_m0_stride is not None:
+                            i_m = m_index_per_group[i_group][0][i_gst+1]
+                            i_m0, i_m1 = ctrl.get_m0_m1_index(i_m)
+                            self._emit(f"; im:{i_m}, i_m0:{i_m0}, i_m1:{i_m1}")
+                            if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+                                if i_m0 > i_m0_start:
+                                    i_m0_start = i_m0
+                                    # m0 accumulate
+                                    self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
+                                else:
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
+                            else:
+                                if i_m1 > i_m1_start:
+                                    i_m1_start = i_m1
+                                    # m1 accumllate
+                                    self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
+                                else:
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
+                        else:
+                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
+                if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"s_mov_b64 exec, -1")
         return self._get_deferred()
-'''
-        for i_group_in_m_repeat in range(self.coalescing_groups_in_m_repeat):
-            for i_group_in_m_per_thread in range(self.group_length_in_m_per_thread):
-                c_group_start_index = (i_group_in_m_repeat *ctrl.gemm_m_per_thread + i_group_in_m_per_thread) * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
-
-                self._emit(f"s_barrier")
-                for imr in range(self.group_length_in_m_repeat):
-                    for imp in range(self.group_length_in_m_per_thread):
-                        c_start_current = c_group_start_index + (imr * ctrl.gemm_m_per_thread + imp) * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
-                        sst_offset = (imr * g_m0 + imp) * ctrl.ctm.n_n_total() * ctrl.data_byte
-                        # def __call__(self, v_sst, v_src, sst_offset = 0):
-                        self._emit(inst_sst(v_co_sst(), v_c(c_start_current), sst_offset))
-
-                self._emit(f"s_waitcnt lgkmcnt(0)")
-                self._emit(f"s_barrier")
-
-                issue_list = []
-                for i_d in range(self.ctrl.get_num_dword_per_group() // (2 * ctrl.vector_write_out)):
-                    #v_dst, v_sld_os, sld_offset = 0):
-                    c_start_current = c_group_start_index + i_d * 2 * ctrl.vector_write_out
-                    sld_offset = i_d * 2 * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
-                    self._emit(inst_sld(v_c(c_start_current), v_co_sld(), sld_offset))
-                    issue_list.append(inst_sld.get_issues(sld_offset))
-                
-                for i_gst in range(self.ctrl.get_num_dword_per_group() // (ctrl.vector_write_out)):
-                    if i_gst % 2 == 0:
-                        i_issues =  (i_gst // 2) + 1
-                        i_issue_list = issue_list[i_issues:]
-                        i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
-                        self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
-                    # vdata, vaddr, srsrc, soffset, offset
-                    inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), s_p_out, s_out_offset_itr(), 0)
-'''

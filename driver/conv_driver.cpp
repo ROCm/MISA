@@ -453,10 +453,10 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_input, device_input_to_host,
                                             n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
-                if (!is_valid) {
-                    printf("\n");
-                    break;
-                }
+                // if (!is_valid) {
+                //     printf("\n");
+                //     break;
+                // }
             }
             printf("\n");
         }

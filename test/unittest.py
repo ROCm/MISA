@@ -51,7 +51,7 @@ def unittest_coalescing_store_m1_m0():
 
     ctrl = ctrl_coalescing_store_t()
     ctrl.ctm = ctm
-    ctrl.coalescing_groups = 2
+    ctrl.coalescing_groups = 4
     ctrl.data_byte = 4
 
     ctrl.vector_write_out = 1
@@ -66,14 +66,19 @@ def unittest_coalescing_store_m1_m0():
     for ig in range(len(m_index_per_group)):
         for ic in range(len(m_index_per_group[ig])):
             print(f"ig:{ig} ic:{ic}, m0_m1: {m_index_per_group[ig][ic]}")
-            print(f"ig:{ig} ic:{ic}, m1_m0 => : {m_index_per_group_m1_m0[ig][ic]}")
+            print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group[ig][ic]))
+    print("")
+    for ig in range(len(m_index_per_group)):
+        for ic in range(len(m_index_per_group[ig])):
+            print(f"ig:{ig} ic:{ic}, m1_m0: {m_index_per_group_m1_m0[ig][ic]}")
+            print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group_m1_m0[ig][ic]))
 
 
     coalescing_store = igemm_coalescing_store_t(mc, ctrl)
 
     mc.emit(coalescing_store.init_co_lds_offset('v_co_sst', 'v_co_sld', 'v_gemm_im', 'v_gemm_in', 'v0', 'v_tmp'))
     mc.emit(coalescing_store.init_co_sub_m_index('v_co_sub_m_index', 'v_tid', 'v_tmp'))
-    mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m_stride', 's_tmp'))
+    mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m0_stride', 's_gemm_m1_stride', 's_tmp'))
     print(mc.emitter.get_buffer())
 
 def unittest_thread_mapping():

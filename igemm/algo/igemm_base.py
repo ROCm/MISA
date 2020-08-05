@@ -31,7 +31,7 @@ from .utility import *
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
-IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 0
+IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 
 
 def igemm_get_vector_size(v):
@@ -118,6 +118,12 @@ class igemm_gtc_tunable_parameter_t(object):
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
+
+        self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
+        self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
+        self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
+        #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
+        # hence stride of x0 should not be x1, but be total number of x divide by x0
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -260,6 +266,16 @@ def igemm_gtc_encode_kernel_name(tunable):
                          f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_" +\
                          "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\
                          "tb" + lengths_str(tunable.tensor_b_thread_lengths) + "_" + lengths_str(tunable.tensor_b_cluster_lengths)
+
+    if tunable.gemm_m_unmerge_cluster:
+        kernel_name += "_mc"
+
+    if tunable.gemm_n_unmerge_cluster:
+        kernel_name += "_nc"
+
+    if tunable.gemm_k_unmerge_cluster:
+        kernel_name += "_kc"
+
     if tunable.multihead:
         kernel_name += "_mh"
 
