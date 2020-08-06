@@ -657,7 +657,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             if outer.tunable.gemm_m_unmerge_cluster == 1:
                 self.s_in_stride_c0        = sym_t("s_in_stride_c0"           ,sseq(1))
             self.s_in_stride_c             = sym_t("s_in_stride_c"            ,sseq(1))
-            if outer.tunable.gemm_m_unmerge_cluster == 1:
+            if outer.tunable.gemm_n_unmerge_cluster == 1:
                 self.s_in_stride_n0        = sym_t("s_in_stride_n0"           ,sseq(1))
             self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
 
@@ -1182,7 +1182,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         unmerge_sub_n = self.tunable.unmerge_sub_n
         if gemm_n_unmerge_cluster == 0:
-            assert unmerge_sub_n % n_n0 == 0
+            assert unmerge_sub_n % n_n0 == 0, f"unmerge_sub_n:{unmerge_sub_n}, n_n0:{n_n0}"
             unmerge_sub_n1 = unmerge_sub_n // n_n0
             assert n_n1b % unmerge_sub_n1 == 0, f"n_n1b:{n_n1b}, unmerge_sub_n1:{unmerge_sub_n1}"
         elif gemm_n_unmerge_cluster == 1:
@@ -1303,6 +1303,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             if gemm_m_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_c()}], {igemm_log2(n_c0)}")
                 self._emit(f"s_mul_i32 s[{s.s_in_stride_c0()}], s[{s.s_in_stride_c()}], s[{s.s_tmp()}]")
+            if gemm_n_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_n()}], {igemm_log2(n_n0)}")
                 self._emit(f"s_mul_i32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}]")
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_c()}],      s[{s.s_y()}],        s[{s.s_x()}]")
@@ -1334,6 +1335,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             if gemm_m_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_c()}], {igemm_log2(n_c0)}")
                 self._emit(f"s_mul_i32 s[{s.s_in_stride_c0()}], s[{s.s_in_stride_c()}], s[{s.s_tmp()}]")
+            if gemm_n_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_n()}], {igemm_log2(n_n0)}")
                 self._emit(f"s_mul_i32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}]")
             self._emit(f"s_mov_b32 s[{s.s_wei_stride_k()}],      s[{s.s_c()}]")
@@ -1677,7 +1679,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[{v.v_in_os()}], s[{s.s_in_stride_n()}], v[{v.v_in_in1()}]")
 
         self._emit(f"; add i_c")
-        if gemm_n_unmerge_cluster == 0:
+        if gemm_m_unmerge_cluster == 0:
             if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1:
                 self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_c() if self.tunable.nxe != 0 else s.s_stride_hw()}], v[{v.v_co_sub_m_index()}]")
             else:
