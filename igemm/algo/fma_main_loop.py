@@ -46,12 +46,12 @@ class inst_mfma_t(object):
         self.n = n
         self.k = k
         self.data_type = data_type
-    def __call__(self, reg_c, reg_a, reg_b, reg_d, cbsz=0, abid=0, blgp=0):
+    def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
         mfma_acc_type = 'f32' # TODO: int8 mfma accumulate type is i32
         mfma_trait = f'{self.m}x{self.n}x{self.k}' + inst_mfma_data_type_to_string(self.data_type)
         mfma_inst = f'v_mfma_{mfma_acc_type}_{mfma_trait}'
         with self._deferred_context():
-            self._emit(f"{mfma_inst} a[{reg_c}], v[{reg_a}], v[{reg_b}], a[{reg_d}] cbsz:{cbsz} abid:{abid} blgp:{blgp}")
+            self._emit(f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] cbsz:{cbsz} abid:{abid} blgp:{blgp}")
         return self._get_deferred()
 
 v_mfma_f32_4x4x1f32     = inst_mfma_t(4,  4,  1,  AMDGPU_PRECISION_FP32)
@@ -88,14 +88,14 @@ class inst_composed_mfma_f32_64x64x1f32_t(object):
         self.mfma = v_mfma_f32_32x32x1f32
     def issues(self):
         return 2
-    def issue0(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 1, 0, 0)
-    def issue1(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 1, 1, 0)
-    def __call__(self, reg_c, reg_a, reg_b, reg_d):
+    def issue0(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 1, 0, 0)
+    def issue1(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 1, 1, 0)
+    def __call__(self, reg_d, reg_a, reg_b, reg_c):
         with self._deferred_context():
-            self._emit(self.issue0(reg_c, reg_a, reg_b, reg_d))
-            self._emit(self.issue1(reg_c'+32', reg_a, reg_b, reg_d))
+            self._emit(self.issue0(reg_d, reg_a, reg_b, reg_c))
+            self._emit(self.issue1(reg_d'+32', reg_a, reg_b, reg_c))
         return self._get_deferred()
 
 class inst_composed_mfma_f32_32x64x1f32_t(object):
@@ -107,10 +107,10 @@ class inst_composed_mfma_f32_32x64x1f32_t(object):
         self.mfma = v_mfma_f32_32x32x1f32
     def issues(self):
         return 1
-    def issue0(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 1, 0, 0)
-    def __call__(self, reg_c, reg_a, reg_b, reg_d):
-        return self.issue0(reg_c, reg_a, reg_b, reg_d)
+    def issue0(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 1, 0, 0)
+    def __call__(self, reg_d, reg_a, reg_b, reg_c):
+        return self.issue0(reg_d, reg_a, reg_b, reg_c)
 
 class inst_composed_mfma_f32_64x32x1f32_t(object):
     def __init__(self):
@@ -121,10 +121,10 @@ class inst_composed_mfma_f32_64x32x1f32_t(object):
         self.mfma = v_mfma_f32_32x32x1f32
     def issues(self):
         return 1
-    def issue0(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 0, 0, 1)
-    def __call__(self, reg_c, reg_a, reg_b, reg_d):
-        return self.issue0(reg_c, reg_a, reg_b, reg_d)
+    def issue0(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 0, 0, 1)
+    def __call__(self, reg_d, reg_a, reg_b, reg_c):
+        return self.issue0(reg_d, reg_a, reg_b, reg_c)
 
 class inst_composed_mfma_f32_16x64x1f32_t(object):
     def __init__(self):
@@ -135,10 +135,10 @@ class inst_composed_mfma_f32_16x64x1f32_t(object):
         self.mfma = v_mfma_f32_16x16x1f32
     def issues(self):
         return 1
-    def issue0(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 2, 0, 0)
-    def __call__(self, reg_c, reg_a, reg_b, reg_d):
-        return self.issue0(reg_c, reg_a, reg_b, reg_d)
+    def issue0(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 2, 0, 0)
+    def __call__(self, reg_d, reg_a, reg_b, reg_c):
+        return self.issue0(reg_d, reg_a, reg_b, reg_c)
 
 class inst_composed_mfma_f32_64x16x1f32_t(object):
     def __init__(self):
@@ -149,10 +149,10 @@ class inst_composed_mfma_f32_64x16x1f32_t(object):
         self.mfma = v_mfma_f32_16x16x1f32
     def issues(self):
         return 1
-    def issue0(self, reg_c, reg_a, reg_b, reg_d):
-        return self.mfma(reg_c, reg_a, reg_b, reg_d, 0, 0, 4)
-    def __call__(self, reg_c, reg_a, reg_b, reg_d):
-        return self.issue0(reg_c, reg_a, reg_b, reg_d)
+    def issue0(self, reg_d, reg_a, reg_b, reg_c):
+        return self.mfma(reg_d, reg_a, reg_b, reg_c, 0, 0, 4)
+    def __call__(self, reg_d, reg_a, reg_b, reg_c):
+        return self.issue0(reg_d, reg_a, reg_b, reg_c)
 
 v_mfma_f32_64x64x1f32   = inst_composed_mfma_f32_64x64x1f32_t()
 v_mfma_f32_32x64x1f32   = inst_composed_mfma_f32_32x64x1f32_t()
