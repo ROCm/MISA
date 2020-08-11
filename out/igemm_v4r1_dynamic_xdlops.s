@@ -174,8 +174,18 @@
 .macro .v_clear_nacc acc_id, num
     _acc = \acc_id
     .rept \num
-        v_mov_b32 a[_acc], 0
+        v_accvgpr_write acc[_acc], 0
         _acc = _acc + 1
+    .endr
+.endm
+
+.macro .read_acc v_c, acc_c, num
+    _acc = \acc_c
+    _v = \v_c
+    .rept \num
+        v_accvgpr_read v[_v], acc[_acc]
+        _acc = _acc + 1
+        _v = _v + 1
     .endr
 .endm
 
@@ -329,6 +339,54 @@
 ; store output to global. s_dst_os_4 need be zero {k0,k1,n1,b,n2}:{2,2,2,1,2}
 .macro .v_out_write_k0_k1_n1_b_n2_2_2_2_1_2 v_src, s_p_out, v_out_os, s_out_stride_k0, s_out_stride_k1, s_out_stride_n1, s_out_stride_n2, s_dst_os_4, t_k0, t_k1, t_n1, t_n2
     .v_write4d_strided \v_src,\s_p_out,\v_out_os,\s_out_stride_n2,\s_out_stride_n1,\s_out_stride_k1,\s_out_stride_k0,\s_dst_os_4,2,2,2,2
+.endm
+
+; stort output to global for xdlops kernel
+.macro .v_out_write_xdlops_4 v_src, s_p_out, v_out_os, s_out_stride_k1, s_tmp, num
+    .itr_1d=0
+    s_mov_b32 s[\s_tmp], 0
+    .rept 4
+        buffer_store_dword v[\v_src+.itr_1d], v[\v_out_os], s[\s_p_out:\s_p_out+3], s[\s_tmp] offen
+        s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+        .itr_1d=.itr_1d+1
+    .endr
+.endm
+
+.macro .v_out_write_xdlops_16 v_src, s_p_out, v_out_os, s_out_stride_k1, s_tmp, num
+    .itr_1d=0
+    s_mov_b32 s[\s_tmp], 0
+    .rept 4
+        buffer_store_dword v[\v_src+.itr_1d], v[\v_out_os], s[\s_p_out:\s_p_out+3], s[\s_tmp] offen
+        s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+        .itr_1d=.itr_1d+1
+    .endr
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    .rept 4
+        buffer_store_dword v[\v_src+.itr_1d], v[\v_out_os], s[\s_p_out:\s_p_out+3], s[\s_tmp] offen
+        s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+        .itr_1d=.itr_1d+1
+    .endr
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    .rept 4
+        buffer_store_dword v[\v_src+.itr_1d], v[\v_out_os], s[\s_p_out:\s_p_out+3], s[\s_tmp] offen
+        s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+        .itr_1d=.itr_1d+1
+    .endr
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+    .rept 4
+        buffer_store_dword v[\v_src+.itr_1d], v[\v_out_os], s[\s_p_out:\s_p_out+3], s[\s_tmp] offen
+        s_add_u32 s[\s_tmp], s[\s_tmp], s[s_out_stride_k1]
+        .itr_1d=.itr_1d+1
+    .endr
 .endm
 
 ; move input slice window. unified for all tunable along e=c*y*x 
@@ -612,6 +670,9 @@
 .set v_tmp,                 51
 .set v_end,                 58
 
+; vaccgpr
+.set a_c,                   0
+
 .text
 .globl igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16
 .p2align 8
@@ -749,19 +810,15 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
     s_sub_i32 s[s_in_ix], s[s_wei_slice], s[s_tmp]
 
     ; c thread mapping
-    v_and_b32 v[v_tmp+4], 7, v0
-    v_and_b32 v[v_tmp], 3, v[v_tmp+4]
-    v_lshrrev_b32 v[v_tmp+1], 2, v[v_tmp+4]
-
-    v_lshrrev_b32 v[v_tmp+4], 3, v0
-    v_and_b32 v[v_tmp+2], 1, v[v_tmp+4]
-    v_lshrrev_b32 v[v_tmp+3], 1, v[v_tmp+4]
-
-    v_lshl_or_b32 v[v_gemm_in], v[v_tmp+2], 2, v[v_tmp]               ; in
-    v_lshl_or_b32 v[v_gemm_im], v[v_tmp+3], 1, v[v_tmp+1]             ; im
-    v_lshlrev_b32 v[v_sld_b_os], 3, v[v_gemm_in]
-    v_lshlrev_b32 v[v_sld_a_os], 3, v[v_gemm_im]
+    v_and_b32 v[v_tmp+4], 15, v0
+    v_lshrrev_b32 v[v_gemm_in], 1, v[v_tmp+4]
+    v_lshrrev_b32 v[v_tmp+3], 5, v0 ; v_tmp_3=tid/32
+    v_lshlrev_b32 v[v_gemm_im], 2, v[v_tmp+3] ; v_gemm_im=tid/32*4
+    v_lshlrev_b32 v[v_sld_b_os], 2, v0
+    v_lshlrev_b32 v[v_sld_a_os], 2, v0
     v_add_u32 v[v_sld_a_os], 512, v[v_sld_a_os]
+
+;s_branch L_debug_code_seg_0
 
     ; calculate weight transform
     ; e_k: e->c*y*x
@@ -789,8 +846,8 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
     .v_wei_load_e_k_1_2_ev1 v_gld_a, s_p_buf_wei, v_wei_os, s_wei_stride_k, s_tmp
 
     ; calculate out index ik0, ik1, ib
-    v_lshlrev_b32 v[v_tmp+1], 1, v[v_gemm_im]
-    v_add_u32 v[v_tmp], s[s_block_ik], v[v_tmp+1]
+    ;v_lshlrev_b32 v[v_tmp+1], 1, v[v_gemm_im]
+    v_add_u32 v[v_tmp], s[s_block_ik], v[v_gemm_im]
     v_lshrrev_b32 v[v_out_ik0], 4, v[v_tmp]
     v_and_b32 v[v_out_ik1], 15, v[v_tmp]
 
@@ -805,20 +862,37 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
 
     v_mul_lo_u32 v[v_tmp], s[s_wo], v[v_tmp+6]
     v_add_u32 v[v_out_os], v[v_tmp], v[v_tmp+5]
+
     s_lshl_b32 s[s_tmp+1], s[s_out_stride_n2], 2
     v_mul_lo_u32 v[v_tmp], s[s_tmp+1], v[v_tmp+4]
+
+    ; n1 stride
+    v_and_b32 v[v_tmp+1], 31, v0 ; v_tmp_1=tid%32
+    v_lshrrev_b32 v[v_tmp+1], 4, v[v_tmp+1] ; v_tmp=tid%32/16
+    v_mul_lo_u32 v[v_tmp+1], s[s_out_stride_n1], v[v_tmp+1] ; v_tmp=tid%32/16*s_stride_n1
+
+    ; n2 stride
+    v_and_b32  v[v_tmp+2], 1, v0 ; v_tmp_2=tid%2
+    v_mul_lo_u32 v[v_tmp+2], s[s_out_stride_n2], v[v_tmp+2] ; v_tmp_2=tid%2*s_stride_n2
+
     v_add_u32 v[v_out_os], v[v_out_os], v[v_tmp]
+    v_add_u32 v[v_out_os], v[v_out_os], v[v_tmp+1]
+    v_add_u32 v[v_out_os], v[v_out_os], v[v_tmp+2]
 
     s_lshl_b32 s[s_out_stride_k0], s[s_out_stride_k0], 2
     v_lshl_or_b32 v[v_tmp], v[v_out_ik0], 4, v[v_out_ik1]
     s_lshl_b32 s[s_out_stride_n1], s[s_out_stride_n1], 2
     v_mul_lo_u32 v[v_tmp+1], s[s_out_stride_k1], v[v_tmp]
     s_lshl_b32 s[s_out_stride_n2], s[s_out_stride_n2], 2
+
     v_add_u32 v[v_out_os], v[v_out_os], v[v_tmp+1] ; v_out_os = (ik0*16+ik1)*n*ho*wo+in0*ho*wo*2+iho*wo+iwo
     s_mul_i32 s[s_tmp], s[s_out_stride_k1], s[s_k] ; s_tmp=k*n*wo*ho
     s_mul_i32 s[s_tmp], s[s_tmp], s[s_block_ie] ; s_tmp=s_block_ie*k*n*wo*ho
+
     v_add_u32 v[v_out_os], v[v_out_os], s[s_tmp] ; v_out_os=v_out_os+s_block_ie*k*n*wo*ho
     s_lshl_b32 s[s_out_stride_k1], s[s_out_stride_k1], 2
+
+;s_branch L_debug_code_seg_0
     v_lshlrev_b32 v[v_out_os], 2, v[v_out_os]
 
     ; in lds offset block e_n1_b_n2
@@ -834,9 +908,8 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
 
     s_mov_b32 s[s_p_buf_out+2], 0xffffffff
     s_mov_b32 s[s_p_buf_out+3], 0x27000
-    .v_clear_nc v_c, 16
 
-    .v_clear_nacc a, 16
+    .v_clear_nacc a_c, 16
 
     ; start FMA loop, 4x4 thread tile with 2x2 sub-tile
     s_waitcnt vmcnt(2)
@@ -864,38 +937,21 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
 
 L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_body:
     ; do fma accumulate with unroll 4
-    ds_read_b64 v[v_a:v_a+1], v[v_sld_a_os] 
-    ds_read_b64 v[v_b:v_b+1], v[v_sld_b_os] 
-    ds_read_b64 v[v_b+2:v_b+2+1], v[v_sld_b_os] offset:64
-    ds_read_b64 v[v_a+2:v_a+2+1], v[v_sld_a_os] offset:64
-    .itr_k = 0
-    .rept 3
-        s_waitcnt lgkmcnt(2)
-        .v_fma_2x2_s4 v_c,v_a,v_b
+    ds_read_b32 v[v_a], v[v_sld_a_os] 
+    ds_read_b32 v[v_b], v[v_sld_b_os] 
+    ds_read_b32 v[v_b+1], v[v_sld_b_os] offset:256
+    ds_read_b32 v[v_a+1], v[v_sld_a_os] offset:256
 
-        s_waitcnt lgkmcnt(1)
-        .v_fma_2x2_s4 v_c+2,v_a,v_b+2
+    ;s_nop 2
+    s_waitcnt lgkmcnt(2)
+    v_mfma_f32_32x32x2f32 acc[a_c:a_c+15], v[v_a:v_a], v[v_b:v_b], acc[a_c:a_c+15]
 
-        ds_read_b64 v[v_a:v_a+1], v[v_sld_a_os] offset:0+(.itr_k+1)*128
-        s_waitcnt lgkmcnt(1)
-        .v_fma_2x2_s4 v_c+8,v_a+2,v_b
+    ;s_nop 2
+    s_waitcnt lgkmcnt(0)
+    v_mfma_f32_32x32x2f32 acc[a_c:a_c+15], v[v_a+1:v_a+1], v[v_b+1:v_b+1], acc[a_c:a_c+15]
 
-        ds_read_b64 v[v_b:v_b+1], v[v_sld_b_os] offset:0+(.itr_k+1)*128
-        .v_fma_2x2_s4 v_c+10,v_a+2,v_b+2
-
-        ds_read_b64 v[v_b+2:v_b+2+1], v[v_sld_b_os] offset:0+(.itr_k+1)*128+64
-        ds_read_b64 v[v_a+2:v_a+2+1], v[v_sld_a_os] offset:0+(.itr_k+1)*128+64
-        .itr_k = .itr_k + 1
-    .endr
-
-    ; last unroll
     v_xor_b32 v[v_sld_b_os], 0x400, v[v_sld_b_os] ; switch double buffer b load
     v_xor_b32 v[v_sld_a_os], 0x400, v[v_sld_a_os] ; switch double buffer a load
-    s_waitcnt lgkmcnt(2)
-    .v_fma_2x2_s4 v_c,v_a,v_b
-
-    s_waitcnt lgkmcnt(1)
-    .v_fma_2x2_s4 v_c+2,v_a,v_b+2
 
     s_waitcnt vmcnt(2)
     .v_in_sst_e_n1_b_n2_1_1_1_2_n1s64_n2v2 v_gld_b, v_sst_b_os
@@ -903,11 +959,9 @@ L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_body:
     .v_wei_sst_e_k_1_2_es128_kv2 v_gld_a, v_sst_a_os
     s_sub_i32 s[s_kitr], s[s_kitr], 4
     s_cmp_gt_i32 s[s_kitr], 0
-    s_cbranch_scc0 L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_finishing
+    s_cbranch_scc0 L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_end
     .v_in_move_slice_window v_in_os, v_in_ic, v_in_iy, v_in_ix, v_in_ihi, v_in_iwi, v_flag, s_hi, s_wi, s_y, s_x, s_in_stride_c, s_dilation_h, s_dilation_w, s_in_ic, s_in_iy, s_in_ix, v_idc, v_idy, v_idx, s_tmp
     .v_wei_move_slice_window v_wei_os, v_wei_ic, v_wei_iy, v_wei_ix, s_y, s_x, s_wei_stride_c, s_wei_ic, s_wei_iy, s_wei_ix, v_idc, v_idy, v_idx, s_tmp
-    s_waitcnt lgkmcnt(2)
-    .v_fma_2x2_s4 v_c+8,v_a+2,v_b
 
     v_xor_b32 v[v_sst_b_os], 0x400, v[v_sst_b_os] ; switch double buffer b store
     v_xor_b32 v[v_sst_a_os], 0x400, v[v_sst_a_os] ; switch double buffer a store
@@ -915,57 +969,54 @@ L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_body:
     s_barrier
     .v_in_load_e_n1_b_n2_1_1_1_2 v_gld_b, s_p_buf_in, v_in_os, s_in_stride_n1, s_in_stride_n2, v_flag, s_tmp
     .v_wei_load_e_k_1_2_ev1 v_gld_a, s_p_buf_wei, v_wei_os, s_wei_stride_k, s_tmp
-    .v_fma_2x2_s4 v_c+10,v_a+2,v_b+2
 
     s_branch L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_body
-L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_fma_finishing:
-    s_waitcnt lgkmcnt(2)
-    .v_fma_2x2_s4 v_c+8,v_a+2,v_b
-    .v_fma_2x2_s4 v_c+10,v_a+2,v_b+2
 L_igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16_end:
     s_waitcnt lgkmcnt(0)
     s_barrier
-    ds_read_b64 v[v_a:v_a+1], v[v_sld_a_os] 
-    ds_read_b64 v[v_b:v_b+1], v[v_sld_b_os] 
-    ds_read_b64 v[v_b+2:v_b+2+1], v[v_sld_b_os] offset:64
-    ds_read_b64 v[v_a+2:v_a+2+1], v[v_sld_a_os] offset:64
-    .itr_k = 0
-    .rept 3
-        s_waitcnt lgkmcnt(2)
-        .v_fma_2x2_s4 v_c,v_a,v_b
-
-        s_waitcnt lgkmcnt(1)
-        .v_fma_2x2_s4 v_c+2,v_a,v_b+2
-
-        ds_read_b64 v[v_a:v_a+1], v[v_sld_a_os] offset:0+(.itr_k+1)*128
-        s_waitcnt lgkmcnt(1)
-        .v_fma_2x2_s4 v_c+8,v_a+2,v_b
-
-        ds_read_b64 v[v_b:v_b+1], v[v_sld_b_os] offset:0+(.itr_k+1)*128
-        .v_fma_2x2_s4 v_c+10,v_a+2,v_b+2
-
-        ds_read_b64 v[v_b+2:v_b+2+1], v[v_sld_b_os] offset:0+(.itr_k+1)*128+64
-        ds_read_b64 v[v_a+2:v_a+2+1], v[v_sld_a_os] offset:0+(.itr_k+1)*128+64
-        .itr_k = .itr_k + 1
-    .endr
-
-    ; last unroll
+    ds_read_b32 v[v_a], v[v_sld_a_os] 
+    ds_read_b32 v[v_b], v[v_sld_b_os] 
+    ds_read_b32 v[v_b+1], v[v_sld_b_os] offset:256
+    ds_read_b32 v[v_a+1], v[v_sld_a_os] offset:256
     s_waitcnt lgkmcnt(2)
-    .v_fma_2x2_s4 v_c,v_a,v_b
-
-    s_waitcnt lgkmcnt(1)
-    .v_fma_2x2_s4 v_c+2,v_a,v_b+2
+    v_mfma_f32_32x32x2f32 acc[a_c:a_c+15], v[v_a:v_a], v[v_b:v_b], acc[a_c:a_c+15]
 
     s_waitcnt lgkmcnt(0)
-    .v_fma_2x2_s4 v_c+8,v_a+2,v_b
+    v_mfma_f32_32x32x2f32 acc[a_c:a_c+15], v[v_a+1:v_a+1], v[v_b+1:v_b+1], acc[a_c:a_c+15]
 
-    .v_fma_2x2_s4 v_c+10,v_a+2,v_b+2
+    s_nop 4
+
+    .read_acc v_c, a_c, 16
+;s_branch L_debug_code_seg_0
 
     s_mov_b32 s[s_tmp], 0
     s_mov_b32 s[s_tmp+1], 0
     s_mov_b32 s[s_tmp+2], 0
     s_mov_b32 s[s_tmp+3], 0
-    .v_out_write_k0_k1_n1_b_n2_2_2_2_1_2 v_c, s_p_buf_out, v_out_os, s_out_stride_k0, s_out_stride_k1, s_out_stride_n1, s_out_stride_n2, s_tmp
+    ;.v_out_write_k0_k1_n1_b_n2_2_2_2_1_2 v_c, s_p_buf_out, v_out_os, s_out_stride_k0, s_out_stride_k1, s_out_stride_n1, s_out_stride_n2, s_tmp
+    .v_out_write_xdlops_16 v_c, s_p_buf_out, v_out_os, s_out_stride_k1, s_tmp, 16
+    ;.v_out_write_xdlops_4 v_c, s_p_buf_out, v_out_os, s_out_stride_k1, s_tmp, 16
+
+    s_branch L_program_end_0
+    ; debug code to cpy vgpr to host
+L_debug_code_seg_0:
+    s_waitcnt lgkmcnt(0)
+    s_waitcnt vmcnt(0)
+    s_barrier
+    s_cmp_lg_u32 s[s_bx], 0
+    s_cbranch_scc1  L_program_end_0
+    ;s_cmp_lg_u32 s[s_wave_id], 0
+    ;s_cbranch_scc1  L_program_end
+    ;v_add_co_u32 v34, vcc, 0, v[v_a0+2]
+    v_mov_b32 v[v_tmp], s[s_out_stride_n2]
+
+    global_store_dword v[v_end:v_end+1], v[v_out_os], s[s_tmp+16:s_tmp+17]
+
+    s_waitcnt vmcnt(0)
+    s_barrier
+
+
+L_program_end_0:
     s_endpgm
 .rodata
 .p2align 6

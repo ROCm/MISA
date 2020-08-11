@@ -221,7 +221,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         //if (i > 255)
         {
 #if PER_PIXEL_CHECK_PRINT
-            if (pp_err < 10)
+            if (pp_err < 128)
                 printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
                        pi, ((uint32_t *)pred)[i], delta);
 #endif
