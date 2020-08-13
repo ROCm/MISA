@@ -98,6 +98,7 @@ class igemm_gtc_tunable_parameter_t(object):
     generic tensor contraction
     '''
     def __init__(self, tunable_dict):
+        self.tensor_layout                      = utility_dict_with_default_t(tunable_dict)('tensor_layout', 'nchw')
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
         self.gemm_n_per_block                   = tunable_dict['gemm_n_per_block']
         self.gemm_k_per_block                   = tunable_dict['gemm_k_per_block']
@@ -199,6 +200,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
     def to_dict(self):
         tunable_dict = {}
+        tunable_dict['tensor_layout']                   = self.tensor_layout
         tunable_dict['gemm_m_per_block']                = self.gemm_m_per_block
         tunable_dict['gemm_n_per_block']                = self.gemm_n_per_block
         tunable_dict['gemm_k_per_block']                = self.gemm_k_per_block
@@ -223,7 +225,8 @@ class igemm_gtc_tunable_parameter_t(object):
         return self.opt_1x1
 
     def serialize(self, line_starter = '; '):
-        return  line_starter + 'gemm_m_per_block           : {}'.format(self.gemm_m_per_block) + '\n' + \
+        return  line_starter + 'tensor_layout              : {}'.format(self.tensor_layout) + '\n' + \
+                line_starter + 'gemm_m_per_block           : {}'.format(self.gemm_m_per_block) + '\n' + \
                 line_starter + 'gemm_n_per_block           : {}'.format(self.gemm_n_per_block) + '\n' + \
                 line_starter + 'gemm_k_per_block           : {}'.format(self.gemm_k_per_block) + '\n' + \
                 line_starter + 'gemm_m_per_thread          : {}'.format(self.gemm_m_per_thread) + '\n' + \
@@ -258,7 +261,7 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     assert type(tunable) is igemm_gtc_tunable_parameter_t
 
-    name_prefix = f"igemm_{tunable.direction}_gtc_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    name_prefix = f"igemm_{tunable.direction}_gtc_{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
 
     kernel_name = name_prefix + f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_" +\
                          f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\

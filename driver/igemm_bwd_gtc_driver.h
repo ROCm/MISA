@@ -114,6 +114,7 @@ public:
     igemm_bwd_gtc_t(){}
     ~igemm_bwd_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
+        auto tensor_layout            = tunable->tensor_layout;
         auto gemm_m_per_block         = tunable->gemm_m_per_block;
         auto gemm_n_per_block         = tunable->gemm_n_per_block;
         auto gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -146,9 +147,11 @@ public:
 
         assert(direction == "bwd");
 
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + precision +
+        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + 
+                tensor_layout + std::string("_") + precision +
                 std::string("_bx") + std::to_string(nxb) + 
                 std::string("_ex") + std::to_string(nxe) + "_";
+
         std::string kernel_name =
             kernel_prefix +
                "bt" +

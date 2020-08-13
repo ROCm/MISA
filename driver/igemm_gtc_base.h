@@ -35,6 +35,7 @@
 
 
 typedef struct {
+    std::string tensor_layout;
     int gemm_m_per_block;
     int gemm_n_per_block;
     int gemm_k_per_block;
@@ -67,6 +68,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             sec.get_name() == "igemm_wrw_gtc")
         {
             igemm_gtc_tunable_t tunable;
+            tunable.tensor_layout            = sec.count("tensor_layout") > 0 ? sec.at("tensor_layout").get_string() : "nchw";
             tunable.gemm_m_per_block         = sec.at("gemm_m_per_block").get_int();
             tunable.gemm_n_per_block         = sec.at("gemm_n_per_block").get_int();
             tunable.gemm_k_per_block         = sec.at("gemm_k_per_block").get_int();

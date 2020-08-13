@@ -24,6 +24,11 @@
 # 
 ################################################################################
 
+
+CONV_TENSOR_LAYOUT_NCHW = ((1 << 3) | 0)
+CONV_TENSOR_LAYOUT_NHWC = ((1 << 3) | 1)
+CONV_TENSOR_LAYOUT_CNHW = ((1 << 3) | 2)
+
 CONV_DIRECTION_FWD = 0      # forward
 CONV_DIRECTION_BWD = 1      # backward data
 CONV_DIRECTOIN_WRW = 2      # backward weight
@@ -45,6 +50,23 @@ def conv_direction_to_string(direction):
     if direction == CONV_DIRECTOIN_WRW:
         return 'wrw'
     assert False
+
+def conv_string_to_tensor_layout(tensor_layout):
+    if tensor_layout == 'nchw':
+        return CONV_TENSOR_LAYOUT_NCHW
+    if tensor_layout == 'nhwc':
+        return CONV_TENSOR_LAYOUT_NHWC
+    if tensor_layout == 'cnhw':
+        return CONV_TENSOR_LAYOUT_CNHW
+    assert False
+
+def conv_tensor_layout_to_string(tensor_layout):
+    if tensor_layout == CONV_TENSOR_LAYOUT_NCHW:
+        return 'nchw'
+    if tensor_layout == CONV_TENSOR_LAYOUT_NHWC:
+        return 'nhwc'
+    if tensor_layout == CONV_TENSOR_LAYOUT_CNHW:
+        return 'cnhw'
 
 def conv_out_size(in_size, pad, dilation,  ksize,  stride):
      return (in_size + 2*pad- dilation*(ksize-1) - 1) // stride + 1
