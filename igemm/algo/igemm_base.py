@@ -32,7 +32,8 @@ from .utility import *
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
-
+IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM = ((1<<16)|0)
+IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM = ((1<<16)|1)
 
 def igemm_get_vector_size(v):
     vec_size = 1
@@ -93,6 +94,15 @@ def igemm_flatten_list_accumulate(x):
     from functools import reduce
     return reduce(lambda a, b: a+b, x)
 
+
+def get_igemm_gtc_tunable_type(tunable_dict):
+    assert type(tunable_dict) is dict
+    if 'gemm_m_per_thread' in tunable_dict and 'gemm_n_per_thread' in tunable_dict:
+        return IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM
+    if 'gemm_m_per_wave' in tunable_dict and 'gemm_n_per_wave' in tunable_dict:
+        return IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM
+    assert False
+
 class igemm_gtc_tunable_parameter_t(object):
     '''
     generic tensor contraction
@@ -102,12 +112,24 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
         self.gemm_n_per_block                   = tunable_dict['gemm_n_per_block']
         self.gemm_k_per_block                   = tunable_dict['gemm_k_per_block']
-        self.gemm_m_per_thread                  = tunable_dict['gemm_m_per_thread']
-        self.gemm_m_level0_cluster              = tunable_dict['gemm_m_level0_cluster']
-        self.gemm_m_level1_cluster              = tunable_dict['gemm_m_level1_cluster']
-        self.gemm_n_per_thread                  = tunable_dict['gemm_n_per_thread']
-        self.gemm_n_level0_cluster              = tunable_dict['gemm_n_level0_cluster']
-        self.gemm_n_level1_cluster              = tunable_dict['gemm_n_level1_cluster']
+        self.tunable_type                       = get_igemm_gtc_tunable_type(tunable_dict)
+        if self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM
+            self.gemm_m_per_thread              = tunable_dict['gemm_m_per_thread']
+            self.gemm_m_level0_cluster          = tunable_dict['gemm_m_level0_cluster']
+            self.gemm_m_level1_cluster          = tunable_dict['gemm_m_level1_cluster']
+            self.gemm_n_per_thread              = tunable_dict['gemm_n_per_thread']
+            self.gemm_n_level0_cluster          = tunable_dict['gemm_n_level0_cluster']
+            self.gemm_n_level1_cluster          = tunable_dict['gemm_n_level1_cluster']
+        elif self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM:
+            self.gemm_m_per_wave                = tunable_dict['gemm_m_per_wave']
+            self.gemm_m_wave_step               = tunable_dict['gemm_m_wave_step']
+            self.gemm_m_wave_repeat             = tunable_dict['gemm_m_wave_repeat']
+            self.gemm_n_per_wave                = tunable_dict['gemm_n_per_wave']
+            self.gemm_n_wave_step               = tunable_dict['gemm_n_wave_step']
+            self.gemm_n_wave_repeat             = tunable_dict['gemm_n_wave_repeat']
+        else:
+            assert False
+
         self.tensor_a_thread_lengths            = tunable_dict['tensor_a_thread_lengths']     # list!
         self.tensor_a_cluster_lengths           = tunable_dict['tensor_a_cluster_lengths']    # list!
         self.tensor_b_thread_lengths            = tunable_dict['tensor_b_thread_lengths']     # list!
@@ -135,7 +157,16 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.nxe in (0,1)
 
         # TODO: better specify
-        self.block_size                         = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
+        if self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM:
+            self.block_size                     = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
+
+        elif self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM:
+            assert self.gemm_m_per_block % (self.gemm_m_per_wave * self.gemm_m_wave_step * self.gemm_m_wave_repeat)
+            assert self.gemm_n_per_block % (self.gemm_n_per_wave * self.gemm_n_wave_step * self.gemm_n_wave_repeat)
+            waves_per_m = self.gemm_m_per_block // (self.gemm_m_per_wave * self.gemm_m_wave_step * self.gemm_m_wave_repeat)
+            waves_per_n = self.gemm_n_per_block // (self.gemm_n_per_wave * self.gemm_n_wave_step * self.gemm_n_wave_repeat)
+            self.block_size                     = waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE
+
         assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths)
         assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths)
 
@@ -163,12 +194,19 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_c = 1
 
         # vector global/lds implicit here
-        self.gemm_m_repeat                      = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
-        self.gemm_n_repeat                      = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
-        # register for a,b,c buffer
-        self.num_vgpr_accumulate_c              = (self.gemm_m_repeat*self.gemm_m_per_thread*self.gemm_n_repeat*self.gemm_n_per_thread)
-        self.num_vgpr_accumulate_a              = (self.gemm_m_repeat*self.gemm_m_per_thread)
-        self.num_vgpr_accumulate_b              = (self.gemm_n_repeat*self.gemm_n_per_thread)
+        if self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM:
+            self.gemm_m_repeat                  = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
+            self.gemm_n_repeat                  = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
+            # register for a,b,c buffer
+            self.num_vgpr_accumulate_c              = (self.gemm_m_repeat*self.gemm_m_per_thread*self.gemm_n_repeat*self.gemm_n_per_thread)
+            self.num_vgpr_accumulate_a              = (self.gemm_m_repeat*self.gemm_m_per_thread)
+            self.num_vgpr_accumulate_b              = (self.gemm_n_repeat*self.gemm_n_per_thread)
+        
+        elif self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM:
+            # register for a,b,c buffer
+            # self.num_vgpr_accumulate_c              = 0
+            self.num_vgpr_accumulate_a              = self.gemm_m_wave_step * self.gemm_m_wave_repeat
+            self.num_vgpr_accumulate_b              = self.gemm_n_wave_step * self.gemm_n_wave_repeat
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
@@ -187,10 +225,11 @@ class igemm_gtc_tunable_parameter_t(object):
         # TODO: LDS size check
 
         # some parameter not in modular_conv
-        self.thread_tile_m                      = self.gemm_m_repeat * self.gemm_m_per_thread
-        self.thread_tile_n                      = self.gemm_n_repeat * self.gemm_n_per_thread
-        self.thread_sub_tile_m                  = self.gemm_m_per_thread
-        self.thread_sub_tile_n                  = self.gemm_n_per_thread
+        if self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_THREAD_WISE_GEMM:
+            self.thread_tile_m                      = self.gemm_m_repeat * self.gemm_m_per_thread
+            self.thread_tile_n                      = self.gemm_n_repeat * self.gemm_n_per_thread
+            self.thread_sub_tile_m                  = self.gemm_m_per_thread
+            self.thread_sub_tile_n                  = self.gemm_n_per_thread
 
         # number of loops at least needed for final coalescing store, dicided by LDS size
         self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
@@ -204,12 +243,22 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['gemm_m_per_block']                = self.gemm_m_per_block
         tunable_dict['gemm_n_per_block']                = self.gemm_n_per_block
         tunable_dict['gemm_k_per_block']                = self.gemm_k_per_block
-        tunable_dict['gemm_m_per_thread']               = self.gemm_m_per_thread_subc
-        tunable_dict['gemm_m_level0_cluster']           = self.gemm_m_level0_cluster
-        tunable_dict['gemm_m_level1_cluster']           = self.gemm_m_level1_cluster
-        tunable_dict['gemm_n_per_thread']               = self.gemm_n_per_thread
-        tunable_dict['gemm_n_level0_cluster']           = self.gemm_n_level0_cluster
-        tunable_dict['gemm_n_level1_cluster']           = self.gemm_n_level1_cluster
+        if hasattr(self, 'gemm_m_per_thread') and hasattr(self, 'gemm_n_per_thread'):
+            tunable_dict['gemm_m_per_thread']           = self.gemm_m_per_thread
+            tunable_dict['gemm_m_level0_cluster']       = self.gemm_m_level0_cluster
+            tunable_dict['gemm_m_level1_cluster']       = self.gemm_m_level1_cluster
+            tunable_dict['gemm_n_per_thread']           = self.gemm_n_per_thread
+            tunable_dict['gemm_n_level0_cluster']       = self.gemm_n_level0_cluster
+            tunable_dict['gemm_n_level1_cluster']       = self.gemm_n_level1_cluster
+        elif hasattr(self, 'gemm_m_per_wave') and hasattr(self, 'gemm_n_per_wave'):
+            tunable_dict['gemm_m_per_wave']             = self.gemm_m_per_wave
+            tunable_dict['gemm_m_wave_step']            = self.gemm_m_wave_step
+            tunable_dict['gemm_m_wave_repeat']          = self.gemm_m_wave_repeat
+            tunable_dict['gemm_n_per_wave']             = self.gemm_n_per_wave
+            tunable_dict['gemm_n_wave_step']            = self.gemm_n_wave_step
+            tunable_dict['gemm_n_wave_repeat']          = self.gemm_n_wave_repeat
+        else:
+            assert False
         tunable_dict['tensor_a_thread_lengths']         = self.tensor_a_thread_lengths
         tunable_dict['tensor_a_cluster_lengths']        = self.tensor_a_cluster_lengths
         tunable_dict['tensor_b_thread_lengths']         = self.tensor_b_thread_lengths

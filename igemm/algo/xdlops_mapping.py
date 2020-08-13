@@ -30,7 +30,7 @@ from .igemm_base import *
 from .fma_main_loop import *
 
 class ctrl_xdlops_mapping_t(object):
-    def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, waves, repeat_m, repeat_n, steps_m, steps_n, inst_mfma):
+    def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, waves, repeat_m, repeat_n, step_m, step_n, inst_mfma):
         self.macro_tile_m = macro_tile_m
         self.macro_tile_n = macro_tile_n
         self.wave_tile_m = wave_tile_m
@@ -38,23 +38,23 @@ class ctrl_xdlops_mapping_t(object):
         self.waves = waves
         self.repeat_m = repeat_m
         self.repeat_n = repeat_n
-        self.steps_m = steps_m
-        self.steps_n = steps_n
+        self.step_m = step_m
+        self.step_n = step_n
         self.inst_mfma = inst_mfma
 
     def composed_wave_tile_m(self):
-        return self.wave_tile_m * self.steps_m
+        return self.wave_tile_m * self.step_m
     
     def composed_wave_tile_n(self):
-        return self.wave_tile_n * self.steps_n
+        return self.wave_tile_n * self.step_n
 
     def composed_waves_per_m(self):
         ''' attention! not count repeat'''
-        return self.macro_tile_m // (self.repeat_m * self.wave_tile_m * self.steps_m)
+        return self.macro_tile_m // (self.repeat_m * self.wave_tile_m * self.step_m)
 
     def composed_waves_per_n(self):
         ''' attention! not count repeat'''
-        return self.macro_tile_n // (self.repeat_n * self.wave_tile_n * self.steps_n)
+        return self.macro_tile_n // (self.repeat_n * self.wave_tile_n * self.step_n)
 
     def block_size(self):
         return self.waves * 64 # wave size 64
@@ -76,8 +76,8 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 128, 16 ,  4 ,  64,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 128,  64,  4 ,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 16 ,  64,  4 ,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 128,  4 ,  64,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),

@@ -190,8 +190,16 @@ class amdgpu_arch_config_t(object):
     def __init__(self, arch_dict):
         ad = _dict_with_default_t(arch_dict)
         self.arch           = ad('arch', AMDGPU_ARCH_GFX906)
-        self.use_dlops      = ad('use_dlops', False)
-        self.use_xdlops     = ad('use_sdlops', False)
+        if self.arch == AMDGPU_ARCH_GFX900:
+            self.use_dlops  = ad('use_dlops', False)
+            self.use_xdlops = ad('use_xdlops', False)
+        if self.arch == AMDGPU_ARCH_GFX906:
+            self.use_dlops  = ad('use_dlops', True)
+            self.use_xdlops = ad('use_xdlops', False)
+        elif self.arch == AMDGPU_ARCH_GFX908:
+            self.use_dlops  = ad('use_dlops', False)
+            self.use_xdlops = ad('use_xdlops', True)
+
         self.data_type      = ad('data_type', AMDGPU_PRECISION_FP32)
         self.code_object    = ad('code_object', AMDGPU_CODEOBJECT_V3)
 

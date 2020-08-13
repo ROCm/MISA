@@ -42,10 +42,18 @@ class inst_mfma_t(object):
     http://llvm.org/docs/AMDGPU/AMDGPUAsmGFX908.html
     '''
     def __init__(self, m, n, k, data_type):
+        #self.arch_config = arch_config
         self.m = m
         self.n = n
         self.k = k
         self.data_type = data_type
+        self.cycle = 1
+        self.num_v_a = 1
+        self.num_v_b = 1
+        self.num_a_c = 1
+        self.num_blocks = 1
+        #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
+
     def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
         mfma_acc_type = 'f32' # TODO: int8 mfma accumulate type is i32
         mfma_trait = f'{self.m}x{self.n}x{self.k}' + inst_mfma_data_type_to_string(self.data_type)
@@ -54,24 +62,24 @@ class inst_mfma_t(object):
             self._emit(f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] cbsz:{cbsz} abid:{abid} blgp:{blgp}")
         return self._get_deferred()
 
-v_mfma_f32_4x4x1f32     = inst_mfma_t(4,  4,  1,  AMDGPU_PRECISION_FP32)
-v_mfma_f32_16x16x1f32   = inst_mfma_t(16, 16, 1,  AMDGPU_PRECISION_FP32)
-v_mfma_f32_16x16x4f32   = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_FP32)
-v_mfma_f32_32x32x1f32   = inst_mfma_t(32, 32, 1,  AMDGPU_PRECISION_FP32)
-v_mfma_f32_32x32x2f32   = inst_mfma_t(32, 32, 2,  AMDGPU_PRECISION_FP32)
+#                                     m,  n,  k,  precision,           cycle, v_a, v_b, a_c, #block
+v_mfma_f32_4x4x1f32     = inst_mfma_t(4,  4,  1,  AMDGPU_PRECISION_FP32,   8,   1,   1,  4,    16)
+v_mfma_f32_16x16x1f32   = inst_mfma_t(16, 16, 1,  AMDGPU_PRECISION_FP32,  32,   1,   1,  16,   4 )
+v_mfma_f32_16x16x4f32   = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_FP32,  32,   1,   1,  4,    1 )
+v_mfma_f32_32x32x1f32   = inst_mfma_t(32, 32, 1,  AMDGPU_PRECISION_FP32,  64,   1,   1,  32,   2 )
+v_mfma_f32_32x32x2f32   = inst_mfma_t(32, 32, 2,  AMDGPU_PRECISION_FP32,  64,   1,   1,  16,   1 )
 
-v_mfma_f32_4x4x4f16     = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_FP16)
-v_mfma_f32_16x16x4f16   = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_FP16)
-v_mfma_f32_16x16x16f16  = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_FP16)
-v_mfma_f32_32x32x4f16   = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_FP16)
-v_mfma_f32_32x32x8f16   = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_FP16)
+v_mfma_f32_4x4x4f16     = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_FP16,   8,   2,   2,  4,    16)
+v_mfma_f32_16x16x4f16   = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_FP16,  32,   2,   2,  16,   4 )
+v_mfma_f32_16x16x16f16  = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_FP16,  32,   2,   2,  4,    1 )
+v_mfma_f32_32x32x4f16   = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_FP16,  64,   2,   2,  32,   2 )
+v_mfma_f32_32x32x8f16   = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_FP16,  64,   2,   2,  16,   1 )
 
-v_mfma_f32_4x4x2bf16    = inst_mfma_t(4,  4,  2,  AMDGPU_PRECISION_BF16)
-v_mfma_f32_16x16x2bf16  = inst_mfma_t(16, 16, 2,  AMDGPU_PRECISION_BF16)
-v_mfma_f32_16x16x8bf16  = inst_mfma_t(16, 16, 8,  AMDGPU_PRECISION_BF16)
-v_mfma_f32_32x32x2bf16  = inst_mfma_t(32, 32, 2,  AMDGPU_PRECISION_BF16)
-v_mfma_f32_32x32x4bf16  = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16)
-
+v_mfma_f32_4x4x2bf16    = inst_mfma_t(4,  4,  2,  AMDGPU_PRECISION_BF16,   8,   1,   1,  4,    16)
+v_mfma_f32_16x16x2bf16  = inst_mfma_t(16, 16, 2,  AMDGPU_PRECISION_BF16,  32,   1,   1,  16,   4 )
+v_mfma_f32_16x16x8bf16  = inst_mfma_t(16, 16, 8,  AMDGPU_PRECISION_BF16,  32,   1,   1,  4,    1 )
+v_mfma_f32_32x32x2bf16  = inst_mfma_t(32, 32, 2,  AMDGPU_PRECISION_BF16,  64,   1,   1,  32,   2 )
+v_mfma_f32_32x32x4bf16  = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   1,   1,  16,   1 )
 
 class inst_composed_mfma_t(object):
     '''
