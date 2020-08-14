@@ -25,9 +25,9 @@
 ################################################################################
 
 
-CONV_TENSOR_LAYOUT_NCHW = ((1 << 3) | 0)
-CONV_TENSOR_LAYOUT_NHWC = ((1 << 3) | 1)
-CONV_TENSOR_LAYOUT_CNHW = ((1 << 3) | 2)
+CONV_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
+CONV_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
+CONV_TENSOR_LAYOUT_CNHW = ((1 << 4) | 2)
 
 CONV_DIRECTION_FWD = 0      # forward
 CONV_DIRECTION_BWD = 1      # backward data
