@@ -32,6 +32,7 @@ from .shared_memory import *
 from .utility import *
 from .thread_mapping import *
 from .coalescing_store import *
+from .mfma_main_loop import *
 
 IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 = 0
 IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 = 1
@@ -389,12 +390,17 @@ class igemm_bwd_gtc_t(mc_base_t):
         assert self.out_thread_copy_ndim in (1, 2)
         assert self.wei_thread_copy_ndim in (1, 2)
 
-        ctrl_thread_mapping = ctrl_thread_mapping_t()
-                #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
-        ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
-        ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
-        self.thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            ctrl_thread_mapping = ctrl_thread_mapping_t()
+                    #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
+            ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
+            ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
+            self.thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
 
+        else:
+            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n)
+            self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
 
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
         ctrl_coalescing_store = ctrl_coalescing_store_t()
@@ -429,6 +435,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self.karg = self.kernel_karg_t(mc, self)
         self.sgpr = self.kernel_sgpr_t(mc, self)
         self.vgpr = self.kernel_vgpr_t(mc, self)
+        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self.agpr = self.kernel_agpr_t(mc, self)
 
 
     def name(self):
@@ -1816,7 +1824,6 @@ class igemm_bwd_gtc_t(mc_base_t):
                                 s.s_out_stride_k_k1(), s.s_wei_stride_k_k1(), s.s_out_stride_k_k0_k1_diff(), s.s_wei_stride_k_k0_k1_diff()))
                 return self._get_deferred()
 
-
         def move_slice_window_a():
             if self.tunable.nxe != 0:
                 m_wei_update_os   = self.get_macro_wei_update_os()
@@ -1830,45 +1837,84 @@ class igemm_bwd_gtc_t(mc_base_t):
                     # we don't really need do anything for a, in nxe 0 case.
                     pass
                 return self._get_deferred()
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            fctrl                             = ctrl_fma_main_loop_t()
+            fctrl.thread_m                    = self.tunable.thread_tile_m
+            fctrl.thread_n                    = self.tunable.thread_tile_n
+            fctrl.unroll_k                    = self.tunable.gemm_k_per_block
+            fctrl.label_prefix                = self.name()
+            fctrl.gemm_m_repeat               = self.tunable.gemm_m_repeat
+            fctrl.gemm_m_level0_cluster       = self.tunable.gemm_m_level0_cluster
+            fctrl.gemm_m_level1_cluster       = self.tunable.gemm_m_level1_cluster
+            fctrl.gemm_n_repeat               = self.tunable.gemm_n_repeat
+            fctrl.gemm_n_level0_cluster       = self.tunable.gemm_n_level0_cluster
+            fctrl.gemm_n_level1_cluster       = self.tunable.gemm_n_level1_cluster
+            fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
 
-        fctrl                             = ctrl_fma_main_loop_t()
-        fctrl.thread_m                    = self.tunable.thread_tile_m
-        fctrl.thread_n                    = self.tunable.thread_tile_n
-        fctrl.unroll_k                    = self.tunable.gemm_k_per_block
-        fctrl.label_prefix                = self.name()
-        fctrl.gemm_m_repeat               = self.tunable.gemm_m_repeat
-        fctrl.gemm_m_level0_cluster       = self.tunable.gemm_m_level0_cluster
-        fctrl.gemm_m_level1_cluster       = self.tunable.gemm_m_level1_cluster
-        fctrl.gemm_n_repeat               = self.tunable.gemm_n_repeat
-        fctrl.gemm_n_level0_cluster       = self.tunable.gemm_n_level0_cluster
-        fctrl.gemm_n_level1_cluster       = self.tunable.gemm_n_level1_cluster
-        fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
+            # functor
+            fctrl.global_load_a_functor       = self.global_load_wei
+            fctrl.global_load_b_functor       = self.global_load_out
+            fctrl.shared_store_a_functor      = self.shared_store_wei
+            fctrl.shared_store_b_functor      = self.shared_store_out
+            fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
+            fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
+            fctrl.move_slice_window_a_functor = move_slice_window_a
+            fctrl.move_slice_window_b_functor = move_slice_window_b
 
-        # functor
-        fctrl.global_load_a_functor       = self.global_load_wei
-        fctrl.global_load_b_functor       = self.global_load_out
-        fctrl.shared_store_a_functor      = self.shared_store_wei
-        fctrl.shared_store_b_functor      = self.shared_store_out
-        fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
-        fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
-        fctrl.move_slice_window_a_functor = move_slice_window_a
-        fctrl.move_slice_window_b_functor = move_slice_window_b
+            # sympol type
+            fctrl.v_a                         = v.v_a
+            fctrl.v_b                         = v.v_b
+            fctrl.v_c                         = v.v_c
+            fctrl.v_gld_a                     = v.v_gld_a
+            fctrl.v_gld_b                     = v.v_gld_b
+            fctrl.v_sld_a_os                  = v.v_sld_a_os
+            fctrl.v_sld_b_os                  = v.v_sld_b_os
+            fctrl.v_sst_a_os                  = v.v_sst_a_os
+            fctrl.v_sst_b_os                  = v.v_sst_b_os
+            fctrl.s_kitr                      = s.s_kitr
+            fctrl.s_knum                      = s.s_knum
 
-        # sympol type
-        fctrl.v_a                         = v.v_a
-        fctrl.v_b                         = v.v_b
-        fctrl.v_c                         = v.v_c
-        fctrl.v_gld_a                     = v.v_gld_a
-        fctrl.v_gld_b                     = v.v_gld_b
-        fctrl.v_sld_a_os                  = v.v_sld_a_os
-        fctrl.v_sld_b_os                  = v.v_sld_b_os
-        fctrl.v_sst_a_os                  = v.v_sst_a_os
-        fctrl.v_sst_b_os                  = v.v_sst_b_os
-        fctrl.s_kitr                      = s.s_kitr
-        fctrl.s_knum                      = s.s_knum
+            fma_main_loop = fma_main_loop_t(self.mc, fctrl)
+            fma_main_loop.emit()
+        else:
+            a = self.agpr
+            fctrl                             = ctrl_fma_main_loop_t()
+            fctrl.wave_tile_m                 = self.tunable.wave_tile_m
+            fctrl.wave_tile_n                 = self.tunable.wave_tile_n
+            fctrl.wave_repeat_m               = self.tunable.wave_repeat_m
+            fctrl.wave_repeat_n               = self.tunable.wave_repeat_n
+            fctrl.wave_step_m                 = self.tunable.wave_step_m
+            fctrl.wave_step_n                 = self.tunable.wave_step_n
+            fctrl.unroll_k                    = self.tunable.gemm_k_per_block
+            fctrl.label_prefix                = self.name()
+            fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
 
-        fma_main_loop = fma_main_loop_t(self.mc, fctrl)
-        fma_main_loop.emit()
+            # functor
+            fctrl.global_load_a_functor       = self.global_load_wei
+            fctrl.global_load_b_functor       = self.global_load_out
+            fctrl.shared_store_a_functor      = self.shared_store_wei
+            fctrl.shared_store_b_functor      = self.shared_store_out
+            fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
+            fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
+            fctrl.move_slice_window_a_functor = move_slice_window_a
+            fctrl.move_slice_window_b_functor = move_slice_window_b
+
+            # sympol type
+            fctrl.v_a                         = v.v_a
+            fctrl.v_b                         = v.v_b
+            fctrl.a_c                         = a.a_c
+            fctrl.v_gld_a                     = v.v_gld_a
+            fctrl.v_gld_b                     = v.v_gld_b
+            fctrl.v_sld_a_os                  = v.v_sld_a_os
+            fctrl.v_sld_b_os                  = v.v_sld_b_os
+            fctrl.v_sst_a_os                  = v.v_sst_a_os
+            fctrl.v_sst_b_os                  = v.v_sst_b_os
+            fctrl.s_kitr                      = s.s_kitr
+            fctrl.s_knum                      = s.s_knum
+
+            mfma_main_loop = mfma_main_loop_t(self.mc, fctrl)
+            mfma_main_loop.emit()
+
 
     def emit_kernel_epilogue(self):
         s = self.sgpr

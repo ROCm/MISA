@@ -61,8 +61,11 @@ class ctrl_coalescing_store_t(object):
             self.coalescing_groups = cg
 
     def get_length_m_groups(self):
+        ''' vgprs per thread in m dimension '''
         return self.ctm.t_mr() * self.ctm.t_m1() * self.ctm.t_m0()
+
     def get_length_n_groups(self):
+        ''' vgprs per thread in n dimension '''
         return self.ctm.t_nr() * self.ctm.t_n1() * self.ctm.t_n0()
 
     def get_subgroups(self):
@@ -107,24 +110,6 @@ class ctrl_coalescing_store_t(object):
         transposed_thread_mapping.cluster_lengths = [trans_c_mr, trans_c_nr, trans_c_m1, trans_c_n1, trans_c_m0, trans_c_n0]
 
         return transposed_thread_mapping
-
-    # def get_group_m_stride(self):
-    #     ttm = self.get_transposed_thread_mapping()
-    #     assert ttm.t_m0() == 1
-    #     
-    #     g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
-    # 
-    #     group_m_stride_mr = 0
-    #     group_m_stride_m1 = 0
-    #     group_m_stride_m0 = 0
-    #     if g_mr != 1:
-    #         group_m_stride_mr = (self.ctm.t_mr() // g_mr) * self.ctm.n_m1()*self.ctm.n_m0()
-    #     if g_m1 != 1:
-    #         group_m_stride_m1 = (self.ctm.t_m1() // g_m1) * self.ctm.n_m0()
-    #     if g_m0 != 1:
-    #         group_m_stride_m0 = (self.ctm.t_m0() // g_m0)
-    # 
-    #     return group_m_stride_mr, group_m_stride_m1, group_m_stride_m0  # group_m_stride_m1 may always 1
 
     def get_thread_m_stride(self):
         ttm = self.get_transposed_thread_mapping()
@@ -426,3 +411,198 @@ class igemm_coalescing_store_t(mc_base_t):
                 if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"s_mov_b64 exec, -1")
         return self._get_deferred()
+
+class ctrl_coalescing_store_xdlops_t(object):
+    def __init__(self):
+        self.cxm = None # ctrl_xdlops_mapping_t
+        self.coalescing_groups = 1
+        self.block_size = 256
+        self.vector_store_size = 1
+        self.data_byte = 1
+        self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
+        self.gemm_m_m0_m1 = []
+
+    def adjust_optimal_coalescing_groups(self):
+        '''
+        if coalescing_groups is not multiply of t_m0, we will be very hard to calculate thread stride after load from LDS
+        this can help make easy index calculation, performance should be no impact
+        '''
+        # if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M1_M0:
+        #     cg = self.coalescing_groups
+        #     while cg % self.ctm.t_m0() != 0:
+        #         cg = cg * 2
+        #     assert cg <= self.get_length_m_groups()
+        #     self.coalescing_groups = cg
+        pass
+
+    def get_length_m_groups(self):
+        ''' agpr per thread in m dimension '''
+        num_agpr_per_issue = self.cxm.inst_mfma.num_a_c
+        return self.cxm.wave_repeat_m * self.cxm.wave_step_m * num_agpr_per_issue
+
+    def get_length_n_groups(self):
+        ''' agpr per thread in n dimension '''
+        return self.cxm.wave_repeat_n * self.cxm.wave_step_n * 1 # xdlops in n dimension always 1
+
+    def get_subgroups(self):
+        # num_m_group * num_n_group = num_group
+        l_mg = self.get_length_m_groups()
+        l_ng = self.get_length_n_groups()
+        num_m_groups = math.gcd(self.coalescing_groups, l_mg)
+        num_n_groups = math.gcd(self.coalescing_groups//num_m_groups, l_ng)
+        g_mr = math.gcd(num_m_groups, self.xtm.wave_repeat_m)
+        g_ms = math.gcd(num_m_groups//g_mr, self.xtm.wave_step_m)
+        g_nr = math.gcd(num_n_groups, self.xtm.wave_repeat_n)
+        g_ns = math.gcd(num_n_groups//g_nr, self.xtm.wave_step_n)
+        return g_mr, g_ms, g_nr, g_ns   # g_m1 always 1
+    
+    def get_transposed_thread_mapping(self):
+        # xdlops need transfer agpr to vgpr, then do LDS shuffle
+        # here we still use legacy thread mapping to describe
+        assert self.vector_store_size == 1
+
+        n_n_total = self.xtm.macro_tile_n
+        n_m_total = self.xtm.macro_tile_m
+        assert self.xtm.waves * AMRGPU_WAVE_SIZE % n_n_total == 0
+
+        trans_t_n0 = self.vector_store_size
+        trans_c_n0 = n_n_total // trans_t_n0
+        trans_t_m0 = 1
+        trans_c_m0 = self.block_size // trans_c_n0
+        trans_t_n1 = 1
+        trans_c_n1 = 1
+        trans_t_m1 = n_m_total // (trans_t_m0 * trans_c_m0)
+        trans_c_m1 = 1
+        trans_t_nr = 1
+        trans_c_nr = 1
+        trans_t_mr = 1
+        trans_c_mr = 1
+
+        transposed_thread_mapping = ctrl_thread_mapping_t()
+        transposed_thread_mapping.thread_lengths =  [trans_t_mr, trans_t_nr, trans_t_m1, trans_t_n1, trans_t_m0, trans_t_n0]
+        transposed_thread_mapping.cluster_lengths = [trans_c_mr, trans_c_nr, trans_c_m1, trans_c_n1, trans_c_m0, trans_c_n0]
+
+        return transposed_thread_mapping
+
+    # def get_group_m_stride(self):
+    #     ttm = self.get_transposed_thread_mapping()
+    #     assert ttm.t_m0() == 1
+    #     
+    #     g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
+    # 
+    #     group_m_stride_mr = 0
+    #     group_m_stride_m1 = 0
+    #     group_m_stride_m0 = 0
+    #     if g_mr != 1:
+    #         group_m_stride_mr = (self.ctm.t_mr() // g_mr) * self.ctm.n_m1()*self.ctm.n_m0()
+    #     if g_m1 != 1:
+    #         group_m_stride_m1 = (self.ctm.t_m1() // g_m1) * self.ctm.n_m0()
+    #     if g_m0 != 1:
+    #         group_m_stride_m0 = (self.ctm.t_m0() // g_m0)
+    # 
+    #     return group_m_stride_mr, group_m_stride_m1, group_m_stride_m0  # group_m_stride_m1 may always 1
+
+    def get_thread_m_stride(self):
+        ttm = self.get_transposed_thread_mapping()
+        assert ttm.t_m0() == 1
+        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
+        assert g_m1 == 1
+
+        # do some assert
+        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+            m_index_per_group = self.get_m_index_per_group()
+            thread_m_stride = g_m0 * ttm.n_m0()
+        else:
+            m_index_per_group = self.get_m_index_per_group_m1_m0()
+            thread_m_stride = -1
+        for ig in range(len(m_index_per_group)):
+            for ic in range(len(m_index_per_group[ig])):
+                _list = m_index_per_group[ig][ic]
+                for idx in range(len(_list) - 1):
+                    diff_m = _list[idx+1] - _list[idx]
+                    if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
+                    else:
+                        if thread_m_stride == -1:
+                            thread_m_stride = diff_m
+                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
+
+        return thread_m_stride
+
+    def get_num_dword_per_group(self):
+        return (self.ctm.t_mr()*self.ctm.t_nr()*self.ctm.t_m0()*self.ctm.t_n0()*self.ctm.t_m1()*self.ctm.t_n1()) // self.coalescing_groups
+
+    def get_sub_m0_offset(self, i_c_m0):
+        ttm = self.get_transposed_thread_mapping()
+        assert ttm.t_m0() == 1
+        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
+        assert g_m1 == 1
+        sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
+        return sub_m0_offset
+        #print(" i_c_m0 >> igemm_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
+
+    def get_m0_m1_index(self, m_index):
+        assert len(self.gemm_m_m0_m1) != 0
+        m0, m1 = self.gemm_m_m0_m1[0], self.gemm_m_m0_m1[1]
+        # print(f"m0:{m0}, m1:{m1}")
+        assert m_index < m0 * m1, f"m_index:{m_index} larger than gemm_m_m0_m1:{self.gemm_m_m0_m1}, please check"
+        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+            return m_index // m1, m_index % m1
+        else:
+            return m_index % m0, m_index // m0
+
+    def get_m_index_per_group(self):
+        num_dword_per_group = self.get_num_dword_per_group()
+        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
+        assert g_nr == 1 and g_n1 == 1 and g_n0 == 1
+        assert g_m1 == 1
+        l_mr = self.ctm.t_mr() // g_mr
+        l_m0 = self.ctm.t_m0() // g_m0
+        ttm = self.get_transposed_thread_mapping()
+        m_index_per_group = list()
+        for i_g_mr in range(g_mr):
+            for i_g_m0 in range(g_m0):
+                m_idx_start_per_group = i_g_mr * self.ctm.n_m0()*self.ctm.n_m1() + i_g_m0 * l_m0
+                # first, generate current group, m index
+                m_index = []
+                for t_mr in range(l_mr):
+                    for tid_along_m0 in range(self.ctm.c_m0()):
+                        for tid_along_m1 in range(self.ctm.c_m1()):
+                            m_idx_start_per_m0 = m_idx_start_per_group + tid_along_m1 * self.ctm.n_m0() + tid_along_m0 * self.ctm.t_m0()
+                            for t_m0 in range(l_m0):
+                                m_idx_start = m_idx_start_per_m0 + t_mr*self.ctm.n_m0()*self.ctm.n_m1() + t_m0
+                                m_index.append(m_idx_start)
+                assert len(m_index) == ttm.c_m0() * num_dword_per_group, f"{len(m_index)}, {ttm.c_m0()}, {num_dword_per_group}"
+                m_index.sort()
+                #print(f"xxxxx:{m_index}")
+                pixel_m_index = [None] * ttm.c_m0()
+                # second, record index according to current id
+                for i, m in enumerate(m_index):
+                    _icm0 = i % ttm.c_m0()
+                    if not pixel_m_index[_icm0]:
+                        pixel_m_index[_icm0] = list()
+                    pixel_m_index[_icm0].append(m)
+                m_index_per_group.append(pixel_m_index)
+        return m_index_per_group
+
+    def get_m_index_from_m1_m0(self, m_idx):
+        assert len(self.gemm_m_m0_m1) == 2
+        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+            return m_idx
+        n_m0, n_m1 = self.gemm_m_m0_m1[0], self.gemm_m_m0_m1[1]
+        i_m0 = m_idx % n_m0
+        i_m1 = m_idx // n_m0
+        return i_m0 * n_m1 + i_m1
+
+    def get_m_index_per_group_m1_m0(self):
+        m_index_per_group = copy.copy(self.get_m_index_per_group())
+        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+            return m_index_per_group
+        assert len(self.gemm_m_m0_m1) == 2
+        assert len(m_index_per_group) == self.coalescing_groups
+        for ig in range(len(m_index_per_group)):
+            for i_cm0 in range(len(m_index_per_group[ig])):
+                for i_t in range(len(m_index_per_group[ig][i_cm0])):
+                    m_index = m_index_per_group[ig][i_cm0][i_t]
+                    m_index_per_group[ig][i_cm0][i_t] = self.get_m_index_from_m1_m0(m_index)
+        return m_index_per_group

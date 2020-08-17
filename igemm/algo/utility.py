@@ -210,6 +210,25 @@ class macro_c_clear_t(mc_base_t):
                 self._emit("_v = _v + 1")
             self._emit(".endr")
 
+class macro_acc_c_clear_t(mc_base_t):
+    '''
+    gfx908 RAW harzard attention!
+    '''
+    def name(self):
+        return '.v_clear_acc_c'
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def __call__(self, a, num):
+        return '{} {}, {}'.format(self.name(), a, num)
+    def emit(self):
+        with self._emit_macro_indented(".macro {} a, num".format(self.name())):
+            self._emit("_a = \\a")
+            self._emit(".rept \\num")
+            with self._indent_context():
+                self._emit("v_accvgpr_write_b32 a[_a], 0")
+                self._emit("_a = _a + 1")
+            self._emit(".endr")
+
 class gpr_sequencer_t(object):
     def __init__(self, cnt = 0):
         self.cnt = cnt
