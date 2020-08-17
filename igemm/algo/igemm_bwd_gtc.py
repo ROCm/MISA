@@ -725,10 +725,12 @@ class igemm_bwd_gtc_t(mc_base_t):
     class kernel_vgpr_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
+            is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
             self.outer               = outer
-            self.v_c                 = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
-            v_c_num                  = vseq()
+            if is_vgpr_acc_c:
+                self.v_c             = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
+                v_c_num              = vseq()
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
             self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
@@ -769,18 +771,47 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.v_move_slice_k_idsy = sym_t("v_move_slice_k_idsy", self.v_gtc_dslice_iy.value)
                 self.v_move_slice_k_idsx = sym_t("v_move_slice_k_idsx", self.v_gtc_dslice_ix.value)
 
-            self.v_gtc_ic0       = sym_t("v_gtc_ic0"      ,v_c_num - 1)
-            self.v_gtc_ic1       = sym_t("v_gtc_ic1"      ,v_c_num - 2)
-            self.v_gtc_ik0       = sym_t("v_gtc_ik0"      ,v_c_num - 3)
-            self.v_gtc_ik1e      = sym_t("v_gtc_ik1e"     ,v_c_num - 4)
+            self.v_gtc_ic0       = sym_t("v_gtc_ic0"      ,v_c_num - 1  if is_vgpr_acc_c else vseq(1))
+            self.v_gtc_ic1       = sym_t("v_gtc_ic1"      ,v_c_num - 2  if is_vgpr_acc_c else vseq(1))
+            self.v_gtc_ik0       = sym_t("v_gtc_ik0"      ,v_c_num - 3  if is_vgpr_acc_c else vseq(1))
+            self.v_gtc_ik1e      = sym_t("v_gtc_ik1e"     ,v_c_num - 4  if is_vgpr_acc_c else vseq(1))
 
-            self.v_gtc_in0       = sym_t("v_gtc_in0"      ,v_c_num - 8)
-            self.v_gtc_in1b      = sym_t("v_gtc_in1b"     ,v_c_num - 9)
-            self.v_gtc_in1       = sym_t("v_gtc_in1"      ,v_c_num - 10)
-            self.v_gemm_in       = sym_t("v_gemm_in"      ,v_c_num - 11)
-            self.v_gemm_im       = sym_t("v_gemm_im"      ,v_c_num - 12)
+            self.v_gtc_in0       = sym_t("v_gtc_in0"      ,v_c_num - 8  if is_vgpr_acc_c else vseq(1))
+            self.v_gtc_in1b      = sym_t("v_gtc_in1b"     ,v_c_num - 9  if is_vgpr_acc_c else vseq(1))
+            self.v_gtc_in1       = sym_t("v_gtc_in1"      ,v_c_num - 10 if is_vgpr_acc_c else vseq(1))
+            self.v_gemm_in       = sym_t("v_gemm_in"      ,v_c_num - 11 if is_vgpr_acc_c else vseq(1))
+            self.v_gemm_im       = sym_t("v_gemm_im"      ,v_c_num - 12 if is_vgpr_acc_c else vseq(1))
 
-            if v_c_num < 16:
+            if is_vgpr_acc_c:
+                if v_c_num < 16:
+                    self.v_in_in0        = sym_t("v_in_in0"       ,vseq(1))
+                    self.v_in_in1b       = sym_t("v_in_in1b"      ,vseq(1))
+                    self.v_in_in1        = sym_t("v_in_in1"       ,vseq(1))
+                    self.v_in_ihi        = sym_t("v_in_ihi"       ,vseq(1))
+                    self.v_in_iwi        = sym_t("v_in_iwi"       ,vseq(1))
+                    if outer.tunable.nxe != 0:
+                        self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,vseq(1))
+                        self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,vseq(1))
+                        self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
+                        self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
+                    else:
+                        self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
+                        self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
+                else:
+                    self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 13)
+                    self.v_in_in1b       = sym_t("v_in_in1b"      ,v_c_num - 14)
+                    self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 15)
+                    self.v_in_ihi        = sym_t("v_in_ihi"       ,v_c_num - 16)
+                    self.v_in_iwi        = sym_t("v_in_iwi"       ,v_c_num - 17)
+                    if outer.tunable.nxe != 0:
+                        self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,v_c_num - 18)
+                        self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,v_c_num - 19)
+                        self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 20)
+                        self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 21)
+                    else:
+                        self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 18)
+                        self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 19)
+            else:
                 self.v_in_in0        = sym_t("v_in_in0"       ,vseq(1))
                 self.v_in_in1b       = sym_t("v_in_in1b"      ,vseq(1))
                 self.v_in_in1        = sym_t("v_in_in1"       ,vseq(1))
@@ -794,20 +825,6 @@ class igemm_bwd_gtc_t(mc_base_t):
                 else:
                     self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
                     self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
-            else:
-                self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 13)
-                self.v_in_in1b       = sym_t("v_in_in1b"      ,v_c_num - 14)
-                self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 15)
-                self.v_in_ihi        = sym_t("v_in_ihi"       ,v_c_num - 16)
-                self.v_in_iwi        = sym_t("v_in_iwi"       ,v_c_num - 17)
-                if outer.tunable.nxe != 0:
-                    self.v_in_dslice_ih  = sym_t("v_in_dslice_ih" ,v_c_num - 18)
-                    self.v_in_dslice_iw  = sym_t("v_in_dslice_iw" ,v_c_num - 19)
-                    self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 20)
-                    self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 21)
-                else:
-                    self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 18)
-                    self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 19)
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
             self.v_end           = sym_t("v_end"          ,vseq())
@@ -820,6 +837,20 @@ class igemm_bwd_gtc_t(mc_base_t):
                 if k.startswith('v_'):
                     self._emit(v.declare())
 
+    class kernel_agpr_t(mc_base_t):
+        def __init__(self, mc, outer):
+            mc_base_t.__init__(self, mc)
+            assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
+            self.outer         = outer
+            self.a_c           = sym_t("a_c",          outer.tunable.num_agpr_accumulate_c)
+
+        def get_count(self):
+            return self.k_end.value
+
+        def emit(self):
+            for k, v in self.__dict__.items():
+                if k.startswith('k_'):
+                    self._emit(v.declare())
 
     def get_thread_lengths(self):
         t_ta = self.tunable.tensor_a_thread_lengths

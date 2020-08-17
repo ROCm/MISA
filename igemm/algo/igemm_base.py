@@ -217,7 +217,9 @@ class igemm_gtc_tunable_parameter_t(object):
         
         elif self.tunable_type == IGEMM_GTC_TUNABLE_TYPE_WAVE_WISE_GEMM:
             # register for a,b,c buffer
-            # self.num_vgpr_accumulate_c              = 0
+            xdlops_mapping                          = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
+            self.num_agpr_accumulate_c              = xdlops_mapping.repeat_m * xdlops_mapping.repeat_n * xdlops_mapping.step_m * xdlops_mapping.step_n * xdlops_mapping.inst_mfma.num_a_c
+            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
             self.num_vgpr_accumulate_a              = self.gemm_m_wave_step * self.gemm_m_wave_repeat
             self.num_vgpr_accumulate_b              = self.gemm_n_wave_step * self.gemm_n_wave_repeat
 
