@@ -52,6 +52,7 @@ class inst_mfma_t(object):
         self.num_v_b = num_v_b
         self.num_a_c = num_a_c
         self.num_blocks = num_blocks
+        # self.num_a_c_per_lanegroup = 4      # all xdlops instruction output agpr is 4 agpr per lanegroup.
         #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
 
     def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
@@ -61,6 +62,13 @@ class inst_mfma_t(object):
         with self._deferred_context():
             self._emit(f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] cbsz:{cbsz} abid:{abid} blgp:{blgp}")
         return self._get_deferred()
+    
+    # def thread_layout(self):
+    #     ''' per wave, thread layout '''
+    #     m_agpr_per_lanegroup = 4         # 
+    #     m_lanegroups_per_block = self.m // m_agpr_per_lanegroup
+    #     m_blocks = 
+
 
 #                                     m,  n,  k,  precision,           cycle, v_a, v_b, a_c, #block
 v_mfma_f32_4x4x1f32     = inst_mfma_t(4,  4,  1,  AMDGPU_PRECISION_FP32,   8,   1,   1,  4,    16)

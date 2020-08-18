@@ -171,7 +171,7 @@ class ctrl_coalescing_store_t(object):
         m_index_per_group = list()
         for i_g_mr in range(g_mr):
             for i_g_m0 in range(g_m0):
-                m_idx_start_per_group = i_g_mr * self.ctm.n_m0()*self.ctm.n_m1() + i_g_m0 * l_m0
+                m_idx_start_per_group = i_g_mr * l_mr * self.ctm.n_m0()*self.ctm.n_m1() + i_g_m0 * l_m0
                 # first, generate current group, m index
                 m_index = []
                 for t_mr in range(l_mr):
@@ -437,33 +437,47 @@ class ctrl_coalescing_store_xdlops_t(object):
 
     def get_length_m_groups(self):
         ''' agpr per thread in m dimension '''
-        num_agpr_per_issue = self.cxm.inst_mfma.num_a_c
-        return self.cxm.wave_repeat_m * self.cxm.wave_step_m * num_agpr_per_issue
+        return self.cxm.wave_repeat_m * self.cxm.wave_step_m * self.cxm.lanegroup_m_per_wave() * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_thread()
 
     def get_length_n_groups(self):
         ''' agpr per thread in n dimension '''
-        return self.cxm.wave_repeat_n * self.cxm.wave_step_n * 1 # xdlops in n dimension always 1
+        return self.cxm.wave_repeat_n * self.cxm.wave_step_n * self.cxm.lanegroup_n_per_wave() * self.cxm.lanegroup_n_per_block() * self.cxm.lanegroup_n_per_thread() # xdlops in n dimension always 1
 
     def get_subgroups(self):
-        # num_m_group * num_n_group = num_group
+        def split_ndim_length(total_length, dim_lengths):
+            assert type(dim_lengths) in (list, tuple)
+            length = total_length
+            split_length = list()
+            for d in dim_lengths:
+                s = math.gcd(d, length)
+                length = length // s
+                split_length.append(s)
+            return tuple(split_length)
+
+        assert self.get_length_m_groups() % self.coalescing_groups == 0, \
+            f"if coalescing groups:{self.coalescing_groups} larger than single xdlops agpr number along m:{self.get_length_m_groups()}, can not do this split"
         l_mg = self.get_length_m_groups()
         l_ng = self.get_length_n_groups()
         num_m_groups = math.gcd(self.coalescing_groups, l_mg)
         num_n_groups = math.gcd(self.coalescing_groups//num_m_groups, l_ng)
-        g_mr = math.gcd(num_m_groups, self.xtm.wave_repeat_m)
-        g_ms = math.gcd(num_m_groups//g_mr, self.xtm.wave_step_m)
-        g_nr = math.gcd(num_n_groups, self.xtm.wave_repeat_n)
-        g_ns = math.gcd(num_n_groups//g_nr, self.xtm.wave_step_n)
-        return g_mr, g_ms, g_nr, g_ns   # g_m1 always 1
-    
+
+        assert num_n_groups == 1, "if have multiple groups along n dimension, coalesing is meaningless"
+
+        # for lanegroup_per_cluster, since within thread will not contain this, so must specify this to 1
+        split_m_lengths = (self.cxm.wave_repeat_m, self.cxm.wave_step_m, \
+                 self.cxm.lanegroup_m_per_wave(), self.cxm.lanegroup_m_per_block(), self.cxm.lanegroup_m_per_thread())
+        g_mr, g_ms, g_mw, g_mb, g_mt = split_ndim_length(num_m_groups, split_m_lengths)
+
+        return g_mr, g_ms, g_mw, g_mb, g_mt # groups in m_repeat, m_step, lanegroup_m_per_wave, lanegroup_m_per_block, lanegroup_m_per_thread
+
     def get_transposed_thread_mapping(self):
         # xdlops need transfer agpr to vgpr, then do LDS shuffle
         # here we still use legacy thread mapping to describe
         assert self.vector_store_size == 1
 
-        n_n_total = self.xtm.macro_tile_n
-        n_m_total = self.xtm.macro_tile_m
-        assert self.xtm.waves * AMRGPU_WAVE_SIZE % n_n_total == 0
+        n_n_total = self.cxm.macro_tile_n
+        n_m_total = self.cxm.macro_tile_m
+        assert self.cxm.waves * AMDGPU_WAVE_SIZE % n_n_total == 0, f"waves:{self.cxm.waves}, n_n_total:{n_n_total}"
 
         trans_t_n0 = self.vector_store_size
         trans_c_n0 = n_n_total // trans_t_n0
@@ -484,29 +498,10 @@ class ctrl_coalescing_store_xdlops_t(object):
 
         return transposed_thread_mapping
 
-    # def get_group_m_stride(self):
-    #     ttm = self.get_transposed_thread_mapping()
-    #     assert ttm.t_m0() == 1
-    #     
-    #     g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
-    # 
-    #     group_m_stride_mr = 0
-    #     group_m_stride_m1 = 0
-    #     group_m_stride_m0 = 0
-    #     if g_mr != 1:
-    #         group_m_stride_mr = (self.ctm.t_mr() // g_mr) * self.ctm.n_m1()*self.ctm.n_m0()
-    #     if g_m1 != 1:
-    #         group_m_stride_m1 = (self.ctm.t_m1() // g_m1) * self.ctm.n_m0()
-    #     if g_m0 != 1:
-    #         group_m_stride_m0 = (self.ctm.t_m0() // g_m0)
-    # 
-    #     return group_m_stride_mr, group_m_stride_m1, group_m_stride_m0  # group_m_stride_m1 may always 1
-
     def get_thread_m_stride(self):
         ttm = self.get_transposed_thread_mapping()
         assert ttm.t_m0() == 1
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
-        assert g_m1 == 1
+        g_mr, g_ms, g_m0, g_nr, g_ns, g_n0 = self.get_subgroups()
 
         # do some assert
         if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
@@ -530,12 +525,14 @@ class ctrl_coalescing_store_xdlops_t(object):
         return thread_m_stride
 
     def get_num_dword_per_group(self):
-        return (self.ctm.t_mr()*self.ctm.t_nr()*self.ctm.t_m0()*self.ctm.t_n0()*self.ctm.t_m1()*self.ctm.t_n1()) // self.coalescing_groups
+        assert self.cxm.total_acc_c() % self.coalescing_groups == 0, \
+                f"total_acc_c:{self.cxm.total_acc_c()}, coalescing_groups:{self.coalescing_groups}, m_groups:{self.get_length_m_groups()}, inst:{self.cxm.inst_mfma.m}x{self.cxm.inst_mfma.n}x{self.cxm.inst_mfma.k}"
+        return self.cxm.total_acc_c() // self.coalescing_groups
 
     def get_sub_m0_offset(self, i_c_m0):
         ttm = self.get_transposed_thread_mapping()
         assert ttm.t_m0() == 1
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
+        g_mr, g_ms, g_m0, g_nr, g_ns, g_n0 = self.get_subgroups()
         assert g_m1 == 1
         sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
         return sub_m0_offset
@@ -552,37 +549,65 @@ class ctrl_coalescing_store_xdlops_t(object):
             return m_index % m0, m_index // m0
 
     def get_m_index_per_group(self):
+        '''
+        get m index after LDS shuffle
+        '''
         num_dword_per_group = self.get_num_dword_per_group()
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.get_subgroups()
-        assert g_nr == 1 and g_n1 == 1 and g_n0 == 1
-        assert g_m1 == 1
-        l_mr = self.ctm.t_mr() // g_mr
-        l_m0 = self.ctm.t_m0() // g_m0
+        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+        # self.cxm.wave_repeat_m, self.cxm.wave_step_m, self.cxm.lanegroup_m_per_wave(), self.cxm.lanegroup_m_per_block(), self.cxm.lanegroup_m_per_thread()
+
+        l_mr = self.cxm.wave_repeat_m // g_mr
+        l_ms = self.cxm.wave_step_m // g_ms
+        l_mw = self.cxm.lanegroup_m_per_wave() // g_mw
+        l_mb = self.cxm.lanegroup_m_per_block() // g_mb
+        l_mt = self.cxm.lanegroup_m_per_thread() // g_mt
+
+        # print(f"mr:{g_mr}x{l_mr}x{self.cxm.wave_repeat_m}, ms:{g_ms}x{l_ms}x{self.cxm.wave_step_m}, mw:{g_mw}x{l_mw}x{self.cxm.lanegroup_m_per_wave()}, mb:{g_mb}x{l_mb}x{self.cxm.lanegroup_m_per_block()}, mt:{g_mt}x{l_mt}x{self.cxm.lanegroup_m_per_thread()}")
+
         ttm = self.get_transposed_thread_mapping()
         m_index_per_group = list()
+        m_index_total = list()
         for i_g_mr in range(g_mr):
-            for i_g_m0 in range(g_m0):
-                m_idx_start_per_group = i_g_mr * self.ctm.n_m0()*self.ctm.n_m1() + i_g_m0 * l_m0
-                # first, generate current group, m index
-                m_index = []
-                for t_mr in range(l_mr):
-                    for tid_along_m0 in range(self.ctm.c_m0()):
-                        for tid_along_m1 in range(self.ctm.c_m1()):
-                            m_idx_start_per_m0 = m_idx_start_per_group + tid_along_m1 * self.ctm.n_m0() + tid_along_m0 * self.ctm.t_m0()
-                            for t_m0 in range(l_m0):
-                                m_idx_start = m_idx_start_per_m0 + t_mr*self.ctm.n_m0()*self.ctm.n_m1() + t_m0
-                                m_index.append(m_idx_start)
-                assert len(m_index) == ttm.c_m0() * num_dword_per_group, f"{len(m_index)}, {ttm.c_m0()}, {num_dword_per_group}"
-                m_index.sort()
-                #print(f"xxxxx:{m_index}")
-                pixel_m_index = [None] * ttm.c_m0()
-                # second, record index according to current id
-                for i, m in enumerate(m_index):
-                    _icm0 = i % ttm.c_m0()
-                    if not pixel_m_index[_icm0]:
-                        pixel_m_index[_icm0] = list()
-                    pixel_m_index[_icm0].append(m)
-                m_index_per_group.append(pixel_m_index)
+            for i_g_ms in range(g_ms):
+                for i_g_mw in range(g_mw):
+                    for i_g_mb in range(g_mb):
+                        for i_g_mt in range(g_mt):
+                            m_idx_start_per_group = i_g_mr * l_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+                                            i_g_ms * l_ms * self.cxm.wave_tile_m + \
+                                            i_g_mw * l_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                                            i_g_mb * l_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                                            i_g_mt * l_mt
+                            # print(f"m_idx_start_per_group:{m_idx_start_per_group}")
+                            m_index = []
+                            for t_along_waves_per_m in range(self.cxm.waves_per_m()):
+                                for t_along_block_m_per_lanegroup in range(self.cxm.block_m_per_lanegroup()):
+                                    for t_along_lanegroup_m_per_cluster in range(self.cxm.lanegroup_m_per_cluster()):
+                                        m_idx_start = m_idx_start_per_group + t_along_waves_per_m * self.cxm.wave_step_m * self.cxm.wave_tile_m + \
+                                                        t_along_block_m_per_lanegroup * self.cxm.lanegroup_m_per_thread() * self.cxm.lanegroup_m_per_cluster() +\
+                                                        t_along_lanegroup_m_per_cluster * self.cxm.lanegroup_m_per_thread()
+                                        for i_mr in range(l_mr):
+                                            for i_ms in range(l_ms):
+                                                for i_mw in range(l_mw):
+                                                    for i_mb in range(l_mb):
+                                                        for i_mt in range(l_mt):
+                                                            m_idx_current = m_idx_start + i_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+                                                                    i_ms * self.cxm.wave_tile_m + \
+                                                                    i_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                                                                    i_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                                                                    i_mt
+                                                            m_index.append(m_idx_current)
+                            m_index.sort()
+                            m_index_total.extend(m_index)
+                            pixel_m_index = [None] * ttm.c_m0()
+                            for i, m in enumerate(m_index):
+                                _icm0 = i % ttm.c_m0()
+                                if not pixel_m_index[_icm0]:
+                                    pixel_m_index[_icm0] = list()
+                                pixel_m_index[_icm0].append(m)
+                            m_index_per_group.append(pixel_m_index)
+        m_index_total.sort()
+        # print(m_index_total)
+        assert m_index_total == [xx for xx in range(self.cxm.macro_tile_m)], f"len:{len(m_index_total)}, {m_index_total}"
         return m_index_per_group
 
     def get_m_index_from_m1_m0(self, m_idx):

@@ -28,6 +28,7 @@
 from ..codegen import *
 from .igemm_base import *
 from .mfma_main_loop import *
+import math
 
 class ctrl_xdlops_mapping_t(object):
     def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
@@ -44,15 +45,15 @@ class ctrl_xdlops_mapping_t(object):
 
     def composed_wave_tile_m(self):
         return self.wave_tile_m * self.wave_step_m
-    
+
     def composed_wave_tile_n(self):
         return self.wave_tile_n * self.wave_step_n
 
-    def composed_waves_per_m(self):
+    def waves_per_m(self):
         ''' attention! not count repeat'''
         return self.macro_tile_m // (self.wave_repeat_m * self.wave_tile_m * self.wave_step_m)
 
-    def composed_waves_per_n(self):
+    def waves_per_n(self):
         ''' attention! not count repeat'''
         return self.macro_tile_n // (self.wave_repeat_n * self.wave_tile_n * self.wave_step_n)
 
@@ -61,6 +62,72 @@ class ctrl_xdlops_mapping_t(object):
 
     def block_size(self):
         return self.waves * 64 # wave size 64
+
+    def lanegroup_validate(self):
+        assert self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * \
+                self.lanegroup_m_per_thread() * self.lanegroup_m_per_block() * self.lanegroup_m_per_wave() \
+                == self.inst_mfma.num_a_c
+    # lanegroup layout for a single xdlops issue
+    # each lanegroup is a 4x64 matrix, and expand into whole block, then wave
+    # hence we group xdlops layout into 4 levels: per_thread->per_cluster->per_block->per_wave
+    #
+    def block_m_per_wave(self):
+        assert self.wave_tile_m % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) == 0
+        assert self.inst_mfma.m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()
+        return self.wave_tile_m // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) 
+
+    def block_n_per_wave(self):
+        assert self.wave_tile_n % (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()) == 0
+        assert self.inst_mfma.n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()
+        return self.wave_tile_n // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block())
+
+    def block_m_per_lanegroup(self):
+        assert self.block_m_per_wave() % self.lanegroup_m_per_wave() == 0
+        return self.block_m_per_wave() // self.lanegroup_m_per_wave()
+
+    def block_n_per_lanegroup(self):
+        assert self.block_n_per_wave() % self.lanegroup_n_per_wave() == 0
+        return self.block_n_per_wave() // self.lanegroup_n_per_wave()
+
+    def lanegroup_m_per_thread(self):
+        ''' for xdlops, always continuous 4 agpr for a c matrix, then interleave with other lanegroup '''
+        return 4
+
+    def lanegroup_n_per_thread(self):
+        ''' for xdlops, always 1 column per lanegroup'''
+        return 1
+
+    def lanegroup_m_per_cluster(self):
+        ''' for xdlops, always m per block as clusters. perthread agpr do not contain this'''
+        return math.gcd(self.inst_mfma.m//self.lanegroup_m_per_thread(), AMDGPU_WAVE_SIZE // self.inst_mfma.n )
+
+    def lanegroup_n_per_cluster(self):
+        ''' for xdlops, always n per block as clusters. perthread agpr do not contain this'''
+        return self.inst_mfma.n
+
+    def lanegroup_m_per_block(self):
+        assert self.inst_mfma.m % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster()) == 0
+        return self.inst_mfma.m // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster())
+
+    def lanegroup_n_per_block(self):
+        return 1
+
+    def lanegroup_m_per_wave(self):
+        assert self.inst_mfma.num_a_c % (self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()) == 0
+        return self.inst_mfma.num_a_c // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * self.lanegroup_m_per_thread() * self.lanegroup_m_per_block())
+
+    def lanegroup_n_per_wave(self):
+        assert self.inst_mfma.num_a_c % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()) == 0
+        return math.gcd(self.block_n_per_wave(), self.inst_mfma.num_a_c // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()))
+
+    def serialize(self):
+        self.lanegroup_validate()
+        s = f"mt_m:{self.macro_tile_m}, mt_n:{self.macro_tile_n}, wt_m:{self.wave_tile_m}, wt_n:{self.wave_tile_n}, ws:{self.waves}, r_m:{self.wave_repeat_m}, r_n:{self.wave_repeat_n}, s_m:{self.wave_step_m}, s_n:{self.wave_step_n} | "
+        s += f"{self.inst_mfma.m}x{self.inst_mfma.n}x{self.inst_mfma.k}, " + \
+                f"lanegroup_m_tcbw:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}x{self.lanegroup_m_per_block()}x{self.lanegroup_m_per_wave()}, " + \
+                f"lanegroup_n_tcbw:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}x{self.lanegroup_n_per_block()}x{self.lanegroup_n_per_wave()}"
+        #print(s)
+        return s
 
 #                             mt_m,mt_n,wt_m,wt_n, ws,r_m,r_n,s_m,s_n, inst_mfma
 ctrl_xdlops_mapping_fp32 = [
@@ -85,6 +152,7 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 256, 4  ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 4  , 256,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         # 2waves, block_size=128
@@ -132,16 +200,16 @@ class igemm_xdlops_mapping_t(mc_base_t):
     def __call__(self, v_gemm_in, v_gemm_im, v_wave_id, v_lane_id, v_tmp2):
         ctrl = self.ctrl
         with self._deferred_context():
-            if ctrl.composed_waves_per_n() != 1:
+            if ctrl.waves_per_n() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp2}], {ctrl.wave_tile_n - 1}, v[{v_lane_id}]")
-                self._emit(f"v_and_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.composed_waves_per_n())}, v[{v_wave_id}]")
+                self._emit(f"v_and_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.waves_per_n())}, v[{v_wave_id}]")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp2}+1], {igemm_log2(ctrl.composed_wave_tile_n())}, v[{v_tmp2}]")
             else:
                 self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.wave_tile_n - 1}, v[{v_lane_id}]")
 
-            if ctrl.composed_waves_per_m() != 1:
+            if ctrl.waves_per_m() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp2}], {ctrl.wave_tile_m - 1}, v[{v_lane_id}]")
-                self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.composed_waves_per_n())}, v[{v_wave_id}] ")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.waves_per_n())}, v[{v_wave_id}] ")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp2}+1], {igemm_log2(ctrl.composed_wave_tile_m())}, v[{v_tmp2}]")
             else:
                 self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.wave_tile_m - 1}, v[{v_lane_id}]")
