@@ -676,7 +676,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         '''
         for ic in range(ttm.c_m0()):
             sub_m = 0
-            nic = ic
+            nic = ic            # when this value become zero, means we no need to go further dimension
             if nic != 0:
                 x_mc = nic % n_mc; nic = nic // n_mc
                 if nic != 0:
@@ -697,7 +697,7 @@ class ctrl_coalescing_store_xdlops_t(object):
                         sub_m = sub_m * (g_mb * l_mb) + x_mb
                     sub_m = sub_m * n_ml + x_ml
                 sub_m = sub_m * n_mc + x_mc
-                sub_m = sub_m * 4
+                sub_m = sub_m * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
             sub_m_index[ic] = sub_m
         return sub_m_index
 
