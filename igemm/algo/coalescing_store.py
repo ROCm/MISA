@@ -627,7 +627,80 @@ class ctrl_coalescing_store_xdlops_t(object):
         m_index_total.sort()
         # print(m_index_total)
         assert m_index_total == [xx for xx in range(self.cxm.macro_tile_m)], f"len:{len(m_index_total)}, {m_index_total}"
+
+        # do some validation
+        for ig in range(len(m_index_per_group)):
+            if len(m_index_per_group[ig]) == 1:
+                continue
+            for ic in range(len(m_index_per_group[ig]) - 1):
+                c_curr_list = m_index_per_group[ig][ic]
+                c_next_list = m_index_per_group[ig][ic + 1]
+                assert len(c_curr_list) == len(c_next_list)
+                diff = c_next_list[0] - c_curr_list[0]
+                for i in range(1, len(c_curr_list)):
+                    diff_i = c_next_list[i] - c_curr_list[i]
+                    assert diff == diff_i, "stride between different transpose m0 not the same, should not happen"
+
         return m_index_per_group
+
+    def get_co_sub_m_index(self):
+        ttm = self.get_transposed_thread_mapping()
+        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+        l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
+        n_mc = self.cxm.lanegroup_m_per_cluster()       # this iteration is among different thread
+        n_ml = self.cxm.block_m_per_lanegroup()         # this iteration is among different thread
+        n_mv = self.cxm.waves_per_m()                   # this iteration is among different thread
+        #print("<+> g_mr:{}, g_ms:{}, g_mw:{}, g_mb:{}, g_mt:{}  ==  l_mr:{}, l_ms:{}, l_mw:{}, l_mb:{}, l_mt:{} | n_mc:{}, n_ml:{}, n_mv:{}".format(
+        #        g_mr, g_ms, g_mw, g_mb, g_mt, l_mr, l_ms, l_mw, l_mb, l_mt, n_mc, n_ml, n_mv))
+        sub_m_index = [0] * ttm.c_m0()
+        # for ic in range(ttm.c_m0()):
+        #     nic = ic
+        #     x_mc = nic % n_mc; nic = nic // n_mc
+        #     x_ml = nic % n_ml; nic = nic // n_ml
+        #     x_mb = nic % l_mb; nic = nic // l_mb
+        #     x_mw = nic % l_mw; nic = nic // l_mw
+        #     x_ms = nic % l_ms; nic = nic // l_ms
+        #     x_mv = nic % n_mv; nic = nic // n_mv
+        #     x_mr = nic % l_mr
+        #     # print("    +-> x_mc:{}, x_ml:{}, x_mb:{}, x_mw:{}, x_ms:{}, x_mv:{}, x_mr:{}".format(x_mc, x_ml, x_mb, x_mw, x_ms, x_mv, x_mr))
+        #     sub_m = x_mr * n_mv + x_mv
+        #     sub_m = sub_m * (g_ms * l_ms) + x_ms
+        #     sub_m = sub_m * (l_mw * g_mw) + x_mw
+        #     sub_m = sub_m * (g_mb * l_mb) + x_mb
+        #     sub_m = sub_m * n_ml + x_ml
+        #     sub_m = sub_m * n_mc + x_mc
+        #     sub_m = sub_m * 4
+        #     sub_m_index[ic] = sub_m
+        '''
+        above for loop is simple for loop, below is a instruction-save approach to do this multi-dim split
+        '''
+        for ic in range(ttm.c_m0()):
+            sub_m = 0
+            nic = ic
+            if nic != 0:
+                x_mc = nic % n_mc; nic = nic // n_mc
+                if nic != 0:
+                    x_ml = nic % n_ml; nic = nic // n_ml
+                    if nic != 0:
+                        x_mb = nic % l_mb; nic = nic // l_mb
+                        if nic != 0:
+                            x_mw = nic % l_mw; nic = nic // l_mw
+                            if nic != 0:
+                                x_ms = nic % l_ms; nic = nic // l_ms
+                                if nic != 0:
+                                    x_mv = nic % n_mv; nic = nic // n_mv
+                                    x_mr = nic % l_mr
+                                    # print("    +-> x_mc:{}, x_ml:{}, x_mb:{}, x_mw:{}, x_ms:{}, x_mv:{}, x_mr:{}".format(x_mc, x_ml, x_mb, x_mw, x_ms, x_mv, x_mr))
+                                    sub_m = x_mr * n_mv + x_mv
+                                sub_m = sub_m * (g_ms * l_ms) + x_ms
+                            sub_m = sub_m * (l_mw * g_mw) + x_mw
+                        sub_m = sub_m * (g_mb * l_mb) + x_mb
+                    sub_m = sub_m * n_ml + x_ml
+                sub_m = sub_m * n_mc + x_mc
+                sub_m = sub_m * 4
+            sub_m_index[ic] = sub_m
+        return sub_m_index
+
 
     def get_m_index_from_m1_m0(self, m_idx):
         assert len(self.gemm_m_m0_m1) == 2
@@ -667,7 +740,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
             self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity while store")
-            gemm_m_shrink = g_mr * g_ms * g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+            gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
             if gemm_m_shrink != 1:
                 self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp2}+1]")
@@ -713,7 +786,6 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tmp2}]")
         return self._get_deferred()
-
 
     def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
         # if no need s_out_offset, set to integer 0

@@ -146,10 +146,54 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
 
             m_index_per_group       = ctrl.get_m_index_per_group()
             m_index_per_group_m1_m0 = ctrl.get_m_index_per_group_m1_m0()
+
+            # def get_co_sub_m():
+            #     ttm = ctrl.get_transposed_thread_mapping()
+            #     g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
+            #     l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
+            #     n_mc = ctrl.cxm.lanegroup_m_per_cluster()       # this iteration is among different thread
+            #     n_ml = ctrl.cxm.block_m_per_lanegroup()         # this iteration is among different thread
+            #     n_mv = ctrl.cxm.waves_per_m()                   # this iteration is among different thread
+            #     #print("<+> g_mr:{}, g_ms:{}, g_mw:{}, g_mb:{}, g_mt:{}  ==  l_mr:{}, l_ms:{}, l_mw:{}, l_mb:{}, l_mt:{} | n_mc:{}, n_ml:{}, n_mv:{}".format(
+            #     #        g_mr, g_ms, g_mw, g_mb, g_mt, l_mr, l_ms, l_mw, l_mb, l_mt, n_mc, n_ml, n_mv))
+            #     sub_m_index = [0] * ttm.c_m0()
+            #     for ic in range(ttm.c_m0()):
+            #         nic = ic
+            #         x_mc = nic % n_mc; nic = nic // n_mc
+            #         x_ml = nic % n_ml; nic = nic // n_ml
+            #         x_mb = nic % l_mb; nic = nic // l_mb
+            #         x_mw = nic % l_mw; nic = nic // l_mw
+            #         x_ms = nic % l_ms; nic = nic // l_ms
+            #         x_mv = nic % n_mv; nic = nic // n_mv
+            #         x_mr = nic % l_mr
+            #         # print("    +-> x_mc:{}, x_ml:{}, x_mb:{}, x_mw:{}, x_ms:{}, x_mv:{}, x_mr:{}".format(x_mc, x_ml, x_mb, x_mw, x_ms, x_mv, x_mr))
+            #         sub_m = x_mr * n_mv + x_mv
+            #         sub_m = sub_m * (g_ms * l_ms) + x_ms
+            #         sub_m = sub_m * (l_mw * g_mw) + x_mw
+            #         sub_m = sub_m * (g_mb * l_mb) + x_mb
+            #         sub_m = sub_m * n_ml + x_ml
+            #         sub_m = sub_m * n_mc + x_mc
+            #         sub_m = sub_m * 4
+            #         sub_m_index[ic] = sub_m
+            #     return sub_m_index
+
+            def get_sliced_sub_m_list():
+                # from m_index_per_group[0]
+                sliced_sub_m_list = list()
+                m_start_index = 0
+                for ic in range(len(m_index_per_group[0])):
+                    sliced_sub_m_list.append(m_index_per_group[0][ic][m_start_index])
+                return sliced_sub_m_list
+
+            print(f"<sub_m_index>:{ctrl.get_co_sub_m_index()}")
             for ig in range(len(m_index_per_group)):
                 for ic in range(len(m_index_per_group[ig])):
                     print(f"ig:{ig} ic:{ic}, m0_m1: {m_index_per_group[ig][ic]}")
                     print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group[ig][ic]))
+
+            # assert co_sub_m along returned m_index_per_group[0], aka first group.
+            assert ctrl.get_co_sub_m_index() == get_sliced_sub_m_list()
+
             print("")
             for ig in range(len(m_index_per_group)):
                 for ic in range(len(m_index_per_group[ig])):
