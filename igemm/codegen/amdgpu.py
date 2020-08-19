@@ -38,6 +38,8 @@ AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
 
 AMDGPU_WAVE_SIZE        = 64
+AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M = 4
+AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_N = 64
 
 class _dict_with_default_t(object):
     def __init__(self, d):

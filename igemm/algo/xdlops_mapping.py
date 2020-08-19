@@ -73,7 +73,6 @@ class ctrl_xdlops_mapping_t(object):
         tm_r, tm_s, tm_w, tm_b, tm_t = self.wave_repeat_m, self.wave_step_m, self.lanegroup_m_per_wave(), self.lanegroup_m_per_block(), self.lanegroup_m_per_thread()
         return tm_r, tm_s, tm_w, tm_b, tm_t
 
-
     def block_size(self):
         return self.waves * 64 # wave size 64
 

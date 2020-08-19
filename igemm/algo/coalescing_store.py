@@ -443,14 +443,14 @@ class ctrl_coalescing_store_xdlops_t(object):
         return self.cxm.wave_repeat_n * self.cxm.wave_step_n * self.cxm.lanegroup_n_per_wave() * self.cxm.lanegroup_n_per_block() * self.cxm.lanegroup_n_per_thread() # xdlops in n dimension always 1
 
     def get_length_m_max_groups(self):
-        ''' maximum number of agpr along m dimension per thread is can be all divided into groups.
+        ''' maximum number of agpr along m dimension per thread can be divided into groups.
             but consider LDS load/store, we want to utilize the fact that every lanegroup is a 4x64 matrix,
-            which might be distributed along multiple blocks (like 4x4x1), or every block contains multiple blocks(like 16x16x1, 32x32x1)
+            which might be distributed along multiple blocks (like 4x4x1), or every block contains multiple lanegroups(like 16x16x1, 32x32x1)
             henve in m dimension there always have a granularity of 4 per thread, that is continuous along m dimension.
             we want to use a single ds_write_b128/ds_read_b128 to deal with this granularity (which implies a transpose)
-            hence we do not want split inside the "4" granularity of a thread
+            hence we do not want split inside the "4" granularity within a thread
         '''
-        return self.get_length_m_groups() // 4
+        return self.get_length_m_groups() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
 
     def get_subgroups(self):
         def split_ndim_length(total_length, dim_lengths):
@@ -478,6 +478,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         split_m_lengths = (self.cxm.wave_repeat_m, self.cxm.wave_step_m, \
                  self.cxm.lanegroup_m_per_wave(), self.cxm.lanegroup_m_per_block(), self.cxm.lanegroup_m_per_thread())
         g_mr, g_ms, g_mw, g_mb, g_mt = split_ndim_length(num_m_groups, split_m_lengths)
+        assert g_mt == 1, 'we do not want to split inside this granularity within a thread'
 
         return g_mr, g_ms, g_mw, g_mb, g_mt # groups in m_repeat, m_step, lanegroup_m_per_wave, lanegroup_m_per_block, lanegroup_m_per_thread
 
@@ -503,10 +504,11 @@ class ctrl_coalescing_store_xdlops_t(object):
 
         trans_t_n0 = self.vector_store_size
         trans_c_n0 = n_n_total // trans_t_n0
-        trans_t_m0 = 1
+        trans_t_m0 = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M  # here we append granularity to perthread m0
         trans_c_m0 = self.block_size // trans_c_n0
         trans_t_n1 = 1
         trans_c_n1 = 1
+        assert n_m_total % (trans_t_m0 * trans_c_m0) == 0
         trans_t_m1 = n_m_total // (trans_t_m0 * trans_c_m0)
         trans_c_m1 = 1
         trans_t_nr = 1
@@ -520,32 +522,32 @@ class ctrl_coalescing_store_xdlops_t(object):
 
         return transposed_thread_mapping
 
-    def get_thread_m_stride(self):
-        ttm = self.get_transposed_thread_mapping()
-        assert ttm.t_m0() == 1
-        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
-        l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
+    #def get_thread_m_stride(self):
+    #    ttm = self.get_transposed_thread_mapping()
+    #    assert ttm.t_m0() == 1
+    #    g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+    #    l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
 
-        # do some assert
-        if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
-            m_index_per_group = self.get_m_index_per_group()
-            thread_m_stride = g_m0 * ttm.n_m0()
-        else:
-            m_index_per_group = self.get_m_index_per_group_m1_m0()
-            thread_m_stride = -1
-        for ig in range(len(m_index_per_group)):
-            for ic in range(len(m_index_per_group[ig])):
-                _list = m_index_per_group[ig][ic]
-                for idx in range(len(_list) - 1):
-                    diff_m = _list[idx+1] - _list[idx]
-                    if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
-                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
-                    else:
-                        if thread_m_stride == -1:
-                            thread_m_stride = diff_m
-                        assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
+    #    # do some assert
+    #    if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+    #        m_index_per_group = self.get_m_index_per_group()
+    #        thread_m_stride = g_m0 * ttm.n_m0()
+    #    else:
+    #        m_index_per_group = self.get_m_index_per_group_m1_m0()
+    #        thread_m_stride = -1
+    #    for ig in range(len(m_index_per_group)):
+    #        for ic in range(len(m_index_per_group[ig])):
+    #            _list = m_index_per_group[ig][ic]
+    #            for idx in range(len(_list) - 1):
+    #                diff_m = _list[idx+1] - _list[idx]
+    #                if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
+    #                    assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
+    #                else:
+    #                    if thread_m_stride == -1:
+    #                        thread_m_stride = diff_m
+    #                    assert diff_m == thread_m_stride, f"diff_m:{diff_m}, thread_m_stride:{thread_m_stride}"
 
-        return thread_m_stride
+    #    return thread_m_stride
 
     def get_num_dword_per_group(self):
         assert self.cxm.total_acc_c() % self.coalescing_groups == 0, \
@@ -617,7 +619,7 @@ class ctrl_coalescing_store_xdlops_t(object):
                             m_index_total.extend(m_index)
                             pixel_m_index = [None] * ttm.c_m0()
                             for i, m in enumerate(m_index):
-                                _icm0 = i % ttm.c_m0()
+                                _icm0 = (i // ttm.t_m0()) % ttm.c_m0()  # NOTE! here is m granularity take place
                                 if not pixel_m_index[_icm0]:
                                     pixel_m_index[_icm0] = list()
                                 pixel_m_index[_icm0].append(m)
@@ -664,12 +666,13 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
-            gemm_m_shrink = g_m0
+            self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity while store")
+            gemm_m_shrink = g_mr * g_ms * g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
             if gemm_m_shrink != 1:
                 self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp2}+1]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_gemm_im}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
+                assert False, "impossible"
             self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.data_byte)}, v[{v_co_sst}]")
             self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
 
@@ -682,12 +685,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
 
         with self._deferred_context():
-            self._emit(f"; init_co_sub_m_index")
+            self._emit(f"; init_co_sub_m_index for xdlops")
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp2}]")
 
             self._emit(f"v_and_b32 v[{v_tmp2}], {l_m0 - 1}, v[{v_co_sub_m_index}]")
             self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(l_m0)}, v[{v_co_sub_m_index}]")
@@ -742,7 +745,6 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         thread_m_stride = ctrl.get_thread_m_stride()
 
         assert len(m_index_per_group) == ctrl.coalescing_groups
-
 
         with self._deferred_context():
             self._emit(f"; coalescing store, gemm_mxn:{ctrl.ctm.n_m_total()}x{ctrl.ctm.n_n_total()}, block:{ctrl.block_size}, m_repeatxm_perthread:{ctrl.ctm.t_mr()}x{ctrl.ctm.t_m0()}, n_repeatxn_perthread:{ctrl.ctm.t_nr()}x{ctrl.ctm.t_n0()}")
