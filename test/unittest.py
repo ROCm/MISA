@@ -128,6 +128,7 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
         cgroup_list = [2**x for x in range(1, int(math.log2(max_possible_groups)) + 1)]
         print(f"[<<<<<<]max_possible_groups:{max_possible_groups}, cgroup_list:{cgroup_list}, {xdlops_mapping.serialize()}")
         for cgroups in cgroup_list:
+            print(f"[------] groups:{cgroups}")
             ctrl = ctrl_coalescing_store_xdlops_t()
             ctrl.cxm = xdlops_mapping
             ctrl.coalescing_groups = cgroups

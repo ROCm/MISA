@@ -390,6 +390,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         assert self.out_thread_copy_ndim in (1, 2)
         assert self.wei_thread_copy_ndim in (1, 2)
 
+        self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             ctrl_thread_mapping = ctrl_thread_mapping_t()
                     #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
@@ -397,29 +398,45 @@ class igemm_bwd_gtc_t(mc_base_t):
             ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
             self.thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
 
+            ctrl_coalescing_store = ctrl_coalescing_store_t()
+            ctrl_coalescing_store.ctm = ctrl_thread_mapping
+            ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
+            ctrl_coalescing_store.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+
+            ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store.block_size = self.tunable.block_size
+
+            gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
+            n_c0, n_c1, n_k0, n_k1e, n_n0, n_n1b = self.get_dims_lengths()
+            ctrl_coalescing_store.gemm_m_m0_m1 = [n_c0, n_c1]
+            if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0:
+                ctrl_coalescing_store.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
+
+            ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
+            self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
+
         else:
             ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
                     self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
 
-        self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
-        ctrl_coalescing_store = ctrl_coalescing_store_t()
-        ctrl_coalescing_store.ctm = ctrl_thread_mapping
-        ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
-        ctrl_coalescing_store.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+            ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t()
+            ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
+            ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
+            ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
-        ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
-        ctrl_coalescing_store.block_size = self.tunable.block_size
+            ctrl_coalescing_store_xdlops.vector_write_out = 1                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
+        
+            gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
+            n_c0, n_c1, n_k0, n_k1e, n_n0, n_n1b = self.get_dims_lengths()
+            ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [n_c0, n_c1]
+            if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0:
+                # we may consider not suppor this mode
+                ctrl_coalescing_store_xdlops.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
+            ctrl_coalescing_store_xdlops.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
+            self.coalescing_store = igemm_coalescing_store_xdlops_t(mc, ctrl_coalescing_store_xdlops)
 
-        gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
-        n_c0, n_c1, n_k0, n_k1e, n_n0, n_n1b = self.get_dims_lengths()
-        ctrl_coalescing_store.gemm_m_m0_m1 = [n_c0, n_c1]
-        if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0:
-            ctrl_coalescing_store.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
-
-
-        ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
-        self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
 
         '''
          in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1

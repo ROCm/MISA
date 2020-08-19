@@ -58,7 +58,21 @@ class ctrl_xdlops_mapping_t(object):
         return self.macro_tile_n // (self.wave_repeat_n * self.wave_tile_n * self.wave_step_n)
 
     def total_acc_c(self):
-        return self.wave_repeat_m * self.wave_repeat_n * self.wave_step_m * self.wave_step_n * self.inst_mfma.num_a_c
+        def flatten(x):
+            from functools import reduce
+            return reduce(lambda a, b: a*b, x, 1)
+        total_c = self.wave_repeat_m * self.wave_repeat_n * self.wave_step_m * self.wave_step_n * self.inst_mfma.num_a_c
+        assert total_c == flatten(self.acc_c_per_thread_m()) * flatten(self.acc_c_per_thread_n())
+        return total_c
+
+    def acc_c_per_thread_n(self):
+        tn_r, tn_s, tn_w, tn_b, tn_t = self.wave_repeat_n, self.wave_step_n, self.lanegroup_n_per_wave(), self.lanegroup_n_per_block(), self.lanegroup_n_per_thread()
+        return tn_r, tn_s, tn_w, tn_b, tn_t
+
+    def acc_c_per_thread_m(self):
+        tm_r, tm_s, tm_w, tm_b, tm_t = self.wave_repeat_m, self.wave_step_m, self.lanegroup_m_per_wave(), self.lanegroup_m_per_block(), self.lanegroup_m_per_thread()
+        return tm_r, tm_s, tm_w, tm_b, tm_t
+
 
     def block_size(self):
         return self.waves * 64 # wave size 64
@@ -72,51 +86,59 @@ class ctrl_xdlops_mapping_t(object):
     # hence we group xdlops layout into 4 levels: per_thread->per_cluster->per_block->per_wave
     #
     def block_m_per_wave(self):
+        ''' [among different thread] '''
         assert self.wave_tile_m % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) == 0
         assert self.inst_mfma.m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()
         return self.wave_tile_m // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) 
 
     def block_n_per_wave(self):
+        ''' [among different thread] '''
         assert self.wave_tile_n % (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()) == 0
         assert self.inst_mfma.n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()
         return self.wave_tile_n // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block())
 
     def block_m_per_lanegroup(self):
+        ''' [among different thread] '''
         assert self.block_m_per_wave() % self.lanegroup_m_per_wave() == 0
         return self.block_m_per_wave() // self.lanegroup_m_per_wave()
 
     def block_n_per_lanegroup(self):
+        ''' [among different thread] '''
         assert self.block_n_per_wave() % self.lanegroup_n_per_wave() == 0
         return self.block_n_per_wave() // self.lanegroup_n_per_wave()
 
     def lanegroup_m_per_thread(self):
-        ''' for xdlops, always continuous 4 agpr for a c matrix, then interleave with other lanegroup '''
+        ''' [within thread] for xdlops, always continuous 4 agpr for a c matrix, then interleave with other lanegroup '''
         return 4
 
     def lanegroup_n_per_thread(self):
-        ''' for xdlops, always 1 column per lanegroup'''
+        ''' [within thread] for xdlops, always 1 column per lanegroup'''
         return 1
 
     def lanegroup_m_per_cluster(self):
-        ''' for xdlops, always m per block as clusters. perthread agpr do not contain this'''
+        ''' [among different thread] for xdlops, always m per block as clusters. perthread agpr do not contain this'''
         return math.gcd(self.inst_mfma.m//self.lanegroup_m_per_thread(), AMDGPU_WAVE_SIZE // self.inst_mfma.n )
 
     def lanegroup_n_per_cluster(self):
-        ''' for xdlops, always n per block as clusters. perthread agpr do not contain this'''
+        ''' [among different thread] for xdlops, always n per block as clusters. perthread agpr do not contain this'''
         return self.inst_mfma.n
 
     def lanegroup_m_per_block(self):
+        ''' [within thread]  '''
         assert self.inst_mfma.m % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster()) == 0
         return self.inst_mfma.m // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster())
 
     def lanegroup_n_per_block(self):
+        ''' [within thread]  '''
         return 1
 
     def lanegroup_m_per_wave(self):
+        ''' [within thread] indeed descipbe agpr per thread within different blocks to form a wave tile '''
         assert self.inst_mfma.num_a_c % (self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()) == 0
         return self.inst_mfma.num_a_c // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * self.lanegroup_m_per_thread() * self.lanegroup_m_per_block())
 
     def lanegroup_n_per_wave(self):
+        ''' [within thread] indeed descipbe agpr per thread within different blocks to form a wave tile '''
         assert self.inst_mfma.num_a_c % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()) == 0
         return math.gcd(self.block_n_per_wave(), self.inst_mfma.num_a_c // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()))
 
@@ -131,7 +153,7 @@ class ctrl_xdlops_mapping_t(object):
 
 #                             mt_m,mt_n,wt_m,wt_n, ws,r_m,r_n,s_m,s_n, inst_mfma
 ctrl_xdlops_mapping_fp32 = [
-        ctrl_xdlops_mapping_t( 256, 256,  32,  64,  4,  2,  2,  2,  1,  v_mfma_f32_32x32x1f32),
+        # ctrl_xdlops_mapping_t( 256, 256,  32,  64,  4,  2,  2,  2,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),

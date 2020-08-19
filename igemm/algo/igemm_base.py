@@ -107,7 +107,6 @@ def igemm_flatten_list_accumulate(x):
     from functools import reduce
     return reduce(lambda a, b: a+b, x)
 
-
 def get_igemm_gtc_tunable_type(tunable_dict):
     assert type(tunable_dict) is dict
     if 'gemm_m_per_thread' in tunable_dict and 'gemm_n_per_thread' in tunable_dict:
