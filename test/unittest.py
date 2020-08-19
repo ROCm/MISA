@@ -124,8 +124,11 @@ def unittest_coalescing_store_m1_m0_xdlops():
 
 def unittest_coalescing_store_m1_m0_xdlops_iterate():
     for xdlops_mapping in ctrl_xdlops_mapping_fp32:
-        max_possible_groups = xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() * xdlops_mapping.lanegroup_m_per_thread()
-        cgroup_list = [2**x for x in range(1, int(math.log2(max_possible_groups)) + 1)]
+        # max_possible_groups = xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() * xdlops_mapping.lanegroup_m_per_thread()
+        max_possible_groups = xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * \
+                xdlops_mapping.lanegroup_m_per_block() * xdlops_mapping.lanegroup_m_per_thread() \
+                    // 4
+        cgroup_list = [2**x for x in range(0, int(math.log2(max_possible_groups)) + 1)]
         print(f"[<<<<<<]max_possible_groups:{max_possible_groups}, cgroup_list:{cgroup_list}, {xdlops_mapping.serialize()}")
         for cgroups in cgroup_list:
             print(f"[------] groups:{cgroups}")

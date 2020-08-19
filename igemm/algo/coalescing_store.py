@@ -442,6 +442,16 @@ class ctrl_coalescing_store_xdlops_t(object):
         ''' agpr per thread in n dimension '''
         return self.cxm.wave_repeat_n * self.cxm.wave_step_n * self.cxm.lanegroup_n_per_wave() * self.cxm.lanegroup_n_per_block() * self.cxm.lanegroup_n_per_thread() # xdlops in n dimension always 1
 
+    def get_length_m_max_groups(self):
+        ''' maximum number of agpr along m dimension per thread is can be all divided into groups.
+            but consider LDS load/store, we want to utilize the fact that every lanegroup is a 4x64 matrix,
+            which might be distributed along multiple blocks (like 4x4x1), or every block contains multiple blocks(like 16x16x1, 32x32x1)
+            henve in m dimension there always have a granularity of 4 per thread, that is continuous along m dimension.
+            we want to use a single ds_write_b128/ds_read_b128 to deal with this granularity (which implies a transpose)
+            hence we do not want split inside the "4" granularity of a thread
+        '''
+        return self.get_length_m_groups() // 4
+
     def get_subgroups(self):
         def split_ndim_length(total_length, dim_lengths):
             assert type(dim_lengths) in (list, tuple)
@@ -453,8 +463,10 @@ class ctrl_coalescing_store_xdlops_t(object):
                 split_length.append(s)
             return tuple(split_length)
 
-        assert self.get_length_m_groups() % self.coalescing_groups == 0, \
-            f"if coalescing groups:{self.coalescing_groups} larger than single xdlops agpr number along m:{self.get_length_m_groups()}, can not do this split"
+        # assert self.get_length_m_groups() % self.coalescing_groups == 0, \
+        #     f"if coalescing groups:{self.coalescing_groups} larger than single xdlops agpr number along m:{self.get_length_m_groups()}, can not do this split"
+        assert self.get_length_m_max_groups() % self.coalescing_groups == 0, \
+            f"if coalescing groups:{self.coalescing_groups} larger than maximum single xdlops agpr(divided by 4) number along m:{self.get_length_m_max_groups()}, can not do this split"
         l_mg = self.get_length_m_groups()
         l_ng = self.get_length_n_groups()
         num_m_groups = math.gcd(self.coalescing_groups, l_mg)
@@ -468,6 +480,17 @@ class ctrl_coalescing_store_xdlops_t(object):
         g_mr, g_ms, g_mw, g_mb, g_mt = split_ndim_length(num_m_groups, split_m_lengths)
 
         return g_mr, g_ms, g_mw, g_mb, g_mt # groups in m_repeat, m_step, lanegroup_m_per_wave, lanegroup_m_per_block, lanegroup_m_per_thread
+
+    def get_subgroup_length(self):
+        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+        # self.cxm.wave_repeat_m, self.cxm.wave_step_m, self.cxm.lanegroup_m_per_wave(), self.cxm.lanegroup_m_per_block(), self.cxm.lanegroup_m_per_thread()
+
+        l_mr = self.cxm.wave_repeat_m // g_mr
+        l_ms = self.cxm.wave_step_m // g_ms
+        l_mw = self.cxm.lanegroup_m_per_wave() // g_mw
+        l_mb = self.cxm.lanegroup_m_per_block() // g_mb
+        l_mt = self.cxm.lanegroup_m_per_thread() // g_mt
+        return l_mr, l_ms, l_mw, l_mb, l_mt
 
     def get_transposed_thread_mapping(self):
         # xdlops need transfer agpr to vgpr, then do LDS shuffle
@@ -500,7 +523,8 @@ class ctrl_coalescing_store_xdlops_t(object):
     def get_thread_m_stride(self):
         ttm = self.get_transposed_thread_mapping()
         assert ttm.t_m0() == 1
-        g_mr, g_ms, g_m0, g_nr, g_ns, g_n0 = self.get_subgroups()
+        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+        l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
 
         # do some assert
         if self.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
@@ -553,13 +577,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         '''
         num_dword_per_group = self.get_num_dword_per_group()
         g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
-        # self.cxm.wave_repeat_m, self.cxm.wave_step_m, self.cxm.lanegroup_m_per_wave(), self.cxm.lanegroup_m_per_block(), self.cxm.lanegroup_m_per_thread()
-
-        l_mr = self.cxm.wave_repeat_m // g_mr
-        l_ms = self.cxm.wave_step_m // g_ms
-        l_mw = self.cxm.lanegroup_m_per_wave() // g_mw
-        l_mb = self.cxm.lanegroup_m_per_block() // g_mb
-        l_mt = self.cxm.lanegroup_m_per_thread() // g_mt
+        l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
 
         # print(f"mr:{g_mr}x{l_mr}x{self.cxm.wave_repeat_m}, ms:{g_ms}x{l_ms}x{self.cxm.wave_step_m}, mw:{g_mw}x{l_mw}x{self.cxm.lanegroup_m_per_wave()}, mb:{g_mb}x{l_mb}x{self.cxm.lanegroup_m_per_block()}, mt:{g_mt}x{l_mt}x{self.cxm.lanegroup_m_per_thread()}")
 
@@ -631,7 +649,6 @@ class ctrl_coalescing_store_xdlops_t(object):
                     m_index_per_group[ig][i_cm0][i_t] = self.get_m_index_from_m1_m0(m_index)
         return m_index_per_group
 
-
 class igemm_coalescing_store_xdlops_t(mc_base_t):
     def __init__(self, mc, ctrl):
         mc_base_t.__init__(self, mc)
@@ -643,7 +660,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
 
     def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp2):
         ctrl = self.ctrl
-        g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
+        g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
+        l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
             gemm_m_shrink = g_m0
@@ -660,11 +678,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
     def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp2):
         ctrl = self.ctrl
         # need use v_co_sub_m_index to calculate v offset in m direction
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = ctrl.get_subgroups()
-        assert g_m1 == 1
-        # sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
-        l_mr = ctrl.ctm.t_mr() // g_mr
-        l_m0 = ctrl.ctm.t_m0() // g_m0
+        g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
+        l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
 
         with self._deferred_context():
             self._emit(f"; init_co_sub_m_index")
@@ -705,10 +720,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
         s_tmp4 = sym_t(s_tmp4)
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.ctrl.get_subgroups()
-        assert g_m1 == 1 and g_nr == 1 and g_n1 == 1 and g_n0 == 1
-        l_mr = ctrl.ctm.t_mr() // g_mr
-        l_m0 = ctrl.ctm.t_m0() // g_m0
+        g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
+        l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
+
         no_s_out_offset = s_out_offset is None
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
