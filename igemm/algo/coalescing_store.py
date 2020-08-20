@@ -891,39 +891,88 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     if c_m0 not in (0, 1):
                         self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(n_mv)}  ,v[{v_co_sub_m_index}]")
                 if l_mr != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mr - 1}, v[{v_co_sub_m_index}]")
+                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mr - 1}, v[{v_co_sub_m_index}]                   ; => x_mr")
 
+                # indeed accoroding to current implementation, at most 2 tmp vgpr is used.
+                # we keep 6 temp here in case in the future there might be different mapping
                 assert v_idx <= 5, "since current we only assign 6 vgpr to do this nd split-merge, so larger than 6 vgpr currently not supported"
 
-                self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")
+                class pretty_accumulate_co_sub_m_t(object):
+                    def __init__(self):
+                        self.first = 1
+                    def __call__(self, v_co_sub_m_index, v_idx, k_multiplier):
+                        '''
+                        return a string to calculate v_co_sub_m_index = v_idx * k_multiplier + v_co_sub_m_index
+                        '''
+                        assert igemm_is_pow2(k_multiplier)
+                        if self.first == 1:
+                            self.first = 0
+                            if k_multiplier == 1:
+                                return f"v_mov_b32 v[{v_co_sub_m_index}], v[{v_idx}]"
+                            else:
+                                return f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(k_multiplier)}, v[{v_idx}]"
+                        else:
+                            if k_multiplier == 1:
+                                return  f"v_add_u32 v[{v_co_sub_m_index}], v[{v_idx}], v[{v_co_sub_m_index}]"
+                            else:
+                                return f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_idx}], {igemm_log2(k_multiplier)}, v[{v_co_sub_m_index}]"
+
                 c_m0 = ttm.c_m0()
                 v_idx_r = 0
+                # self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")
+                # if n_mc != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_add_u32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], v[{v_co_sub_m_index}]  ; => accumulate x_mc")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // n_mc
+                # if n_ml != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:1]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // n_ml
+                # if l_mb != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:2]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mb")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // l_mb
+                # if l_mw != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:3]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mw")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // l_mw
+                # if l_ms != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:4]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ms")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // l_ms
+                # if n_mv != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:5]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mv")
+                #     v_idx_r = v_idx_r + 1
+                #     c_m0    = c_m0 // n_mv
+                # if l_mr != 1 and c_m0 not in (0, 1):
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mr")
+                accumulate_co_sub_m = pretty_accumulate_co_sub_m_t()
                 if n_mc != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_add_u32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], v[{v_co_sub_m_index}]  ; => accumulate x_mc")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", 1) + "      ; => accumulate x_mc")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_mc
                 if n_ml != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:1]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:1])) + "      ; => accumulate x_ml")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_ml
                 if l_mb != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:2]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mb")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:2])) + "      ; => accumulate x_mb")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_mb
                 if l_mw != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:3]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mw")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:3])) + "      ; => accumulate x_mw")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_mw
                 if l_ms != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:4]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ms")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:4])) + "      ; => accumulate x_ms")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_ms
                 if n_mv != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:5]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mv")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:5])) + "      ; => accumulate x_mv")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_mv
                 if l_mr != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:6])) + "      ; => accumulate x_mr")
 
                 self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
 
