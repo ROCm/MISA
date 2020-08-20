@@ -996,24 +996,29 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
-    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
+    def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
         ctrl = self.ctrl
+        a_c = sym_t(a_c)
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
         s_tmp4 = sym_t(s_tmp4)
+
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
+        n_mc = ctrl.cxm.lanegroup_m_per_cluster()       # this iteration is among different thread
+        n_ml = ctrl.cxm.block_m_per_lanegroup()         # this iteration is among different thread
+        n_mv = ctrl.cxm.waves_per_m()                   # this iteration is among different thread
+        ttm = ctrl.get_transposed_thread_mapping()
+        nd_stride = [n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
 
         no_s_out_offset = s_out_offset is None
 
-        # mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
-        # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
-        inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
-        # self, vdata, vaddr, srsrc, soffset, offset):
+        # for xdlops, always consider granularity in column
+        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
+        inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
 
         s_out_offset_itr = sym_t(s_tmp4(0))
@@ -1028,9 +1033,11 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         assert len(m_index_per_group) == ctrl.coalescing_groups
 
         with self._deferred_context():
-            self._emit(f"; coalescing store, gemm_mxn:{ctrl.ctm.n_m_total()}x{ctrl.ctm.n_n_total()}, block:{ctrl.block_size}, m_repeatxm_perthread:{ctrl.ctm.t_mr()}x{ctrl.ctm.t_m0()}, n_repeatxn_perthread:{ctrl.ctm.t_nr()}x{ctrl.ctm.t_n0()}")
+            self._emit(f"; coalescing store, mapping:{ctrl.cxm.serialize()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}")
-            self._emit(f"; coalescing_groups_in_m_repeat:{g_mr}, group_length_in_m_repeat:{l_mr}, coalescing_groups_in_m_per_thread:{g_m0}, group_length_in_m_per_thread:{l_m0}")
+            self._emit(f"; init_co_sub_m_index xdlops, block_size:{ctrl.cxm.block_size()}, macro-tile:{ctrl.cxm.macro_tile_m}x{ctrl.cxm.macro_tile_n} sub_m_index:{ctrl.get_co_sub_m_index()}")
+            self._emit(f"; g_mr:{g_mr}, g_ms:{g_ms}, g_mw:{g_mw}, g_mb:{g_mb}, g_mt:{g_mt} | l_mr:{l_mr}, l_ms:{l_ms}, l_mw:{l_mw}, l_mb:{l_mb}, l_mt:{l_mt} | n_mc:{n_mc}, n_ml:{n_ml}, n_mv:{n_mv}")
+            self._emit(f"; nd_stride:{nd_stride}")
             # emit some pre index
             if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M1_M0 and s_gemm_m0_stride is not None:
                 self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m0_stride}]    ; init per thread stride in m dimension")
@@ -1041,10 +1048,18 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 m_index_start_per_group = m_index_per_group[i_group][0][0]
                 m0_index_start_per_group, m1_index_start_per_group = ctrl.get_m0_m1_index(m_index_start_per_group)
 
-                c_group_start_index = i_group * l_mr * l_m0 * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
+                # c_group_start_index = i_group * l_mr * l_m0 * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
+                a_group_start_index = i_group * ctrl.get_num_dword_per_group()
                 current_m_index = m_index_per_group[i_group]
                 self._emit(f"; start group {i_group}, m index start from {m_index_start_per_group}")
                 self._emit(f"s_barrier")
+
+
+
+
+
+
+                
                 for i_sub_length in range(l_mr * l_m0):
                     c_sub_start_index = c_group_start_index + i_sub_length * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
                     sst_offset = i_sub_length * ctrl.ctm.n_n_total() * ctrl.data_byte
