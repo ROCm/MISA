@@ -644,6 +644,10 @@ class ctrl_coalescing_store_xdlops_t(object):
         return m_index_per_group
 
     def get_co_sub_m_index(self):
+        '''
+        after LDS shuffle, before store to global, now thread-mapping is inteed transposed (see get_transposed_thread_mapping)
+        this function try to get the m_index of the first element of each ttm.c_m0
+        '''
         ttm = self.get_transposed_thread_mapping()
         g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()

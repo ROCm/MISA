@@ -31,6 +31,27 @@ from .mfma_main_loop import *
 import math
 
 class ctrl_xdlops_mapping_t(object):
+    '''
+    xdlops mapping, forms a 6-d mapping of thread-lanegroup-block-wave-macro_tile
+    each dimension is composed within one thread(thread_length), or composed by several thread(cluster_length)
+
+
+    take m dimension for example:
+
+            | thread_length             | cluster_length
+    --------+---------------------------+----------------------------+
+    level_0 | lanegroup_m_per_thread()  | lanegroup_m_per_cluster()  |
+    level_1 | lanegroup_m_per_block()   | block_m_per_lanegroup()    |
+    level_2 | lanegroup_m_per_wave()    | 1                          |
+    level_3 | wave_step_m               | 1                          |
+    level_4 | wave_repeat_m             | 1                          |
+    level_5 | 1                         | waves_per_m()              |
+
+    level_0    describe lanegroup level
+    level0/1/2 describe a single xdlops, that form a wave-tile
+    level3/4/5 describe macro-tile, formed by wave-tile
+
+    '''
     def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
         self.macro_tile_m = macro_tile_m
         self.macro_tile_n = macro_tile_n
@@ -75,6 +96,14 @@ class ctrl_xdlops_mapping_t(object):
 
     def block_size(self):
         return self.waves * 64 # wave size 64
+
+    def wave_tile_validate(self):
+        assert self.wave_tile_m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block() * self.block_m_per_lanegroup() * self.lanegroup_m_per_wave()
+        assert self.wave_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block() * self.block_n_per_lanegroup() * self.lanegroup_n_per_wave()
+
+    def macro_tile_validate(self):
+        assert self.macro_tile_m == self.wave_tile_m * self.wave_step_m * self.wave_repeat_m * self.waves_per_m()
+        assert self.macro_tile_n == self.wave_tile_n * self.wave_step_n * self.wave_repeat_n * self.waves_per_n()
 
     def lanegroup_validate(self):
         assert self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * \
@@ -143,6 +172,8 @@ class ctrl_xdlops_mapping_t(object):
 
     def serialize(self):
         self.lanegroup_validate()
+        self.wave_tile_validate()
+        self.macro_tile_validate()
         s = f"mt_m:{self.macro_tile_m}, mt_n:{self.macro_tile_n}, wt_m:{self.wave_tile_m}, wt_n:{self.wave_tile_n}, ws:{self.waves}, r_m:{self.wave_repeat_m}, r_n:{self.wave_repeat_n}, s_m:{self.wave_step_m}, s_n:{self.wave_step_n} | "
         s += f"{self.inst_mfma.m}x{self.inst_mfma.n}x{self.inst_mfma.k}, " + \
                 f"lanegroup_m_tcbw:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}x{self.lanegroup_m_per_block()}x{self.lanegroup_m_per_wave()}, " + \
