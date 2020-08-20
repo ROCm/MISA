@@ -811,7 +811,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
 
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity while store")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
             gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
             if gemm_m_shrink != 1:
                 self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
@@ -981,20 +981,19 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         return self._get_deferred()
 
     def init_co_sub_n_index(self, v_co_sub_n_index, v_tid, v_tmp2):
+        '''
+        in n dimension, always have one thread per column
+        '''
         ctrl = self.ctrl
         # need use v_co_sub_n_index to calculate v offset in n direction
-        g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = ctrl.get_subgroups()
-        assert g_m1 == 1
-        l_mr = ctrl.ctm.t_mr() // g_mr
-        l_m0 = ctrl.ctm.t_m0() // g_m0
 
         with self._deferred_context():
-            self._emit(f"; init_co_sub_n_index")
+            self._emit(f"; init_co_sub_n_index xdlops")
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tid}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tmp2}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
     def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
