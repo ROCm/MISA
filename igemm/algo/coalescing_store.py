@@ -653,6 +653,7 @@ class ctrl_coalescing_store_xdlops_t(object):
                 if not pixel_m_index[_icm0]: pixel_m_index[_icm0] = list()
                 pixel_m_index[_icm0].append(m)
             m_index_per_group.append(pixel_m_index)
+
         m_index_total.sort()
         # print(m_index_total)
         assert m_index_total == [xx for xx in range(self.cxm.macro_tile_m)], f"len:{len(m_index_total)}, {m_index_total}"
@@ -677,6 +678,9 @@ class ctrl_coalescing_store_xdlops_t(object):
         after LDS shuffle, before store to global, now thread-mapping is inteed transposed (see get_transposed_thread_mapping)
         this function try to get the m_index of the first element of each ttm.c_m0
         '''
+        def flatten(x):
+            from functools import reduce
+            return reduce(lambda a, b: a*b, x, 1)
         ttm = self.get_transposed_thread_mapping()
         g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
@@ -705,32 +709,54 @@ class ctrl_coalescing_store_xdlops_t(object):
         #     sub_m = sub_m * 4
         #     sub_m_index[ic] = sub_m
         '''
-        above for loop is simple for loop, below is a instruction-save approach to do this multi-dim split
+        above for loop is simple for loop
+        '''
+        # for ic in range(ttm.c_m0()):
+        #     sub_m = 0
+        #     nic = ic            # when this value become zero, means we no need to go further dimension
+        #     if nic != 0:
+        #         x_mc = nic % n_mc; nic = nic // n_mc
+        #         if nic != 0:
+        #             x_ml = nic % n_ml; nic = nic // n_ml
+        #             if nic != 0:
+        #                 x_mb = nic % l_mb; nic = nic // l_mb
+        #                 if nic != 0:
+        #                     x_mw = nic % l_mw; nic = nic // l_mw
+        #                     if nic != 0:
+        #                         x_ms = nic % l_ms; nic = nic // l_ms
+        #                         if nic != 0:
+        #                             x_mv = nic % n_mv; nic = nic // n_mv
+        #                             x_mr = nic % l_mr
+        #                             # print("    +-> x_mc:{}, x_ml:{}, x_mb:{}, x_mw:{}, x_ms:{}, x_mv:{}, x_mr:{}".format(x_mc, x_ml, x_mb, x_mw, x_ms, x_mv, x_mr))
+        #                             sub_m = x_mr * n_mv + x_mv
+        #                         sub_m = sub_m * (g_ms * l_ms) + x_ms
+        #                     sub_m = sub_m * (l_mw * g_mw) + x_mw
+        #                 sub_m = sub_m * (g_mb * l_mb) + x_mb
+        #             sub_m = sub_m * n_ml + x_ml
+        #         sub_m = sub_m * n_mc + x_mc
+        #         sub_m = sub_m * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+        #     sub_m_index[ic] = sub_m
+        '''
+        below is instruction-save approach
         '''
         for ic in range(ttm.c_m0()):
+            nic = ic
+            nd_list = list()
+            nd_stride = [n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
+            if n_mc != 1: x_mc = nic % n_mc; nic = nic // n_mc; nd_list.insert(0, ('x_mc', x_mc, 1))
+            if n_ml != 1: x_ml = nic % n_ml; nic = nic // n_ml; nd_list.insert(0, ('x_ml', x_ml, flatten(nd_stride[0:1])))
+            if l_mb != 1: x_mb = nic % l_mb; nic = nic // l_mb; nd_list.insert(0, ('x_mb', x_mb, flatten(nd_stride[0:2])))
+            if l_mw != 1: x_mw = nic % l_mw; nic = nic // l_mw; nd_list.insert(0, ('x_mw', x_mw, flatten(nd_stride[0:3])))
+            if l_ms != 1: x_ms = nic % l_ms; nic = nic // l_ms; nd_list.insert(0, ('x_ms', x_ms, flatten(nd_stride[0:4])))
+            if n_mv != 1: x_mv = nic % n_mv; nic = nic // n_mv; nd_list.insert(0, ('x_mv', x_mv, flatten(nd_stride[0:5])))
+            if l_mr != 1: x_mr = nic % l_mr;                    nd_list.insert(0, ('x_mr', x_mr, flatten(nd_stride[0:6])))
             sub_m = 0
-            nic = ic            # when this value become zero, means we no need to go further dimension
-            if nic != 0:
-                x_mc = nic % n_mc; nic = nic // n_mc
-                if nic != 0:
-                    x_ml = nic % n_ml; nic = nic // n_ml
-                    if nic != 0:
-                        x_mb = nic % l_mb; nic = nic // l_mb
-                        if nic != 0:
-                            x_mw = nic % l_mw; nic = nic // l_mw
-                            if nic != 0:
-                                x_ms = nic % l_ms; nic = nic // l_ms
-                                if nic != 0:
-                                    x_mv = nic % n_mv; nic = nic // n_mv
-                                    x_mr = nic % l_mr
-                                    # print("    +-> x_mc:{}, x_ml:{}, x_mb:{}, x_mw:{}, x_ms:{}, x_mv:{}, x_mr:{}".format(x_mc, x_ml, x_mb, x_mw, x_ms, x_mv, x_mr))
-                                    sub_m = x_mr * n_mv + x_mv
-                                sub_m = sub_m * (g_ms * l_ms) + x_ms
-                            sub_m = sub_m * (l_mw * g_mw) + x_mw
-                        sub_m = sub_m * (g_mb * l_mb) + x_mb
-                    sub_m = sub_m * n_ml + x_ml
-                sub_m = sub_m * n_mc + x_mc
-                sub_m = sub_m * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+            # print(f"ic:{ic}, nd_list:{nd_list}")
+            for i in range(len(nd_list)):
+                i_id = nd_list[i][1]
+                i_st = nd_list[i][2]
+                sub_m += i_id * i_st
+            sub_m = sub_m * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
             sub_m_index[ic] = sub_m
         return sub_m_index
 
@@ -770,6 +796,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         ctrl = self.ctrl
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
+
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
             self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity while store")
@@ -784,19 +811,30 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
 
         return self._get_deferred()
 
-    def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp2):
+    def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp4):
         ctrl = self.ctrl
         # need use v_co_sub_m_index to calculate v offset in m direction
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
+        n_mc = self.cxm.lanegroup_m_per_cluster()       # this iteration is among different thread
+        n_ml = self.cxm.block_m_per_lanegroup()         # this iteration is among different thread
+        n_mv = self.cxm.waves_per_m()                   # this iteration is among different thread
+        ttm = self.get_transposed_thread_mapping()
 
         with self._deferred_context():
-            self._emit(f"; init_co_sub_m_index for xdlops")
+            self._emit(f"; init_co_sub_m_index for xdlops, sub_m_index:{ctrl.get_co_sub_m_index()}")
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tid}]   ; get tid along m")
             else:
-                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp2}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp4}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp4}]  ; get tid along m")
+
+
+            self._emit(f"v_and_b32 v[{v_tmp4}], {n_mc - 1}, v[{v_co_sub_m_index}]     ; x_mc")
+            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(n_mc)}, v[{v_co_sub_m_index}]")
+
+
+
 
             self._emit(f"v_and_b32 v[{v_tmp2}], {l_m0 - 1}, v[{v_co_sub_m_index}]")
             self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(l_m0)}, v[{v_co_sub_m_index}]")
