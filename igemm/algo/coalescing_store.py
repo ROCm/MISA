@@ -30,6 +30,7 @@ from .shared_memory import *
 from .global_memory import *
 from .thread_mapping import *
 import copy
+import itertools
 
 IGEMM_COALESCING_GEMM_M_ORDER_M0_M1 = 0
 IGEMM_COALESCING_GEMM_M_ORDER_M1_M0 = 1
@@ -586,44 +587,72 @@ class ctrl_coalescing_store_xdlops_t(object):
         ttm = self.get_transposed_thread_mapping()
         m_index_per_group = list()
         m_index_total = list()
-        for i_g_mr in range(g_mr):
-            for i_g_ms in range(g_ms):
-                for i_g_mw in range(g_mw):
-                    for i_g_mb in range(g_mb):
-                        for i_g_mt in range(g_mt):
-                            m_idx_start_per_group = i_g_mr * l_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
-                                            i_g_ms * l_ms * self.cxm.wave_tile_m + \
-                                            i_g_mw * l_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
-                                            i_g_mb * l_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
-                                            i_g_mt * l_mt
-                            # print(f"m_idx_start_per_group:{m_idx_start_per_group}")
-                            m_index = []
-                            for t_along_waves_per_m in range(self.cxm.waves_per_m()):
-                                for t_along_block_m_per_lanegroup in range(self.cxm.block_m_per_lanegroup()):
-                                    for t_along_lanegroup_m_per_cluster in range(self.cxm.lanegroup_m_per_cluster()):
-                                        m_idx_start = m_idx_start_per_group + t_along_waves_per_m * self.cxm.wave_step_m * self.cxm.wave_tile_m + \
-                                                        t_along_block_m_per_lanegroup * self.cxm.lanegroup_m_per_thread() * self.cxm.lanegroup_m_per_cluster() +\
-                                                        t_along_lanegroup_m_per_cluster * self.cxm.lanegroup_m_per_thread()
-                                        for i_mr in range(l_mr):
-                                            for i_ms in range(l_ms):
-                                                for i_mw in range(l_mw):
-                                                    for i_mb in range(l_mb):
-                                                        for i_mt in range(l_mt):
-                                                            m_idx_current = m_idx_start + i_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
-                                                                    i_ms * self.cxm.wave_tile_m + \
-                                                                    i_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
-                                                                    i_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
-                                                                    i_mt
-                                                            m_index.append(m_idx_current)
-                            m_index.sort()
-                            m_index_total.extend(m_index)
-                            pixel_m_index = [None] * ttm.c_m0()
-                            for i, m in enumerate(m_index):
-                                _icm0 = (i // ttm.t_m0()) % ttm.c_m0()  # NOTE! here is m granularity take place
-                                if not pixel_m_index[_icm0]:
-                                    pixel_m_index[_icm0] = list()
-                                pixel_m_index[_icm0].append(m)
-                            m_index_per_group.append(pixel_m_index)
+        # for i_g_mr in range(g_mr):
+        #     for i_g_ms in range(g_ms):
+        #         for i_g_mw in range(g_mw):
+        #             for i_g_mb in range(g_mb):
+        #                 for i_g_mt in range(g_mt):
+        #                     m_idx_start_per_group = i_g_mr * l_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+        #                                     i_g_ms * l_ms * self.cxm.wave_tile_m + \
+        #                                     i_g_mw * l_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+        #                                     i_g_mb * l_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+        #                                     i_g_mt * l_mt
+        #                     # print(f"m_idx_start_per_group:{m_idx_start_per_group}")
+        #                     m_index = []
+        #                     for t_along_waves_per_m in range(self.cxm.waves_per_m()):
+        #                         for t_along_block_m_per_lanegroup in range(self.cxm.block_m_per_lanegroup()):
+        #                             for t_along_lanegroup_m_per_cluster in range(self.cxm.lanegroup_m_per_cluster()):
+        #                                 m_idx_start = m_idx_start_per_group + t_along_waves_per_m * self.cxm.wave_step_m * self.cxm.wave_tile_m + \
+        #                                                 t_along_block_m_per_lanegroup * self.cxm.lanegroup_m_per_thread() * self.cxm.lanegroup_m_per_cluster() +\
+        #                                                 t_along_lanegroup_m_per_cluster * self.cxm.lanegroup_m_per_thread()
+        #                                 for i_mr in range(l_mr):
+        #                                     for i_ms in range(l_ms):
+        #                                         for i_mw in range(l_mw):
+        #                                             for i_mb in range(l_mb):
+        #                                                 for i_mt in range(l_mt):
+        #                                                     m_idx_current = m_idx_start + i_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+        #                                                             i_ms * self.cxm.wave_tile_m + \
+        #                                                             i_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+        #                                                             i_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+        #                                                             i_mt
+        #                                                     m_index.append(m_idx_current)
+        #                     m_index.sort()
+        #                     m_index_total.extend(m_index)
+        #                     pixel_m_index = [None] * ttm.c_m0()
+        #                     for i, m in enumerate(m_index):
+        #                         _icm0 = (i // ttm.t_m0()) % ttm.c_m0()  # NOTE! here is m granularity take place
+        #                         if not pixel_m_index[_icm0]:
+        #                             pixel_m_index[_icm0] = list()
+        #                         pixel_m_index[_icm0].append(m)
+        #                     m_index_per_group.append(pixel_m_index)
+
+        for i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt in itertools.product(range(g_mr), range(g_ms), range(g_mw), range(g_mb), range(g_mt)):
+            m_idx_start_per_group = i_g_mr * l_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+                    i_g_ms * l_ms * self.cxm.wave_tile_m + \
+                    i_g_mw * l_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                    i_g_mb * l_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                    i_g_mt * l_mt
+            m_index = []
+            for t_along_waves_per_m, t_along_block_m_per_lanegroup, t_along_lanegroup_m_per_cluster in itertools.product(
+                                    range(self.cxm.waves_per_m()), range(self.cxm.block_m_per_lanegroup()), range(self.cxm.lanegroup_m_per_cluster())):
+                m_idx_start = m_idx_start_per_group + t_along_waves_per_m * self.cxm.wave_step_m * self.cxm.wave_tile_m + \
+                                t_along_block_m_per_lanegroup * self.cxm.lanegroup_m_per_thread() * self.cxm.lanegroup_m_per_cluster() +\
+                                t_along_lanegroup_m_per_cluster * self.cxm.lanegroup_m_per_thread()
+                for i_mr, i_ms, i_mw, i_mb, i_mt in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb), range(l_mt)):
+                    m_idx_current = m_idx_start + i_mr * self.cxm.wave_step_m * self.cxm.wave_tile_m * self.cxm.waves_per_m() + \
+                            i_ms * self.cxm.wave_tile_m + \
+                            i_mw * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                            i_mb * self.cxm.lanegroup_m_per_cluster() * self.cxm.lanegroup_m_per_thread() + \
+                            i_mt
+                    m_index.append(m_idx_current)
+            m_index.sort()
+            m_index_total.extend(m_index)
+            pixel_m_index = [None] * ttm.c_m0()
+            for i, m in enumerate(m_index):
+                _icm0 = (i // ttm.t_m0()) % ttm.c_m0()  # NOTE! here is m granularity take place
+                if not pixel_m_index[_icm0]: pixel_m_index[_icm0] = list()
+                pixel_m_index[_icm0].append(m)
+            m_index_per_group.append(pixel_m_index)
         m_index_total.sort()
         # print(m_index_total)
         assert m_index_total == [xx for xx in range(self.cxm.macro_tile_m)], f"len:{len(m_index_total)}, {m_index_total}"
