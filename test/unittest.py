@@ -131,6 +131,7 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
         cgroup_list = [2**x for x in range(0, int(math.log2(max_possible_groups)) + 1)]
         print(f"[<<<<<<]max_possible_groups:{max_possible_groups}, cgroup_list:{cgroup_list}, {xdlops_mapping.serialize()}")
         for cgroups in cgroup_list:
+            mc = get_default_mc()
             print(f"[------] groups:{cgroups}")
             ctrl = ctrl_coalescing_store_xdlops_t()
             ctrl.cxm = xdlops_mapping
@@ -143,6 +144,10 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
             ctrl.gemm_m_m0_m1 = [4, xdlops_mapping.macro_tile_m // 4] # similar to non-xdlops
 
             ctrl.adjust_optimal_coalescing_groups()
+
+
+
+            coalescing_store = igemm_coalescing_store_xdlops_t(mc, ctrl)
 
             m_index_per_group       = ctrl.get_m_index_per_group()
             m_index_per_group_m1_m0 = ctrl.get_m_index_per_group_m1_m0()
@@ -191,14 +196,19 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
                     print(f"ig:{ig} ic:{ic}, m0_m1: {m_index_per_group[ig][ic]}")
                     print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group[ig][ic]))
 
+            mc.emit(coalescing_store.init_co_sub_m_index('v_co_sub_m_index', 'v_tid', 'v_tmp6'))
+            print(mc.emitter.get_buffer())
+            print("------------------------------------------------------------")
+
+
             # assert co_sub_m along returned m_index_per_group[0], aka first group.
             assert ctrl.get_co_sub_m_index() == get_sliced_sub_m_list()
 
-            print("")
-            for ig in range(len(m_index_per_group)):
-                for ic in range(len(m_index_per_group[ig])):
-                    print(f"ig:{ig} ic:{ic}, m1_m0: {m_index_per_group_m1_m0[ig][ic]}")
-                    print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group_m1_m0[ig][ic]))
+            # print("")
+            # for ig in range(len(m_index_per_group)):
+            #     for ic in range(len(m_index_per_group[ig])):
+            #         print(f"ig:{ig} ic:{ic}, m1_m0: {m_index_per_group_m1_m0[ig][ic]}")
+            #         print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group_m1_m0[ig][ic]))
 
 
 
