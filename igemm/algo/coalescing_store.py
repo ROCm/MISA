@@ -435,6 +435,18 @@ class ctrl_coalescing_store_xdlops_t(object):
         #     self.coalescing_groups = cg
         pass
 
+    def can_skip_coalescing(self):
+        '''
+        in some configuration, after LDS shuffle the data layout is the same compare with un-shuffled shape.
+        '''
+        if self.coalescing_groups == 1 and self.cxm.wave_step_m == 1 and self.cxm.wave_step_n == 1 and \
+                self.cxm.wave_repeat_m == 1 and self.cxm.wave_repeat_n == 1:
+            if self.cxm.wave_tile_m == self.cxm.inst_mfma.m:
+                return True
+            if self.cxm.wave_tile_n == self.cxm.macro_tile_n:
+                return True
+        return False
+
     def get_length_m_groups(self):
         ''' agpr per thread in m dimension '''
         return self.cxm.wave_repeat_m * self.cxm.wave_step_m * self.cxm.lanegroup_m_per_wave() * self.cxm.lanegroup_m_per_block() * self.cxm.lanegroup_m_per_thread()
@@ -578,9 +590,15 @@ class ctrl_coalescing_store_xdlops_t(object):
         '''
         get m index after LDS shuffle
         '''
+        def flatten(x):
+            from functools import reduce
+            return reduce(lambda a, b: a*b, x, 1)
         num_dword_per_group = self.get_num_dword_per_group()
         g_mr, g_ms, g_mw, g_mb, g_mt = self.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = self.get_subgroup_length()
+
+        assert num_dword_per_group == (l_mr * l_ms * l_mw * l_mb * l_mt) * flatten(self.cxm.acc_c_per_thread_n()), \
+                f"num_dword_per_group:{num_dword_per_group}, l_mr:{l_mr}, l_ms:{l_ms}, l_mw:{l_mw}, l_mb:{l_mb}, l_mt:{l_mt} x acc_c_per_thread_n:{self.cxm.acc_c_per_thread_n()}"
 
         # print(f"mr:{g_mr}x{l_mr}x{self.cxm.wave_repeat_m}, ms:{g_ms}x{l_ms}x{self.cxm.wave_step_m}, mw:{g_mw}x{l_mw}x{self.cxm.lanegroup_m_per_wave()}, mb:{g_mb}x{l_mb}x{self.cxm.lanegroup_m_per_block()}, mt:{g_mt}x{l_mt}x{self.cxm.lanegroup_m_per_thread()}")
 
@@ -999,6 +1017,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
     def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
+        def flatten(x):
+            from functools import reduce
+            return reduce(lambda a, b: a*b, x, 1)
         ctrl = self.ctrl
         a_c = sym_t(a_c)
         v_c = sym_t(v_c)
@@ -1011,26 +1032,48 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         n_mc = ctrl.cxm.lanegroup_m_per_cluster()       # this iteration is among different thread
         n_ml = ctrl.cxm.block_m_per_lanegroup()         # this iteration is among different thread
         n_mv = ctrl.cxm.waves_per_m()                   # this iteration is among different thread
+
+        n_nc = ctrl.cxm.lanegroup_n_per_cluster()       # this iteration is among different thread
+        n_nl = ctrl.cxm.block_n_per_lanegroup()         # this iteration is among different thread
+        n_nv = ctrl.cxm.waves_per_n()                   # this iteration is among different thread
+
+
         ttm = ctrl.get_transposed_thread_mapping()
         nd_stride = [n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
 
         no_s_out_offset = s_out_offset is None
 
-        # for xdlops, always consider granularity in column
+        # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
         inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
 
         s_out_offset_itr = sym_t(s_tmp4(0))
-        s_thread_m_stride = sym_t(s_tmp4(1))
+        # s_thread_m_stride = sym_t(s_tmp4(1))
 
         if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
             m_index_per_group = ctrl.get_m_index_per_group()
         else:
             m_index_per_group = ctrl.get_m_index_per_group_m1_m0()
-        thread_m_stride = ctrl.get_thread_m_stride()
+        # thread_m_stride = ctrl.get_thread_m_stride()
 
         assert len(m_index_per_group) == ctrl.coalescing_groups
+
+        t_mr, t_nr, t_ms, t_ns, t_mw, t_nw, t_mb, t_mt = ctrl.cxm.acc_c_lengths()
+        s_mr, s_nr, s_ms, s_ns, s_mw, s_nw, s_mb, s_mt = t_nr * t_ms * t_ns * t_mw * t_nw * t_mb * t_mt, \
+                                                            t_ms * t_ns * t_mw * t_nw * t_mb * t_mt, \
+                                                            t_ns * t_mw * t_nw * t_mb * t_mt, \
+                                                            t_mw * t_nw * t_mb * t_mt, \
+                                                            t_nw * t_mb * t_mt, \
+                                                            t_mb * t_mt, \
+                                                            t_mt, \
+                                                            1
+
+        i_g_list = list()
+        for i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt in itertools.product(range(g_mr), range(g_ms), range(g_mw), range(g_mb), range(g_mt)):
+            i_g_list.append((i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt))
+
+        agpr_consume_list = list()
 
         with self._deferred_context():
             self._emit(f"; coalescing store, mapping:{ctrl.cxm.serialize()}")
@@ -1038,101 +1081,120 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             self._emit(f"; init_co_sub_m_index xdlops, block_size:{ctrl.cxm.block_size()}, macro-tile:{ctrl.cxm.macro_tile_m}x{ctrl.cxm.macro_tile_n} sub_m_index:{ctrl.get_co_sub_m_index()}")
             self._emit(f"; g_mr:{g_mr}, g_ms:{g_ms}, g_mw:{g_mw}, g_mb:{g_mb}, g_mt:{g_mt} | l_mr:{l_mr}, l_ms:{l_ms}, l_mw:{l_mw}, l_mb:{l_mb}, l_mt:{l_mt} | n_mc:{n_mc}, n_ml:{n_ml}, n_mv:{n_mv}")
             self._emit(f"; nd_stride:{nd_stride}")
-            # emit some pre index
-            if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M1_M0 and s_gemm_m0_stride is not None:
-                self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m0_stride}]    ; init per thread stride in m dimension")
-            else:
-                self._emit(f"s_mul_i32 s[{s_thread_m_stride()}], {thread_m_stride}, s[{s_gemm_m1_stride}]    ; init per thread stride in m dimension")
+
+            # some cases that 
+            if ctrl.can_skip_coalescing():
+                self._emit(f";[X] coalescing through LDS is skipped")
 
             for i_group in range(ctrl.coalescing_groups):
                 m_index_start_per_group = m_index_per_group[i_group][0][0]
                 m0_index_start_per_group, m1_index_start_per_group = ctrl.get_m0_m1_index(m_index_start_per_group)
 
-                # c_group_start_index = i_group * l_mr * l_m0 * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
-                a_group_start_index = i_group * ctrl.get_num_dword_per_group()
-                current_m_index = m_index_per_group[i_group]
-                self._emit(f"; start group {i_group}, m index start from {m_index_start_per_group}")
-                self._emit(f"s_barrier")
+                i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt = i_g_list[i_group]
+                a_group_start_index = i_g_mr * l_mr * s_mr + i_g_ms * l_ms * s_ms + i_g_mw * l_mw * s_mw + i_g_mb * l_mb * s_mb + i_g_mt * l_mt * s_mt
 
+                self._emit(f"; start group {i_group}, i_g_mr:{i_g_mr}, i_g_ms:{i_g_ms}, i_g_mw:{i_g_mw}, i_g_mb:{i_g_mb}, i_g_mt:{i_g_mt}, m index start from {m_index_start_per_group}")
+                if not ctrl.can_skip_coalescing():
+                    self._emit(f"s_barrier")
 
+                for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
+                    gpr_m_offset = i_mr * s_mr + i_ms * s_ms + i_mw * s_mw + i_mb * s_mb
+                    sst_m_offset = i_mr *  n_mv * l_ms * l_mw * l_mb * n_ml * n_mc + \
+                                    i_ms * l_mw * l_mb * n_ml * n_mc + \
+                                    i_mw * l_mb * n_ml * n_mc + \
+                                    i_mb * n_ml * n_mc              # ATTENTION! here is not multiplied by granularity_m, since it is shrinked to n direction, when everything is in LDS
+                    # iterate through all m within current group
+                    for i_nr, i_ns, i_nw in itertools.product(range(t_nr), range(t_ns), range(t_nw)):
+                        gpr_n_offset = i_nr * s_nr + i_ns * s_ns + i_nw * s_nw
+                        sst_n_offset = i_nr * n_nv * ctrl.cxm.wave_step_n * ctrl.cxm.lanegroup_n_per_wave() * n_nl * n_nc + \
+                                     i_ns * ctrl.cxm.lanegroup_n_per_wave() * n_nl * n_nc + \
+                                     i_nw * n_nl * n_nc
+                        # self._emit(f" => ctrl.cxm.wave_step_n:{ctrl.cxm.wave_step_n}, ctrl.cxm.lanegroup_n_per_wave():{ctrl.cxm.lanegroup_n_per_wave()}, n_nl:{n_nl}, n_nc:{n_nc}")
+                        agpr_index = a_group_start_index + gpr_m_offset + gpr_n_offset
+                        vgpr_index = gpr_m_offset + gpr_n_offset
+                        sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M + \
+                                     sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * ctrl.data_byte
 
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
+                        # self._emit(f"s_nop 4")    # might consider nop to solve RAW
+                        if not ctrl.can_skip_coalescing():
+                            idword = sst_offset // (ctrl.data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
+                                f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
+                                f" /{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
 
-
-
-                
-                for i_sub_length in range(l_mr * l_m0):
-                    c_sub_start_index = c_group_start_index + i_sub_length * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
-                    sst_offset = i_sub_length * ctrl.ctm.n_n_total() * ctrl.data_byte
-                    self._emit(inst_sst(v_co_sst(), v_c(c_sub_start_index), sst_offset))
-
-                self._emit(f"s_waitcnt lgkmcnt(0)")
-                self._emit(f"s_barrier")
-                self._emit(f";   load from lds")
                 issue_list = []
-                for i_d in range(ctrl.get_num_dword_per_group() // (2 * ctrl.vector_write_out)):
-                    c_sub_start_index = c_group_start_index + i_d * 2 * ctrl.vector_write_out
-                    sld_offset = i_d * 2 * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
-                    self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
-                    issue_list.append(inst_sld.get_issues(sld_offset))
+                if not ctrl.can_skip_coalescing():
+                    self._emit(f"s_waitcnt lgkmcnt(0)")
+                    self._emit(f"s_barrier")
+                    self._emit(f";   load from lds")
+                    #for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
+                    for i_d in range(ctrl.get_num_dword_per_group() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M):
+                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+                        sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
+                        self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
+                        issue_list.append(inst_sld.get_issues(sld_offset))
 
                 if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
-                    #self._emit(f"s_cbranch_execz {label_prefix}_co_{i_group}")
 
                 self._emit(f";   store to global, m index start from {m_index_start_per_group}, m0:{m0_index_start_per_group}, m1:{m1_index_start_per_group}")
-                if s_gemm_m0_stride is not None:
-                    self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {m0_index_start_per_group}, s[{s_gemm_m0_stride}]")
-                    self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m1_index_start_per_group}, s[{s_gemm_m1_stride}]")
-                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
-                else:
-                    if m_index_start_per_group == 0:
-                        if no_s_out_offset:
-                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0")
-                        else:
-                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]")
-                    elif m_index_start_per_group == 1:
-                        if no_s_out_offset:
-                            self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]")
-                        else:
-                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]")
+
+                def emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1):
+                    # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")
+                    comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1})"
+                    if s_gemm_m0_stride is not None:
+                        self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
+                        self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
+                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]" + comments)
+                        if not no_s_out_offset:
+                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_out_offset}], s[{s_out_offset_itr()}] ")
                     else:
-                        if no_s_out_offset:
-                            self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {m_index_start_per_group}, s[{s_gemm_m1_stride}]")
+                        '''
+                        no m0_stride, which indicate m0, m1 is continuous, no need to deal with m0, m1 seperately
+                        '''
+                        if i_m == 0:
+                            if no_s_out_offset:
+                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
+                            else:
+                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
+                        elif i_m == 1:
+                            if no_s_out_offset:
+                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
+                            else:
+                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                         else:
-                            self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {m_index_start_per_group}, s[{s_gemm_m1_stride}]")
-                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]")
+                            if no_s_out_offset:
+                                self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
+                            else:
+                                self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m}, s[{s_gemm_m1_stride}]")
+                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]" + comments)
+
+                emit_calculate_s_out_offset_itr(m_index_start_per_group, m0_index_start_per_group, m1_index_start_per_group)
                 i_m0_start, i_m1_start =  m0_index_start_per_group, m1_index_start_per_group
                 for i_gst in range(ctrl.get_num_dword_per_group() // ctrl.vector_write_out):
-                    if i_gst % 2 == 0:
-                        i_issues =  (i_gst // 2) + 1
-                        i_issue_list = issue_list[i_issues:]
-                        i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
-                        self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
+                    if len(issue_list) != 0:
+                        if i_gst % AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M == 0:
+                            i_issues =  (i_gst // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) + 1
+                            i_issue_list = issue_list[i_issues:]
+                            i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
+                            self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
-                    self._emit(inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
-                        if s_gemm_m0_stride is not None:
-                            i_m = m_index_per_group[i_group][0][i_gst+1]
-                            i_m0, i_m1 = ctrl.get_m0_m1_index(i_m)
-                            self._emit(f"; im:{i_m}, i_m0:{i_m0}, i_m1:{i_m1}")
-                            if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
-                                if i_m0 > i_m0_start:
-                                    i_m0_start = i_m0
-                                    # m0 accumulate
-                                    self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
-                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
-                                else:
-                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
-                            else:
-                                if i_m1 > i_m1_start:
-                                    i_m1_start = i_m1
-                                    # m1 accumllate
-                                    self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
-                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]")
-                                else:
-                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
-                        else:
-                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_thread_m_stride()}], s[{s_out_offset_itr()}]")
+                        i_m = m_index_per_group[i_group][0][i_gst+1]
+                        # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")
+                        i_m0, i_m1 = ctrl.get_m0_m1_index(i_m)
+                        emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1)
                 if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"s_mov_b64 exec, -1")
+
+            # do some assert
+            agpr_consume_list.sort()
+            assert agpr_consume_list == [x for x in range(ctrl.cxm.total_acc_c())], f"agpr_consume_list:{agpr_consume_list}"
+            #if agpr_consume_list != [x for x in range(ctrl.cxm.total_acc_c())]:
+            #    self._emit(f"; [WRONG!] agpr ~~~~~~~~, {agpr_consume_list}")
         return self._get_deferred()

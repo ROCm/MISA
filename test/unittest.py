@@ -122,6 +122,11 @@ def unittest_coalescing_store_m1_m0_xdlops():
     #mc.emit(coalescing_store('v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_offset', 's_out_offset', 's_gemm_m0_stride', 's_gemm_m1_stride', 's_tmp'))
     #print(mc.emitter.get_buffer())
 
+def unittest_xdlops_mapping():
+    for xdlops_mapping in ctrl_xdlops_mapping_fp32:
+        print(xdlops_mapping.serialize())
+
+
 def unittest_coalescing_store_m1_m0_xdlops_iterate():
     for xdlops_mapping in ctrl_xdlops_mapping_fp32:
         # max_possible_groups = xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() * xdlops_mapping.lanegroup_m_per_thread()
@@ -140,7 +145,7 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
 
             ctrl.vector_write_out = 1
             ctrl.block_size = xdlops_mapping.block_size()
-            ctrl.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
+            # ctrl.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
             ctrl.gemm_m_m0_m1 = [4, xdlops_mapping.macro_tile_m // 4] # similar to non-xdlops
 
             ctrl.adjust_optimal_coalescing_groups()
@@ -197,6 +202,10 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
                     print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group[ig][ic]))
 
             mc.emit(coalescing_store.init_co_sub_m_index('v_co_sub_m_index', 'v_tid', 'v_tmp6'))
+            mc.emit(';@@@@ ------------------------------------------------')
+            mc.emit(coalescing_store('a_c', 'v_c', 'v_co_sst', 'v_co_sld',
+                    's_p_out', 'v_out_offset', 's_out_offset' if 0 else None, None, 's_gemm_m1_stride', 's_tmp4', 'v_store_flag'))
+            mc.emit(';XXXX ------------------------------------------------')
             print(mc.emitter.get_buffer())
             print("------------------------------------------------------------")
 
@@ -227,6 +236,7 @@ def run_all_unittest():
     #unittest_coalescing_store()
     #unittest_coalescing_store_m1_m0()
     #unittest_coalescing_store_m1_m0_xdlops()
+    #unittest_xdlops_mapping()
     unittest_coalescing_store_m1_m0_xdlops_iterate()
     # unittest_thread_mapping()
 

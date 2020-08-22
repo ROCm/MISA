@@ -35,17 +35,36 @@ class ctrl_xdlops_mapping_t(object):
     xdlops mapping, forms a 6-d mapping of thread-lanegroup-block-wave-macro_tile
     each dimension is composed within one thread(thread_length), or composed by several thread(cluster_length)
 
+    m_dim   | thread_length                | cluster_length
+    --------+------------------------------+-----------------------------+
+    level_0 | lanegroup_m_per_thread(), 4  | lanegroup_m_per_cluster()   |
+    level_1 | lanegroup_m_per_block()      | block_m_per_lanegroup()     |
+    level_2 | lanegroup_m_per_wave()       | 1                           |
+    level_3 | wave_step_m                  | 1                           |
+    level_4 | 1                            | waves_per_m()               |
+    level_5 | wave_repeat_m                | 1                           |
 
-    take m dimension for example:
+    n_dim   | thread_length                | cluster_length
+    --------+------------------------------+-----------------------------+
+    level_0 | lanegroup_n_per_thread(), 1  | lanegroup_n_per_cluster(), n|
+    level_1 | lanegroup_n_per_block(), 1   | block_n_per_lanegroup()     |
+    level_2 | lanegroup_n_per_wave()       | 1                           |
+    level_3 | wave_step_n                  | 1                           |
+    level_4 | 1                            | waves_per_n()               |
+    level_5 | wave_repeat_n                | 1                           |
 
-            | thread_length             | cluster_length
-    --------+---------------------------+----------------------------+
-    level_0 | lanegroup_m_per_thread()  | lanegroup_m_per_cluster()  |
-    level_1 | lanegroup_m_per_block()   | block_m_per_lanegroup()    |
-    level_2 | lanegroup_m_per_wave()    | 1                          |
-    level_3 | wave_step_m               | 1                          |
-    level_4 | wave_repeat_m             | 1                          |
-    level_5 | 1                         | waves_per_m()              |
+    so consider per_thread order:
+
+    V   |           m               |         n
+        +---------------------------+---------------------------+
+        | wave_repeat_m             | _                         | => level_5, m
+        | _                         | wave_repeat_n             | => level_5, n
+        | wave_step_m               | _                         | => level_3, m
+        | _                         | wave_step_n               | => level_3, n
+        | lanegroup_m_per_wave()    | _                         | => level_2, m
+        | _                         | lanegroup_n_per_wave()    | => level_2, n
+        | lanegroup_m_per_block()   | _                         | => level_1, m
+        | lanegroup_m_per_thread()  | _                         | => level_0, m
 
     level_0    describe lanegroup level
     level0/1/2 describe a single xdlops, that form a wave-tile
@@ -63,6 +82,15 @@ class ctrl_xdlops_mapping_t(object):
         self.wave_step_m = wave_step_m
         self.wave_step_n = wave_step_n
         self.inst_mfma = inst_mfma
+
+    def acc_c_lengths(self):
+        '''
+        return agpr lengths for each dimension. from right to left is agpr index increase
+        '''      
+        t_mr, t_nr, t_ms, t_ns, t_mw, t_nw, t_mb, t_mt = self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n,\
+                                            self.lanegroup_m_per_wave(), self.lanegroup_n_per_wave(),\
+                                            self.lanegroup_m_per_block(), self.lanegroup_m_per_thread()
+        return  t_mr, t_nr, t_ms, t_ns, t_mw, t_nw, t_mb, t_mt
 
     def composed_wave_tile_m(self):
         return self.wave_tile_m * self.wave_step_m
@@ -84,15 +112,16 @@ class ctrl_xdlops_mapping_t(object):
             return reduce(lambda a, b: a*b, x, 1)
         total_c = self.wave_repeat_m * self.wave_repeat_n * self.wave_step_m * self.wave_step_n * self.inst_mfma.num_a_c
         assert total_c == flatten(self.acc_c_per_thread_m()) * flatten(self.acc_c_per_thread_n())
+        assert total_c == flatten(self.acc_c_lengths())
         return total_c
 
     def acc_c_per_thread_n(self):
-        tn_r, tn_s, tn_w, tn_b, tn_t = self.wave_repeat_n, self.wave_step_n, self.lanegroup_n_per_wave(), self.lanegroup_n_per_block(), self.lanegroup_n_per_thread()
-        return tn_r, tn_s, tn_w, tn_b, tn_t
+        t_nr, t_ns, t_nw, t_nb, t_nt = self.wave_repeat_n, self.wave_step_n, self.lanegroup_n_per_wave(), self.lanegroup_n_per_block(), self.lanegroup_n_per_thread()
+        return t_nr, t_ns, t_nw, t_nb, t_nt
 
     def acc_c_per_thread_m(self):
-        tm_r, tm_s, tm_w, tm_b, tm_t = self.wave_repeat_m, self.wave_step_m, self.lanegroup_m_per_wave(), self.lanegroup_m_per_block(), self.lanegroup_m_per_thread()
-        return tm_r, tm_s, tm_w, tm_b, tm_t
+        t_mr, t_ms, t_mw, t_mb, t_mt = self.wave_repeat_m, self.wave_step_m, self.lanegroup_m_per_wave(), self.lanegroup_m_per_block(), self.lanegroup_m_per_thread()
+        return t_mr, t_ms, t_mw, t_mb, t_mt
 
     def block_size(self):
         return self.waves * 64 # wave size 64

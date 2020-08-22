@@ -513,7 +513,7 @@ class inst_ds_read_t(object):
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         assert False
-    def get_issues(self):
+    def get_issues(self, sld_offset = 0):
         return 1
 
 class inst_ds_write_t(object):
@@ -538,7 +538,7 @@ class inst_ds_write_t(object):
             return 'ds_write_b128 v[{}], v[{}:{}+3] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
         assert False
 
-    def get_issues(self):
+    def get_issues(self, sst_offset = 0):
         return 1
 
 class ctrl_2d_shared_store_t(object):
