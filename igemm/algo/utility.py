@@ -248,13 +248,15 @@ class sym_t(object):
     '''
     symbol used in asm source, can use '.set <label>,   <value>'
     '''
-    def __init__(self, label, value = 0):
+    def __init__(self, label, value = 0, comments = ''):
         assert type(label) is str
         assert type(value) is int
         self.label = label
         self.value = value
+        self.comments = comments
     def declare(self):
-        return f'.set {self.label}, {self.value}'
+        comments_str = '' if self.comments == '' else f'  ; {self.comments}'
+        return f'.set {self.label}, {self.value}{comments_str}'
     @staticmethod
     def expr(label, index = 0):
         if type(index) is int:
