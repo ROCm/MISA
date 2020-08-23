@@ -29,7 +29,7 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import *
+from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
@@ -115,7 +115,7 @@ def get_igemm_gtc_fma_type(tunable_dict):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
         assert tunable_dict['arch'] == 'gfx908'
-        return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
+        return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
 def igemm_get_fma_type_from_arch_config(arch_config):
@@ -335,8 +335,11 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_starter + 'nxb                        : {}'.format(self.nxb) + '\n' + \
                 line_starter + 'nxe                        : {}'.format(self.nxe) + '\n' + \
                 line_starter + '\n' + \
-                line_starter + 'block_size                 : {}'.format(self.block_size) + '\n' + \
-                line_starter + 'thread_tile                : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n' + \
+                line_starter + 'block_size                 : {}'.format(self.block_size) + '\n'
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+             sstr += \
+                line_starter + 'thread_tile                : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n'
+        sstr += \
                 line_starter + 'lds_total                  : {}'.format(self.lds_total) + '\n' + \
                 line_starter
         return sstr

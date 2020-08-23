@@ -26,9 +26,8 @@
 # pylint: disable=maybe-no-member
 
 from ..codegen import *
-from .igemm_base import *
-from .mfma_main_loop import *
-import math
+from .utility import *
+from .mfma import *
 
 class ctrl_xdlops_mapping_t(object):
     '''
@@ -174,7 +173,7 @@ class ctrl_xdlops_mapping_t(object):
 
     def lanegroup_m_per_cluster(self):
         ''' [among different thread] for xdlops, always m per block as clusters. perthread agpr do not contain this'''
-        return math.gcd(self.inst_mfma.m//self.lanegroup_m_per_thread(), AMDGPU_WAVE_SIZE // self.inst_mfma.n )
+        return utility_gcd(self.inst_mfma.m//self.lanegroup_m_per_thread(), AMDGPU_WAVE_SIZE // self.inst_mfma.n )
 
     def lanegroup_n_per_cluster(self):
         ''' [among different thread] for xdlops, always n per block as clusters. perthread agpr do not contain this'''
@@ -197,7 +196,7 @@ class ctrl_xdlops_mapping_t(object):
     def lanegroup_n_per_wave(self):
         ''' [within thread] indeed descipbe agpr per thread within different blocks to form a wave tile '''
         assert self.inst_mfma.num_a_c % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()) == 0
-        return math.gcd(self.block_n_per_wave(), self.inst_mfma.num_a_c // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()))
+        return utility_gcd(self.block_n_per_wave(), self.inst_mfma.num_a_c // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_block()))
 
     def serialize(self):
         self.lanegroup_validate()
@@ -283,15 +282,15 @@ class igemm_xdlops_mapping_t(mc_base_t):
         with self._deferred_context():
             if ctrl.waves_per_n() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp2}], {ctrl.wave_tile_n - 1}, v[{v_lane_id}]")
-                self._emit(f"v_and_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.waves_per_n())}, v[{v_wave_id}]")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp2}+1], {igemm_log2(ctrl.composed_wave_tile_n())}, v[{v_tmp2}]")
+                self._emit(f"v_and_b32 v[{v_tmp2}+1], {utility_log2(ctrl.waves_per_n())}, v[{v_wave_id}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp2}+1], {utility_log2(ctrl.composed_wave_tile_n())}, v[{v_tmp2}]")
             else:
                 self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.wave_tile_n - 1}, v[{v_lane_id}]")
 
             if ctrl.waves_per_m() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp2}], {ctrl.wave_tile_m - 1}, v[{v_lane_id}]")
-                self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(ctrl.waves_per_n())}, v[{v_wave_id}] ")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp2}+1], {igemm_log2(ctrl.composed_wave_tile_m())}, v[{v_tmp2}]")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {utility_log2(ctrl.waves_per_n())}, v[{v_wave_id}] ")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp2}+1], {utility_log2(ctrl.composed_wave_tile_m())}, v[{v_tmp2}]")
             else:
                 self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.wave_tile_m - 1}, v[{v_lane_id}]")
 

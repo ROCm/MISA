@@ -33,5 +33,6 @@ from .igemm_bwd_gtc import *
 from .utility import *
 from .thread_mapping import *
 from .coalescing_store import *
+from .mfma import *
 from .xdlops_mapping import *
 from .mfma_main_loop import *

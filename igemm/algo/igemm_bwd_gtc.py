@@ -31,8 +31,10 @@ from .global_memory import *
 from .shared_memory import *
 from .utility import *
 from .thread_mapping import *
+from .xdlops_mapping import *
 from .coalescing_store import *
 from .mfma_main_loop import *
+
 
 IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 = 0
 IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 = 1
@@ -390,8 +392,15 @@ class igemm_bwd_gtc_t(mc_base_t):
         assert self.out_thread_copy_ndim in (1, 2)
         assert self.wei_thread_copy_ndim in (1, 2)
 
+        '''
+         in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1
+         hence we always want to split coalescing groups along m direction, to store c matrix
+        '''
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            assert (self.tunable.gemm_m_per_thread * self.tunable.gemm_m_repeat) % self.coalescing_store_groups == 0, \
+                f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
+
             ctrl_thread_mapping = ctrl_thread_mapping_t()
                     #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
             ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
@@ -414,11 +423,17 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
+            
 
         else:
+            def flatten(x):
+                from functools import reduce
+                return reduce(lambda a, b: a*b, x, 1)
             ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
                     self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
+            assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
+                f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
 
             ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t()
             ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
@@ -438,12 +453,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.coalescing_store = igemm_coalescing_store_xdlops_t(mc, ctrl_coalescing_store_xdlops)
 
 
-        '''
-         in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1
-         hence we always want to split coalescing groups along m direction, to store c matrix
-        '''
-        assert (self.tunable.gemm_m_per_thread * self.tunable.gemm_m_repeat) % self.coalescing_store_groups == 0, \
-            f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
+        
+
 
         self.label_out = f"L_{self.name()}_out"
         self.dict_shifted_stride = dict()
@@ -1589,8 +1600,14 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(self.global_load_wei())
         self._emit_empty_line()
 
-        self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
-        self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+            self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+        else:
+            self._emit(f"v_and_b32 v[{v.v_tmp(4)}], {AMDGPU_WAVE_SIZE - 1}, v0      ; lane_id")
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp(5)}], {igemm_log2(AMDGPU_WAVE_SIZE)}, v0  ; wave_id")
+            # v_gemm_in, v_gemm_im, v_wave_id, v_lane_id, v_tmp2
+            self._emit(self.xdlops_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(4), v.v_tmp(5), v.v_tmp()))
 
         self._emit(f"; LDS store, out: k0,k1e,n0,n1b: {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, {c_k0}x{c_k1e}x{c_n0}x{c_n1b}, order:{gemm_n_order}")
         if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
@@ -1822,6 +1839,7 @@ class igemm_bwd_gtc_t(mc_base_t):
     def emit_kernel_fma_main_loop(self):
         s = self.sgpr
         v = self.vgpr
+        data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         def move_slice_window_b():
             if self.tunable.nxe != 0:
@@ -1880,8 +1898,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.global_load_b_functor       = self.global_load_out
             fctrl.shared_store_a_functor      = self.shared_store_wei
             fctrl.shared_store_b_functor      = self.shared_store_out
-            fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
-            fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
+            fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * data_byte)
+            fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * data_byte)
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 
@@ -1902,7 +1920,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             fma_main_loop.emit()
         else:
             a = self.agpr
-            fctrl                             = ctrl_fma_main_loop_t()
+            fctrl                             = ctrl_mfma_main_loop_t()
             fctrl.wave_tile_m                 = self.tunable.wave_tile_m
             fctrl.wave_tile_n                 = self.tunable.wave_tile_n
             fctrl.wave_repeat_m               = self.tunable.wave_repeat_m
@@ -1918,8 +1936,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.global_load_b_functor       = self.global_load_out
             fctrl.shared_store_a_functor      = self.shared_store_wei
             fctrl.shared_store_b_functor      = self.shared_store_out
-            fctrl.shared_load_a_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_m * 4)
-            fctrl.shared_load_b_functor       = inst_ds_read_t(self.tunable.thread_sub_tile_n * 4)
+            fctrl.shared_load_a_functor       = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+            fctrl.shared_load_b_functor       = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 

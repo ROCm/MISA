@@ -25,6 +25,7 @@
 ################################################################################
 
 from ..codegen import *
+import math
 
 class macro_int_div_vv_t(mc_base_t):
     '''
@@ -297,3 +298,53 @@ class utility_dict_with_default_t(object):
         if key in self.d:
             return self.d[key]
         return default_value
+
+
+# compute next power of 2
+def utility_next_pow2(n):
+    if n == 0:
+        return 1
+    if n & (n - 1) == 0:
+        return n
+    while n & (n - 1) > 0:
+        n &= (n - 1)
+    return n << 1
+
+def utility_next_mul(n, mul):
+    d = n // mul
+    d = d + (1 if (n % mul != 0) else 0)
+    return d * mul
+
+def utility_is_pow2(v):
+    return v and (not(v & (v - 1)))
+
+def utility_log2(v):
+    assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
+    return int(math.log2(v))
+
+def utility_get_epack_length(precision):
+        # GetEPackLength
+        epack = 1
+        if precision == AMDGPU_PRECISION_FP16:
+            # todo: xdlops check
+            epack = 2
+        elif precision == AMDGPU_PRECISION_BF16:
+            epack = 2
+        return epack
+
+def utility_gcd(a, b):
+    # math.gcd new in python 3.5
+    return math.gcd(a, b)
+
+def utility_lcm(a, b):
+    return abs(a * b) // math.gcd(a, b)
+
+def utility_flatten_list_product(x):
+    assert type(x) is list
+    from functools import reduce
+    return reduce(lambda a, b: a*b, x, 1)
+
+def utility_flatten_list_accumulate(x):
+    assert type(x) is list
+    from functools import reduce
+    return reduce(lambda a, b: a+b, x, 0)
