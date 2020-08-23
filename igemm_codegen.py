@@ -59,6 +59,8 @@ def igemm_flatten(args, config_content):
     mc = mc_asm_printer_t(emitter, arch)
 
     tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        td['arch'] = sec_root['arch']       # append arch to each section
 
     igemm_codegen_driver_t(mc, tunable_dicts)()
 

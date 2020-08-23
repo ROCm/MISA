@@ -638,6 +638,14 @@ class config_content_t {
     void add_section(config_section_t section) {
         this->sections.push_back(section);
     }
+    config_section_t get_section(std::string sec_name) const {
+        // return first section with name 'sec_name'
+        for(auto &sec : sections){
+            if(sec.get_name() == sec_name)
+                return sec;
+        }
+        return config_section_t("sec_na");
+    }
     std::vector<config_section_t>::iterator begin() { return sections.begin(); }
     std::vector<config_section_t>::iterator end() { return sections.end(); }
     std::vector<config_section_t>::const_iterator begin() const {

@@ -1073,7 +1073,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         for i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt in itertools.product(range(g_mr), range(g_ms), range(g_mw), range(g_mb), range(g_mt)):
             i_g_list.append((i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt))
 
-        agpr_consume_list = list()
+        agpr_consume_list = list()      # used for assertion
+        lds_size_per_group = (ctrl.cxm.macro_tile_m * ctrl.cxm.macro_tile_n // ctrl.coalescing_groups) * ctrl.data_byte # used for assertion
 
         with self._deferred_context():
             self._emit(f"; coalescing store, mapping:{ctrl.cxm.serialize()}")
@@ -1114,6 +1115,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         vgpr_index = gpr_m_offset + gpr_n_offset
                         sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M + \
                                      sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * ctrl.data_byte
+                        assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * ctrl.data_byte < lds_size_per_group
 
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)

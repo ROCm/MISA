@@ -114,6 +114,7 @@ public:
     igemm_bwd_gtc_t(){}
     ~igemm_bwd_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
+#if 0
         auto tensor_layout            = tunable->tensor_layout;
         auto gemm_m_per_block         = tunable->gemm_m_per_block;
         auto gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -183,6 +184,8 @@ public:
         if(multihead)
             kernel_name += std::string("_mh");
         return kernel_name;
+#endif
+        return igemm_gtc_encode_kernel_name(tunable);
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
         return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
