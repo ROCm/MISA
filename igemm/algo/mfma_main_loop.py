@@ -140,9 +140,11 @@ class mfma_main_loop_t(mc_base_t):
                 for i_step_n in range(wave_step_n):
                     for i_step_m in range(wave_step_m):
                         a_index = i_repeat_m * wave_tile_m * wave_step_m + i_step_m
+                        a_index_end = a_index + num_agpr_per_issue - 1
                         b_index = i_repeat_n * wave_tile_n * wave_step_n + i_step_n
                         c_index = ((i_repeat_m * wave_step_m + i_step_m) * wave_repeat_n * wave_step_n + i_repeat_n * wave_step_n + i_step_n) * num_agpr_per_issue
-                        self._emit(f"a[{a_c()}], v[{v_a(a_index)}], v[{v_b(b_index)}], a[{a_c()}]    ; repeat:{i_repeat_m}x{i_repeat_n}, step{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        #self._emit(f"a[{a_c()}], v[{v_a(a_index)}], v[{v_b(b_index)}], a[{a_c()}]    ; repeat:{i_repeat_m}x{i_repeat_n}, step{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        self._emit(mfma(a_c((a_index, a_index_end)), v_a(a_index), v_b(b_index), a_c((a_index, a_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
             return self._get_deferred()
 
         def mfma_loop_repeat_2x2():

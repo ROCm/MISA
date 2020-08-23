@@ -58,8 +58,11 @@ class igemm_codegen_driver_t(mc_base_t):
         macro_int_div_rem_vs_t(self.mc).emit()
         macro_int_div_rem_ss_t(self.mc).emit()
         # emit_write_4d_strided_t(self.mc).emit()
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
+            macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
-        self._emit_fma_macro()
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and not self.mc.arch_config.use_dlops:
+            self._emit_fma_macro()
 
     def emit_igemm_macro(self):
         # igemm algorithm related macros

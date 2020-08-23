@@ -892,7 +892,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         def emit(self):
             for k, v in self.__dict__.items():
-                if k.startswith('k_'):
+                if k.startswith('a_'):
                     self._emit(v.declare())
 
     def get_thread_lengths(self):
@@ -1988,6 +1988,9 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit_empty_line()
         self.vgpr.emit()
         self._emit_empty_line()
+        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self.agpr.emit()
+            self._emit_empty_line()
 
     def emit_kernel_header(self):
         kernel_name = self.name()

@@ -54,12 +54,23 @@ class inst_mfma_t(object):
         #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
 
     def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
+        def src_datatype_string(data_type_string):
+            if data_type_string == 'fp32':
+                return 'f32'
+            if data_type_string == 'fp16':
+                return 'f16'
+            if data_type_string == 'bf16':
+                return 'bf16'
+            assert False, f"unknow type :{data_type_string}"
+
         mfma_acc_type = 'f32' # TODO: int8 mfma accumulate type is i32
-        mfma_trait = f'{self.m}x{self.n}x{self.k}' + inst_mfma_data_type_to_string(self.data_type)
+        mfma_trait = f'{self.m}x{self.n}x{self.k}' + src_datatype_string(inst_mfma_data_type_to_string(self.data_type))
         mfma_inst = f'v_mfma_{mfma_acc_type}_{mfma_trait}'
-        with self._deferred_context():
-            self._emit(f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] cbsz:{cbsz} abid:{abid} blgp:{blgp}")
-        return self._get_deferred()
+        cbsz_str = f"cbsz:{cbsz}" if cbsz != 0 else ""
+        abid_str = f"abid:{abid}" if abid != 0 else ""
+        blgp_str = f"blgp:{blgp}" if blgp != 0 else ""
+        return  f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] {cbsz_str} {abid_str} {blgp_str}"
+
     
     # def thread_layout(self):
     #     ''' per wave, thread layout '''
