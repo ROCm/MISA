@@ -368,7 +368,7 @@ def igemm_gtc_encode_kernel_name(tunable):
                          f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_"
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         kernel_name +=   f'wt{tunable.wave_tile_m}x{tunable.wave_tile_n}_' +\
-                         f'ws{tunable.wave_step_m}x{tunable.wave_repeat_m}_' +\
+                         f'ws{tunable.wave_step_m}x{tunable.wave_step_n}_' +\
                          f'wr{tunable.wave_repeat_m}x{tunable.wave_repeat_n}_'
 
     kernel_name +=       "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\

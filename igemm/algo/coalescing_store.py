@@ -1121,7 +1121,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
-                        # self._emit(f"s_nop 4")    # might consider nop to solve RAW
+                        self._emit(f"s_nop 4")    # might consider nop to solve RAW
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (ctrl.data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
                             self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \

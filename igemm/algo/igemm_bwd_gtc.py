@@ -885,10 +885,12 @@ class igemm_bwd_gtc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            self.a_c           = sym_t("a_c",          outer.tunable.num_agpr_accumulate_c)
+            aseq = gpr_sequencer_t()
+            self.a_c           = sym_t("a_c",          aseq(outer.tunable.num_agpr_accumulate_c))
+            self.a_end         = sym_t("a_end",        aseq())
 
         def get_count(self):
-            return self.k_end.value
+            return self.a_end.value
 
         def emit(self):
             for k, v in self.__dict__.items():

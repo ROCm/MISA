@@ -39,6 +39,8 @@
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS           "xdlops"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_NA               "fma_na"
+#define AMDGPU_WAVE_SIZE        64
+
 
 typedef struct {
     std::string tensor_layout;
@@ -213,7 +215,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             std::to_string(gemm_n_level1_cluster) + "_";
     }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
         kernel_name +=   std::string("wt") + std::to_string(tunable->wave_tile_m) + "x" + std::to_string(tunable->wave_tile_n) + "_" + 
-                         "ws" + std::to_string(tunable->wave_step_m) + "x" + std::to_string(tunable->wave_repeat_m) + "_" +
+                         "ws" + std::to_string(tunable->wave_step_m) + "x" + std::to_string(tunable->wave_step_n) + "_" +
                          "wr" + std::to_string(tunable->wave_repeat_m) + "x" + std::to_string(tunable->wave_repeat_n) + "_";
     }
 
