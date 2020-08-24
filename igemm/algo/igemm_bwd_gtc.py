@@ -773,6 +773,8 @@ class igemm_bwd_gtc_t(mc_base_t):
                                         8       # from v_sst_a_os to v_wei_os
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
+
+                v_c_needed           = v_c_needed if v_c_needed > 2 else 2  # let at least 2
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
@@ -1606,10 +1608,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
         else:
-            self._emit(f"v_and_b32 v[{v.v_tmp(4)}], {AMDGPU_WAVE_SIZE - 1}, v0      ; lane_id")
-            self._emit(f"v_lshrrev_b32 v[{v.v_tmp(5)}], {igemm_log2(AMDGPU_WAVE_SIZE)}, v0  ; wave_id")
-            # v_gemm_in, v_gemm_im, v_wave_id, v_lane_id, v_tmp2
-            self._emit(self.xdlops_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(4), v.v_tmp(5), v.v_tmp()))
+            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+            self._emit(self.xdlops_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
 
         self._emit(f"; LDS store, out: k0,k1e,n0,n1b: {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, {c_k0}x{c_k1e}x{c_n0}x{c_n1b}, order:{gemm_n_order}")
         if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
