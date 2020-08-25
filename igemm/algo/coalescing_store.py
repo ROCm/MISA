@@ -29,6 +29,7 @@ from .igemm_base import *
 from .shared_memory import *
 from .global_memory import *
 from .thread_mapping import *
+from .xdlops_mapping import *
 import copy
 import itertools
 
@@ -836,11 +837,11 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
             if gemm_m_shrink != 1:
                 self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp2}+1]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp2}+1]")
             else:
                 assert False, "impossible"
             self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -1124,7 +1125,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
-                        self._emit(f"s_nop 4")    # might consider nop to solve RAW
+                        # self._emit(f"s_nop 4")    # might consider nop to solve RAW
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (ctrl.data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
                             self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \

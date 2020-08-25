@@ -29,15 +29,11 @@ from ..codegen import *
 from .utility import *
 from .mfma import *
 from .xdlops_mapping import *
+from .nop import *
 
 class ctrl_mfma_main_loop_t(object):
     def __init__(self):
-        self.wave_tile_m                 = 0
-        self.wave_tile_n                 = 0
-        self.wave_repeat_m               = 0
-        self.wave_repeat_n               = 0
-        self.wave_step_m                 = 0
-        self.wave_step_n                 = 0
+        self.cxm                         = None
 
         self.unroll_k                    = 0
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
@@ -112,18 +108,12 @@ class mfma_main_loop_t(mc_base_t):
 
         s_kitr = self.ctrl.s_kitr
         s_knum = self.ctrl.s_knum
-
-        wave_tile_m   = self.ctrl.wave_tile_m
-        wave_tile_n   = self.ctrl.wave_tile_n
-        wave_repeat_m = self.ctrl.wave_repeat_m
-        wave_repeat_n = self.ctrl.wave_repeat_n
-        wave_step_m   = self.ctrl.wave_step_m
-        wave_step_n   = self.ctrl.wave_step_n
+        cxm = self.ctrl.cxm
 
         data_byte = amdgpu_precision_data_byte(self.ctrl.data_type)
 
-        lds_width_m = data_byte * wave_tile_m * wave_step_m * wave_repeat_m
-        lds_width_n = data_byte * wave_tile_n * wave_step_n * wave_repeat_n
+        lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
+        lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n
         lds_single_size = self.ctrl.lds_single_size
 
         # used as offset:x number. may some 
@@ -131,32 +121,30 @@ class mfma_main_loop_t(mc_base_t):
         lds_base_n = 0
         unroll_k = self.ctrl.unroll_k
 
-        v_mfma_wave_wise = get_ctrl_xdlops_mapping_from_wave_fp32(wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n)
-
         def mfma_step_mxn(i_repeat_m, i_repeat_n):
-            mfma = v_mfma_wave_wise.inst_mfma
+            mfma = cxm.inst_mfma
             num_agpr_per_issue = mfma.num_a_c
             with self._deferred_context():
-                for i_step_n in range(wave_step_n):
-                    for i_step_m in range(wave_step_m):
-                        #a_index = i_repeat_m * wave_tile_m * wave_step_m + i_repeat_n *wave_tile_n*wave_step_n +  i_step_m
-                        c_index = i_repeat_m * wave_step_m * wave_step_n * wave_repeat_n * num_agpr_per_issue + \
-                                    i_repeat_n * wave_step_m * wave_step_n * num_agpr_per_issue + \
-                                    i_step_m * wave_step_n * num_agpr_per_issue + \
+                for i_step_n in range(cxm.wave_step_n):
+                    for i_step_m in range(cxm.wave_step_m):
+                        #a_index = i_repeat_m * cxm.wave_tile_m * cxm.wave_step_m + i_repeat_n *cxm.wave_tile_n*cxm.wave_step_n +  i_step_m
+                        c_index = i_repeat_m * cxm.wave_step_m * cxm.wave_step_n * cxm.wave_repeat_n * num_agpr_per_issue + \
+                                    i_repeat_n * cxm.wave_step_m * cxm.wave_step_n * num_agpr_per_issue + \
+                                    i_step_m * cxm.wave_step_n * num_agpr_per_issue + \
                                     i_step_n * num_agpr_per_issue
                         c_index_end = c_index + num_agpr_per_issue - 1
-                        a_index = i_repeat_m * wave_step_m * mfma.num_v_a + \
+                        a_index = i_repeat_m * cxm.wave_step_m * mfma.num_v_a + \
                                     i_step_m * mfma.num_v_a
 
-                        b_index = i_repeat_n * wave_step_n * mfma.num_v_b + \
+                        b_index = i_repeat_n * cxm.wave_step_n * mfma.num_v_b + \
                                     i_step_n * mfma.num_v_b
                         self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
             return self._get_deferred()
 
         def mfma_loop_repeat_2x2():
-            mfma = v_mfma_wave_wise.inst_mfma
-            repeat_m_thread_offset = wave_step_m * mfma.num_v_a
-            repeat_n_thread_offset = wave_step_n * mfma.num_v_b
+            mfma = cxm.inst_mfma
+            repeat_m_thread_offset = cxm.wave_step_m * mfma.num_v_a
+            repeat_n_thread_offset = cxm.wave_step_n * mfma.num_v_b
 
             # right after clear acc
             self._emit(f_move_slice_window_b())
@@ -316,7 +304,7 @@ class mfma_main_loop_t(mc_base_t):
             pass
 
         # start emit
-        self._emit(f"; start MFMA loop, {wave_tile_m}x{wave_tile_n} wave tile with {wave_repeat_m}x{wave_repeat_n} repeat, {wave_step_m}x{wave_step_n} step")
+        self._emit(f"; start MFMA loop, {cxm.wave_tile_m}x{cxm.wave_tile_n} wave tile with {cxm.wave_repeat_m}x{cxm.wave_repeat_n} repeat, {cxm.wave_step_m}x{cxm.wave_step_n} step")
         self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
 
         self._emit(f_sst_b())
@@ -325,7 +313,7 @@ class mfma_main_loop_t(mc_base_t):
         self._emit(f_sst_a())
         self._emit_empty_line()
 
-        self._emit(f".v_clear_acc_c {a_c()}, {v_mfma_wave_wise.total_acc_c()}")
+        self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
         self._emit(f"; make sure acc WAR harzard, at least 1 nop for src_c")
 
         # decrese k
@@ -335,9 +323,13 @@ class mfma_main_loop_t(mc_base_t):
         self._emit_empty_line()
 
         # diverge based on repeat
-        if wave_repeat_m == 2 and wave_repeat_n == 2:
+        if cxm.wave_repeat_m == 2 and cxm.wave_repeat_n == 2:
             mfma_loop_repeat_2x2()
-        elif wave_repeat_m == 1 and wave_repeat_n == 1:
+        elif cxm.wave_repeat_m == 1 and cxm.wave_repeat_n == 1:
             mfma_loop_repeat_1x1()
         else:
-            assert False, f"un implemented repeat {wave_repeat_m}x{wave_repeat_n}"
+            assert False, f"un implemented repeat {cxm.wave_repeat_m}x{cxm.wave_repeat_n}"
+        
+
+        nop = emit_nop_t(self.mc)
+        nop(cxm.inst_mfma.get_nop_count_mfma_acc_raw())   # solve dependency 

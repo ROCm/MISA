@@ -36,3 +36,4 @@ from .coalescing_store import *
 from .mfma import *
 from .xdlops_mapping import *
 from .mfma_main_loop import *
+from .nop import *

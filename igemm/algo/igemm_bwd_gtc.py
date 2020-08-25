@@ -429,7 +429,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             def flatten(x):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
-            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
+            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
                     self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
@@ -1928,12 +1928,10 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
-            fctrl.wave_tile_m                 = self.tunable.wave_tile_m
-            fctrl.wave_tile_n                 = self.tunable.wave_tile_n
-            fctrl.wave_repeat_m               = self.tunable.wave_repeat_m
-            fctrl.wave_repeat_n               = self.tunable.wave_repeat_n
-            fctrl.wave_step_m                 = self.tunable.wave_step_m
-            fctrl.wave_step_n                 = self.tunable.wave_step_n
+            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.wave_tile_m, self.tunable.wave_tile_n,
+                                                                        self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
+                                                                        self.tunable.wave_step_m, self.tunable.wave_step_n)
+            fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()
             fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2

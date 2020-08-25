@@ -71,12 +71,9 @@ class inst_mfma_t(object):
         blgp_str = f"blgp:{blgp}" if blgp != 0 else ""
         return  f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] {cbsz_str} {abid_str} {blgp_str}"
 
-    
-    # def thread_layout(self):
-    #     ''' per wave, thread layout '''
-    #     m_agpr_per_lanegroup = 4         # 
-    #     m_lanegroups_per_block = self.m // m_agpr_per_lanegroup
-    #     m_blocks = 
+    def get_nop_count_mfma_acc_raw(self):
+        # in unit of passes, aka 4 cycle
+        return (self.cycle // 4) + 2
 
 
 #                                     m,  n,  k,  precision,           cycle, v_a, v_b, a_c, #block

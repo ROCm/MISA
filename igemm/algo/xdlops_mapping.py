@@ -290,7 +290,7 @@ def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling_fp32[0]
 
-def get_ctrl_xdlops_mapping_from_wave_fp32(wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n):
+def get_ctrl_xdlops_mapping_from_wave_tile_fp32(wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n):
     target_mfma_tiling_fp32 = list()
     for t in ctrl_xdlops_mapping_fp32:
         if t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and \
