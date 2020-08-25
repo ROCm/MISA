@@ -229,6 +229,9 @@ class igemm_coalescing_store_t(mc_base_t):
         return ''
 
     def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp2):
+        '''
+        v_gemm_im, v_gemm_in must be computed from get_gemm_index_for_dst_matrix
+        '''
         ctrl = self.ctrl
         g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.ctrl.get_subgroups()
         with self._deferred_context():
