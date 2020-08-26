@@ -712,20 +712,20 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.v_gemm_im       = sym_t("v_gemm_im"      ,v_c_num - 12)
 
             if v_c_num < 16:
-                self.v_in_in0        = sym_t("v_in_in0"       ,vseq(1))
-                self.v_in_in1b       = sym_t("v_in_in1b"      ,vseq(1))
-                self.v_in_in1        = sym_t("v_in_in1"       ,vseq(1))
-                self.v_in_ihi        = sym_t("v_in_ihi"       ,vseq(1))
-                self.v_in_iwi        = sym_t("v_in_iwi"       ,vseq(1))
+                self.v_wei_ic0        = sym_t("v_wei_ic0"       ,vseq(1))
+                self.v_wei_ic1e       = sym_t("v_wei_ic1e"      ,vseq(1))
+                self.v_wei_ic1        = sym_t("v_wei_ic1"       ,vseq(1))
+                self.v_wei_iy        = sym_t("v_wei_iy"       ,vseq(1))
+                self.v_wei_ix        = sym_t("v_wei_ix"       ,vseq(1))
                 
                 self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
                 self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
             else:
-                self.v_in_in0        = sym_t("v_in_in0"       ,v_c_num - 13)
-                self.v_in_in1b       = sym_t("v_in_in1b"      ,v_c_num - 14)
-                self.v_in_in1        = sym_t("v_in_in1"       ,v_c_num - 15)
-                self.v_in_ihi        = sym_t("v_in_ihi"       ,v_c_num - 16)
-                self.v_in_iwi        = sym_t("v_in_iwi"       ,v_c_num - 17)
+                self.v_wei_ic0        = sym_t("v_wei_ic0"       ,v_c_num - 13)
+                self.v_wei_ic1e       = sym_t("v_wei_ic1e"      ,v_c_num - 14)
+                self.v_wei_ic1        = sym_t("v_wei_ic1"       ,v_c_num - 15)
+                self.v_wei_iy        = sym_t("v_wei_iy"       ,v_c_num - 16)
+                self.v_wei_ix        = sym_t("v_wei_ix"       ,v_c_num - 17)
                 
                 self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,v_c_num - 18)
                 self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,v_c_num - 19)
@@ -1416,12 +1416,12 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f";   compute from c1e")
         if self.tunable.nxe != 0:
-            self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ic1e()}], v[{v.v_in_ic1e()}]")
-            self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_wei_ic1(), v.v_tmp(5), s.s_stride_dslice_hw(), v.v_tmp(), s.s_tmp()))
-            self._emit(m_int_div_rem_vs(v.v_in_dslice_iw(), v.v_in_dslice_ih(), v.v_tmp(4), s.s_dslice_w(), v.v_tmp(), s.s_tmp()))
+            self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ic1e()}], v[{v.v_wei_ic1e()}]")
+            self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_wei_ic1(), v.v_tmp(5), s.s_wei_stride_c(), v.v_tmp(), s.s_tmp()))
+            #self._emit(m_int_div_rem_vs(v.v_in_dslice_iw(), v.v_in_dslice_ih(), v.v_tmp(4), s.s_dslice_w(), v.v_tmp(), s.s_tmp()))
             self._emit_empty_line()
-            self._emit(f"v_add_u32 v[{v.v_in_dslice_ih()}], s[{s.s_dslice_h_left()}], v[{v.v_in_dslice_ih()}]")
-            self._emit(f"v_add_u32 v[{v.v_in_dslice_iw()}], s[{s.s_dslice_w_left()}], v[{v.v_in_dslice_iw()}]")
+            #self._emit(f"v_add_u32 v[{v.v_in_dslice_ih()}], s[{s.s_dslice_h_left()}], v[{v.v_in_dslice_ih()}]")
+            #self._emit(f"v_add_u32 v[{v.v_in_dslice_iw()}], s[{s.s_dslice_w_left()}], v[{v.v_in_dslice_iw()}]")
             self._emit_empty_line()
             self._emit(f"; dslice_h,dslice_y -> hip,  dslice_w,dslicw_x -> wip")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dtile_iy()}], s[{s.s_dilation_h()}]")
