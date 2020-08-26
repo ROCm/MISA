@@ -36,8 +36,13 @@ class igemm_codegen_driver_t(mc_base_t):
 
         kernel_list = []
 
-        # gtc bwd
-        kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+        # gtc driver
+        for td in tunable_dicts:
+            igemm_gtc_tunable = igemm_gtc_tunable_parameter_t(td)
+            if igemm_gtc_tunable.direction == 'bwd':
+                kernel_list.append(igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
+            if igemm_gtc_tunable.direction == 'wrw':
+                kernel_list.append(igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
 
         self.kernel_list = kernel_list
 

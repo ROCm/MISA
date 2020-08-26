@@ -156,10 +156,10 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
             self.unmerge_sub_c = 1                             # not used
         else:
-            # TODO: wrw maybe different
-            self.unmerge_sub_n = 1
+            assert self.gemm_n_per_block % self.nxe == 0
+            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
             self.unmerge_sub_k = 1
-            self.unmerge_sub_c = 1
+            self.unmerge_sub_c = self.gemm_n_per_block // self.nxe
 
         # vector global/lds implicit here
         self.gemm_m_repeat                      = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
