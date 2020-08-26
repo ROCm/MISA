@@ -872,7 +872,11 @@ class igemm_bwd_gtc_t(mc_base_t):
                     self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
-            self.v_end           = sym_t("v_end"          ,vseq())
+            total_vgpr           = vseq()
+            if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                # if xdlops agpr is larger than vgpr usage, must change vgpr count to agpr
+                total_vgpr       = max(total_vgpr, outer.tunable.num_agpr_accumulate_c)
+            self.v_end           = sym_t("v_end"          ,total_vgpr)
 
         def get_count(self):
             return self.v_end.value
