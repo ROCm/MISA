@@ -374,12 +374,29 @@ int main(int argc, char **argv) {
 
     int num_cu;
     int num_simd = 64; // hard coded
+    int gcn_arch = 0;
     {
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
         HIP_CALL(hipGetDevice(&dev));
         HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
         num_cu = dev_prop.multiProcessorCount;
+        gcn_arch = dev_prop.gcnArch;
+#if 0
+#define P_DEVICE_PROP_INT(prop) \
+        printf(#prop":%d\n", dev_prop.prop)
+
+
+        P_DEVICE_PROP_INT(clockRate);
+        P_DEVICE_PROP_INT(memoryClockRate);
+        P_DEVICE_PROP_INT(memoryBusWidth);
+        P_DEVICE_PROP_INT(major);
+        P_DEVICE_PROP_INT(minor);
+        P_DEVICE_PROP_INT(gcnArch);
+#endif
+    }
+    if(gcn_arch == 908){
+        num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
     }
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
