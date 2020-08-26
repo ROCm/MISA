@@ -631,9 +631,9 @@ class igemm_v4r1_dynamic_driver_t {
             // debug section of code
             printf("workspace debug \r\n");
             hipMemcpy(gemmc_host_check, gemmc_workspace, gemmk_groups * karg.n * karg.k * y * x * sizeof(float), hipMemcpyDeviceToHost);
-            for (int i_check = 0; i_check < (0+64); i_check++)
+            for (int i_check = 0; i_check < (0+256); i_check++)
             {
-                printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
+                //printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
             }
             printf("workspace debug end \r\n");
 

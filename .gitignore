@@ -4,3 +4,7 @@ out_ori/
 __pycache__
 #*.s
 .vscode/
+out/*.exe
+out/*.hsaco
+out/*.o
+out/sqtt/*

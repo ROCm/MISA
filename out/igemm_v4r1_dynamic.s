@@ -790,16 +790,16 @@ igemm_v4r1_dynamic_wrw_32x32x4_4x4_2x2x4x2x4x2_4x2x8x1_4x16:
     .v_u32_div_vs v_tmp+4, v_out_ib, s_out_stride_n2, v_tmp, s_tmp
     v_mul_lo_u32 v[v_tmp+1], s[s_out_stride_n2], v[v_tmp+4]
     v_sub_u32 v[v_tmp+5], v[v_out_ib], v[v_tmp+1]
-    .v_u32_div_vs v_tmp+6, v_tmp+5, s_wo, v_tmp, s_tmp
-    v_mul_lo_u32 v[v_tmp+1], s[s_wo], v[v_tmp+6]
-    v_sub_u32 v[v_tmp+5], v[v_tmp+5], v[v_tmp+1]
+    ;.v_u32_div_vs v_tmp+6, v_tmp+5, s_wo, v_tmp, s_tmp
+    ;v_mul_lo_u32 v[v_tmp+1], s[s_wo], v[v_tmp+6]
+    ;v_sub_u32 v[v_tmp+5], v[v_tmp+5], v[v_tmp+1]
     ; v_tmp+4:n0, v_tmp+6:ho, v_tmp+5:wo
 
-    v_mul_lo_u32 v[v_tmp], s[s_wo], v[v_tmp+6]
-    v_add_u32 v[v_out_os], v[v_tmp], v[v_tmp+5]
+    ;v_mul_lo_u32 v[v_tmp], s[s_wo], v[v_tmp+6]
+    ;v_add_u32 v[v_out_os], v[v_tmp], v[v_tmp+5]
     s_lshl_b32 s[s_tmp+1], s[s_out_stride_n2], 2
     v_mul_lo_u32 v[v_tmp], s[s_tmp+1], v[v_tmp+4]
-    v_add_u32 v[v_out_os], v[v_out_os], v[v_tmp]
+    v_add_u32 v[v_out_os], v[v_tmp+5], v[v_tmp]
 
     s_lshl_b32 s[s_out_stride_k0], s[s_out_stride_k0], 2
     v_lshl_or_b32 v[v_tmp], v[v_out_ik0], 4, v[v_out_ik1]

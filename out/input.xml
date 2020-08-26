@@ -1,0 +1,15 @@
+<trace name="SQTT">
+ 
+    <parameters
+ 
+        SE_MASK=0xF
+ 
+        MASK=0x0F09
+ 
+        TOKEN_MASK=0x344B
+ 
+        TOKEN_MASK2=0xFFFFFFFF
+ 
+    ></parameters>
+ 
+</trace>

@@ -139,8 +139,8 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define IGEMM_CONFIG_FILE "igemm_v4r1_dynamic.config"
 #endif
 
-#define WARMUP 3
-#define REPEAT 5
+#define WARMUP 1
+#define REPEAT 2
 #define SCLK_MHZ 1800
 
 static inline int env_get_int(const char *var_name, int default_int) {
@@ -221,7 +221,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         //if (i > 255)
         {
 #if PER_PIXEL_CHECK_PRINT
-            if (pp_err < 128)
+            if (pp_err < 256)
                 printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
                        pi, ((uint32_t *)pred)[i], delta);
 #endif
@@ -471,6 +471,12 @@ int main(int argc, char **argv) {
                 for (int i_check = 0; i_check < (0+8); i_check++)
                 {
                     //printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, device_weight_to_host[i_check], ((int *)device_weight_to_host)[i_check]);
+                }
+
+                printf("\r\n");
+                for (int i_check = 18432*2; i_check < (18432*2+256); i_check++)
+                {
+                    //printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_weight[i_check], ((int *)host_weight)[i_check]);
                 }
 
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
