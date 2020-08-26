@@ -242,7 +242,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
         if(igemm_per_pixel_check){
-            double delta = ABS(ri - pi) / ri;
+            double delta = ABS((ri - pi) / ri);
             printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
