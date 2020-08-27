@@ -60,15 +60,16 @@ class compile_asm_t(object):
         cmd += ['{}'.format(self.asm_file_name)]
         cmd += ['-o', '{}'.format(self.target_hsaco)]
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
+        # print("[asm] " + " ".join(cmd))
         try:
             (out, _) = p.communicate()
             if p.returncode != 0:
-                print('build fail:{}'.format(cmd))
+                print('build fail:{}'.format(" ".join(cmd)))
                 print('{}'.format(out.decode('utf-8')))
                 return False
             return True
         except Exception as e:
-            print('fail to run cmd:{}'.format(cmd))
+            print('fail to run cmd:{}'.format(" ".join(cmd)))
             print('err:{}'.format(e))
             return False
 
@@ -94,18 +95,19 @@ class compile_disass_t(object):
 
         cmd += ['{}'.format(self.hsaco_file_name)]
         # cmd += ['>', '{}'.format(self.target_disass)]
+        # print("[dis] " + " ".join(cmd))
         try:
             fp = open(self.target_disass, "w")
             p = subprocess.Popen(cmd, stdout=fp)
             try:
                 (out, _) = p.communicate()
                 if p.returncode != 0:
-                    print('build fail:{}'.format(cmd))
+                    print('build fail:{}'.format(" ".join(cmd)))
                     print('{}'.format(out.decode('utf-8')))
                     return False
                 return True
             except Exception as e:
-                print('fail to run cmd:{}'.format(cmd))
+                print('fail to run cmd:{}'.format(" ".join(cmd)))
                 print('err:{}'.format(e))
                 return False
         except IOError as e:
@@ -174,16 +176,16 @@ class compile_host_t(object):
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-L{bytes.fromhex(xdnnroot).decode()}/lib', f"-l{bytes.fromhex('646e6e6c').decode()}", f'-Wl,-rpath={bytes.fromhex(xdnnroot).decode()}/lib']
             cmd += ['-o', self.target_exec]
-
+        # print("[host] " + " ".join(cmd))
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
         try:
             (out, _) = p.communicate()
             if p.returncode != 0:
-                print('build fail:{}'.format(cmd))
+                print('build fail:{}'.format(" ".join(cmd)))
                 print('{}'.format(out.decode('utf-8')))
                 return False
             return True
         except Exception as e:
-            print('fail to run cmd:{}'.format(cmd))
+            print('fail to run cmd:{}'.format(" ".join(cmd)))
             print('err:{}'.format(e))
             return False
