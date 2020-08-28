@@ -34,7 +34,7 @@ from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
-
+IGEMM_GTC_FEAT_LOCAL_PREFETCH = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -216,22 +216,24 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = 1
 
+        self.local_prefetch_num = 1
         # vector global/lds implicit here
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             self.gemm_m_repeat                  = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
             self.gemm_n_repeat                  = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
             # register for a,b,c buffer
-            self.num_vgpr_accumulate_c              = (self.gemm_m_repeat*self.gemm_m_per_thread*self.gemm_n_repeat*self.gemm_n_per_thread)
-            self.num_vgpr_accumulate_a              = (self.gemm_m_repeat*self.gemm_m_per_thread)
-            self.num_vgpr_accumulate_b              = (self.gemm_n_repeat*self.gemm_n_per_thread)
-        
+            self.num_vgpr_accumulate_c          = (self.gemm_m_repeat * self.gemm_m_per_thread * self.gemm_n_repeat * self.gemm_n_per_thread)
+            self.num_vgpr_accumulate_a          = (self.gemm_m_repeat * self.gemm_m_per_thread)
+            self.num_vgpr_accumulate_b          = (self.gemm_n_repeat * self.gemm_n_per_thread)
+
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self.local_prefetch_num             = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1
             # register for a,b,c buffer
-            xdlops_mapping                          = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
-            self.num_agpr_accumulate_c              = xdlops_mapping.total_acc_c()
+            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
+            self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
             assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
-            self.num_vgpr_accumulate_a              = self.wave_step_m * self.wave_repeat_m
-            self.num_vgpr_accumulate_b              = self.wave_step_n * self.wave_repeat_n
+            self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
+            self.num_vgpr_accumulate_b          = self.wave_step_n * self.wave_repeat_n * xdlops_mapping.inst_mfma.num_v_b * self.local_prefetch_num
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)

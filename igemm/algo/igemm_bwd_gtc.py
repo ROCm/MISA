@@ -1939,6 +1939,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()
             fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
+            fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_wei

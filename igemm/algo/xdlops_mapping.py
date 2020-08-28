@@ -164,13 +164,13 @@ class ctrl_xdlops_mapping_t(object):
         assert self.lanegroup_n_per_thread() * self.lanegroup_n_per_block() * self.lanegroup_n_per_wave() * \
                 self.lanegroup_m_per_thread() * self.lanegroup_m_per_block() * self.lanegroup_m_per_wave() \
                 == self.inst_mfma.num_a_c
-    
+
     def block_m(self):
         return self.inst_mfma.m
-    
+
     def block_n(self):
         return self.inst_mfma.n
-    
+
     def block_k(self):
         return self.inst_mfma.k
 
@@ -243,7 +243,6 @@ class ctrl_xdlops_mapping_t(object):
         s += f"{self.inst_mfma.m}x{self.inst_mfma.n}x{self.inst_mfma.k}, " + \
                 f"lanegroup_m_tcbw:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}x{self.lanegroup_m_per_block()}x{self.lanegroup_m_per_wave()}, " + \
                 f"lanegroup_n_tcbw:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}x{self.lanegroup_n_per_block()}x{self.lanegroup_n_per_wave()}"
-        #print(s)
         return s
 
 #                             mt_m,mt_n,wt_m,wt_n, ws,r_m,r_n,s_m,s_n, inst_mfma
