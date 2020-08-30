@@ -1243,12 +1243,21 @@ class igemm_bwd_gtc_t(mc_base_t):
                 rtn = functor()
                 if rtn is None:
                     continue
-                if type(rtn) is tuple:
-                    kernel_macros.extend([m for m in rtn])
-                else:
-                    kernel_macros.append(rtn)
-        return kernel_macros
 
+                # here we follow the convention in code:
+                # #1. for macro like emit class, use emit() to generate macro definition, use __call__() to call this macro
+                # #2. for non-macro like emit class, which might want to "inline-ed" into normal code, no emit() is defined, just __call__().
+                # hence need to check if has attr name "emit". if not have, it is type #2, no need to do emit() before hand.
+                if type(rtn) is tuple:
+                    for e in rtn:
+                        if hasattr(e, 'emit'):
+                            #continue
+                            kernel_macros.extend([m for m in rtn])
+                else:
+                    if hasattr(rtn, 'emit'):
+                        #continue
+                        kernel_macros.append(rtn)
+        return kernel_macros
 
     def emit_kernel_prologue(self):
         s = self.sgpr

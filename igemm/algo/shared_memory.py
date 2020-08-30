@@ -251,8 +251,8 @@ class inst_ds_read2_likely_t(mc_base_t):
             return emit_read2_fallback(sld_offset)
 
         return likely_emit(sld_offset)
-    def emit(self):
-        assert False, 'dont use emit of this'
+    #def emit(self):
+    #    assert False, 'dont use emit of this'
     def get_issues(self, sld_offset = 0):
         if self.vec_byte == 4:
             if self.likely_read2_b32(sld_offset) or self.likely_read2st64_b32(sld_offset):
@@ -486,8 +486,8 @@ class inst_ds_write2_likely_t(mc_base_t):
             return emit_write2_fallback(sst_offset)
         return likely_emit(sst_offset)
 
-    def emit(self):
-        assert False, 'dont use emit of this'
+    #def emit(self):
+    #    assert False, 'dont use emit of this'
     def get_issues(self, sst_offset = 0):
         if self.vec_byte == 4:
             if self.likely_write2_b32(sst_offset) or self.likely_write2st64_b32(sst_offset):
