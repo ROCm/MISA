@@ -243,33 +243,38 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f's_waitcnt lgkmcnt(6)')
             self._emit(mfma_step_mxn(0, 0, 0, 0))
             self._emit(f_move_slice_window_b())
-            self._emit_empty_line()
-
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(5)')
-            self._emit(mfma_step_mxn(0, 1, 0, 0))
             self._emit(f_move_slice_window_a())
             self._emit_empty_line()
 
+            # 2nd fma
+            self._emit(f's_waitcnt lgkmcnt(0)')
+            self._emit(f"s_barrier")
+            self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
+            self._emit(f_sst_b())
+            self._emit(mfma_step_mxn(0, 1, 0, 0))
+
+            self._emit_empty_line()
+
             # 3rd fma
-            self._emit(f's_waitcnt lgkmcnt(4)')
+            #self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(mfma_step_mxn(1, 0, 0, 0))
             self._emit_empty_line()
 
             # 4th fma
             self._emit(mfma_step_mxn(1, 1, 0, 0))
+            self._emit(f"s_waitcnt vmcnt(0)")
+            self._emit(f_sst_a())
 
             self._emit(f"; k iteration : {unroll_k - 1}")
             # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(0)')
-            self._emit(f"s_barrier")
+            #self._emit(f's_waitcnt lgkmcnt(0)')
+            #self._emit(f"s_barrier")
             #       wait global and store to LDS
-            self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
-            self._emit(f_sst_b())
             
+
             self._emit(mfma_step_mxn(0, 0, 1, 1))
-            self._emit(f"s_waitcnt vmcnt(0)")
-            self._emit(f_sst_a())
+            
+
             self._emit_empty_line()
 
             # 2nd fma
