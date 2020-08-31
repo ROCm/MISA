@@ -219,7 +219,46 @@ def unittest_coalescing_store_m1_m0_xdlops_iterate():
             #         print(f"ig:{ig} ic:{ic}, m1_m0: {m_index_per_group_m1_m0[ig][ic]}")
             #         print("    |" + " ".join( f"{ctrl.get_m0_m1_index(x)}" for x in m_index_per_group_m1_m0[ig][ic]))
 
+def unittest_macro():
+    class macro_igemm_bwd_gtc_out_update_hw_t(macro_base_t):
+        def __init__(self, mc):
+            macro_base_t.__init__(self, mc)
+            self.declare_arg("v_out_iho")
+            self.declare_arg("v_out_iwo")
+            self.declare_arg("v_out_dslice_ih")
+            self.declare_arg("v_out_dslice_iw")
+            self.declare_arg("v_out_dslice_iy")
+            self.declare_arg("v_out_dslice_ix")
+            self.declare_arg("s_dtile_dy_neg")
+            self.declare_arg("s_dtile_dx_neg")
 
+        def name(self):
+            return '.v_bwd_gtc_out_update_hw'
+        # def __call__(self, v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg):
+        #     return '{} {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
+        #         v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg)
+        # def emit(self):
+        #     with self._emit_macro_indented('.macro {} v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg'.format(self.name())):
+        #         self._emit(f"; dslice_y,dslice_h -> oh, dslice_x,dslice_w -> ow")
+        #         self._emit(f"v_mad_i32_i24 v[\\v_out_iho], s[\\s_dtile_dy_neg], v[\\v_out_dslice_iy], v[\\v_out_dslice_ih]")
+        #         self._emit(f"v_mad_i32_i24 v[\\v_out_iwo], s[\\s_dtile_dx_neg], v[\\v_out_dslice_ix], v[\\v_out_dslice_iw]")
+
+        #def is_inline(self):
+        #    return True
+        def expr(self):
+            self._emit(f"; dslice_y,dslice_h -> oh, dslice_x,dslice_w -> ow")
+            self._emit(f"v_mad_i32_i24 v[{self.v_out_iho()}], s[{self.s_dtile_dy_neg()}], v[{self.v_out_dslice_iy()}], v[{self.v_out_dslice_ih()}]")
+            self._emit(f"v_mad_i32_i24 v[{self.v_out_iwo()}], s[{self.s_dtile_dx_neg()}], v[{self.v_out_dslice_ix()}], v[{self.v_out_dslice_iw()}]")
+
+    mc = get_default_mc()
+    igemm_bwd_gtc_out_update_hw = macro_igemm_bwd_gtc_out_update_hw_t(mc)
+
+    igemm_bwd_gtc_out_update_hw.emit()
+    mc.emit(igemm_bwd_gtc_out_update_hw('v_out_iho', 'v_out_iwo', 'v_out_dslice_ih222', 'v_out_dslice_iw222', 'v_out_dslice_iy', 'v_out_dslice_ix', 's_dtile_dy_neg', 's_dtile_dx_neg'))
+
+
+    mc.emit(igemm_bwd_gtc_out_update_hw(sym_t('v_out_ihoabab')(), 'v_out_iwo', 'v_out_dslice_ih222', 'v_out_dslice_iw222', 'v_out_dslice_iy', 'v_out_dslice_ix', 's_dtile_dy_neg', 's_dtile_dx_neg'))
+    print(mc.emitter.get_buffer())
 
 
 def unittest_thread_mapping():
@@ -237,8 +276,9 @@ def run_all_unittest():
     #unittest_coalescing_store_m1_m0()
     #unittest_coalescing_store_m1_m0_xdlops()
     #unittest_xdlops_mapping()
-    unittest_coalescing_store_m1_m0_xdlops_iterate()
+    #unittest_coalescing_store_m1_m0_xdlops_iterate()
     # unittest_thread_mapping()
+    unittest_macro()
 
 if __name__ == '__main__':
     run_all_unittest()

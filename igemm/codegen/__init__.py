@@ -23,6 +23,8 @@
 #  SOFTWARE.
 # 
 ################################################################################
+from .symbol import *
+from .macro import *
 from .compile import *
 from .config_parser import *
 from .amdgpu import *
