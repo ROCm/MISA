@@ -30,7 +30,7 @@ from .mbb import *
 
 SCHEDULER_TYPE_SIMPLE_INTERLEAVE = 0
 
-INTERLEAVE_PTN_0 = "mbb0 mfma, mbb1 global_load and move_slice_window"
+INTERLEAVE_PTN_0 = "mbb0 mfma and related share load, mbb1 global_load and move_slice_window"
 INTERLEAVE_PTN_1 = "mbb0 mfma, mbb1 share_store"
 INTERLEAVE_PTN_2 = "mbb0 global store, mbb 1 share store"
 
@@ -42,6 +42,18 @@ class simple_interleave_scheduler_t(mc_base_t):
     def __init__(self, mc, mbb_lists):
         mc_base_t.__init__(self, mc)
         self.mbb_lists = mbb_lists
+
+    def call_mbb(self, mbb):
+        '''
+        basically this is to deal with indent...
+        within mbb, there is no concept of indent.
+        but while lowering, we need indent to pretty emit
+        '''
+        mbb_lines = mbb().split('\n')
+        with self._deferred_context():
+            for line in mbb_lines:
+                self._emit(line)
+        return self._get_deferred()
 
     def lower(self, **options):
         '''
@@ -60,7 +72,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                 return dictionary[key]
             else:
                 return default_value
-        assert len(mbb_lists) == 2, "currently only support 2 mbb list interleave together"
+        assert len(self.mbb_lists) == 2, "currently only support 2 mbb list interleave together"
 
         interleave_pattern = get_dict_with_default(options, "interleave_pattern", INTERLEAVE_PTN_0)
         start_position = get_dict_with_default(options, "start_position", 0)
@@ -83,10 +95,10 @@ class simple_interleave_scheduler_t(mc_base_t):
 
         if interleave_pattern == INTERLEAVE_PTN_0:
             # first check how many global load in mbb_1
-            assert mbb_1[0].mc_inst().type() == MC_INST_TYPE_GLOBAL_MEM
+            assert mbb_1[0].mc_inst(-1).type() == MC_INST_TYPE_GLOBAL_MEM
             num_gmem = 0
             for i in range(len(mbb_1)):
-                if mbb_1[i].mc_inst().type() == MC_INST_TYPE_GLOBAL_MEM:
+                if mbb_1[i].mc_inst(-1).type() == MC_INST_TYPE_GLOBAL_MEM:
                     num_gmem = num_gmem + 1
                 else:
                     break
@@ -107,25 +119,26 @@ class simple_interleave_scheduler_t(mc_base_t):
                 m0_idx = 0
                 m1_idx = 0
                 for i in range(num_mbb_0_interleave_gmem):
-                    self._emit(mbb_0[m0_idx]()) ; m0_idx += 1
+                    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
                     for j in range(gmem_per_interval):
                         if m1_idx < num_gmem:
-                            self._emit(mbb_1[m1_idx]()) ; m1_idx += 1
+                            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
 
                 for i in range(num_mbb_0_left):
-                    self._emit(mbb_0[m0_idx]()) ; m0_idx += 1
+                    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
                     for j in range(mbb_1_left_per_interval):
                         if m1_idx < len(mbb_1):
-                            self._emit(mbb_1[m1_idx]()) ; m1_idx += 1
+                            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
                 assert m0_idx == len(mbb_0)
                 assert m1_idx == len(mbb_1)
             return self._get_deferred()
 
         if interleave_pattern == INTERLEAVE_PTN_1:
-            assert mbb_1[0].mc_inst().type() == MC_INST_TYPE_SHARE_MEM
+            # mbb_1[0].dump()
+            assert mbb_1[0].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM
             num_smem = 0
             for i in range(len(mbb_1)):
-                if mbb_1[i].mc_inst().type() == MC_INST_TYPE_SHARE_MEM:
+                if mbb_1[i].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
                     num_smem = num_smem + 1
                 else:
                     pass         # here we might face with some
@@ -137,12 +150,17 @@ class simple_interleave_scheduler_t(mc_base_t):
                 for i in range(len(mbb_0)):
                     smem_per_interleave_cnt = 0
                     while True:
-                        self._emit(mbb_1[m1_idx]()) ; m1_idx += 1
-                        if mbb_1[m1_idx].mc_inst().type() == MC_INST_TYPE_SHARE_MEM:
+                        if m1_idx >= len(mbb_1):
+                            break
+                        # print(f' --- inst:{mbb_1[m1_idx]()} === {m1_idx}/{len(mbb_1)}, {smem_per_interleave_cnt}/smem_per_interleave:{smem_per_interleave}')
+                        self._emit(self.call_mbb(mbb_1[m1_idx]))
+                        if mbb_1[m1_idx].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
                             smem_per_interleave_cnt = smem_per_interleave_cnt + 1
+                        m1_idx += 1
                         if smem_per_interleave_cnt >= smem_per_interleave:
                             break
-                    self._emit(mbb_1[m1_idx]()) ; m1_idx += 1
+                    self._emit(self.call_mbb(mbb_0[m0_idx]))
+                    m0_idx += 1
             return self._get_deferred()
 
 

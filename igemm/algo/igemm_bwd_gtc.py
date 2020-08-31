@@ -50,94 +50,129 @@ def _find_non_1_index_in_list(list_object):
             result_list.append(idx)
     return result_list
 
-class macro_igemm_bwd_gtc_out_update_os_t(mc_base_t):
-    def __init__(self, mc, data_byte):
-        mc_base_t.__init__(self, mc)
+class macro_igemm_bwd_gtc_out_update_os_t(macro_base_t):
+    def __init__(self, mc, data_byte, inline = False):
+        macro_base_t.__init__(self, mc, inline)
         self.data_byte = data_byte
+        self.declare_arg("v_out_os")
+        self.declare_arg("v_out_os_base")
+        self.declare_arg("v_out_iho")
+        self.declare_arg("v_out_iwo")
+        self.declare_arg("s_wo")
+        self.declare_arg("v_tmp")
+
     def name(self):
         return '.v_bwd_gtc_out_update_os'
-    def __call__(self, v_out_os, v_out_os_base, v_out_iho, v_out_iwo, s_wo, v_tmp):
-        return '{} {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_out_os, v_out_os_base, v_out_iho, v_out_iwo, s_wo, v_tmp)
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_out_os, v_out_os_base, v_out_iho, v_out_iwo, s_wo, v_tmp'.format(self.name())):
-            self._emit(f"; from ho, wo, os_base, compute final offset")
-            self._emit(f"v_mad_u32_u24 v[\\v_tmp], s[\\s_wo], v[\\v_out_iho], v[\\v_out_iwo]")
-            self._emit(f"v_lshl_add_u32 v[\\v_out_os], v[\\v_tmp], {igemm_log2(self.data_byte)}, v[\\v_out_os_base]")
 
-class macro_igemm_bwd_gtc_out_update_hw_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+    def expr(self):
+        self._emit(f"; from ho, wo, os_base, compute final offset")
+        self._emit(f"v_mad_u32_u24 v[{self.v_tmp()}], s[{self.s_wo()}], v[{self.v_out_iho()}], v[{self.v_out_iwo()}]")
+        self._emit(f"v_lshl_add_u32 v[{self.v_out_os()}], v[{self.v_tmp()}], {igemm_log2(self.data_byte)}, v[{self.v_out_os_base()}]")
+
+class macro_igemm_bwd_gtc_out_update_hw_t(macro_base_t):
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("v_out_iho")
+        self.declare_arg("v_out_iwo")
+        self.declare_arg("v_out_dslice_ih")
+        self.declare_arg("v_out_dslice_iw")
+        self.declare_arg("v_out_dslice_iy")
+        self.declare_arg("v_out_dslice_ix")
+        self.declare_arg("s_dtile_dy_neg")
+        self.declare_arg("s_dtile_dx_neg")
     def name(self):
         return '.v_bwd_gtc_out_update_hw'
-    def __call__(self, v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg):
-        return '{} {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg)
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_out_iho, v_out_iwo, v_out_dslice_ih, v_out_dslice_iw, v_out_dslice_iy, v_out_dslice_ix, s_dtile_dy_neg, s_dtile_dx_neg'.format(self.name())):
-            self._emit(f"; dslice_y,dslice_h -> oh, dslice_x,dslice_w -> ow")
-            self._emit(f"v_mad_i32_i24 v[\\v_out_iho], s[\\s_dtile_dy_neg], v[\\v_out_dslice_iy], v[\\v_out_dslice_ih]")
-            self._emit(f"v_mad_i32_i24 v[\\v_out_iwo], s[\\s_dtile_dx_neg], v[\\v_out_dslice_ix], v[\\v_out_dslice_iw]")
 
-class macro_igemm_bwd_gtc_wei_update_os_t(mc_base_t):
-    def __init__(self, mc, data_byte):
-        mc_base_t.__init__(self, mc)
+    def expr(self):
+        self._emit(f"; dslice_y,dslice_h -> oh, dslice_x,dslice_w -> ow")
+        self._emit(f"v_mad_i32_i24 v[{self.v_out_iho()}], s[{self.s_dtile_dy_neg()}], v[{self.v_out_dslice_iy()}], v[{self.v_out_dslice_ih()}]")
+        self._emit(f"v_mad_i32_i24 v[{self.v_out_iwo()}], s[{self.s_dtile_dx_neg()}], v[{self.v_out_dslice_ix()}], v[{self.v_out_dslice_iw()}]")
+
+class macro_igemm_bwd_gtc_wei_update_os_t(macro_base_t):
+    def __init__(self, mc, data_byte, inline = False):
+        macro_base_t.__init__(self, mc, inline)
         self.data_byte = data_byte
+        self.declare_arg("v_wei_os")
+        self.declare_arg("v_wei_os_base")
+        self.declare_arg("v_wei_iy")
+        self.declare_arg("v_wei_ix")
+        self.declare_arg("s_x")
+        self.declare_arg("v_tmp")
     def name(self):
         return '.v_bwd_gtc_wei_update_os'
-    def __call__(self, v_wei_os, v_wei_os_base, v_wei_iy, v_wei_ix, s_x, v_tmp):
-        return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_wei_os, v_wei_os_base, v_wei_iy, v_wei_ix, s_x, v_tmp)
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_wei_os, v_wei_os_base, v_wei_iy, v_wei_ix, s_x, v_tmp'.format(self.name())):
-            self._emit(f"; from y, x, os_base, compute final offset")
-            self._emit(f"v_mad_u32_u24 v[\\v_tmp], v[\\v_wei_iy], s[\\s_x], v[\\v_wei_ix]")
-            self._emit(f"v_lshl_add_u32 v[\\v_wei_os], v[\\v_tmp], {igemm_log2(self.data_byte)}, v[\\v_wei_os_base]")
+
+    def expr(self):
+        self._emit(f"; from y, x, os_base, compute final offset")
+        self._emit(f"v_mad_u32_u24 v[{self.v_tmp()}], v[{self.v_wei_iy()}], s[{self.s_x()}], v[{self.v_wei_ix()}]")
+        self._emit(f"v_lshl_add_u32 v[{self.v_wei_os()}], v[{self.v_tmp()}], {igemm_log2(self.data_byte)}, v[{self.v_wei_os_base()}]")
 
 
-class macro_igemm_bwd_gtc_wei_update_yx_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class macro_igemm_bwd_gtc_wei_update_yx_t(macro_base_t):
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("v_wei_iy")
+        self.declare_arg("v_wei_ix")
+        self.declare_arg("v_wei_dslice_iy")
+        self.declare_arg("v_wei_dslice_ix")
+        self.declare_arg("s_dtile_y")
+        self.declare_arg("s_dtile_x")
+        self.declare_arg("v_dtile_iy")
+        self.declare_arg("v_dtile_ix")
+
     def name(self):
         return '.v_bwd_gtc_wei_update_yx'
-    def __call__(self, v_wei_iy, v_wei_ix, v_wei_dslice_iy, v_wei_dslice_ix, s_dtile_y, s_dtile_x, v_dtile_iy, v_dtile_ix):
-        return '{} {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_wei_iy, v_wei_ix, v_wei_dslice_iy, v_wei_dslice_ix, s_dtile_y, s_dtile_x, v_dtile_iy, v_dtile_ix)
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_wei_iy, v_wei_ix, v_wei_dslice_iy, v_wei_dslice_ix, s_dtile_y, s_dtile_x, v_dtile_iy, v_dtile_ix'.format(self.name())):
-            self._emit(f"v_mad_u32_u24 v[\\v_wei_iy], s[\\s_dtile_y], v[\\v_wei_dslice_iy], v[\\v_dtile_iy]")
-            self._emit(f"v_mad_u32_u24 v[\\v_wei_ix], s[\\s_dtile_x], v[\\v_wei_dslice_ix], v[\\v_dtile_ix]")
+
+    def expr(self):
+        self._emit(f"v_mad_u32_u24 v[{self.v_wei_iy()}], s[{self.s_dtile_y()}], v[{self.v_wei_dslice_iy()}], v[{self.v_dtile_iy()}]")
+        self._emit(f"v_mad_u32_u24 v[{self.v_wei_ix()}], s[{self.s_dtile_x()}], v[{self.v_wei_dslice_ix()}], v[{self.v_dtile_ix()}]")
 
 
-class macro_igemm_bwd_gtc_set_flag_hw(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class macro_igemm_bwd_gtc_set_flag_hw(macro_base_t):
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("v_flag")
+        self.declare_arg("v_ih")
+        self.declare_arg("v_iw")
+        self.declare_arg("s_h")
+        self.declare_arg("s_w")
     def name(self):
         return '.v_set_flag_hw'
-    def __call__(self, v_flag, v_ih, v_iw, s_h, s_w):
-        return '{} {}, {}, {}, {}, {}'.format(self.name(), v_flag, v_ih, v_iw, s_h, s_w)
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_flag, v_ih, v_iw, s_h, s_w'.format(self.name())):
-            self._emit(f"v_cmp_gt_u32 vcc, s[\\s_h], v[\\v_ih]")
-            self._emit(f"v_cndmask_b32 v[\\v_flag], 0, 1, vcc")
-            self._emit(f"v_cmp_gt_u32 vcc, s[\\s_w], v[\\v_iw]")
-            self._emit(f"v_cndmask_b32 v[\\v_flag], 0, v[\\v_flag], vcc")
 
+    def expr(self):
+        self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_h()}], v[{self.v_ih()}]")
+        self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, 1, vcc")
+        self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_w()}], v[{self.v_iw()}]")
+        self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
 
-class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
+class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(macro_base_t):
     '''
     optimized move slice approach. 
     '''
-    def __init__(self, mc, tunable):
+    def __init__(self, mc, tunable, inline = False):
         assert type(tunable) is igemm_gtc_tunable_parameter_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.tunable = tunable
+        self.declare_arg("v_move_slice_k_ik1")
+        self.declare_arg("v_move_slice_k_idsy")
+        self.declare_arg("v_move_slice_k_idsx")
+        self.declare_arg("s_gemm_k_num_k1")
+        self.declare_arg("s_gemm_k_num_dsy")
+        self.declare_arg("s_gemm_k_num_dsx")
+        self.declare_arg("s_move_slice_k_k1")
+        self.declare_arg("s_move_slice_k_dsy")
+        self.declare_arg("s_move_slice_k_dsx")
+        self.declare_arg("v_out_os_base")
+        self.declare_arg("v_wei_os_base")
+        self.declare_arg("s_out_stride_k")
+        self.declare_arg("s_wei_stride_k")
+        self.declare_arg("s_out_stride_k_k1")
+        self.declare_arg("s_wei_stride_k_k1")
+        self.declare_arg("s_out_stride_k_k0_k1_diff")
+        self.declare_arg("s_wei_stride_k_k0_k1_diff")
 
     def name(self):
         return '.s_bwd_gtc_move_slice_window_k_dsy_dsx'
 
-    def __call__(self, v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff):
-        return '{} {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff)
     def init_stride_k(self, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff, s_move_slice_k_k1):
         '''
         s_out_stride_k, s_wei_stride_k, s_move_slice_k_k1 is known value, want to compute other
@@ -172,87 +207,89 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(mc_base_t):
 
         return self._get_deferred()
 
-    def emit(self):
-        # unmerge_sub_k1 = self.unmerge_sub_k1
-        '''
-        This is indeed a multi-dimension add-carry operation
-        e.g. if want to compute a 3d (merged) dimension index [iz, iy, ix], with dimension length of [nz, ny, nx] in each.
-        suppose we want to add a specific value this merged dimension.
-        1) if want to add 1, it is simple.
-            ix += 1
-            if ix >= nx:
-                ix = 0
-                iy += 1     # carry to iy
-            if iy >= ny:
-                iy = 0
-                iz += 1     # carry to iz
-            if iz >= nz:
-                pass        # the final dimension indeed can be ignored
-        
-        2) if we want to add N
-            # first, find out how many steps in each dimension needed to add
-            stride_x = N % nx               # -> usually can store in sgpr
-            stride_y = (N//nx) % ny         # -> usually can store in sgpr
-            stride_z = (N//(nx*ny)) % nz    # -> usually can store in sgpr
+    '''
+    This is indeed a multi-dimension add-carry operation
+    e.g. if want to compute a 3d (merged) dimension index [iz, iy, ix], with dimension length of [nz, ny, nx] in each.
+    suppose we want to add a specific value this merged dimension.
+    1) if want to add 1, it is simple.
+        ix += 1
+        if ix >= nx:
+            ix = 0
+            iy += 1     # carry to iy
+        if iy >= ny:
+            iy = 0
+            iz += 1     # carry to iz
+        if iz >= nz:
+            pass        # the final dimension indeed can be ignored
+    
+    2) if we want to add N
+        # first, find out how many steps in each dimension needed to add
+        stride_x = N % nx               # -> usually can store in sgpr
+        stride_y = (N//nx) % ny         # -> usually can store in sgpr
+        stride_z = (N//(nx*ny)) % nz    # -> usually can store in sgpr
 
-            # then do the add-carry
-            ix += stride_x
-            if ix >= nx:
-                ix -= nx    # ! note here, no longer set 0
-                iy += 1     # carry to iy
-            iy += stride_y
-            if iy >= ny:
-                iy -= ny    # ! note here, no longer set 0
-                iz += 1     # carry to iz
-            iz += stride_z
-            if iz >= nz:
-                pass        # the final dimension indeed can be ignored
-        '''
-        with self._emit_macro_indented('.macro {} v_move_slice_k_ik1, v_move_slice_k_idsy, v_move_slice_k_idsx, s_gemm_k_num_k1, s_gemm_k_num_dsy, s_gemm_k_num_dsx, s_move_slice_k_k1, s_move_slice_k_dsy, s_move_slice_k_dsx, v_out_os_base, v_wei_os_base, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff'.format(self.name())):
-            # k0, k1e is unmerge.  k1e is merged from k1, e
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_idsx], s[\\s_move_slice_k_dsx], v[\\v_move_slice_k_idsx]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_dsx], v[\\v_move_slice_k_idsx]")
-            #self._emit(f"v_mov_b32 v[\\v_move_slice_k_idsx], 0")
-            self._emit(f"v_subrev_u32 v[\\v_move_slice_k_idsx], s[\\s_gemm_k_num_dsx], v[\\v_move_slice_k_idsx]")
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_idsy], 1, v[\\v_move_slice_k_idsy]")
-            self._emit(f"s_mov_b64 exec, -1")
-            self._emit_empty_line()
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_idsy], s[\\s_move_slice_k_dsy], v[\\v_move_slice_k_idsy]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_dsy], v[\\v_move_slice_k_idsy]")
-            #self._emit(f"v_mov_b32 v[\\v_move_slice_k_idsy], 0")
-            self._emit(f"v_subrev_u32 v[\\v_move_slice_k_idsy], s[\\s_gemm_k_num_dsy], v[\\v_move_slice_k_idsy]")
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_ik1], 1, v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k], v[\\v_out_os_base]")
-            self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k], v[\\v_wei_os_base]")
-            self._emit(f"s_mov_b64 exec, -1")
-            self._emit_empty_line()
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_ik1], s[\\s_move_slice_k_k1], v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k_k1], v[\\v_out_os_base]")
-            self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k_k1], v[\\v_wei_os_base]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
-            #self._emit(f"v_mov_b32 v[\\v_move_slice_k_ik1], 0")
-            self._emit(f"v_subrev_u32 v[\\v_move_slice_k_ik1], s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_add_u32 v[\\v_out_os_base], s[\\s_out_stride_k_k0_k1_diff], v[\\v_out_os_base]")
-            self._emit(f"v_add_u32 v[\\v_wei_os_base], s[\\s_wei_stride_k_k0_k1_diff], v[\\v_wei_os_base]")
-            self._emit(f"s_mov_b64 exec, -1")
-            self._emit_empty_line()
+        # then do the add-carry
+        ix += stride_x
+        if ix >= nx:
+            ix -= nx    # ! note here, no longer set 0
+            iy += 1     # carry to iy
+        iy += stride_y
+        if iy >= ny:
+            iy -= ny    # ! note here, no longer set 0
+            iz += 1     # carry to iz
+        iz += stride_z
+        if iz >= nz:
+            pass        # the final dimension indeed can be ignored
+    '''
+    def expr(self):
+        # k0, k1e is unmerge.  k1e is merged from k1, e
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_idsx()}], s[{self.s_move_slice_k_dsx()}], v[{self.v_move_slice_k_idsx()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_dsx()}], v[{self.v_move_slice_k_idsx()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_idsx()}], s[{self.s_gemm_k_num_dsx()}], v[{self.v_move_slice_k_idsx()}]")
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_idsy()}], 1, v[{self.v_move_slice_k_idsy()}]")
+        self._emit(f"s_mov_b64 exec, -1")
+        self._emit_empty_line()
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_idsy()}], s[{self.s_move_slice_k_dsy()}], v[{self.v_move_slice_k_idsy()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_dsy()}], v[{self.v_move_slice_k_idsy()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_idsy()}], s[{self.s_gemm_k_num_dsy()}], v[{self.v_move_slice_k_idsy()}]")
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ik1()}], 1, v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_add_u32 v[{self.v_out_os_base()}], s[{self.s_out_stride_k()}], v[{self.v_out_os_base()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k()}], v[{self.v_wei_os_base()}]")
+        self._emit(f"s_mov_b64 exec, -1")
+        self._emit_empty_line()
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ik1()}], s[{self.s_move_slice_k_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_add_u32 v[{self.v_out_os_base()}], s[{self.s_out_stride_k_k1()}], v[{self.v_out_os_base()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k_k1()}], v[{self.v_wei_os_base()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ik1()}], s[{self.s_gemm_k_num_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_add_u32 v[{self.v_out_os_base()}], s[{self.s_out_stride_k_k0_k1_diff()}], v[{self.v_out_os_base()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k_k0_k1_diff()}], v[{self.v_wei_os_base()}]")
+        self._emit(f"s_mov_b64 exec, -1")
+        self._emit_empty_line()
 
-class macro_igemm_bwd_gtc_move_slice_window_k(mc_base_t):
+
+class macro_igemm_bwd_gtc_move_slice_window_k(macro_base_t):
     '''
     optimized move slice approach.
     '''
-    def __init__(self, mc, tunable):
+    def __init__(self, mc, tunable, inline = False):
         assert type(tunable) is igemm_gtc_tunable_parameter_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.tunable = tunable
         assert self.tunable.nxe == 0, "this is for nxe 0 only"
+        self.declare_arg("v_move_slice_k_ik1")
+        self.declare_arg("s_gemm_k_num_k1")
+        self.declare_arg("s_move_slice_k_k1")
+        self.declare_arg("v_out_os")
+        self.declare_arg("v_wei_os")
+        self.declare_arg("s_out_stride_k_k1")
+        self.declare_arg("s_wei_stride_k_k1")
+        self.declare_arg("s_out_stride_k_k0_k1_diff")
+        self.declare_arg("s_wei_stride_k_k0_k1_diff")
 
     def name(self):
         return '.s_bwd_gtc_move_slice_window_k'
 
-    def __call__(self, v_move_slice_k_ik1, s_gemm_k_num_k1, s_move_slice_k_k1, v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff):
-        return '{} {}, {}, {}, {}, {}, {}, {}, {}, {}'.format(self.name(),
-            v_move_slice_k_ik1, s_gemm_k_num_k1, s_move_slice_k_k1, v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff)
     def init_stride_k(self, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff, s_move_slice_k_k1):
         '''
         s_out_stride_k, s_wei_stride_k, s_move_slice_k_k1 is known value, want to compute other
@@ -284,28 +321,25 @@ class macro_igemm_bwd_gtc_move_slice_window_k(mc_base_t):
             self._emit(f"s_mul_i32 s[{s_wei_stride_k_k0_k1_diff}], {diff_k0_k1}, s[{s_wei_stride_k}]")
             self._emit(f"s_mul_i32 s[{s_out_stride_k_k1}], s[{s_move_slice_k_k1}], s[{s_out_stride_k}]  ; might be 0 or larger")
             self._emit(f"s_mul_i32 s[{s_wei_stride_k_k1}], s[{s_move_slice_k_k1}], s[{s_wei_stride_k}]  ; might be 0 or larger")
-
         return self._get_deferred()
 
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_move_slice_k_ik1, s_gemm_k_num_k1, s_move_slice_k_k1, v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1, s_out_stride_k_k0_k1_diff, s_wei_stride_k_k0_k1_diff'.format(self.name())):
-            self._emit(f"v_add_u32 v[\\v_move_slice_k_ik1], s[\\s_move_slice_k_k1], v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_add_u32 v[\\v_out_os], s[\\s_out_stride_k_k1], v[\\v_out_os]")
-            self._emit(f"v_add_u32 v[\\v_wei_os], s[\\s_wei_stride_k_k1], v[\\v_wei_os]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_subrev_u32 v[\\v_move_slice_k_ik1], s[\\s_gemm_k_num_k1], v[\\v_move_slice_k_ik1]")
-            self._emit(f"v_add_u32 v[\\v_out_os], s[\\s_out_stride_k_k0_k1_diff], v[\\v_out_os]")
-            self._emit(f"v_add_u32 v[\\v_wei_os], s[\\s_wei_stride_k_k0_k1_diff], v[\\v_wei_os]")
-            self._emit(f"s_mov_b64 exec, -1")
-            self._emit_empty_line()
+    def expr(self):
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ik1()}], s[{self.s_move_slice_k_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_k_k1()}], v[{self.v_out_os()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os()}], s[{self.s_wei_stride_k_k1()}], v[{self.v_wei_os()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ik1()}], s[{self.s_gemm_k_num_k1()}], v[{self.v_move_slice_k_ik1()}]")
+        self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_k_k0_k1_diff()}], v[{self.v_out_os()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os()}], s[{self.s_wei_stride_k_k0_k1_diff()}], v[{self.v_wei_os()}]")
+        self._emit(f"s_mov_b64 exec, -1")
 
-class macro_igemm_bwd_gtc_move_slice_window_k_1d(mc_base_t):
+class macro_igemm_bwd_gtc_move_slice_window_k_1d(macro_base_t):
     '''
     optimized move slice approach. 
     '''
-    def __init__(self, mc, tunable):
+    def __init__(self, mc, tunable, inline = False):
         assert type(tunable) is igemm_gtc_tunable_parameter_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.tunable = tunable
         assert self.tunable.nxe == 0, "this is for nxe 0 only"
 
@@ -331,9 +365,6 @@ class macro_igemm_bwd_gtc_move_slice_window_k_1d(mc_base_t):
     def name(self):
         return '.s_bwd_gtc_move_slice_window_k_1d'
 
-    def __call__(self, v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1):
-        return '{} {}, {}, {}, {}'.format(self.name(),
-            v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1)
     def init_stride_k(self, s_out_stride_k, s_wei_stride_k, s_out_stride_k_k1, s_wei_stride_k_k1, s_move_slice_k_k1):
         '''
         s_out_stride_k, s_wei_stride_k, s_move_slice_k_k1 is known value, want to compute other
@@ -343,11 +374,10 @@ class macro_igemm_bwd_gtc_move_slice_window_k_1d(mc_base_t):
             self._emit(f"s_mul_i32 s[{s_wei_stride_k_k1}], s[{s_move_slice_k_k1}], s[{s_wei_stride_k}]  ; might be 0 or larger")
         return self._get_deferred()
 
-    def emit(self):
-        with self._emit_macro_indented('.macro {} v_out_os, v_wei_os, s_out_stride_k_k1, s_wei_stride_k_k1'.format(self.name())):
-            self._emit(f"v_add_u32 v[\\v_out_os], s[\\s_out_stride_k_k1], v[\\v_out_os]")
-            self._emit(f"v_add_u32 v[\\v_wei_os], s[\\s_wei_stride_k_k1], v[\\v_wei_os]")
-            self._emit_empty_line()
+    def expr(self):
+        self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_k_k1()}], v[{self.v_out_os()}]")
+        self._emit(f"v_add_u32 v[{self.v_wei_os()}], s[{self.s_wei_stride_k_k1()}], v[{self.v_wei_os()}]")
+
 
 
 class igemm_bwd_gtc_t(mc_base_t):
@@ -950,6 +980,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         return out_thread_copy_index, wei_thread_copy_index
 
     def get_macro_global_load(self):
+        inline = True if self.tunable.fma_interleave else False
         t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths()
         out_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
@@ -981,10 +1012,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             assert False
 
         if self.tunable.precache_soffset:
-            return macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_out_gld), \
-                    macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld)
+            return macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_out_gld, inline), \
+                    macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld, inline)
         else:
-            return macro_igemm_2d_global_load_t(self.mc, ctrl_out_gld),  macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld)
+            return macro_igemm_2d_global_load_t(self.mc, ctrl_out_gld, inline),  macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld, inline)
 
     def get_macro_global_store(self):
         return macro_igemm_write_4d_strided_t(self.mc)
@@ -1078,35 +1109,41 @@ class igemm_bwd_gtc_t(mc_base_t):
             assert False
 
         # print(f"out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
+        inline = True if self.tunable.fma_interleave else False 
+        return macro_igemm_2d_shared_store_t(self.mc, out_sst_ctrl, inline), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl, inline)
 
-        return macro_igemm_2d_shared_store_t(self.mc, out_sst_ctrl), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl)
-
-    def get_macro_shared_load(self):
-        return None
+    #def get_macro_shared_load(self):
+    #    return None
 
     def get_macro_out_update_os(self):
-        return macro_igemm_bwd_gtc_out_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision))
+        inline = True if self.tunable.fma_interleave else False
+        return macro_igemm_bwd_gtc_out_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision), inline)
     def get_macro_out_update_hw(self):
+        inline = True if self.tunable.fma_interleave else False
         if self.tunable.nxe != 0:
-            return macro_igemm_bwd_gtc_out_update_hw_t(self.mc)
+            return macro_igemm_bwd_gtc_out_update_hw_t(self.mc, inline)
         return None
     def get_macro_wei_update_os(self):
-        return macro_igemm_bwd_gtc_wei_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision))
+        inline = True if self.tunable.fma_interleave else False
+        return macro_igemm_bwd_gtc_wei_update_os_t(self.mc, amdgpu_precision_data_byte(self.tunable.precision), inline)
     def get_macro_wei_update_yx(self):
+        inline = True if self.tunable.fma_interleave else False
         if self.tunable.nxe != 0:
-            return macro_igemm_bwd_gtc_wei_update_yx_t(self.mc)
+            return macro_igemm_bwd_gtc_wei_update_yx_t(self.mc, inline)
         return None
     def get_macro_set_flag_hw(self):
-        return macro_igemm_bwd_gtc_set_flag_hw(self.mc)
+        inline = True if self.tunable.fma_interleave else False
+        return macro_igemm_bwd_gtc_set_flag_hw(self.mc, inline)
 
     def get_macro_move_slice_window(self):
+        inline = True if self.tunable.fma_interleave else False
         if self.tunable.nxe != 0:
-            return macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(self.mc, self.tunable)
+            return macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(self.mc, self.tunable, inline)
         else:
             if self.is_1d_move_slice_k():
-                return macro_igemm_bwd_gtc_move_slice_window_k_1d(self.mc, self.tunable)
+                return macro_igemm_bwd_gtc_move_slice_window_k_1d(self.mc, self.tunable, inline)
             else:
-                return macro_igemm_bwd_gtc_move_slice_window_k(self.mc, self.tunable)
+                return macro_igemm_bwd_gtc_move_slice_window_k(self.mc, self.tunable, inline)
 
     def get_symbol_global_load_s_stride_d0_d1(self):
         t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths()
@@ -1250,11 +1287,13 @@ class igemm_bwd_gtc_t(mc_base_t):
                 # hence need to check if has attr name "emit". if not have, it is type #2, no need to do emit() before hand.
                 if type(rtn) is tuple:
                     for e in rtn:
-                        if hasattr(e, 'emit'):
+                        #if hasattr(e, 'emit'):
+                        if not e.is_inline():
                             #continue
                             kernel_macros.extend([m for m in rtn])
                 else:
-                    if hasattr(rtn, 'emit'):
+                    #if hasattr(rtn, 'emit'):
+                    if not e.is_inline():
                         #continue
                         kernel_macros.append(rtn)
         return kernel_macros
@@ -1949,6 +1988,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.label_prefix                = self.name()
             fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
+            fctrl.interleave                  = self.tunable.fma_interleave
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_wei

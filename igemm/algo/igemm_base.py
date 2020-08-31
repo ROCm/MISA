@@ -35,6 +35,7 @@ from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
+IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -216,6 +217,7 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = 1
 
+        self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1
         # vector global/lds implicit here
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
@@ -299,6 +301,9 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
+
+        tunable_dict['local_prefetch_num']              = self.local_prefetch_num
+        tunable_dict['fma_interleave']                  = self.fma_interleave
 
         tunable_dict['gemm_m_unmerge_cluster']          = self.gemm_m_unmerge_cluster
         tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
