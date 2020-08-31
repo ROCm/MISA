@@ -94,14 +94,26 @@ class simple_interleave_scheduler_t(mc_base_t):
         mbb_1 = self.mbb_lists[1]
 
         if interleave_pattern == INTERLEAVE_PTN_0:
+            def mbb_have_global_mem(mbb):
+                '''
+                check if mbb contains at least one globel mem
+                '''
+                for mi in mbb.mc_inst_list:
+                    if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
+                        return True
+                return False
             # first check how many global load in mbb_1
-            assert mbb_1[0].mc_inst(-1).type() == MC_INST_TYPE_GLOBAL_MEM
+            # for x in mbb_1:
+            #     x.dump()
+
+            #assert mbb_have_global_mem(mbb_1[0])
             num_gmem = 0
             for i in range(len(mbb_1)):
-                if mbb_1[i].mc_inst(-1).type() == MC_INST_TYPE_GLOBAL_MEM:
+                if mbb_have_global_mem(mbb_1[i]):
                     num_gmem = num_gmem + 1
                 else:
                     break
+            assert num_gmem != 0, f"no global mem in this instructino list, please check"
 
             # second decide how many global mem to interleave per interval
             gmem_mbb_0_ratio = 2 / 3                          # if num global mem bigger than this of mbb_0 length, need add more per interval

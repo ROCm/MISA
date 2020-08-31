@@ -142,8 +142,27 @@ def create_machine_basic_block(multi_line_inst_str, **option):
         STATE_NORMAL = 0
         STATE_PARSING_MBB = 1
 
-        INST_MBB_START = ['v_cmpx', 's_and_saveexec']
+        INST_MBB_START = ['v_cmpx']
         INST_MBB_END = ['s_mov_b64 exec', 's_or_b64 exec']
+
+        def is_mbb_start_cmp_and_exec_block(self, current_index, istrs_list):
+            assert type(istrs_list) is list
+            current_istr = istrs_list[current_index]
+            # current_mc_inst = create_mc_inst(current_istr)
+            current_inst_op = get_mc_inst_op(current_istr)
+            if current_inst_op.startswith('v_cmp_'):
+                #print('asdadds XXXXX')
+                for next_index in range(current_index+1, len(istrs_list)):
+                    next_istr =  istrs_list[next_index]
+                    next_mc_inst = create_mc_inst(next_istr)
+                    next_inst_op = get_mc_inst_op(next_istr)
+                    #print(f'   next_inst_op:{next_inst_op} ')
+                    if not next_mc_inst:
+                        continue
+                    if next_inst_op.startswith('s_and_saveexec'):
+                        return True
+                    return False
+            return False
 
         def is_mbb_start(self, istr):
             _istr = istr.strip()
@@ -169,6 +188,15 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                     return default_value
 
             group_mbb_by_end_of_inst_op = get_dict_with_default(option, "group_mbb_by_end_of_inst_op", "")
+            def match_group_mbb_by_end_of_inst_op(inst_op):
+                if type(group_mbb_by_end_of_inst_op) is str:
+                    return inst_op.startswith(group_mbb_by_end_of_inst_op)
+                if type(group_mbb_by_end_of_inst_op) in (list, tuple):
+                    for g in group_mbb_by_end_of_inst_op:
+                        if inst_op.startswith(g):
+                            return True
+                    return False
+                assert False
 
             istrs = multi_line_inst_str.split('\n')
             mbbs = list()
@@ -180,7 +208,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
 
             if len(istrs) == 0:
                 return None
-            for istr in istrs:
+            for i, istr in enumerate(istrs):
                 mc_inst = create_mc_inst(istr)
                 if not mc_inst:
                     continue
@@ -188,7 +216,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                 if group_mbb_by_end_of_inst_op:
                     inst_op = get_mc_inst_op(istr)
                     if state == self.STATE_NORMAL:
-                        if inst_op.startswith(group_mbb_by_end_of_inst_op):
+                        if match_group_mbb_by_end_of_inst_op(inst_op):
                             mbbs.append(machine_basic_block_t(copy.copy([mc_inst])))
                             mc_inst_buffer.clear()
                         else:
@@ -196,7 +224,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                             mc_inst_buffer.append(mc_inst)
                             state = self.STATE_PARSING_MBB
                     else:
-                        if inst_op.startswith(group_mbb_by_end_of_inst_op):
+                        if match_group_mbb_by_end_of_inst_op(inst_op):
                             mc_inst_buffer.append(mc_inst)
                             mbbs.append(machine_basic_block_t(copy.copy(mc_inst_buffer)))
                             # print(f'xxxxx_ {mc_inst_buffer}, len:{len(mc_inst_buffer)}')
@@ -209,7 +237,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                             mc_inst_buffer.append(mc_inst)
                 else:
                     if state == self.STATE_NORMAL:
-                        if self.is_mbb_start(istr):
+                        if self.is_mbb_start(istr) or self.is_mbb_start_cmp_and_exec_block(i, istrs):
                             mc_inst_buffer.clear()
                             mc_inst_buffer.append(mc_inst)
                             state = self.STATE_PARSING_MBB
@@ -217,7 +245,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                             mbbs.append(machine_basic_block_t(copy.copy([mc_inst])))
                     else:
                         if self.is_mbb_start(istr):
-                            assert False, f'not support recursive start/end for now, with {istr}'
+                            assert False, f'not support recursive start/end for now, with {i}:{istr}, {istrs}'
                         if self.is_mbb_end(istr):
                             mc_inst_buffer.append(mc_inst)
                             mbbs.append(machine_basic_block_t(copy.copy(mc_inst_buffer)))
