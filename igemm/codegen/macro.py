@@ -32,13 +32,14 @@ class macro_base_t(mc_base_t):
     base class of a macro
     a macro can be inline-ed, which means no need to generate .macro ..... .endm and then call this macro
     '''
-    def __init__(self, mc):
+    def __init__(self, mc, inline = False):
         mc_base_t.__init__(self, mc)
         self.arg_list = list()
+        self.inline = inline
     def name(self):
         return 'n/a macro'
     def is_inline(self):
-        return False
+        return self.inline
 
     def _declare_arg(self, arg_name):
         assert type(arg_name) is str

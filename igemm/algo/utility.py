@@ -27,14 +27,14 @@
 from ..codegen import *
 import math
 
-class macro_int_div_vv_t(mc_base_t):
+class macro_int_div_vv_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / v_d`, v_q, v_n, v_d all vgpr
     '''
     def name(self):
         return '.v_u32_div'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, v_n, v_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, v_n, v_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -65,14 +65,14 @@ class macro_int_div_vv_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          0,          v[\\v_d]")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_vv_t(mc_base_t):
+class macro_int_div_rem_vv_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / v_d, v_r = v_n % v_d`, v_r, v_q, v_n, v_d all vgpr
     '''
     def name(self):
         return '.v_u32_div_rem'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_r, v_q, v_n, v_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, v_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -82,14 +82,14 @@ class macro_int_div_rem_vv_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], v[\\v_d], v[\\v_q]")
             self._emit(f"v_sub_u32 v[\\v_r], v[\\v_n], v[\\v_tmp4]")
 
-class macro_int_div_vs_t(mc_base_t):
+class macro_int_div_vs_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / s_d`, v_q, v_n are vgpr, s_d is sgpr
     '''
     def name(self):
         return '.v_u32_div_vs'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, v_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, v_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -120,14 +120,14 @@ class macro_int_div_vs_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          s[\\s_d],   0")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_vs_t(mc_base_t):
+class macro_int_div_rem_vs_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / s_d, v_r = v_n % s_d`, v_r, v_q, v_n are vgpr, s_d is sgpr
     '''
     def name(self):
         return '.v_u32_div_rem_vs'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_r, v_q, v_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -137,14 +137,14 @@ class macro_int_div_rem_vs_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], s[\\s_d], v[\\v_q]")
             self._emit(f"v_sub_u32 v[\\v_r], v[\\v_n], v[\\v_tmp4]")
 
-class macro_int_div_ss_t(mc_base_t):
+class macro_int_div_ss_t(macro_base_t):
     '''
     integer divide to compute `s_q = s_n / s_d`, s_q, s_n, s_d all sgpr
     '''
     def name(self):
         return '.v_u32_div_ss'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, s_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, s_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -175,14 +175,14 @@ class macro_int_div_ss_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          s[\\s_d],   0")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_ss_t(mc_base_t):
+class macro_int_div_rem_ss_t(macro_base_t):
     '''
     integer divide to compute `s_q = s_n / s_d, s_r = s_n % s_d`, s_r, s_q, s_n, s_d all sgpr
     '''
     def name(self):
         return '.v_u32_div_rem_ss'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
 
     def __call__(self, s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}, {}'.format(self.name(), s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4) 
@@ -195,11 +195,11 @@ class macro_int_div_rem_ss_t(mc_base_t):
             self._emit(f"s_mul_i32 s[\\s_tmp4], s[\\s_d], s[\\s_q]")
             self._emit(f"s_sub_i32 s[\\s_r], s[\\s_n], s[\\s_tmp4]")
 
-class macro_c_clear_t(mc_base_t):
+class macro_c_clear_t(macro_base_t):
     def name(self):
         return '.v_clear_nc'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, vid, num):
         return '{} {}, {}'.format(self.name(), vid, num)
     def emit(self):
@@ -211,14 +211,14 @@ class macro_c_clear_t(mc_base_t):
                 self._emit("_v = _v + 1")
             self._emit(".endr")
 
-class macro_acc_c_clear_t(mc_base_t):
+class macro_acc_c_clear_t(macro_base_t):
     '''
     gfx908 RAW harzard attention!
     '''
     def name(self):
         return '.v_clear_acc_c'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, a, num):
         return '{} {}, {}'.format(self.name(), a, num)
     def emit(self):

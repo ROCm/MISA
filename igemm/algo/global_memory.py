@@ -79,12 +79,19 @@ class ctrl_2d_global_load_t(object):
         self.src_order = 0           # 0-d0xd1, 1-d1xd0
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
 
-class macro_igemm_2d_global_load_t(mc_base_t):
+class macro_igemm_2d_global_load_t(macro_base_t):
     # TODO: if need vectorize further LDS write, need shuffle dst gpr while load
-    def __init__(self, mc, ctrl):
+    def __init__(self, mc, ctrl, inline = False):
         assert type(ctrl) is ctrl_2d_global_load_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("v_os")
+        self.declare_arg("s_stride_d0")
+        self.declare_arg("s_stride_d1")
+        self.declare_arg("s_tmp2")
+
     def name(self):
         ctrl = self.ctrl
         if ctrl.precision == "fp32":
@@ -106,74 +113,70 @@ class macro_igemm_2d_global_load_t(mc_base_t):
         #assert ctrl.length_d1 % ctrl.vector_d1 = 0
         #n_d1 = ctrl.length_d1 // ctrl.vector_d1
         return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}"
-    def __call__(self, v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2):
-        return '{} {}, {}, {}, {}, {}, {}'.format(self.name(),
-                        v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2)
 
-    def emit(self):
+    def expr(self):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
-        with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
-            # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
-            if ctrl.src_order == 0 and ctrl.dst_order == 0:
-                i_dst = 0
-                for i_d0 in range(ctrl.length_d0):
-                    for i_d1 in range(n_d1):
-                        if i_d1 == 0 and i_d0 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", 0, 0))
-                        elif i_d1 == 0 and i_d0 != 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_tmp2+1", 0))
-                        else:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_tmp2", 0))
+        #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
+        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+            i_dst = 0
+            for i_d0 in range(ctrl.length_d0):
+                for i_d1 in range(n_d1):
+                    if i_d1 == 0 and i_d0 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                    elif i_d1 == 0 and i_d0 != 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
+                    else:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
 
-                        if i_d1 != (n_d1 - 1):
-                            if i_d1 == 0 and i_d0 ==  0:
-                                self._emit("s_mov_b32 s[\\s_tmp2], s[\\s_stride_d1]")
-                            elif i_d1 == 0 and i_d0 !=  0:
-                                self._emit("s_add_u32 s[\\s_tmp2], s[\\s_tmp2+1], s[\\s_stride_d1]")
-                            else:
-                                self._emit("s_add_u32 s[\\s_tmp2], s[\\s_tmp2], s[\\s_stride_d1]")
-                        i_dst = i_dst + 1
+                    if i_d1 != (n_d1 - 1):
+                        if i_d1 == 0 and i_d0 ==  0:
+                            self._emit(f"s_mov_b32 s[{self.s_tmp2()}], s[{self.s_stride_d1()}]")
+                        elif i_d1 == 0 and i_d0 !=  0:
+                            self._emit(f"s_add_u32 s[{self.s_tmp2()}], s[{self.s_tmp2+1()}], s[{self.s_stride_d1()}]")
+                        else:
+                            self._emit(f"s_add_u32 s[{self.s_tmp2()}], s[{self.s_tmp2()}], s[{self.s_stride_d1()}]")
+                    i_dst = i_dst + 1
+
+                if i_d0 != (ctrl.length_d0 - 1):
+                    if i_d0 == 0:
+                        self._emit(f"s_mov_b32 s[{self.s_tmp2+1()}], s[{self.s_stride_d0()}]")
+                    else:
+                        self._emit(f"s_add_u32 s[{self.s_tmp2+1()}], s[{self.s_tmp2+1()}], s[{self.s_stride_d0()}]")
+        elif ctrl.src_order == 1 and ctrl.dst_order == 0:
+            assert ctrl.vector_d1 == 1, "in such reorder, vector load is meanless"
+            for i_d1 in range(ctrl.length_d1):
+                for i_d0 in range(ctrl.length_d0):
+                    if i_d0 == 0 and i_d1 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                    elif i_d0 == 0 and i_d1 != 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
+                    else:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
 
                     if i_d0 != (ctrl.length_d0 - 1):
-                        if i_d0 == 0:
-                            self._emit("s_mov_b32 s[\\s_tmp2+1], s[\\s_stride_d0]")
+                        if i_d0 == 0 and i_d1 ==  0:
+                            self._emit(f"s_mov_b32 s[{self.s_tmp2()}], s[{self.s_stride_d0()}]")
+                        elif i_d0 == 0 and i_d1 !=  0:
+                            self._emit(f"s_add_u32 s[{self.s_tmp2()}], s[{self.s_tmp2+1()}], s[{self.s_stride_d0()}]")
                         else:
-                            self._emit("s_add_u32 s[\\s_tmp2+1], s[\\s_tmp2+1], s[\\s_stride_d0]")
-            elif ctrl.src_order == 1 and ctrl.dst_order == 0:
-                assert ctrl.vector_d1 == 1, "in such reorder, vector load is meanless"
-                for i_d1 in range(ctrl.length_d1):
-                    for i_d0 in range(ctrl.length_d0):
-                        if i_d0 == 0 and i_d1 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_d0 * ctrl.length_d1 + i_d1}", "\\v_os", "\\s_ptr", 0, 0))
-                        elif i_d0 == 0 and i_d1 != 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_d0 * ctrl.length_d1 + i_d1}", "\\v_os", "\\s_ptr", "\\s_tmp2+1", 0))
-                        else:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_d0 * ctrl.length_d1 + i_d1}", "\\v_os", "\\s_ptr", "\\s_tmp2", 0))
+                            self._emit(f"s_add_u32 s[{self.s_tmp2()}], s[{self.s_tmp2()}], s[{self.s_stride_d0()}]")
 
-                        if i_d0 != (ctrl.length_d0 - 1):
-                            if i_d0 == 0 and i_d1 ==  0:
-                                self._emit("s_mov_b32 s[\\s_tmp2], s[\\s_stride_d0]")
-                            elif i_d0 == 0 and i_d1 !=  0:
-                                self._emit("s_add_u32 s[\\s_tmp2], s[\\s_tmp2+1], s[\\s_stride_d0]")
-                            else:
-                                self._emit("s_add_u32 s[\\s_tmp2], s[\\s_tmp2], s[\\s_stride_d0]")
+                if i_d1 != (ctrl.length_d1 - 1):
+                    if i_d1 == 0:
+                        self._emit(f"s_mov_b32 s[{self.s_tmp2+1()}], s[{self.s_stride_d1()}]")
+                    else:
+                        self._emit(f"s_add_u32 s[{self.s_tmp2+1()}], s[{self.s_tmp2+1()}], s[{self.s_stride_d1()}]")
 
-                    if i_d1 != (ctrl.length_d1 - 1):
-                        if i_d1 == 0:
-                            self._emit("s_mov_b32 s[\\s_tmp2+1], s[\\s_stride_d1]")
-                        else:
-                            self._emit("s_add_u32 s[\\s_tmp2+1], s[\\s_tmp2+1], s[\\s_stride_d1]")
-
-            elif ctrl.src_order == 0 and ctrl.dst_order == 1:
-                assert False, "un implemented"
-            elif ctrl.src_order == 1 and ctrl.dst_order == 1:
-                assert False, "un implemented, consider simple swap stride_d0/d1 order should be the same"
-            else:
-                assert False
+        elif ctrl.src_order == 0 and ctrl.dst_order == 1:
+            assert False, "un implemented"
+        elif ctrl.src_order == 1 and ctrl.dst_order == 1:
+            assert False, "un implemented, consider simple swap stride_d0/d1 order should be the same"
+        else:
+            assert False
 
     def get_issues(self):
         ctrl = self.ctrl
@@ -181,12 +184,19 @@ class macro_igemm_2d_global_load_t(mc_base_t):
         return  ctrl.length_d0 * n_d1
 
 
-class macro_igemm_2d_global_load_precache_soffset_t(mc_base_t):
+class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
     # precache soffset means no salu while do loading
-    def __init__(self, mc, ctrl):
+    def __init__(self, mc, ctrl, inline = False):
         assert type(ctrl) is ctrl_2d_global_load_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("v_os")
+        self.declare_arg("s_stride_d0")
+        self.declare_arg("s_stride_d1")
+        self.declare_arg("s_offset")
+
     def name(self):
         ctrl = self.ctrl
         if ctrl.precision == "fp32":
@@ -206,10 +216,6 @@ class macro_igemm_2d_global_load_precache_soffset_t(mc_base_t):
             assert False
 
         return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_soffset"
-
-    def __call__(self, v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset):
-        return '{} {}, {}, {}, {}, {}, {}'.format(self.name(),
-                        v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset)
     
     def get_2d_index_soffset(self):
         ctrl = self.ctrl
@@ -282,63 +288,66 @@ class macro_igemm_2d_global_load_precache_soffset_t(mc_base_t):
                     i_soffset += 1
         return self._get_deferred()
 
-    def emit(self):
+    def expr(self):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
-        with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
-            # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
-            if ctrl.src_order == 0 and ctrl.dst_order == 0:
-                i_dst = 0
-                i_soffset = 0
-                for i_d0 in range(ctrl.length_d0):
-                    for i_d1 in range(n_d1):
-                        if i_d0 == 0 and i_d1 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", 0, 0))
-                        elif i_d0 == 0 and i_d1 == 1:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_stride_d1", 0))
-                        elif i_d0 == 1 and i_d1 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_stride_d0", 0))
-                        else:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", f"\\s_offset+{i_soffset}", 0))
-                            i_soffset += 1
-                        i_dst = i_dst + 1
+        #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
+        # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
+        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+            i_dst = 0
+            i_soffset = 0
+            for i_d0 in range(ctrl.length_d0):
+                for i_d1 in range(n_d1):
+                    if i_d0 == 0 and i_d1 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                    elif i_d0 == 0 and i_d1 == 1:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                    elif i_d0 == 1 and i_d1 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                    else:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        i_soffset += 1
+                    i_dst = i_dst + 1
 
-            elif ctrl.src_order == 1 and ctrl.dst_order == 0:
-                assert ctrl.vector_d1 == 1, "in such reorder, vector load is meanless"
-                index_mapping = self.get_2d_index_soffset()
-                for i_d1 in range(ctrl.length_d1):
-                    for i_d0 in range(ctrl.length_d0):
-                        if i_d0 == 0 and i_d1 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", 0, 0))
-                        elif i_d0 == 0 and i_d1 == 1:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_stride_d1", 0))
-                        elif i_d0 == 1 and i_d1 == 0:
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", "\\s_stride_d0", 0))
-                        else:
-                            i_soffset = index_mapping[i_d0][i_d1]
-                            assert i_soffset != 1, "impossible"
-                            self._emit(buffer_load_dword(f"\\v_dst+{i_dst*ctrl.vector_d1}", "\\v_os", "\\s_ptr", f"\\s_offset+{i_soffset}", 0))
-            elif ctrl.src_order == 0 and ctrl.dst_order == 1:
-                assert False, "un implemented"
-            elif ctrl.src_order == 1 and ctrl.dst_order == 1:
-                assert False, "un implemented, consider simple swap stride_d0/d1 order should be the same"
-            else:
-                assert False
+        elif ctrl.src_order == 1 and ctrl.dst_order == 0:
+            assert ctrl.vector_d1 == 1, "in such reorder, vector load is meanless"
+            index_mapping = self.get_2d_index_soffset()
+            for i_d1 in range(ctrl.length_d1):
+                for i_d0 in range(ctrl.length_d0):
+                    if i_d0 == 0 and i_d1 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                    elif i_d0 == 0 and i_d1 == 1:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                    elif i_d0 == 1 and i_d1 == 0:
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                    else:
+                        i_soffset = index_mapping[i_d0][i_d1]
+                        assert i_soffset != 1, "impossible"
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+        elif ctrl.src_order == 0 and ctrl.dst_order == 1:
+            assert False, "un implemented"
+        elif ctrl.src_order == 1 and ctrl.dst_order == 1:
+            assert False, "un implemented, consider simple swap stride_d0/d1 order should be the same"
+        else:
+            assert False
 
     def get_issues(self):
         ctrl = self.ctrl
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         return  ctrl.length_d0 * n_d1
 
-
-class macro_igemm_write_4d_strided_t(mc_base_t):
+class macro_igemm_write_4d_strided_t(macro_base_t):
+    '''
+    TODO: this is always not inline
+    '''
     def name(self):
         return '.v_write4d_strided'
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+
     def __call__(self, v_src, s_p_dst, v_dst_os, s_dst_diff1d, s_dst_diff2d, s_dst_diff3d, s_dst_diff4d,
                 s_dst_os_4, t_dim_1d, t_dim_2d, t_dim_3d, t_dim_4d, vec_1d = 1):
         return '{} {},{},{},{},{},{},{},{},{},{},{},{}'.format(self.name(),
