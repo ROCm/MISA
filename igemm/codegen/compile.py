@@ -28,7 +28,7 @@ import subprocess
 
 from .amdgpu import *
 
-IGEMM_HOST_USE_XDNN = False
+IGEMM_HOST_USE_XDNN = True
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')
@@ -174,6 +174,9 @@ class compile_host_t(object):
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-L{bytes.fromhex(xdnnroot).decode()}/lib', f"-l{bytes.fromhex('646e6e6c').decode()}", f'-Wl,-rpath={bytes.fromhex(xdnnroot).decode()}/lib']
             cmd += ['-o', self.target_exec]
+
+        print("compile cpp command:")
+        print(cmd)
 
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
         try:

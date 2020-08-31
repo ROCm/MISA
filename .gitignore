@@ -3,3 +3,4 @@ out/
 __pycache__
 *.s
 .vscode/
+driver/xdnn_conv.h
