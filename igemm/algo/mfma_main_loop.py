@@ -527,7 +527,7 @@ class mfma_main_loop_t(mc_base_t):
 
             se_sub = create_scheduler(self.mc, mbb_list_sub)
 
-            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last()),
+            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
                              create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
             #for x in mbb_list_last:

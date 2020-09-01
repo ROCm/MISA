@@ -72,6 +72,34 @@ class simple_interleave_scheduler_t(mc_base_t):
                 return dictionary[key]
             else:
                 return default_value
+
+        def mbb_have_global_mem(mbb):
+            '''
+            check if mbb contains at least one globel mem
+            '''
+            for mi in mbb.mc_inst_list:
+                if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
+                    return True
+            return False
+
+        def mbb_have_mfma(mbb):
+            for mi in mbb.mc_inst_list:
+                if mi.type() == MC_INST_TYPE_VALU:
+                    mi_op = get_mc_inst_op(mi.inst_str)
+                    if mi_op.startswith('v_mfma_'):
+                        return True
+            return False
+
+        def mbb_is_macro_c_clear(mbb):
+            '''
+            check if mbb is indeed a legacy macro of .v_clear_nc
+            '''
+            if mbb.length() == 1:
+                if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
+                    if get_mc_inst_op(mbb.mc_inst()).startswith('.v_clear_nc'):
+                        return True
+            return False
+
         assert len(self.mbb_lists) == 2, "currently only support 2 mbb list interleave together"
 
         interleave_pattern = get_dict_with_default(options, "interleave_pattern", INTERLEAVE_PTN_0)
@@ -94,24 +122,6 @@ class simple_interleave_scheduler_t(mc_base_t):
         mbb_1 = self.mbb_lists[1]
 
         if interleave_pattern == INTERLEAVE_PTN_0:
-            def mbb_have_global_mem(mbb):
-                '''
-                check if mbb contains at least one globel mem
-                '''
-                for mi in mbb.mc_inst_list:
-                    if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
-                        return True
-                return False
-            def mbb_is_macro_c_clear(mbb):
-                '''
-                check if mbb is indeed a legacy macro of .v_clear_nc
-                '''
-                if mbb.length() == 1:
-                    if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
-                        if get_mc_inst_op(mbb.mc_inst()).startswith('.v_clear_nc'):
-                            return True
-                return False
-
             # first check how many global load in mbb_1
             # for x in mbb_1:
             #     x.dump()
@@ -181,16 +191,22 @@ class simple_interleave_scheduler_t(mc_base_t):
             return self._get_deferred()
 
         if interleave_pattern == INTERLEAVE_PTN_1:
-            # mbb_1[0].dump()
+            mbb_0_mfma_cnt = 0
+            for m in mbb_0:
+                if mbb_have_mfma(m):
+                    mbb_0_mfma_cnt += 1
+
             assert mbb_1[0].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM
             num_smem = 0
             for i in range(len(mbb_1)):
                 if mbb_1[i].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
                     num_smem = num_smem + 1
                 else:
-                    pass         # here we might face with some
+                    pass
             assert num_smem == len(mbb_1)
-            smem_per_interleave = (len(mbb_0) - 1 + num_smem - 1) // num_smem
+            #smem_per_interleave = (len(mbb_0) - 1 + num_smem - 1) // num_smem
+            smem_per_interleave = (num_smem + (mbb_0_mfma_cnt - 1) - 1) //  (mbb_0_mfma_cnt - 1)
+            # print(f'__ len(mbb_0):{len(mbb_0)}, num_smem:{num_smem}, smem_per_interleave:{smem_per_interleave}')
             with self._deferred_context():
                 m0_idx = 0
                 m1_idx = 0
