@@ -346,6 +346,7 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # 2nd fma
+            self._emit(f's_waitcnt lgkmcnt(1)')
             self._emit(mfma_step_mxn(0, 1, 1, 1))
             self._emit_empty_line()
 
@@ -449,7 +450,7 @@ class mfma_main_loop_t(mc_base_t):
                 with self._deferred_context():
                     self._emit(f"; k iteration : {unroll_k - 2}")
                     # 1st fma
-                    self._emit(f's_waitcnt lgkmcnt(6)')
+                    # self._emit(f's_waitcnt lgkmcnt(6)')
                     self._emit(mfma_step_mxn(0, 0, 0, 0))
                     self._emit_empty_line()
 
@@ -585,6 +586,7 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # 2nd fma
+            self._emit(f's_waitcnt lgkmcnt(1)')
             self._emit(mfma_step_mxn(0, 1, 1, 1))
             self._emit_empty_line()
 
