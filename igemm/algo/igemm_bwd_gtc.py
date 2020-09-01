@@ -1951,6 +1951,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.gemm_n_level0_cluster       = self.tunable.gemm_n_level0_cluster
             fctrl.gemm_n_level1_cluster       = self.tunable.gemm_n_level1_cluster
             fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
+            fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_wei
@@ -1987,6 +1988,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()
             fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
+            fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
             fctrl.interleave                  = self.tunable.fma_interleave
 

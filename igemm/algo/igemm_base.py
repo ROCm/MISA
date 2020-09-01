@@ -249,7 +249,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2                          = igemm_next_pow2( self.lds_a)
         self.lds_b_np2                          = igemm_next_pow2( self.lds_b)
         self.lds_single                         = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2)
-        self.lds_total                          = (2*self.lds_single)
+        self.lds_buffer_num                     = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        self.lds_total                          = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
@@ -262,7 +263,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # number of loops at least needed for final coalescing store, dicided by LDS size
         self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
-                (2 * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
+                (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
         if self.coalescing_store_groups < 2:
             self.coalescing_store_groups = 2
 

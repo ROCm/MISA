@@ -826,20 +826,48 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
     def name(self):
         return ''
 
-    def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp2):
+    def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp4):
         ctrl = self.ctrl
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
 
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset for xdlops")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp2}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
-            gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
-            if gemm_m_shrink != 1:
-                self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp2}+1]")
-            else:
-                assert False, "impossible"
+            '''
+            gemm_m_shrink is in multi-dimension.
+            then, consider that introduced by granularity
+            '''
+            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_gemm_im}]")
+            self._emit(f"v_and_b32 v[{v_tmp4}],  {ctrl.cxm.lanegroup_m_per_cluster() - 1} v[{v_tmp4}]   ; thread id of lanegroup_m_per_cluster")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_tmp4}]")
+
+            if ctrl.cxm.block_m_per_lanegroup() != 1:
+                length_above_block_m_per_lanegroup = ctrl.cxm.lanegroup_m_per_block() * ctrl.cxm.lanegroup_m_per_cluster() * \
+                                                    ctrl.cxm.lanegroup_m_per_thread()
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+1], {igemm_log2(length_above_block_m_per_lanegroup)}, v[{v_gemm_im}]")
+                self._emit(f"v_and_b32 v[{v_tmp4}+1], {ctrl.cxm.block_m_per_lanegroup() - 1}  , v[{v_tmp4}+1]   ; thread id of block_m_per_lanegroup")
+                assert length_above_block_m_per_lanegroup % g_mb == 0, f"length_above_block_m_per_lanegroup:{length_above_block_m_per_lanegroup}, g_mb:{g_mb}"
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+1], {igemm_log2(length_above_block_m_per_lanegroup // g_mb)}, v[{v_co_sst}]")
+
+            if ctrl.cxm.waves_per_m() != 1:
+                length_above_waves_per_m = ctrl.cxm.wave_step_m * ctrl.cxm.lanegroup_m_per_wave() * \
+                                                    ctrl.cxm.lanegroup_m_per_block() * ctrl.cxm.block_m_per_lanegroup() * \
+                                                    ctrl.cxm.lanegroup_m_per_thread() * ctrl.cxm.lanegroup_m_per_cluster()
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+2], {igemm_log2(length_above_waves_per_m)}, v[{v_gemm_im}]  ; thread id of waves_per_m")
+                assert length_above_waves_per_m % (g_ms * g_mw * g_mb) == 0, f"length_above_waves_per_m:{length_above_waves_per_m}, g_ms:{g_ms} g_mw:{g_mw} g_mb:{g_mb}"
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+2], {igemm_log2(length_above_waves_per_m // (g_ms * g_mw * g_mb))}, v[{v_co_sst}]")
+
+            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
+            self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+
+            # gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
+            # gemm_m_shrink = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+            # if gemm_m_shrink != 1:
+            #     self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
+            #     self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+            # else:
+            #     assert False, "impossible"
             self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.data_byte)}, v[{v_co_sst}]")
             self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tid}]")
 
@@ -1102,6 +1130,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 if not ctrl.can_skip_coalescing():
                     self._emit(f"s_barrier")
 
+                vgpr_index_acc = 0
                 for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
                     gpr_m_offset = i_mr * s_mr + i_ms * s_ms + i_mw * s_mw + i_mb * s_mb
                     sst_m_offset = i_mr *  n_mv * l_ms * l_mw * l_mb * n_ml * n_mc + \
@@ -1116,7 +1145,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                      i_nw * n_nl * n_nc
                         # self._emit(f" => ctrl.cxm.wave_step_n:{ctrl.cxm.wave_step_n}, ctrl.cxm.lanegroup_n_per_wave():{ctrl.cxm.lanegroup_n_per_wave()}, n_nl:{n_nl}, n_nc:{n_nc}")
                         agpr_index = a_group_start_index + gpr_m_offset + gpr_n_offset
-                        vgpr_index = gpr_m_offset + gpr_n_offset
+                        #vgpr_index = gpr_m_offset + gpr_n_offset
+                        vgpr_index = vgpr_index_acc
                         sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M + \
                                      sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * ctrl.data_byte
                         assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * ctrl.data_byte < lds_size_per_group
@@ -1131,6 +1161,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
                                 f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
                                 f" /{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
+                        vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
 
                 issue_list = []
                 if not ctrl.can_skip_coalescing():

@@ -32,8 +32,15 @@ class emit_nop_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         self.mc = mc
     def __call__(self, nop_count):
-        nops = nop_count
-        while nops > 0:
-            current_nop = nops % 16
-            self._emit(f"s_nop {current_nop - 1}")
-            nops = nops - current_nop
+        assert nop_count > 0
+        if nop_count == 0:
+            pass
+        else:
+            nops = nop_count - 1
+            while True:
+                if nops > 15:
+                    self._emit(f"s_nop 15")
+                    nops = nops - 15
+                else:
+                    self._emit(f"s_nop {nops}")
+                    break
