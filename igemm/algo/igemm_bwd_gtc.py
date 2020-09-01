@@ -1997,8 +1997,17 @@ class igemm_bwd_gtc_t(mc_base_t):
             fctrl.global_load_b_functor       = self.global_load_out
             fctrl.shared_store_a_functor      = self.shared_store_wei
             fctrl.shared_store_b_functor      = self.shared_store_out
-            fctrl.shared_load_a_functor       = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
-            fctrl.shared_load_b_functor       = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+            if ctrl_xdlops_mapping.wave_step_m == 1:
+                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+            else:
+                assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
+                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte)
+
+            if ctrl_xdlops_mapping.wave_step_n == 1:
+                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+            else:
+                assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
+                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte)
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 

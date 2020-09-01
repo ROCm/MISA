@@ -179,7 +179,7 @@ class inst_ds_read2_likely_t(mc_base_t):
             return False
         if self.vec_count % 2 != 0:
             return False
-        if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % 4 == 0):
+        if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
             if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
@@ -261,6 +261,71 @@ class inst_ds_read2_likely_t(mc_base_t):
             if self.likely_read2_b64(sld_offset) or self.likely_read2st64_b64(sld_offset):
                 return self.vec_count // 2
         return self.vec_count
+
+
+class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
+    '''
+    used in fma main loop, that if ds_read2 can't be generated (aka have fall back), accumulate offset, then use ds_read2 again.
+    '''
+    def name(self):
+        return ''
+
+    def __init__(self, mc, vec_count, vec_byte, vec_stride, sld_base = 0):
+        mc_base_t.__init__(self, mc)
+        self.ds_read2_likely = inst_ds_read2_likely_t(mc, vec_count, vec_byte, vec_stride, sld_base)
+        self.init_sld_offset = 0
+        self.first_call = 1
+
+        self.v_tmp = sym_t('v_tmp')     # by default use this as accumulator! this should be convention
+        #self.acc_into_v_tmp = False
+        self.last_sld_offset = 0
+
+    def any_read2_likely(self, sld_offset = 0):
+        return self.ds_read2_likely.likely_read2_b32(sld_offset) or \
+                self.ds_read2_likely.likely_read2st64_b32(sld_offset) or \
+                self.ds_read2_likely.likely_read2_b64(sld_offset) or \
+                self.ds_read2_likely.likely_read2st64_b64(sld_offset)
+
+    def __call__(self, v_dst, v_sld_os, sld_offset = 0):
+        if self.first_call:
+            self.init_sld_offset = sld_offset       # record the first offset, as a marker for loop over from start
+            self.last_sld_offset = sld_offset
+            self.first_call = 0
+            assert self.any_read2_likely(sld_offset), "currently we must make sure the first call is using read2"
+            return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+        else:
+            if self.init_sld_offset == sld_offset:
+                self.last_sld_offset = self.init_sld_offset
+                # this means we loop over from start
+                return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+            else:
+                if self.last_sld_offset == self.init_sld_offset:
+                    diff_sld_offset = sld_offset - self.last_sld_offset
+                    if self.any_read2_likely(sld_offset):
+                        return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+                    else:
+                        with self._deferred_context():
+                            self._emit(f"v_add_u32 v[{self.v_tmp()}], {diff_sld_offset}, v[{v_sld_os}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp(), self.init_sld_offset))
+                        self.last_sld_offset = sld_offset
+                        return self._get_deferred()
+                else:
+                    diff_sld_offset = sld_offset - self.last_sld_offset
+                    if self.any_read2_likely(diff_sld_offset):
+                        return self.ds_read2_likely(v_dst, self.v_tmp(), diff_sld_offset)
+                    else:
+                        # diff_sld_offset = sld_offset - self.last_sld_offset
+                        with self._deferred_context():
+                            self._emit(f"v_add_u32 v[{self.v_tmp()}], {diff_sld_offset}, v[{self.v_tmp()}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp(), self.init_sld_offset))
+                        self.last_sld_offset = sld_offset
+                        return self._get_deferred()
+
+    def get_issue(self, sld_offset = 0):
+        # TODO: might have bug
+        return self.ds_read2_likely.get_issues()
+
+
 '''
 class inst_ds_write2_likely_t(mc_base_t):   
     def name(self):
