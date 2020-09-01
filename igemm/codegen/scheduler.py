@@ -102,18 +102,33 @@ class simple_interleave_scheduler_t(mc_base_t):
                     if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
                         return True
                 return False
+            def mbb_is_macro_c_clear(mbb):
+                '''
+                check if mbb is indeed a legacy macro of .v_clear_nc
+                '''
+                if mbb.length() == 1:
+                    if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
+                        if get_mc_inst_op(mbb.mc_inst()).startswith('.v_clear_nc'):
+                            return True
+                return False
+
             # first check how many global load in mbb_1
             # for x in mbb_1:
             #     x.dump()
 
             #assert mbb_have_global_mem(mbb_1[0])
             num_gmem = 0
+            num_v_c_clear = 0
             for i in range(len(mbb_1)):
                 if mbb_have_global_mem(mbb_1[i]):
                     num_gmem = num_gmem + 1
-                else:
-                    break
+                elif mbb_is_macro_c_clear(mbb_1[i]):
+                    num_v_c_clear = num_v_c_clear + 1
+                #else:
+                #    break
             assert num_gmem != 0, f"no global mem in this instructino list, please check"
+            assert num_v_c_clear in (0, 1)
+            num_gmem += num_v_c_clear
 
             # second decide how many global mem to interleave per interval
             gmem_mbb_0_ratio = 2 / 3                          # if num global mem bigger than this of mbb_0 length, need add more per interval
@@ -128,20 +143,40 @@ class simple_interleave_scheduler_t(mc_base_t):
 
             # finaly, go interleave
             with self._deferred_context():
-                m0_idx = 0
+                STATE_GMEM      = 0
+                STATE_OTHER     = 1
+                STATE_END       = 2
+                
+                state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
                 m1_idx = 0
-                for i in range(num_mbb_0_interleave_gmem):
-                    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
-                    for j in range(gmem_per_interval):
-                        if m1_idx < num_gmem:
-                            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                for m0_idx in range(len(mbb_0)):
+                    self._emit(self.call_mbb(mbb_0[m0_idx]))
+                    if state == STATE_GMEM:
+                        for j in range(gmem_per_interval):
+                            if m1_idx < num_gmem:
+                                self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                            else:
+                                state = STATE_OTHER
 
-                for i in range(num_mbb_0_left):
-                    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
-                    for j in range(mbb_1_left_per_interval):
-                        if m1_idx < len(mbb_1):
-                            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
-                assert m0_idx == len(mbb_0)
+                    elif state == STATE_OTHER:
+                        for j in range(mbb_1_left_per_interval):
+                            if m1_idx < len(mbb_1):
+                                self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+
+                #m0_idx = 0
+                #m1_idx = 0
+                #for i in range(num_mbb_0_interleave_gmem):
+                #    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
+                #    for j in range(gmem_per_interval):
+                #        if m1_idx < num_gmem:
+                #            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+
+                #for i in range(num_mbb_0_left):
+                #    self._emit(self.call_mbb(mbb_0[m0_idx])) ; m0_idx += 1
+                #    for j in range(mbb_1_left_per_interval):
+                #        if m1_idx < len(mbb_1):
+                #            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                # assert m0_idx == len(mbb_0)
                 assert m1_idx == len(mbb_1)
             return self._get_deferred()
 

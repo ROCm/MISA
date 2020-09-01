@@ -32,7 +32,9 @@ MC_INST_TYPE_SALU = 0
 MC_INST_TYPE_VALU = 1
 MC_INST_TYPE_SHARE_MEM = 2
 MC_INST_TYPE_GLOBAL_MEM = 3
-MC_INST_TYPE_OTHER = 4
+MC_INST_TYPE_LEGACY_MACRO = 4       # like macro_c_clear_t. this is a hack
+MC_INST_TYPE_COMMENTS = 5
+MC_INST_TYPE_OTHER = 6
 
 def get_mc_inst_op(inst_str):
     istr = inst_str.strip()
@@ -55,6 +57,8 @@ def mc_inst_is_share_mem(inst_op):
     return _check_inst_prefix(inst_op, ['ds_'])
 def mc_inst_is_global_mem(inst_op):
     return _check_inst_prefix(inst_op, ['global_', 'buffer_'])
+def mc_inst_is_legacy_macro(inst_op):
+    return _check_inst_prefix(inst_op, ['.v_clear_nc'])
 
 def get_mc_inst_type(inst_str):
     '''
@@ -95,6 +99,10 @@ def create_mc_inst(inst_str):
     istr = inst_str.strip()
     if len(istr) == 0:
         return None
+
+    if mc_inst_is_legacy_macro(get_mc_inst_op(istr)):
+        return mc_inst_t(inst_str)
+
     if istr[0] in (';', '/', '.', '\n'):      # ignore comment, directive like .set, .macro
         return None
     # print(f'[XX] {istr[0]}, {inst_str}')
@@ -144,6 +152,18 @@ def create_machine_basic_block(multi_line_inst_str, **option):
 
         INST_MBB_START = ['v_cmpx']
         INST_MBB_END = ['s_mov_b64 exec', 's_or_b64 exec']
+
+        def is_mbb_start_macro_c_clear(self, current_index, istrs_list):
+            '''
+            special rule for macro_c_clear_t
+            '''
+            assert type(istrs_list) is list
+            current_istr = istrs_list[current_index]
+            current_inst_op = get_mc_inst_op(current_istr)
+            if mc_inst_is_legacy_macro(current_inst_op):
+                if current_inst_op.startswith('.v_clear_nc'):
+                    return True
+            return False
 
         def is_mbb_start_cmp_and_exec_block(self, current_index, istrs_list):
             assert type(istrs_list) is list
@@ -211,6 +231,14 @@ def create_machine_basic_block(multi_line_inst_str, **option):
             for i, istr in enumerate(istrs):
                 mc_inst = create_mc_inst(istr)
                 if not mc_inst:
+                    continue
+
+                # early pass rule
+                if self.is_mbb_start_macro_c_clear(i, istrs):
+                    '''
+                    whatever state, always insert a new mbb
+                    '''
+                    mbbs.append(machine_basic_block_t(copy.copy([mc_inst])))
                     continue
 
                 if group_mbb_by_end_of_inst_op:
