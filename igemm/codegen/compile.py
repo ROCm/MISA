@@ -27,6 +27,7 @@ import os
 import subprocess
 
 from .amdgpu import *
+import os
 
 IGEMM_HOST_USE_XDNN = False
 
@@ -52,6 +53,7 @@ class compile_asm_t(object):
         else:
             cmd = ['/opt/rocm/hcc/bin/clang']
         cmd += ['-x', 'assembler']
+        cmd += ['-I{}'.format(os.path.dirname(self.asm_file_name))]
         cmd += ['-target', 'amdgcn--amdhsa']
         cmd += ['-mcpu={}'.format(arch_str)]
         if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
