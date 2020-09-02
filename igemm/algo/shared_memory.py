@@ -270,13 +270,13 @@ class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
     def name(self):
         return ''
 
-    def __init__(self, mc, vec_count, vec_byte, vec_stride, sld_base = 0):
+    def __init__(self, mc, vec_count, vec_byte, vec_stride, v_tmp_sld = sym_t('v_tmp'), sld_base = 0):
         mc_base_t.__init__(self, mc)
         self.ds_read2_likely = inst_ds_read2_likely_t(mc, vec_count, vec_byte, vec_stride, sld_base)
         self.init_sld_offset = 0
         self.first_call = 1
 
-        self.v_tmp = sym_t('v_tmp')     # by default use this as accumulator! this should be convention
+        self.v_tmp_sld = v_tmp_sld     # by default use this as accumulator! this should be convention
         #self.acc_into_v_tmp = False
         self.last_sld_offset = 0
 
@@ -305,19 +305,19 @@ class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
                         return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
                     else:
                         with self._deferred_context():
-                            self._emit(f"v_add_u32 v[{self.v_tmp()}], {diff_sld_offset}, v[{v_sld_os}]")
-                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp(), self.init_sld_offset))
+                            self._emit(f"v_add_u32 v[{self.v_tmp_sld()}], {diff_sld_offset}, v[{v_sld_os}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp_sld(), self.init_sld_offset))
                         self.last_sld_offset = sld_offset
                         return self._get_deferred()
                 else:
                     diff_sld_offset = sld_offset - self.last_sld_offset
                     if self.any_read2_likely(diff_sld_offset):
-                        return self.ds_read2_likely(v_dst, self.v_tmp(), diff_sld_offset)
+                        return self.ds_read2_likely(v_dst, self.v_tmp_sld(), diff_sld_offset)
                     else:
                         # diff_sld_offset = sld_offset - self.last_sld_offset
                         with self._deferred_context():
-                            self._emit(f"v_add_u32 v[{self.v_tmp()}], {diff_sld_offset}, v[{self.v_tmp()}]")
-                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp(), self.init_sld_offset))
+                            self._emit(f"v_add_u32 v[{self.v_tmp_sld()}], {diff_sld_offset}, v[{self.v_tmp_sld()}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp_sld(), self.init_sld_offset))
                         self.last_sld_offset = sld_offset
                         return self._get_deferred()
 
