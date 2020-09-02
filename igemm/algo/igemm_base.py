@@ -482,12 +482,12 @@ class igemm_thread_cluster_index_accumulator_t(mc_base_t):
         assert not (c_x0 == 1 and c_x1 == 1)
         with self._deferred_context():
             if c_x0 != 1 and c_x1 != 1:
-                self._emit(f"v_lshl_or_b32 v[{v_dst}], v[{v_x0}], {igemm_log2(n_c1)}, v[{v_x1}]")
+                self._emit(f"v_lshl_or_b32 v[{v_dst}], v[{v_x0}], {igemm_log2(n_x1)}, v[{v_x1}]")
             elif c_x0 == 1 and c_x1 != 1:
                 self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x1}]")
             elif c_x0 != 1 and c_x1 == 1:
-                if n_c1 == 1:
+                if n_x1 == 1:
                     self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x0}]")
                 else:
-                    self._emit(f"v_lshlrev_b32 v[{v_dst}], {igemm_log2(n_c1)}, v[{v_x0}]")
+                    self._emit(f"v_lshlrev_b32 v[{v_dst}], {igemm_log2(n_x1)}, v[{v_x0}]")
         return self._get_deferred()
