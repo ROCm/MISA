@@ -237,7 +237,7 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemmk_groups = 1;
+        int gemmk_groups = 0;
         
         int num_of_gemm = 1 << gemmk_groups;
 
@@ -269,7 +269,7 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+        printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -306,15 +306,16 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
+#if 0
         printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc(gemmk_groups * k * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_out, gemmk_groups * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        float* gemmc_host_check = (float* )malloc((1 << gemmk_groups) * n * c * y * x * sizeof(float));
+        hipMemcpy(gemmc_host_check, p_wei, (1 << gemmk_groups) * n * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+256); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
         }
         printf("workspace debug end \r\n");
-
+#endif
         result_t result;
         result.return_code = 0;
         result.duration_ms = avg_duration;

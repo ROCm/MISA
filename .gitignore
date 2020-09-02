@@ -4,3 +4,4 @@ __pycache__
 *.s
 .vscode/
 driver/xdnn_conv.h
+*.log

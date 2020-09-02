@@ -244,7 +244,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ri - pi) / ABS(ri);
-            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -256,7 +256,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
         }
     }
-     printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+    // printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -409,10 +409,10 @@ int main(int argc, char **argv) {
         float *device_input_to_host = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
-            gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
             conv_bwd_d_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
@@ -473,31 +473,48 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
 
-            std::cout << __LINE__ << std::endl;
-
             conv_bwd_f_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h);
             device_weight_to_host = (float *)malloc(k * c * y * x * sizeof(float));
-            printf("len:%d\n", k * c * y * x * sizeof(float) );
+            //printf("len:%d\n", k * c * y * x * sizeof(float) );
         }
 
         HIP_CALL(hipMemcpy(device_input, host_input,
                        n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
         HIP_CALL(hipMemcpy(device_output, host_output,
                        n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
-        
+
+#if 0
+        printf("input\r\n");
+        for (int i_check = 0; i_check < (0+8); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
+        }
+        printf("output\r\n");
+        for (int i_check = 0; i_check < (0+8); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*ho*wo, host_output[i_check*ho*wo], ((int *)host_output)[i_check*ho*wo]);
+        }
+        printf("input\r\n");
+        for (int i_check = 0; i_check < (0+8); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_input[i_check], ((int *)host_input)[i_check]);
+        }
+        printf("output\r\n");
+        for (int i_check = 0; i_check < (0+8); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_output[i_check], ((int *)host_output)[i_check]);
+        }
+        printf("workspace debug end \r\n");
+#endif   
 
         igemm_wrw_gtc_t conv_wrw_driver;
         double nrms = get_wrw_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            std::cout << __LINE__ << std::endl;
-
             printf("  %s, ", conv_wrw_driver.get_kernel_name(tunable).c_str());
-
-            std::cout << __LINE__ << std::endl;
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_weight, 0,
@@ -506,7 +523,6 @@ int main(int argc, char **argv) {
                 conv_wrw_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
 
-            std::cout << __LINE__ << std::endl;
             if (result.return_code != 0)
                 continue;
             double gflops = measured_fp32_conv_gflops(
