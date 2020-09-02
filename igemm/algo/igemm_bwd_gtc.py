@@ -419,8 +419,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
         self.out_thread_copy_ndim = len(out_thread_copy_index)
         self.wei_thread_copy_ndim = len(wei_thread_copy_index)
-        assert self.out_thread_copy_ndim in (1, 2)
-        assert self.wei_thread_copy_ndim in (1, 2)
+        assert self.out_thread_copy_ndim in (0, 1, 2)
+        assert self.wei_thread_copy_ndim in (0, 1, 2)
 
         '''
          in generic tensor contraction, gemm_m direction always is *good* dimension, fwd:k0*k1, bwd:c0*c1, wrw:k0*k1
@@ -975,6 +975,10 @@ class igemm_bwd_gtc_t(mc_base_t):
         out_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         out_thread_copy_index   = _find_non_1_index_in_list(out_thread_copy_dims)
         wei_thread_copy_index   = _find_non_1_index_in_list(wei_thread_copy_dims)
+        '''
+        if thread lengths both dimension is 1, means every thread only copy one pixel.
+        we need support this also
+        '''
         #assert len(out_thread_copy_index) in (1, 2) and len(wei_thread_copy_index) in (1, 2),\
         #        f'out_thread_copy_dims:{out_thread_copy_dims} wei_thread_copy_dims:{wei_thread_copy_dims}'
         return out_thread_copy_index, wei_thread_copy_index
@@ -1000,7 +1004,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             ctrl_out_gld.length_d0 = 1
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_out_gld.length_d0 = 1
+            ctrl_out_gld.length_d1 = out_thread_copy_dims[-1]
 
         if self.wei_thread_copy_ndim == 2:
             ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -1009,7 +1014,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             ctrl_wei_gld.length_d0 = 1
             ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_wei_gld.length_d0 = 1
+            ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
 
         if self.tunable.precache_soffset:
             return macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_out_gld, inline), \
@@ -1074,7 +1080,22 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = 4
                 out_sst_ctrl.stride_d0 = 4 * data_byte
         else:
-            assert False
+            out_sst_ctrl.length_d0 = 1
+            out_sst_ctrl.length_d1 = out_thread_copy_dims[-1]
+            if (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and t_n1b != 1) or \
+                (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 and t_n0 != 1):
+                out_sst_ctrl.vector_d1 = out_thread_copy_dims[-1]
+            else:
+                out_sst_ctrl.vector_d1 = 1
+            out_sst_ctrl.stride_d0 = 1
+            out_sst_ctrl.stride_d1 = out_stride_list[-1] * data_byte
+            if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
+                # assert False
+                # TODO: this is indeed not optimal. may consider shuffle in the future.
+                out_sst_ctrl.length_d0 = 2
+                out_sst_ctrl.length_d1 = 4
+                out_sst_ctrl.vector_d1 = 4
+                out_sst_ctrl.stride_d0 = 4 * data_byte
 
         if self.wei_thread_copy_ndim == 2:
             wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -1106,7 +1127,24 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.vector_d1 = 4
                 wei_sst_ctrl.stride_d0 = 4 * data_byte
         else:
-            assert False
+            wei_sst_ctrl.length_d0 = 1
+            wei_sst_ctrl.length_d1 = wei_thread_copy_dims[-1]
+
+            if (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 and t_c1 != 1) or \
+                (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 and t_c0 != 1):
+                wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[-1]
+            else:
+                wei_sst_ctrl.vector_d1 = 1
+
+            wei_sst_ctrl.stride_d0 = 1
+            wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte
+            if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
+                # assert False
+                # TODO: this is indeed not optimal. may consider shuffle in the future.
+                wei_sst_ctrl.length_d0 = 2
+                wei_sst_ctrl.length_d1 = 4
+                wei_sst_ctrl.vector_d1 = 4
+                wei_sst_ctrl.stride_d0 = 4 * data_byte
 
         # print(f"out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 
@@ -1167,7 +1205,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             s_out_stride_d0 = s_dummy
             s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[0]]
         else:
-            assert False
+            s_out_stride_d0 = s_dummy
+            s_out_stride_d1 = out_stride_gprs[-1]
 
         if self.wei_thread_copy_ndim == 2:
             s_wei_stride_d0 = wei_stride_gprs[wei_thread_copy_index[0]]
@@ -1176,7 +1215,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             s_wei_stride_d0 = s_dummy
             s_wei_stride_d1 = wei_stride_gprs[wei_thread_copy_index[0]]
         else:
-            assert False
+            s_wei_stride_d0 = s_dummy
+            s_wei_stride_d1 = wei_stride_gprs[-1]
 
         return s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1
 
