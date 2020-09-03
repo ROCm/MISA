@@ -474,6 +474,8 @@ class inst_ds_write2_likely_t(mc_base_t):
         self.vec_stride   = vec_stride
         self.sst_base     = sst_base
     def likely_write2_b32(self, sst_offset = 0):
+        if self.vec_byte != 4:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
@@ -481,6 +483,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2st64_b32(self, sst_offset = 0):
+        if self.vec_byte != 4:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
@@ -488,6 +492,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2_b64(self, sst_offset = 0):
+        if self.vec_byte != 8:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
@@ -495,6 +501,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2st64_b64(self, sst_offset = 0):
+        if self.vec_byte != 8:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
@@ -563,6 +571,12 @@ class inst_ds_write2_likely_t(mc_base_t):
         return self.vec_count
 
 
+class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):   
+    def name(self):
+        return ''
+
+
+
 class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
@@ -619,6 +633,7 @@ class ctrl_2d_shared_store_t(object):
         self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0  # 0-d0,d1, 1-d1,d0
+        self.v_tmp = None   # used when order is 1 and consider shuffle
 
 class macro_igemm_2d_shared_store_t(macro_base_t):
     def __init__(self, mc, ctrl, inline = False):
@@ -655,22 +670,28 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         ctrl = self.ctrl
         # assert ctrl.length_d1 == ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
         #with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
         if ctrl.length_d1 == ctrl.vector_d1:
-            ds_write = inst_ds_write_t(ctrl.vector_d1 * 4)
             if ctrl.src_order == 0:
-                for i_d0 in range(ctrl.length_d0):
-                    self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
-                    issue_cnt += ds_write.get_issues()
+                if ctrl.length_d0 % 2 == 0 and data_byte == 4 and ctrl.vector_d1 in (1, 2):
+                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d0)
+                    for i_d0 in range(ctrl.length_d0 // 2):
+                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d0*ctrl.vector_d1}', 2 * i_d0 * ctrl.stride_d0))
+                        issue_cnt += ds_write2.get_issues(2 * i_d0 * ctrl.stride_d0)
+                else:
+                    ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                    for i_d0 in range(ctrl.length_d0):
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+                        issue_cnt += ds_write.get_issues()
             else:
                 assert "unimplemented"
         else:
             assert ctrl.length_d1 % ctrl.vector_d1 == 0
             assert ctrl.stride_d1 != 1
             num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * 4, ctrl.stride_d1)
+            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
             if ctrl.src_order == 0:
                 for i_d0 in range(ctrl.length_d0):
                     for i_d1 in range(num_vector_d1 // 2):
