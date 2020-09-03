@@ -143,13 +143,17 @@ class simple_interleave_scheduler_t(mc_base_t):
             # second decide how many global mem to interleave per interval
             gmem_mbb_0_ratio = 2 / 3                          # if num global mem bigger than this of mbb_0 length, need add more per interval
             gmem_per_interval = 1
-            while num_gmem * gmem_per_interval >= int(len(mbb_0) * gmem_mbb_0_ratio):
+            #while num_gmem * gmem_per_interval >= int(len(mbb_0) * gmem_mbb_0_ratio):
+            while (num_gmem + gmem_per_interval - 1) // gmem_per_interval  >= int(len(mbb_0) * gmem_mbb_0_ratio):
                 gmem_per_interval += 1
 
             num_mbb_0_interleave_gmem = (num_gmem + gmem_per_interval - 1) // gmem_per_interval
             num_mbb_1_left = len(mbb_1) - num_gmem
             num_mbb_0_left = len(mbb_0) - num_mbb_0_interleave_gmem
-            mbb_1_left_per_interval = (num_mbb_0_left + num_mbb_1_left - 1) // num_mbb_1_left
+            #mbb_1_left_per_interval = (num_mbb_0_left + num_mbb_1_left - 1) // num_mbb_1_left
+            mbb_1_left_per_interval = (num_mbb_1_left + num_mbb_0_left - 1) // num_mbb_0_left
+            #mbb_1_left_per_interval = num_mbb_1_left // num_mbb_0_left
+            #print(f"num_mbb_0_interleave_gmem:{num_mbb_0_interleave_gmem}, num_mbb_1_left:{num_mbb_1_left}. num_mbb_0_left:{num_mbb_0_left}, mbb_1_left_per_interval:{mbb_1_left_per_interval}")
 
             # finaly, go interleave
             with self._deferred_context():
@@ -161,12 +165,18 @@ class simple_interleave_scheduler_t(mc_base_t):
                 m1_idx = 0
                 for m0_idx in range(len(mbb_0)):
                     self._emit(self.call_mbb(mbb_0[m0_idx]))
+                    #print(f" ---- m0_idx:{m0_idx}, m1_idx:{m1_idx}")
                     if state == STATE_GMEM:
                         for j in range(gmem_per_interval):
                             if m1_idx < num_gmem:
                                 self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                                #print(f'      m1_idx:{m1_idx}')
                             else:
                                 state = STATE_OTHER
+                                continue
+                        if m1_idx == num_gmem:
+                            state = STATE_OTHER
+                            continue
 
                     elif state == STATE_OTHER:
                         for j in range(mbb_1_left_per_interval):
@@ -187,7 +197,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                 #        if m1_idx < len(mbb_1):
                 #            self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
                 # assert m0_idx == len(mbb_0)
-                assert m1_idx == len(mbb_1)
+                assert m1_idx == len(mbb_1), f"m1_idx:{m1_idx}, num_gmem:{num_gmem}, len(mbb_0):{len(mbb_0)}, len(mbb_1):{len(mbb_1)}, mbb_1_left_per_interval:{mbb_1_left_per_interval}, gmem_per_interval:{gmem_per_interval}"
             return self._get_deferred()
 
         if interleave_pattern == INTERLEAVE_PTN_1:

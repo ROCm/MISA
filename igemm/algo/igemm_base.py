@@ -264,8 +264,8 @@ class igemm_gtc_tunable_parameter_t(object):
         # number of loops at least needed for final coalescing store, dicided by LDS size
         self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
                 (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
-        if self.coalescing_store_groups < 2:
-            self.coalescing_store_groups = 2
+        #if self.coalescing_store_groups < 2:
+        #    self.coalescing_store_groups = 2
 
     def to_dict(self):
         tunable_dict = {}

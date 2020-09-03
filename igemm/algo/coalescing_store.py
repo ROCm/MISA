@@ -443,12 +443,12 @@ class ctrl_coalescing_store_xdlops_t(object):
         '''
         in some configuration, after LDS shuffle the data layout is the same compare with un-shuffled shape.
         '''
-        if self.coalescing_groups == 1 and self.cxm.wave_step_m == 1 and self.cxm.wave_step_n == 1 and \
-                self.cxm.wave_repeat_m == 1 and self.cxm.wave_repeat_n == 1:
-            if self.cxm.wave_tile_m == self.cxm.inst_mfma.m:
-                return True
-            if self.cxm.wave_tile_n == self.cxm.macro_tile_n:
-                return True
+        # if self.coalescing_groups == 1 and self.cxm.wave_step_m == 1 and self.cxm.wave_step_n == 1 and \
+        #         self.cxm.wave_repeat_m == 1 and self.cxm.wave_repeat_n == 1:
+        #     if self.cxm.wave_tile_m == self.cxm.inst_mfma.m:
+        #         return True
+        #     if self.cxm.wave_tile_n == self.cxm.macro_tile_n:
+        #         return True
         return False
 
     def get_length_m_groups(self):
