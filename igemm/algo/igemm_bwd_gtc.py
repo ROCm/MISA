@@ -362,6 +362,11 @@ class macro_igemm_bwd_gtc_move_slice_window_k_1d(macro_base_t):
         # assert (n_k0 == 1 and n_k1e != 1) or (n_k0 != 1 and n_k1e == 1)
         assert (n_k0 == 1 and n_k1e != 1)  # indeed in this case will assume only k1 direction non-1. only k0 non-1 is meaningless
 
+        self.declare_arg("v_out_os")
+        self.declare_arg("v_wei_os")
+        self.declare_arg("s_out_stride_k_k1")
+        self.declare_arg("s_wei_stride_k_k1")
+
     def name(self):
         return '.s_bwd_gtc_move_slice_window_k_1d'
 
