@@ -264,8 +264,25 @@ class igemm_gtc_tunable_parameter_t(object):
         # number of loops at least needed for final coalescing store, dicided by LDS size
         self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
                 (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
+        if self.coalescing_store_groups == 0:
+            self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
         #if self.coalescing_store_groups < 2:
         #    self.coalescing_store_groups = 2
+        if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            # check on grouping
+            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
+            length_in_m =  xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() # no need xdlops_mapping.lanegroup_m_per_thread()
+            if length_in_m % self.coalescing_store_groups != 0:
+                # we still asume both value are power of 2
+                assert self.coalescing_store_groups % length_in_m == 0
+                shrink_in_co_group = self.coalescing_store_groups // length_in_m
+
+                # TODO: this may affect occupancy!
+                self.lds_buffer_num = self.lds_buffer_num * shrink_in_co_group
+                self.lds_total = self.lds_buffer_num * self.lds_single
+                self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
+
+
 
     def to_dict(self):
         tunable_dict = {}

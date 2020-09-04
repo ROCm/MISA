@@ -517,7 +517,7 @@ class ctrl_coalescing_store_xdlops_t(object):
 
         n_n_total = self.cxm.macro_tile_n
         n_m_total = self.cxm.macro_tile_m
-        assert self.cxm.waves * AMDGPU_WAVE_SIZE % n_n_total == 0, f"waves:{self.cxm.waves}, n_n_total:{n_n_total}"
+        assert self.cxm.waves * AMDGPU_WAVE_SIZE % n_n_total == 0, f"waves:{self.cxm.waves}, n_n_total:{n_n_total}, cxm:{self.cxm.serialize()}"
 
         trans_t_n0 = self.vector_store_size
         trans_c_n0 = n_n_total // trans_t_n0

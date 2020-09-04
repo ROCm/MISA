@@ -256,6 +256,10 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+
+        #ctrl_xdlops_mapping_t( 256, 16 ,  64,  16,  2,  1,  1,  2,  1,  v_mfma_f32_16x16x1f32),     # TODO: this will fail in coalescing
+        #ctrl_xdlops_mapping_t( 16 , 256,  16,  64,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),     # TODO: this will fail in coalescing
+
         ctrl_xdlops_mapping_t( 128, 128,  32,  32,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
@@ -279,7 +283,10 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 64 , 8  ,  64,  4 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 8  , 64 ,  4 ,  64,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        # 1 wave
+        ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
 
 def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     target_mfma_tiling_fp32 = list()
@@ -291,12 +298,13 @@ def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling_fp32[0]
 
-def get_ctrl_xdlops_mapping_from_wave_tile_fp32(wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n):
+def get_ctrl_xdlops_mapping_from_wave_tile_fp32(wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves):
     target_mfma_tiling_fp32 = list()
     for t in ctrl_xdlops_mapping_fp32:
         if t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and \
                 t.wave_repeat_m == wave_repeat_m and t.wave_repeat_n == wave_repeat_n and \
-                t.wave_step_m == wave_step_m and t.wave_step_n == wave_step_n:
+                t.wave_step_m == wave_step_m and t.wave_step_n == wave_step_n and \
+                t.waves == waves:
             target_mfma_tiling_fp32.append(t)
 
     assert len(target_mfma_tiling_fp32) != 0, f"unsupported wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m},  wave_repeat_n:{wave_repeat_n}"
