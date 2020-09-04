@@ -151,7 +151,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 
 #define WARMUP 3
 #define REPEAT 8
-#define SCLK_MHZ 1725
+#define SCLK_MHZ 1283
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -302,7 +302,7 @@ void dump_arg(const args_t *arg) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
-    printf("n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
+    printf("conv_driver.exe conv: n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
            "dx:%d, py:%d, px:%d, ho:%d, wo:%d\n",
            n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
            pad_h, pad_w, ho, wo);
@@ -331,7 +331,7 @@ int main(int argc, char **argv) {
     HIP_CALL(hipModuleLoad(&module, hsaco));
 
     args_t conv_args = create_conv_args(argc, argv);
-    // dump_arg(&conv_args);
+    dump_arg(&conv_args);
 
     int hi = conv_args.get_int("in_h");
     int wi = conv_args.get_int("in_w");
@@ -468,7 +468,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("  %s, ", conv_bwd_driver.get_kernel_name(tunable).c_str());
+            printf("\nKernel\t %d :  %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0,

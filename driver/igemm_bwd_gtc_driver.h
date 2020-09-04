@@ -267,7 +267,66 @@ public:
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
-        // TODO:
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int gemm_k_per_block         = tunable->gemm_k_per_block;
+
+        int gcd_stride_dilation_h = utility_gcd(stride_h, dilation_h);
+        int gcd_stride_dilation_w = utility_gcd(stride_w, dilation_w);
+
+        int y_tilda = stride_h / gcd_stride_dilation_h;
+        int x_tilda = stride_w / gcd_stride_dilation_w;
+
+        int y_dot = utility_integer_divide_ceil(y, y_tilda);
+        int x_dot = utility_integer_divide_ceil(x, x_tilda);
+
+        int h_tilda = ho + utility_integer_divide_ceil(dilation_h * (y - 1), stride_h);
+        int w_tilda = wo + utility_integer_divide_ceil(dilation_w * (x - 1), stride_w);
+
+        int h_tilda_left = utility_integer_divide_floor(
+            utility_max(0, pad_h - dilation_h * (y_tilda - 1)), stride_h);
+        int w_tilda_left = utility_integer_divide_floor(
+            utility_max(0, pad_w - dilation_w * (x_tilda - 1)), stride_w);
+
+        int h_tilda_right = utility_min(
+            h_tilda, utility_integer_divide_ceil(pad_h + hi - 1, stride_h) + 1);
+        int w_tilda_right = utility_min(
+            w_tilda, utility_integer_divide_ceil(pad_w + wi - 1, stride_w) + 1);
+
+        int h_tilda_slice = h_tilda_right - h_tilda_left;
+        int w_tilda_slice = w_tilda_right - w_tilda_left;
+
+        int gemm_m = c;
+        int gemm_n = n * h_tilda_slice * w_tilda_slice;
+
+        if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
+            return false;
+        }
+        if(tunable->nxe == 0){
+            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
+                return false;
+            }
+        }
+        if(utility_gcd(ho*wo, tunable->nxb) < tunable->nxb){
+            return false;
+        }
         return true;
     }
 
@@ -277,6 +336,7 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
+            //printf("this kernel can not support this config\n");
             return result;
         }
         
