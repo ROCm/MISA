@@ -23,18 +23,24 @@
 #  SOFTWARE.
 # 
 ################################################################################
+# pylint: disable=maybe-no-member
 
-from .conv import *
-from .fma_main_loop import *
-from .global_memory import *
-from .shared_memory import *
-from .igemm_base import *
-from .igemm_bwd_gtc import *
-from .igemm_wrw_gtc import *
-from .utility import *
-from .thread_mapping import *
-from .coalescing_store import *
-from .mfma import *
-from .xdlops_mapping import *
-from .mfma_main_loop import *
-from .nop import *
+from ..codegen import *
+
+class emit_nop_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+        self.mc = mc
+    def __call__(self, nop_count):
+        assert nop_count > 0
+        if nop_count == 0:
+            pass
+        else:
+            nops = nop_count - 1
+            while True:
+                if nops > 15:
+                    self._emit(f"s_nop 15")
+                    nops = nops - 15
+                else:
+                    self._emit(f"s_nop {nops}")
+                    break

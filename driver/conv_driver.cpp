@@ -230,7 +230,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
@@ -243,7 +243,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
         if(igemm_per_pixel_check){
-            double delta = ABS(ri - pi) / ABS(ri);
+            double delta = ABS((ri - pi) / ri);
             //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
@@ -256,7 +256,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
         }
     }
-    // printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+    printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -316,6 +316,7 @@ int main(int argc, char **argv) {
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
+    int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -374,12 +375,29 @@ int main(int argc, char **argv) {
 
     int num_cu;
     int num_simd = 64; // hard coded
+    int gcn_arch = 0;
     {
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
         HIP_CALL(hipGetDevice(&dev));
         HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
         num_cu = dev_prop.multiProcessorCount;
+        gcn_arch = dev_prop.gcnArch;
+#if 0
+#define P_DEVICE_PROP_INT(prop) \
+        printf(#prop":%d\n", dev_prop.prop)
+
+
+        P_DEVICE_PROP_INT(clockRate);
+        P_DEVICE_PROP_INT(memoryClockRate);
+        P_DEVICE_PROP_INT(memoryBusWidth);
+        P_DEVICE_PROP_INT(major);
+        P_DEVICE_PROP_INT(minor);
+        P_DEVICE_PROP_INT(gcnArch);
+#endif
+    }
+    if(gcn_arch == 908){
+        num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
     }
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
@@ -391,7 +409,8 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
 
-            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+            if(!skip_cpu_conv)
+                conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h);
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
@@ -414,7 +433,8 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
-            conv_bwd_d_nchw(host_input, host_weight, host_output, n,
+            if(!skip_cpu_conv)
+                conv_bwd_d_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h);
             device_input_to_host = (float *)malloc(n * c * hi * wi * sizeof(float));

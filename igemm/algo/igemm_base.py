@@ -28,11 +28,23 @@ import sys
 import math
 from ..codegen import *
 from .utility import *
+from .conv import *
+from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
+IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
+IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
 
+# IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
+# IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
+# IGEMM_GTC_TENSOR_LAYOUT_CNHW = ((1 << 4) | 2)
+
+
+IGEMM_GTC_TUNABLE_FMA_TYPE_MAC               = 'mac'
+IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS             = 'dlops'
+IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS            = 'xdlops'
 
 def igemm_get_vector_size(v):
     vec_size = 1
@@ -93,20 +105,55 @@ def igemm_flatten_list_accumulate(x):
     from functools import reduce
     return reduce(lambda a, b: a+b, x)
 
+def get_igemm_gtc_fma_type(tunable_dict):
+    assert type(tunable_dict) is dict
+    if 'gemm_m_per_thread' in tunable_dict and 'gemm_n_per_thread' in tunable_dict:
+        if tunable_dict['arch'] == 'gfx900':
+            return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
+        if tunable_dict['arch'] == 'gfx906':
+            return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
+        if tunable_dict['arch'] == 'gfx908':
+            return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
+    if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
+        assert tunable_dict['arch'] == 'gfx908'
+        return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
+    assert False
+
+def igemm_get_fma_type_from_arch_config(arch_config):
+    assert type(arch_config) is amdgpu_arch_config_t
+    if arch_config.use_xdlops:
+        return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
+    if arch_config.use_dlops:
+        return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
+    return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
+
 class igemm_gtc_tunable_parameter_t(object):
     '''
     generic tensor contraction
     '''
     def __init__(self, tunable_dict):
+        self.tensor_layout                      = utility_dict_with_default_t(tunable_dict)('tensor_layout', 'nchw')
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
         self.gemm_n_per_block                   = tunable_dict['gemm_n_per_block']
         self.gemm_k_per_block                   = tunable_dict['gemm_k_per_block']
-        self.gemm_m_per_thread                  = tunable_dict['gemm_m_per_thread']
-        self.gemm_m_level0_cluster              = tunable_dict['gemm_m_level0_cluster']
-        self.gemm_m_level1_cluster              = tunable_dict['gemm_m_level1_cluster']
-        self.gemm_n_per_thread                  = tunable_dict['gemm_n_per_thread']
-        self.gemm_n_level0_cluster              = tunable_dict['gemm_n_level0_cluster']
-        self.gemm_n_level1_cluster              = tunable_dict['gemm_n_level1_cluster']
+        self.fma_type                           = get_igemm_gtc_fma_type(tunable_dict)
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            self.gemm_m_per_thread              = tunable_dict['gemm_m_per_thread']
+            self.gemm_m_level0_cluster          = tunable_dict['gemm_m_level0_cluster']
+            self.gemm_m_level1_cluster          = tunable_dict['gemm_m_level1_cluster']
+            self.gemm_n_per_thread              = tunable_dict['gemm_n_per_thread']
+            self.gemm_n_level0_cluster          = tunable_dict['gemm_n_level0_cluster']
+            self.gemm_n_level1_cluster          = tunable_dict['gemm_n_level1_cluster']
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self.wave_tile_m                    = tunable_dict['wave_tile_m']
+            self.wave_step_m                    = tunable_dict['wave_step_m']
+            self.wave_repeat_m                  = tunable_dict['wave_repeat_m']
+            self.wave_tile_n                    = tunable_dict['wave_tile_n']
+            self.wave_step_n                    = tunable_dict['wave_step_n']
+            self.wave_repeat_n                  = tunable_dict['wave_repeat_n']
+        else:
+            assert False
+
         self.tensor_a_thread_lengths            = tunable_dict['tensor_a_thread_lengths']     # list!
         self.tensor_a_cluster_lengths           = tunable_dict['tensor_a_cluster_lengths']    # list!
         self.tensor_b_thread_lengths            = tunable_dict['tensor_b_thread_lengths']     # list!
@@ -134,7 +181,16 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.nxe in (0,1)
 
         # TODO: better specify
-        self.block_size                         = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            self.block_size                     = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
+
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            assert self.gemm_m_per_block % (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m) == 0
+            assert self.gemm_n_per_block % (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n) == 0
+            waves_per_m = self.gemm_m_per_block // (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m)
+            waves_per_n = self.gemm_n_per_block // (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n)
+            self.block_size                     = waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE
+
         assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths)
         assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths)
 
@@ -161,13 +217,25 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = self.gemm_n_per_block // self.nxe
 
+        self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
+        self.local_prefetch_num = 1
         # vector global/lds implicit here
-        self.gemm_m_repeat                      = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
-        self.gemm_n_repeat                      = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
-        # register for a,b,c buffer
-        self.num_vgpr_accumulate_c              = (self.gemm_m_repeat*self.gemm_m_per_thread*self.gemm_n_repeat*self.gemm_n_per_thread)
-        self.num_vgpr_accumulate_a              = (self.gemm_m_repeat*self.gemm_m_per_thread)
-        self.num_vgpr_accumulate_b              = (self.gemm_n_repeat*self.gemm_n_per_thread)
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            self.gemm_m_repeat                  = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
+            self.gemm_n_repeat                  = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
+            # register for a,b,c buffer
+            self.num_vgpr_accumulate_c          = (self.gemm_m_repeat * self.gemm_m_per_thread * self.gemm_n_repeat * self.gemm_n_per_thread)
+            self.num_vgpr_accumulate_a          = (self.gemm_m_repeat * self.gemm_m_per_thread)
+            self.num_vgpr_accumulate_b          = (self.gemm_n_repeat * self.gemm_n_per_thread)
+
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self.local_prefetch_num             = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1
+            # register for a,b,c buffer
+            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
+            self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
+            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
+            self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
+            self.num_vgpr_accumulate_b          = self.wave_step_n * self.wave_repeat_n * xdlops_mapping.inst_mfma.num_v_b * self.local_prefetch_num
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
@@ -181,33 +249,64 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2                          = igemm_next_pow2( self.lds_a)
         self.lds_b_np2                          = igemm_next_pow2( self.lds_b)
         self.lds_single                         = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2)
-        self.lds_total                          = (2*self.lds_single)
+        self.lds_buffer_num                     = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        self.lds_total                          = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
         # some parameter not in modular_conv
-        self.thread_tile_m                      = self.gemm_m_repeat * self.gemm_m_per_thread
-        self.thread_tile_n                      = self.gemm_n_repeat * self.gemm_n_per_thread
-        self.thread_sub_tile_m                  = self.gemm_m_per_thread
-        self.thread_sub_tile_n                  = self.gemm_n_per_thread
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            self.thread_tile_m                      = self.gemm_m_repeat * self.gemm_m_per_thread
+            self.thread_tile_n                      = self.gemm_n_repeat * self.gemm_n_per_thread
+            self.thread_sub_tile_m                  = self.gemm_m_per_thread
+            self.thread_sub_tile_n                  = self.gemm_n_per_thread
 
         # number of loops at least needed for final coalescing store, dicided by LDS size
         self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
-                (2 * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
-        if self.coalescing_store_groups < 2:
-            self.coalescing_store_groups = 2
+                (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
+        if self.coalescing_store_groups == 0:
+            self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
+        #if self.coalescing_store_groups < 2:
+        #    self.coalescing_store_groups = 2
+        if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            # check on grouping
+            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // AMDGPU_WAVE_SIZE)
+            length_in_m =  xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() # no need xdlops_mapping.lanegroup_m_per_thread()
+            if length_in_m % self.coalescing_store_groups != 0:
+                # we still asume both value are power of 2
+                assert self.coalescing_store_groups % length_in_m == 0
+                shrink_in_co_group = self.coalescing_store_groups // length_in_m
+
+                # TODO: this may affect occupancy!
+                self.lds_buffer_num = self.lds_buffer_num * shrink_in_co_group
+                self.lds_total = self.lds_buffer_num * self.lds_single
+                self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
+
+
 
     def to_dict(self):
         tunable_dict = {}
+        tunable_dict['tensor_layout']                   = self.tensor_layout
+        tunable_dict['fma_type']                        = self.fma_type
         tunable_dict['gemm_m_per_block']                = self.gemm_m_per_block
         tunable_dict['gemm_n_per_block']                = self.gemm_n_per_block
         tunable_dict['gemm_k_per_block']                = self.gemm_k_per_block
-        tunable_dict['gemm_m_per_thread']               = self.gemm_m_per_thread_subc
-        tunable_dict['gemm_m_level0_cluster']           = self.gemm_m_level0_cluster
-        tunable_dict['gemm_m_level1_cluster']           = self.gemm_m_level1_cluster
-        tunable_dict['gemm_n_per_thread']               = self.gemm_n_per_thread
-        tunable_dict['gemm_n_level0_cluster']           = self.gemm_n_level0_cluster
-        tunable_dict['gemm_n_level1_cluster']           = self.gemm_n_level1_cluster
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            tunable_dict['gemm_m_per_thread']           = self.gemm_m_per_thread
+            tunable_dict['gemm_m_level0_cluster']       = self.gemm_m_level0_cluster
+            tunable_dict['gemm_m_level1_cluster']       = self.gemm_m_level1_cluster
+            tunable_dict['gemm_n_per_thread']           = self.gemm_n_per_thread
+            tunable_dict['gemm_n_level0_cluster']       = self.gemm_n_level0_cluster
+            tunable_dict['gemm_n_level1_cluster']       = self.gemm_n_level1_cluster
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            tunable_dict['wave_tile_m']                 = self.wave_tile_m
+            tunable_dict['wave_step_m']                 = self.wave_step_m
+            tunable_dict['wave_repeat_m']               = self.wave_repeat_m
+            tunable_dict['wave_tile_n']                 = self.wave_tile_n
+            tunable_dict['wave_step_n']                 = self.wave_step_n
+            tunable_dict['wave_repeat_n']               = self.wave_repeat_n
+        else:
+            assert False
         tunable_dict['tensor_a_thread_lengths']         = self.tensor_a_thread_lengths
         tunable_dict['tensor_a_cluster_lengths']        = self.tensor_a_cluster_lengths
         tunable_dict['tensor_b_thread_lengths']         = self.tensor_b_thread_lengths
@@ -217,21 +316,41 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
 
+        tunable_dict['multihead']                       = self.multihead
+        tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
+        tunable_dict['precache_soffset']                = self.precache_soffset
+
+        tunable_dict['local_prefetch_num']              = self.local_prefetch_num
+        tunable_dict['fma_interleave']                  = self.fma_interleave
+
+        tunable_dict['gemm_m_unmerge_cluster']          = self.gemm_m_unmerge_cluster
+        tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
+        tunable_dict['gemm_k_unmerge_cluster']          = self.gemm_k_unmerge_cluster
+
         return tunable_dict
 
-    def is_opt_1x1(self):
-        return self.opt_1x1
-
     def serialize(self, line_starter = '; '):
-        return  line_starter + 'gemm_m_per_block           : {}'.format(self.gemm_m_per_block) + '\n' + \
+        sstr =  line_starter + 'tensor_layout              : {}'.format(self.tensor_layout) + '\n' + \
+                line_starter + 'gemm_m_per_block           : {}'.format(self.gemm_m_per_block) + '\n' + \
                 line_starter + 'gemm_n_per_block           : {}'.format(self.gemm_n_per_block) + '\n' + \
-                line_starter + 'gemm_k_per_block           : {}'.format(self.gemm_k_per_block) + '\n' + \
+                line_starter + 'gemm_k_per_block           : {}'.format(self.gemm_k_per_block) + '\n'
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            sstr += \
                 line_starter + 'gemm_m_per_thread          : {}'.format(self.gemm_m_per_thread) + '\n' + \
                 line_starter + 'gemm_m_level0_cluster      : {}'.format(self.gemm_m_level0_cluster) + '\n' + \
                 line_starter + 'gemm_m_level1_cluster      : {}'.format(self.gemm_m_level1_cluster) + '\n' + \
                 line_starter + 'gemm_n_per_thread          : {}'.format(self.gemm_n_per_thread) + '\n' + \
                 line_starter + 'gemm_n_level0_cluster      : {}'.format(self.gemm_n_level0_cluster) + '\n' + \
-                line_starter + 'gemm_n_level1_cluster      : {}'.format(self.gemm_n_level1_cluster) + '\n' + \
+                line_starter + 'gemm_n_level1_cluster      : {}'.format(self.gemm_n_level1_cluster) + '\n'
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            sstr += \
+                line_starter + 'wave_tile_m                : {}'.format(self.wave_tile_m) + '\n' + \
+                line_starter + 'wave_step_m                : {}'.format(self.wave_step_m) + '\n' + \
+                line_starter + 'wave_repeat_m              : {}'.format(self.wave_repeat_m) + '\n' + \
+                line_starter + 'wave_tile_n                : {}'.format(self.wave_tile_n) + '\n' + \
+                line_starter + 'wave_step_n                : {}'.format(self.wave_step_n) + '\n' + \
+                line_starter + 'wave_repeat_n              : {}'.format(self.wave_repeat_n) + '\n'
+        sstr += \
                 line_starter + 'tensor_a_thread_lengths    : {}'.format(self.tensor_a_thread_lengths) + '\n' + \
                 line_starter + 'tensor_a_cluster_lengths   : {}'.format(self.tensor_a_cluster_lengths) + '\n' + \
                 line_starter + 'tensor_b_thread_lengths    : {}'.format(self.tensor_b_thread_lengths) + '\n' + \
@@ -241,15 +360,14 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_starter + 'nxb                        : {}'.format(self.nxb) + '\n' + \
                 line_starter + 'nxe                        : {}'.format(self.nxe) + '\n' + \
                 line_starter + '\n' + \
-                line_starter + 'block_size                 : {}'.format(self.block_size) + '\n' + \
-                line_starter + 'thread_tile                : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n' + \
+                line_starter + 'block_size                 : {}'.format(self.block_size) + '\n'
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+             sstr += \
+                line_starter + 'thread_tile                : {}x{}'.format(self.thread_tile_m, self.thread_tile_n) + '\n'
+        sstr += \
                 line_starter + 'lds_total                  : {}'.format(self.lds_total) + '\n' + \
                 line_starter
-
-def igemm_gtc_get_block_size(tunable):
-    assert type(tunable) is igemm_gtc_tunable_parameter_t
-    return tunable.gemm_m_level0_cluster * tunable.gemm_n_level0_cluster * \
-                    tunable.gemm_m_level1_cluster * tunable.gemm_n_level1_cluster
+        return sstr
 
 def igemm_gtc_encode_kernel_name(tunable):
     def lengths_str(lengths):
@@ -258,13 +376,27 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     assert type(tunable) is igemm_gtc_tunable_parameter_t
 
-    name_prefix = f"igemm_{tunable.direction}_gtc_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    kernel_name = f"igemm_{tunable.direction}_"
 
-    kernel_name = name_prefix + f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_" +\
-                         f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
+    if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
+        kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
+    elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
+        kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
+    elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+        kernel_name += 'gtcx_'                                  # generic tensor contraction with xdlops
+
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    kernel_name += f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_"
+    if tunable.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+        kernel_name +=   f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
                          f"gm{tunable.gemm_m_repeat}x{tunable.gemm_m_level0_cluster}x{tunable.gemm_m_level1_cluster}_" +\
-                         f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_" +\
-                         "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\
+                         f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_"
+    elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+        kernel_name +=   f'wt{tunable.wave_tile_m}x{tunable.wave_tile_n}_' +\
+                         f'ws{tunable.wave_step_m}x{tunable.wave_step_n}_' +\
+                         f'wr{tunable.wave_repeat_m}x{tunable.wave_repeat_n}_'
+
+    kernel_name +=       "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\
                          "tb" + lengths_str(tunable.tensor_b_thread_lengths) + "_" + lengths_str(tunable.tensor_b_cluster_lengths)
 
     if tunable.gemm_m_unmerge_cluster:
@@ -367,12 +499,12 @@ class igemm_thread_cluster_index_accumulator_t(mc_base_t):
         assert not (c_x0 == 1 and c_x1 == 1)
         with self._deferred_context():
             if c_x0 != 1 and c_x1 != 1:
-                self._emit(f"v_lshl_or_b32 v[{v_dst}], v[{v_x0}], {igemm_log2(n_c1)}, v[{v_x1}]")
+                self._emit(f"v_lshl_or_b32 v[{v_dst}], v[{v_x0}], {igemm_log2(n_x1)}, v[{v_x1}]")
             elif c_x0 == 1 and c_x1 != 1:
                 self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x1}]")
             elif c_x0 != 1 and c_x1 == 1:
-                if n_c1 == 1:
+                if n_x1 == 1:
                     self._emit(f"v_mov_b32 v[{v_dst}], v[{v_x0}]")
                 else:
-                    self._emit(f"v_lshlrev_b32 v[{v_dst}], {igemm_log2(n_c1)}, v[{v_x0}]")
+                    self._emit(f"v_lshlrev_b32 v[{v_dst}], {igemm_log2(n_x1)}, v[{v_x0}]")
         return self._get_deferred()

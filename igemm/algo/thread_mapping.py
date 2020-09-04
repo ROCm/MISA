@@ -125,7 +125,7 @@ class igemm_thread_mapping_t(mc_base_t):
 
             self._emit(f"v_and_b32 v[{v_tmp4}+2],   {c_n1 - 1}, v[{v_tid_shifter}]       ; => iNL1")
             self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_log2(c_n1)}, v[{v_tid_shifter}]")
-            self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tmp4}+5]       ; => iML1")
+            self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tid_shifter}]       ; => iML1")
 
             self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {igemm_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
             self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]              ; im  (without repeat)")

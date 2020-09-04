@@ -2,10 +2,10 @@
 
 # host compilation
 rm out/conv_driver.exe
-rm out/igemm_bwd_gtc.hsaco
+rm out/igemm_wrw_gtc.hsaco
 g++ -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/hip/include -I/opt/rocm/hcc/include -I/opt/rocm/hsa/include -Wall \
 -O2 -std=c++11 -I/opt/intel/inteloneapi/oneDNN/latest/cpu_gomp//include -DUSE_XDNN \
--DIGEMM_CONFIG_FILE="\"/dockerx/MIOpen_task/wrw_igemmgen_gtc/config/igemm_bwd_gtc.config\"" -DIGEMM_HSACO="\"igemm_bwd_gtc.hsaco\"" \
+-DIGEMM_CONFIG_FILE="\"/dockerx/MIOpen_task/wrw_igemmgen_gtc/config/igemm_wrw_gtc.config\"" -DIGEMM_HSACO="\"igemm_wrw_gtc.hsaco\"" \
 driver/conv_driver.cpp -L/opt/rocm/lib -L/opt/rocm/lib64 -Wl,-rpath=/opt/rocm/lib -ldl -lm -lpthread -Wl,--whole-archive \
 -lamdhip64 -lhsa-runtime64 -lhsakmt -Wl,--no-whole-archive -L/opt/intel/inteloneapi/oneDNN/latest/cpu_gomp//lib -ldnnl \
 -Wno-sign-compare -Wno-unused-variable -Wno-write-strings -Wno-unused-function \
@@ -13,7 +13,7 @@ driver/conv_driver.cpp -L/opt/rocm/lib -L/opt/rocm/lib64 -Wl,-rpath=/opt/rocm/li
 
 # device compilation
 arch=gfx908
-/opt/rocm-3.5.0/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$arch out/igemm_bwd_gtc.s -o out/igemm_bwd_gtc.hsaco
+/opt/rocm-3.5.0/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$arch -Iout out/igemm_wrw_gtc.s -o out/igemm_wrw_gtc.hsaco
 
 #/opt/rocm-3.5.0/llvm/bin/clang++  -std=c++14 -mcpu=$arch -Werror -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
 #-Wno-conversion -Wno-double-promotion -Wno-exit-time-destructors -Wno-extra-semi -Wno-float-conversion \

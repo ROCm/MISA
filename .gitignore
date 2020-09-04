@@ -5,3 +5,5 @@ __pycache__
 .vscode/
 driver/xdnn_conv.h
 *.log
+*.inc
+*_bak

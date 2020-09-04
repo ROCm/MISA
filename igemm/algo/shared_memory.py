@@ -179,7 +179,7 @@ class inst_ds_read2_likely_t(mc_base_t):
             return False
         if self.vec_count % 2 != 0:
             return False
-        if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % 4 == 0):
+        if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
             if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
@@ -251,8 +251,8 @@ class inst_ds_read2_likely_t(mc_base_t):
             return emit_read2_fallback(sld_offset)
 
         return likely_emit(sld_offset)
-    def emit(self):
-        assert False, 'dont use emit of this'
+    #def emit(self):
+    #    assert False, 'dont use emit of this'
     def get_issues(self, sld_offset = 0):
         if self.vec_byte == 4:
             if self.likely_read2_b32(sld_offset) or self.likely_read2st64_b32(sld_offset):
@@ -261,6 +261,71 @@ class inst_ds_read2_likely_t(mc_base_t):
             if self.likely_read2_b64(sld_offset) or self.likely_read2st64_b64(sld_offset):
                 return self.vec_count // 2
         return self.vec_count
+
+
+class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
+    '''
+    used in fma main loop, that if ds_read2 can't be generated (aka have fall back), accumulate offset, then use ds_read2 again.
+    '''
+    def name(self):
+        return ''
+
+    def __init__(self, mc, vec_count, vec_byte, vec_stride, v_tmp_sld = sym_t('v_tmp'), sld_base = 0):
+        mc_base_t.__init__(self, mc)
+        self.ds_read2_likely = inst_ds_read2_likely_t(mc, vec_count, vec_byte, vec_stride, sld_base)
+        self.init_sld_offset = 0
+        self.first_call = 1
+
+        self.v_tmp_sld = v_tmp_sld     # by default use this as accumulator! this should be convention
+        #self.acc_into_v_tmp = False
+        self.last_sld_offset = 0
+
+    def any_read2_likely(self, sld_offset = 0):
+        return self.ds_read2_likely.likely_read2_b32(sld_offset) or \
+                self.ds_read2_likely.likely_read2st64_b32(sld_offset) or \
+                self.ds_read2_likely.likely_read2_b64(sld_offset) or \
+                self.ds_read2_likely.likely_read2st64_b64(sld_offset)
+
+    def __call__(self, v_dst, v_sld_os, sld_offset = 0):
+        if self.first_call:
+            self.init_sld_offset = sld_offset       # record the first offset, as a marker for loop over from start
+            self.last_sld_offset = sld_offset
+            self.first_call = 0
+            assert self.any_read2_likely(sld_offset), "currently we must make sure the first call is using read2"
+            return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+        else:
+            if self.init_sld_offset == sld_offset:
+                self.last_sld_offset = self.init_sld_offset
+                # this means we loop over from start
+                return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+            else:
+                if self.last_sld_offset == self.init_sld_offset:
+                    diff_sld_offset = sld_offset - self.last_sld_offset
+                    if self.any_read2_likely(sld_offset):
+                        return self.ds_read2_likely(v_dst, v_sld_os, sld_offset)
+                    else:
+                        with self._deferred_context():
+                            self._emit(f"v_add_u32 v[{self.v_tmp_sld()}], {diff_sld_offset}, v[{v_sld_os}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp_sld(), self.init_sld_offset))
+                        self.last_sld_offset = sld_offset
+                        return self._get_deferred()
+                else:
+                    diff_sld_offset = sld_offset - self.last_sld_offset
+                    if self.any_read2_likely(diff_sld_offset):
+                        return self.ds_read2_likely(v_dst, self.v_tmp_sld(), diff_sld_offset)
+                    else:
+                        # diff_sld_offset = sld_offset - self.last_sld_offset
+                        with self._deferred_context():
+                            self._emit(f"v_add_u32 v[{self.v_tmp_sld()}], {diff_sld_offset}, v[{self.v_tmp_sld()}]")
+                            self._emit(self.ds_read2_likely(v_dst, self.v_tmp_sld(), self.init_sld_offset))
+                        self.last_sld_offset = sld_offset
+                        return self._get_deferred()
+
+    def get_issue(self, sld_offset = 0):
+        # TODO: might have bug
+        return self.ds_read2_likely.get_issues()
+
+
 '''
 class inst_ds_write2_likely_t(mc_base_t):   
     def name(self):
@@ -409,6 +474,8 @@ class inst_ds_write2_likely_t(mc_base_t):
         self.vec_stride   = vec_stride
         self.sst_base     = sst_base
     def likely_write2_b32(self, sst_offset = 0):
+        if self.vec_byte != 4:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
@@ -416,6 +483,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2st64_b32(self, sst_offset = 0):
+        if self.vec_byte != 4:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
@@ -423,6 +492,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2_b64(self, sst_offset = 0):
+        if self.vec_byte != 8:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
@@ -430,6 +501,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def likely_write2st64_b64(self, sst_offset = 0):
+        if self.vec_byte != 8:
+            return False
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
@@ -486,8 +559,8 @@ class inst_ds_write2_likely_t(mc_base_t):
             return emit_write2_fallback(sst_offset)
         return likely_emit(sst_offset)
 
-    def emit(self):
-        assert False, 'dont use emit of this'
+    #def emit(self):
+    #    assert False, 'dont use emit of this'
     def get_issues(self, sst_offset = 0):
         if self.vec_byte == 4:
             if self.likely_write2_b32(sst_offset) or self.likely_write2st64_b32(sst_offset):
@@ -496,6 +569,12 @@ class inst_ds_write2_likely_t(mc_base_t):
             if self.likely_write2_b64(sst_offset) or self.likely_write2st64_b64(sst_offset):
                 return self.vec_count // 2
         return self.vec_count
+
+
+class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):   
+    def name(self):
+        return ''
+
 
 
 class inst_ds_read_t(object):
@@ -513,7 +592,7 @@ class inst_ds_read_t(object):
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         assert False
-    def get_issues(self):
+    def get_issues(self, sld_offset = 0):
         return 1
 
 class inst_ds_write_t(object):
@@ -538,7 +617,7 @@ class inst_ds_write_t(object):
             return 'ds_write_b128 v[{}], v[{}:{}+3] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
         assert False
 
-    def get_issues(self):
+    def get_issues(self, sst_offset = 0):
         return 1
 
 class ctrl_2d_shared_store_t(object):
@@ -554,13 +633,16 @@ class ctrl_2d_shared_store_t(object):
         self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0  # 0-d0,d1, 1-d1,d0
+        self.v_tmp = None   # used when order is 1 and consider shuffle
 
-class macro_igemm_2d_shared_store_t(mc_base_t):
-    def __init__(self, mc, ctrl):
+class macro_igemm_2d_shared_store_t(macro_base_t):
+    def __init__(self, mc, ctrl, inline = False):
         assert type(ctrl) is ctrl_2d_shared_store_t
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc, inline)
         self.ctrl = ctrl
         self.issue_cnt = 0
+        self.declare_arg("v_src")
+        self.declare_arg("v_sst_os")
     def name(self):
         ctrl = self.ctrl
         if ctrl.precision == "fp32":
@@ -584,39 +666,44 @@ class macro_igemm_2d_shared_store_t(mc_base_t):
         return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}" + \
                 f"_st{ctrl.stride_d0}x{ctrl.stride_d1}"
 
-    def __call__(self, v_src, v_sst_os):
-        return '{} {}, {}'.format(self.name(), v_src, v_sst_os)
-    def emit(self):
+    def expr(self):
         ctrl = self.ctrl
         # assert ctrl.length_d1 == ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
-        with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
-            if ctrl.length_d1 == ctrl.vector_d1:
-                ds_write = inst_ds_write_t(ctrl.vector_d1 * 4)
-                if ctrl.src_order == 0:
+        #with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
+        if ctrl.length_d1 == ctrl.vector_d1:
+            if ctrl.src_order == 0:
+                if ctrl.length_d0 % 2 == 0 and data_byte == 4 and ctrl.vector_d1 in (1, 2):
+                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d0)
+                    for i_d0 in range(ctrl.length_d0 // 2):
+                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d0*ctrl.vector_d1}', 2 * i_d0 * ctrl.stride_d0))
+                        issue_cnt += ds_write2.get_issues(2 * i_d0 * ctrl.stride_d0)
+                else:
+                    ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                     for i_d0 in range(ctrl.length_d0):
-                        self._emit(ds_write('\\v_sst_os', f'\\v_src+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
                         issue_cnt += ds_write.get_issues()
-                else:
-                    assert "unimplemented"
             else:
-                assert ctrl.length_d1 % ctrl.vector_d1 == 0
-                assert ctrl.stride_d1 != 1
-                num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * 4, ctrl.stride_d1)
-                if ctrl.src_order == 0:
-                    for i_d0 in range(ctrl.length_d0):
-                        for i_d1 in range(num_vector_d1 // 2):
-                            i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                            self._emit(ds_write2('\\v_sst_os',
-                                    f'\\v_src+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
-                                    i_offset))
-                            issue_cnt += ds_write2.get_issues(i_offset)
-                else:
-                    assert "unimplemented"
+                assert "unimplemented"
+        else:
+            assert ctrl.length_d1 % ctrl.vector_d1 == 0
+            assert ctrl.stride_d1 != 1
+            num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
+            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
+            if ctrl.src_order == 0:
+                for i_d0 in range(ctrl.length_d0):
+                    for i_d1 in range(num_vector_d1 // 2):
+                        i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                        self._emit(ds_write2(f'{self.v_sst_os()}',
+                                f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
+                                i_offset))
+                        issue_cnt += ds_write2.get_issues(i_offset)
+            else:
+                assert "unimplemented"
         self.issue_cnt = issue_cnt
+
     def get_issues(self):
         #assert False, "tobe implemented"
         #return self.ctrl.length_d0

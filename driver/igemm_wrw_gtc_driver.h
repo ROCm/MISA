@@ -88,6 +88,7 @@ public:
     igemm_wrw_gtc_t(){}
     ~igemm_wrw_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
+#if 0
         auto gemm_m_per_block         = tunable->gemm_m_per_block;
         auto gemm_n_per_block         = tunable->gemm_n_per_block;
         auto gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -154,10 +155,20 @@ public:
         if(multihead)
             kernel_name += std::string("_mh");
         return kernel_name;
+#else
+        return igemm_gtc_encode_kernel_name(tunable);
+#endif
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
-        return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
+        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
+        }
+        else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
+            int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
+            int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
+            return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
+        }
     }
     int get_grid_size(const args_t *arg,
                       const igemm_gtc_tunable_t *tunable,
