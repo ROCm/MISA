@@ -312,6 +312,7 @@ public:
 
         int h_tilda_slice = h_tilda_right - h_tilda_left;
         int w_tilda_slice = w_tilda_right - w_tilda_left;
+        int num_of_gemm = y_tilda * x_tilda;
 
         int gemm_m = c;
         int gemm_n = n * h_tilda_slice * w_tilda_slice;
@@ -319,12 +320,30 @@ public:
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
             return false;
         }
+
+        bool gemm_k_valid = true;
+        for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
+            int i_y_tilda = gemm_id / x_tilda;
+            int i_x_tilda = gemm_id % x_tilda;
+            int y_dot_slice = (i_y_tilda + 1) * y_dot <= y ? y_dot : y % y_dot;
+            int x_dot_slice = (i_x_tilda + 1) * x_dot <= x ? x_dot : x % x_dot;
+            int gemm_k = k * y_dot_slice * x_dot_slice;
+            bool is_gemm_not_empty = gemm_k > 0;
+            if(is_gemm_not_empty){
+                if(gemm_k % gemm_k_per_block != 0)
+                    gemm_k_valid = false;
+            }
+        }
+        if(!gemm_k_valid)
+            return false;
+
         if(tunable->nxe == 0){
             if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
                 return false;
             }
         }
-        if(utility_gcd(ho*wo, tunable->nxb) < tunable->nxb){
+        // if(utility_gcd(ho*wo, tunable->nxb) < tunable->nxb){
+        if( (ho * wo) % tunable->nxb != 0){
             return false;
         }
         return true;
@@ -339,7 +358,7 @@ public:
             //printf("this kernel can not support this config\n");
             return result;
         }
-        
+
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");

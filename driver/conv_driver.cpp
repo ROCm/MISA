@@ -331,7 +331,7 @@ int main(int argc, char **argv) {
     HIP_CALL(hipModuleLoad(&module, hsaco));
 
     args_t conv_args = create_conv_args(argc, argv);
-    dump_arg(&conv_args);
+    // dump_arg(&conv_args);
 
     int hi = conv_args.get_int("in_h");
     int wi = conv_args.get_int("in_w");
@@ -468,7 +468,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("\nKernel\t %d :  %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
+            printf("[%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0,
@@ -476,8 +476,11 @@ int main(int argc, char **argv) {
             result_t result =
                 conv_bwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
-            if (result.return_code != 0)
+            if (result.return_code != 0){
+                printf("not applicatble\n");
                 continue;
+            }
+
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
