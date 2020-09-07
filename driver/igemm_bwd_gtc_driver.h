@@ -318,6 +318,20 @@ public:
         int gemm_n = n * h_tilda_slice * w_tilda_slice;
 
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
+            printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
+            return false;
+        }
+
+        if(gemm_n_per_block%tunable->nxb!=0){
+            printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            return false;
+        }
+        //# ho * wo is 4x, gemm_n is 256, hence need batch size 256/4=64x
+        if(n%(gemm_n_per_block/tunable->nxb)!=0){
+            printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            return false;
+        }
+        if( (ho * wo) % tunable->nxb != 0){
             return false;
         }
 
@@ -342,10 +356,7 @@ public:
                 return false;
             }
         }
-        // if(utility_gcd(ho*wo, tunable->nxb) < tunable->nxb){
-        if( (ho * wo) % tunable->nxb != 0){
-            return false;
-        }
+
         return true;
     }
 
