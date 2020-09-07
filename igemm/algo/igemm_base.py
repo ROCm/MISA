@@ -119,6 +119,17 @@ def get_igemm_gtc_fma_type(tunable_dict):
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
+def get_igemm_gtc_use_atomic_add(tunable_dict):
+    assert type(tunable_dict) is dict
+    if tunable_dict['arch'] == 'gfx908':
+        gemmk_groups = tunable_dict['gemmk_groups']
+        if gemmk_groups > 0:
+            return 1
+        else:
+            return 0
+    else:
+        return 0
+
 def igemm_get_fma_type_from_arch_config(arch_config):
     assert type(arch_config) is amdgpu_arch_config_t
     if arch_config.use_xdlops:
@@ -163,6 +174,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
+        self.use_atomic_add                     = get_igemm_gtc_use_atomic_add(tunable_dict)
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
 

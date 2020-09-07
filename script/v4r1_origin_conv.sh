@@ -1,7 +1,7 @@
 #!/bin/sh
 export IGEMM_HSACO=out/igemm_wrw_gtc.hsaco
 #./out/conv_driver.exe conv -n 128 -c 256 -H 16 -W 16 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1
-./out/conv_driver.exe conv -n 16 -c 256 -H 17 -W 17 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -V 1
+./out/conv_driver.exe conv -n 64 -c 256 -H 16 -W 16 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -V 1
 #./out/conv_driver.exe conv -n 64 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1
 #./out/conv_driver.exe conv -n 128 -c 1024 -H 17 -W 17 -k 1024 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1
 #./out/conv_driver.exe conv -n 64 -c 256 -H 34 -W 34 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1

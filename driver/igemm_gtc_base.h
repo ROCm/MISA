@@ -78,6 +78,7 @@ typedef struct {
     int gemm_n_unmerge_cluster;
     int gemm_k_unmerge_cluster;
     int multihead;
+    int gemmk_groups;
 } igemm_gtc_tunable_t;
 
 static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const config_section_t &sec){
@@ -139,6 +140,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_n_unmerge_cluster   = sec.count("gemm_n_unmerge_cluster") > 0 ? sec.at("gemm_n_unmerge_cluster").get_int() : 0;
             tunable.gemm_k_unmerge_cluster   = sec.count("gemm_k_unmerge_cluster") > 0 ? sec.at("gemm_k_unmerge_cluster").get_int() : 0;
             tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
+            tunable.gemmk_groups             = codegen_sec.at("arch").get_string() != "gfx908" ? 0 : sec.count("gemmk_groups") > 0 ? sec.at("gemmk_groups").get_int() : 0;
 
             tunables.push_back(tunable);
         }

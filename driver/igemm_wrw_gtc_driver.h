@@ -171,8 +171,7 @@ public:
         }
     }
     int get_grid_size(const args_t *arg,
-                      const igemm_gtc_tunable_t *tunable,
-                      const int gemmk_groups) {
+                      const igemm_gtc_tunable_t *tunable) {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -193,6 +192,7 @@ public:
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
+        int gemmk_groups             = tunable->gemmk_groups;
 
         int gemm_m = k;
         int gemm_n = c * y * x;
@@ -248,7 +248,7 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemmk_groups = 0;
+        int gemmk_groups             = tunable->gemmk_groups;
         
         int num_of_gemm = 1 << gemmk_groups;
 
@@ -276,13 +276,15 @@ public:
         karg.gemmk_groups  = gemmk_groups;
 
         int block_size = get_block_size(tunable);
-        int grid_size = get_grid_size(arg, tunable, gemmk_groups);
+        int grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+
+        hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
 
         auto launch_wrw_driver = [&](){
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
@@ -304,6 +306,11 @@ public:
             timer.stop();
             float d = timer.duration();
             duration_list.push_back(d);
+        }
+
+        for (int i = 0; i < warmup; i++) {
+            hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
+            launch_wrw_driver();
         }
 
         // remove min and max from list, then do average
