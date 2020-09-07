@@ -122,7 +122,7 @@ def get_igemm_gtc_fma_type(tunable_dict):
 def get_igemm_gtc_use_atomic_add(tunable_dict):
     assert type(tunable_dict) is dict
     if tunable_dict['arch'] == 'gfx908':
-        gemmk_groups = tunable_dict['gemmk_groups']
+        gemmk_groups = utility_dict_with_default_t(tunable_dict)('gemmk_groups', 0)
         if gemmk_groups > 0:
             return 1
         else:
