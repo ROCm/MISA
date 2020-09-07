@@ -390,7 +390,7 @@ class igemm_bwd_gtc_t(mc_base_t):
     k -> k0, k1
     c -> c0, c1
     n -> n0, n1
-    ho, wo -> b
+    h_tilda_slice * w_tilda_slice -> b
     dslice_y, dslice_x -> e
 
     gemm_m -> c0*c1
@@ -946,6 +946,10 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         t_k0, t_k1e, t_c0, t_c1  = t_ta[0], t_ta[1], t_ta[2], t_ta[3]
         _   ,    _,  t_n0, t_n1b = t_tb[0], t_tb[1], t_tb[2], t_tb[3]
+
+        if self.tunable.nxe != 0:
+            assert t_n1b == 1, "in non-1x1 case, n1b is n1*h_tilda_slice*w_tilda_slice, and h_tilda_slice,w_tilda_slice may not equal to ho,wo" + \
+                                "currently we just force non-1x1 case t_n1b is always 1, hence no vector load"
 
         return t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b # M, K, N
 

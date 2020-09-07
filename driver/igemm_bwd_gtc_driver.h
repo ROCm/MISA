@@ -331,7 +331,7 @@ public:
             printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
             return false;
         }
-        if( (ho * wo) % tunable->nxb != 0){
+        if( (h_tilda_slice * w_tilda_slice) % tunable->nxb != 0){
             return false;
         }
 
