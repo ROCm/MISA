@@ -177,7 +177,7 @@ class igemm_gtc_tunable_parameter_t(object):
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
         assert self.precision in ('fp32', 'fp16', 'bf16')
-        assert self.nxb in (1,4,16,64,256)
+        assert self.nxb in (1,4,8,16,64,256)
         assert self.nxe in (0,1)
 
         # TODO: better specify
@@ -239,7 +239,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
-
+        
         assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
         assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
 
