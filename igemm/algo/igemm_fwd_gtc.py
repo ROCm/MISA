@@ -1435,11 +1435,11 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         if self.tunable.nxe != 0:
             self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
-            self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_iho(), v.v_in_iwo(), s.s_wi(), v.v_tmp()))
-            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_iho(), v.v_in_iwo(), s.s_hi(), s.s_wi()))
+            self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
+            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
         else:
             self._emit(f"v_add_lshl_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
-            self._emit(m_in_update_os(v.v_in_os(), v.v_tmp(4), v.v_in_iho(), v.v_in_iwo(), s.s_wi(), v.v_tmp()))
+            self._emit(m_in_update_os(v.v_in_os(), v.v_tmp(4), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
         self._emit_empty_line()
 
         if self.in_thread_copy_ndim != 1:
