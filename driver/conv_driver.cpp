@@ -135,6 +135,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 }
 
 #include "igemm_gtc_base.h"
+#include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
 
 #ifndef ABS
@@ -265,7 +266,11 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
 static inline double get_fwd_nrms()
 {
+#ifdef USE_XDNN
+    return 5e-5;
+#else
     return 1e-6;
+#endif
 }
 static inline double get_bwd_nrms()
 {
@@ -408,6 +413,10 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
 
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+
+
             if(!skip_cpu_conv)
                 conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
@@ -420,9 +429,44 @@ int main(int argc, char **argv) {
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
+        igemm_fwd_gtc_t conv_fwd_driver;
+        double nrms = get_fwd_nrms();
+        for (int i = 0; i < tunables.size(); i++) {
+            igemm_gtc_tunable_t *tunable = &tunables[i];
+
+            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+
+            //if (need_verify)
+            //    HIP_CALL(hipMemset(device_output, 0,
+            //                       n * c * ho * wo * sizeof(float)));
+            result_t result =
+                conv_fwd_driver.run(&conv_args, tunable, module, device_input,
+                                device_weight, device_output, warmup, repeat);
+            if (result.return_code != 0){
+                printf("not applicatble\n");
+                continue;
+            }
+
+            double gflops = measured_fp32_conv_gflops(
+                result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+            printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
+            if (need_verify) {
+                HIP_CALL(hipMemcpy(device_output_to_host, device_output,
+                                   n * c * ho * wo * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+                bool is_valid = valid_vector(host_output, device_output_to_host,
+                                            n * c * ho * wo, nrms);
+                printf(", valid:%s", is_valid ? "y" : "n");
+            }
+            printf("\n");
+        }
+
         if (need_verify)
             free(device_output_to_host);
     }
+
     if (need_bwd){
         float *device_input_to_host = NULL;
         if (need_verify) {
@@ -468,7 +512,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("[%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
+            printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0,

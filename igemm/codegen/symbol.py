@@ -54,6 +54,8 @@ class sym_t(object):
         return self.expr(self.label, index)
     
     def __eq__(self, other):
+        if type(other) is not sym_t:
+            return False
         return self.label == other.label and self.value == other.value
     def __ne__(self, other):
         return not self == other

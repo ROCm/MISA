@@ -41,8 +41,21 @@ class igemm_codegen_driver_t(mc_base_t):
 
         kernel_list = []
 
-        # gtc bwd
-        kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+        # currently only support direction in tunable_dicts all the same.
+        if tunable_dicts[0]['direction'] == 'fwd':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'fwd'
+            # gtc fwd
+            kernel_list.extend([igemm_fwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+
+        elif tunable_dicts[0]['direction'] == 'bwd':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'bwd'
+            # gtc bwd
+            kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+
+        else:
+            assert False, f"unknown direcrion? {tunable_dicts[0]['direction']}"
 
         self.kernel_list = kernel_list
 
