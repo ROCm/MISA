@@ -169,6 +169,11 @@ public:
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
+        else{
+            std::cout << "not valid fma_type: " << tunable->fma_type << std::endl;
+            assert(false);
+            return 0;
+        }
     }
     int get_grid_size(const args_t *arg,
                       const igemm_gtc_tunable_t *tunable) {
@@ -215,6 +220,63 @@ public:
                           const igemm_gtc_tunable_t *tunable)
     {
         // TODO:
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int gemm_k_per_block         = tunable->gemm_k_per_block;
+
+        int gemmk_groups             = tunable->gemmk_groups;
+        int gemmk_blocks             = 1 << gemmk_groups;
+        
+        if (n % gemmk_blocks != 0){
+            return false;
+        }
+
+        int n_per_block = n >> gemmk_groups;
+
+        int gemm_m = k;
+        int gemm_n = c * y * x;
+        int gemm_k = n * ho * wo;
+
+        if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
+            std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+            return false;
+        }
+
+        if (gemm_n_per_block % tunable->nxb != 0){
+            std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
+            return false;
+        }
+
+        int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
+        
+        if (n_n0 > 1){
+            if (n_per_block % (tunable->tensor_a_thread_lengths[1] * tunable->tensor_a_cluster_lengths[1] * n_n0) != 0){
+                return false;
+            }
+        }
+        else {
+            if (n_per_block * ho * wo % gemm_k_per_block !=0){
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -224,6 +286,7 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
+            std::cout << "not valid tunable config." << std::endl;
             return result;
         }
         
@@ -327,8 +390,8 @@ public:
 #if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemmk_groups) * n * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei, (1 << gemmk_groups) * n * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
-        for (int i_check = 0; i_check < (0+256); i_check++)
+        hipMemcpy(gemmc_host_check, p_wei, n * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
         }

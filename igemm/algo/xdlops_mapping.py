@@ -287,6 +287,8 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         # 1 wave
+        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  1,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  1,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
 
