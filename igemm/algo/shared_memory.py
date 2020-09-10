@@ -586,6 +586,9 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return True
         return False
     def __call__(self, v_sst, v_src, sst_offset = 0):
+        if type(v_src) in (tuple , list):
+            assert len(v_src) == self.vec_count
+        #else:
         v_src = sym_t(v_src)
         v_sst = sym_t(v_sst)
         def emit_write2_fallback(sst_offset = 0):
@@ -806,16 +809,22 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         issue_cnt += ds_write2.get_issues(i_offset)
             else:
                 # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
-                assert ctrl.v_tmp != None
+                # assert ctrl.v_tmp != None
                 trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                 for i_d0 in range(ctrl.length_d0):
                     s_id = trans_seq.get_start_id_per_row()[i_d0]
-                    for j in range(len(s_id)):
-                        self._emit(f"v_mov_b32 v[{ctrl.v_tmp(j)}], v[{self.v_src()}+{s_id[j]}]")
+                    # for j in range(len(s_id)):
+                    #     self._emit(f"v_mov_b32 v[{ctrl.v_tmp(j)}], v[{self.v_src()}+{s_id[j]}]")
+                    # for i_d1 in range(num_vector_d1 // 2):
+                    #     i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                    #     self._emit(ds_write2(f'{self.v_sst_os()}',
+                    #             ctrl.v_tmp(i_d1 * num_vector_d1 // 2),
+                    #             i_offset))
+                    #     issue_cnt += ds_write2.get_issues(i_offset)
                     for i_d1 in range(num_vector_d1 // 2):
                         i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
                         self._emit(ds_write2(f'{self.v_sst_os()}',
-                                ctrl.v_tmp(i_d1 * num_vector_d1 // 2),
+                                (self.v_src(s_id[i_d1 * num_vector_d1 // 2]), self.v_src(s_id[i_d1 * num_vector_d1 // 2 + 1])),
                                 i_offset))
                         issue_cnt += ds_write2.get_issues(i_offset)
 
