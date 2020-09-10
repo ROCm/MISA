@@ -824,7 +824,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     for i_d1 in range(num_vector_d1 // 2):
                         i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
                         self._emit(ds_write2(f'{self.v_sst_os()}',
-                                (self.v_src(s_id[i_d1 * num_vector_d1 // 2]), self.v_src(s_id[i_d1 * num_vector_d1 // 2 + 1])),
+                                (self.v_src(s_id[i_d1 * 2]), self.v_src(s_id[i_d1 * 2 + 1])),
                                 i_offset))
                         issue_cnt += ds_write2.get_issues(i_offset)
 
