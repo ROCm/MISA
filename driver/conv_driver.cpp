@@ -454,10 +454,10 @@ int main(int argc, char **argv) {
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_output_to_host, device_output,
-                                   n * c * ho * wo * sizeof(float),
+                                   n * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
                 bool is_valid = valid_vector(host_output, device_output_to_host,
-                                            n * c * ho * wo, nrms);
+                                            n * k * ho * wo, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
