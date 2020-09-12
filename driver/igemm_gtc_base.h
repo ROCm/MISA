@@ -173,6 +173,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
     auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
     auto multihead                = tunable->multihead;
+    auto gemmk_groups             = tunable->gemmk_groups;
 
     std::string kernel_name = std::string("igemm_") + direction + "_";
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
@@ -235,6 +236,9 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += std::string("_kc");
     if(multihead)
         kernel_name += std::string("_mh");
+    // when split in gemmk, we need call atomic add function
+    if(gemmk_groups > 0)
+        kernel_name += std::string("_atadd");
     return kernel_name;
 }
 

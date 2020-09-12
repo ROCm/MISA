@@ -371,7 +371,7 @@ int main(int argc, char **argv) {
 
     int need_verify = conv_args.get_int("verify");
 
-    // printf("fwd:%d, bwd:%d, wrw:%d, verify:%d\n",need_fwd, need_bwd, need_wrw, need_verify);
+    printf("fwd:%d, bwd:%d, wrw:%d, verify:%d\n",need_fwd, need_bwd, need_wrw, need_verify);
 
     int num_cu;
     int num_simd = 64; // hard coded
@@ -488,16 +488,16 @@ int main(int argc, char **argv) {
         float *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, n * k * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
 
             conv_bwd_f_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h);
             device_weight_to_host = (float *)malloc(k * c * y * x * sizeof(float));
-            //printf("len:%d\n", k * c * y * x * sizeof(float) );
+            // printf("len:%d\n", k * c * y * x * sizeof(float));
         }
 
         HIP_CALL(hipMemcpy(device_input, host_input,
@@ -507,22 +507,22 @@ int main(int argc, char **argv) {
 
 #if 0
         printf("input\r\n");
-        for (int i_check = 0; i_check < (0+8); i_check++)
+        for (int i_check = 0; i_check < (0+32); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
         }
         printf("output\r\n");
-        for (int i_check = 0; i_check < (0+8); i_check++)
+        for (int i_check = 0; i_check < (0+32); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*ho*wo, host_output[i_check*ho*wo], ((int *)host_output)[i_check*ho*wo]);
         }
         printf("input\r\n");
-        for (int i_check = 0; i_check < (0+8); i_check++)
+        for (int i_check = 0; i_check < (0+32); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_input[i_check], ((int *)host_input)[i_check]);
         }
         printf("output\r\n");
-        for (int i_check = 0; i_check < (0+8); i_check++)
+        for (int i_check = 0; i_check < (0+32); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_output[i_check], ((int *)host_output)[i_check]);
         }

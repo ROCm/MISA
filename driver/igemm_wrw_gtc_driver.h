@@ -259,8 +259,21 @@ public:
             return false;
         }
 
-        if (gemm_n_per_block % tunable->nxb != 0){
+        if (gemm_k_per_block % tunable->nxb != 0){
             std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
+            return false;
+        }
+
+        if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
+            return false;
+
+        if ((tunable->nxb != 1) && (tunable->nxe != 0)){
+            std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
+            return false;
+        }
+
+        if ((ho * wo) % tunable->nxb != 0){
+            std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
         }
 
@@ -389,8 +402,8 @@ public:
         // debug section of code
 #if 0
         printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc((1 << gemmk_groups) * n * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei, n * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        float* gemmc_host_check = (float* )malloc((1 << gemmk_groups) * k * c * y * x * sizeof(float));
+        hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);

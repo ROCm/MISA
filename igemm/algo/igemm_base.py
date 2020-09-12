@@ -224,10 +224,10 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
             self.unmerge_sub_c = 1                             # not used
         else:
-            assert self.gemm_n_per_block % self.nxe == 0
-            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
+            assert self.gemm_k_per_block % self.nxb == 0
+            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, 1)
             self.unmerge_sub_k = 1
-            self.unmerge_sub_c = self.gemm_n_per_block // self.nxe
+            self.unmerge_sub_c = self.gemm_n_per_block
 
         self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1
@@ -328,6 +328,8 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
 
+        tunable_dict['use_atomic_add']                  = self.use_atomic_add
+
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
@@ -422,6 +424,9 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     if tunable.multihead:
         kernel_name += "_mh"
+
+    if tunable.use_atomic_add:
+        kernel_name += "_atadd"
 
     return kernel_name
 
