@@ -293,6 +293,68 @@ public:
         return true;
     }
 
+    int update_gemmk_groups(const args_t *arg,
+                            const igemm_gtc_tunable_t *tunable)
+    {
+        // TODO:
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int gemm_k_per_block         = tunable->gemm_k_per_block;
+
+        int gemmk_groups             = tunable->gemmk_groups;
+        int gemmk_blocks             = 1 << gemmk_groups;
+
+        int gemm_m = k;
+        int gemm_n = c * y * x;
+
+        int max_grid_size = 1200;
+
+        int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        
+        if (gemmk_groups > 0){
+            for (int i = 1; i < 6; i++){
+                if ((grid_size << i) > max_grid_size){
+                    gemmk_groups = i;
+                    break;
+                }
+                int n_per_block = n >> i;
+                if (n_n0 > 1){
+                    if (n_per_block % (tunable->tensor_a_thread_lengths[1] * tunable->tensor_a_cluster_lengths[1] * n_n0) != 0){
+                        return false;
+                    }
+                }
+                else {
+                    if (n_per_block * ho * wo % gemm_k_per_block !=0){
+                        return false;
+                    }
+                }
+            }
+        }
+        else{
+            return 0;
+        }
+        
+        
+    }
+
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
                  hipModule_t module, float *p_in, float *p_wei, float *p_out,
                  int warmup, int repeat) {
@@ -325,6 +387,8 @@ public:
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
         int gemmk_groups             = tunable->gemmk_groups;
+
+        gemmk_groups = update_gemmk_groups(arg, tunable);
         
         int num_of_gemm = 1 << gemmk_groups;
 

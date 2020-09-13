@@ -371,7 +371,7 @@ int main(int argc, char **argv) {
 
     int need_verify = conv_args.get_int("verify");
 
-    printf("fwd:%d, bwd:%d, wrw:%d, verify:%d\n",need_fwd, need_bwd, need_wrw, need_verify);
+    // printf("fwd:%d, bwd:%d, wrw:%d, verify:%d\n",need_fwd, need_bwd, need_wrw, need_verify);
 
     int num_cu;
     int num_simd = 64; // hard coded
