@@ -199,6 +199,8 @@ public:
         int gemm_k_per_block         = tunable->gemm_k_per_block;
         int gemmk_groups             = tunable->gemmk_groups;
 
+        gemmk_groups = update_gemmk_groups(arg, tunable);
+
         int gemm_m = k;
         int gemm_n = c * y * x;
 
@@ -296,7 +298,7 @@ public:
     int update_gemmk_groups(const args_t *arg,
                             const igemm_gtc_tunable_t *tunable)
     {
-        // TODO:
+        // choose a largest gemmk splits
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -328,25 +330,32 @@ public:
 
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
         
         if (gemmk_groups > 0){
-            for (int i = 1; i < 6; i++){
+            int update_gemmk_split = 1;
+            for (int i = 1; i < 8; i++){
                 if ((grid_size << i) > max_grid_size){
-                    gemmk_groups = i;
                     break;
                 }
+                
                 int n_per_block = n >> i;
+                if (n_per_block == 0){
+                    break;
+                }
                 if (n_n0 > 1){
                     if (n_per_block % (tunable->tensor_a_thread_lengths[1] * tunable->tensor_a_cluster_lengths[1] * n_n0) != 0){
-                        return false;
+                        break;
                     }
                 }
                 else {
                     if (n_per_block * ho * wo % gemm_k_per_block !=0){
-                        return false;
+                        break;
                     }
                 }
+                update_gemmk_split = i;
             }
+            return update_gemmk_split;
         }
         else{
             return 0;
@@ -414,6 +423,8 @@ public:
         karg.y             = y;
         karg.x             = x;
         karg.gemmk_groups  = gemmk_groups;
+
+        printf("gemmk split is %d\r\n", 1 << gemmk_groups);
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
