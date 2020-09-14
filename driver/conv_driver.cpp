@@ -152,7 +152,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 
 #define WARMUP 3
 #define REPEAT 8
-#define SCLK_MHZ 1725
+#define SCLK_MHZ 1283
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -530,7 +530,9 @@ int main(int argc, char **argv) {
 #endif   
 
         igemm_wrw_gtc_t conv_wrw_driver;
+        float min_duration = 10000000.0f;
         double nrms = get_wrw_nrms();
+        
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -550,6 +552,10 @@ int main(int argc, char **argv) {
                 dilation_h, dilation_w, pad_h, pad_w);
             printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
+            if (result.duration_ms < min_duration)
+            {
+                min_duration = result.duration_ms;
+            }
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
                                    k * c * y * x * sizeof(float),
@@ -564,6 +570,11 @@ int main(int argc, char **argv) {
             }
             printf("\n");
         }
+        double gflops = measured_fp32_conv_gflops(
+                min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+        printf("min cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", min_duration,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
         if (need_verify) 
             free(device_weight_to_host);
     }
