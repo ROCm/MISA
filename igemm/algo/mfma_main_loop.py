@@ -259,7 +259,7 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
-                    self._emit(f's_waitcnt lgkmcnt(0)')
+                    # self._emit(f's_waitcnt lgkmcnt(0)')
                     self._emit(mfma_step_mxn(0, 0, 0, 0))
 
                     self._emit_empty_line()
@@ -291,10 +291,10 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
-            self._emit_empty_line()
-            self._emit(f_gld_b())                                           # global load
-            self._emit(f_gld_a())                                           # global load
-            self._emit_empty_line()
+            # self._emit_empty_line()
+            # self._emit(f_gld_b())                                           # global load
+            # self._emit(f_gld_a())                                           # global load
+            # self._emit_empty_line()
 
             # Label: start of fma body
             self._emit_front(f"{label_mfma_body}:")
