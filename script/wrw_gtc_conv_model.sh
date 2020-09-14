@@ -1,6 +1,6 @@
 
 #!/bin/sh
-export IGEMM_HSACO=out/igemm_wrw_gtc.hsaco
+export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908.hsaco
 set -v
 export DIR=4
 #resnext101

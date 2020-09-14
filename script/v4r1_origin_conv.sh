@@ -1,6 +1,6 @@
 #!/bin/bash -x
 set -v
-export IGEMM_HSACO=out/igemm_wrw_gtc.hsaco
+export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908.hsaco
 #./out/conv_driver.exe conv -n 128 -c 128 -H 17 -W 17 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 
 #./out/conv_driver.exe conv -n 128 -c 128 -H 16 -W 16 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 
 #./out/conv_driver.exe conv -n 2 -c 256 -H 100 -W 104 -k 12 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -V 1
