@@ -35,6 +35,7 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+#include <float.h>
 
 #ifdef USE_XDNN
 #include "xdnn_conv.h"
@@ -95,6 +96,8 @@ static int next_pow2(int n) {
 typedef struct {
     int return_code;
     float duration_ms;
+    float gflops;
+    float efficiency;
     std::string kernel_name;
 } result_t;
 
@@ -307,7 +310,7 @@ void dump_arg(const args_t *arg) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
-    printf("conv_driver.exe conv: n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
+    printf("n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
            "dx:%d, py:%d, px:%d, ho:%d, wo:%d\n",
            n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
            pad_h, pad_w, ho, wo);
@@ -321,6 +324,7 @@ int main(int argc, char **argv) {
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
+    int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -407,6 +411,9 @@ int main(int argc, char **argv) {
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
 
     if (need_fwd){
+        result_t fastest_result_fwd;
+        fastest_result_fwd.duration_ms = FLT_MAX;
+        int fastest_id = 0;
         float *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
@@ -461,14 +468,31 @@ int main(int argc, char **argv) {
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
+            if(result.duration_ms < fastest_result_fwd.duration_ms){
+                fastest_result_fwd = result;
+                fastest_result_fwd.gflops = (float)gflops;
+                fastest_result_fwd.efficiency = (gflops / fp32_gflops) * 100;
+                fastest_id = i;
+            }
         }
-
+        if(log_fastest_config){
+            dump_arg(&conv_args);
+            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+                    fastest_id,
+                    fastest_result_fwd.kernel_name.c_str(),
+                    fastest_result_fwd.duration_ms,
+                    fastest_result_fwd.gflops / 1000,
+                    fastest_result_fwd.efficiency);
+        }
         if (need_verify)
             free(device_output_to_host);
     }
 
     if (need_bwd){
         float *device_input_to_host = NULL;
+        result_t fastest_result_bwd;
+        fastest_result_bwd.duration_ms = FLT_MAX;
+        int fastest_id;
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
@@ -505,7 +529,6 @@ int main(int argc, char **argv) {
                        n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-        
 
         igemm_bwd_gtc_t conv_bwd_driver;
         double nrms = get_bwd_nrms();
@@ -543,6 +566,21 @@ int main(int argc, char **argv) {
                 // }
             }
             printf("\n");
+            if(result.duration_ms < fastest_result_bwd.duration_ms){
+                fastest_result_bwd = result;
+                fastest_result_bwd.gflops = (float)gflops;
+                fastest_result_bwd.efficiency = (gflops / fp32_gflops) * 100;
+                fastest_id = i;
+            }
+        }
+        if(log_fastest_config){
+            dump_arg(&conv_args);
+            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+                    fastest_id,
+                    fastest_result_bwd.kernel_name.c_str(),
+                    fastest_result_bwd.duration_ms,
+                    fastest_result_bwd.gflops / 1000,
+                    fastest_result_bwd.efficiency);
         }
         if (need_verify) 
             free(device_input_to_host);
