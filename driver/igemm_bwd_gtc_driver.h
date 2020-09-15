@@ -114,6 +114,8 @@ public:
     igemm_bwd_gtc_t(){}
     ~igemm_bwd_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
+#if 0
+        auto tensor_layout            = tunable->tensor_layout;
         auto gemm_m_per_block         = tunable->gemm_m_per_block;
         auto gemm_n_per_block         = tunable->gemm_n_per_block;
         auto gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -146,9 +148,11 @@ public:
 
         assert(direction == "bwd");
 
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + precision +
+        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + 
+                tensor_layout + std::string("_") + precision +
                 std::string("_bx") + std::to_string(nxb) + 
                 std::string("_ex") + std::to_string(nxe) + "_";
+
         std::string kernel_name =
             kernel_prefix +
                "bt" +
@@ -180,10 +184,19 @@ public:
         if(multihead)
             kernel_name += std::string("_mh");
         return kernel_name;
+#endif
+        return igemm_gtc_encode_kernel_name(tunable);
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
-        return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
+        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
+        }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
+            int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
+            int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
+            return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
+        }
+       
     }
     int get_grid_size(const args_t *arg,
                       const igemm_gtc_tunable_t *tunable) {
@@ -254,7 +267,96 @@ public:
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
-        // TODO:
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int gemm_k_per_block         = tunable->gemm_k_per_block;
+
+        int gcd_stride_dilation_h = utility_gcd(stride_h, dilation_h);
+        int gcd_stride_dilation_w = utility_gcd(stride_w, dilation_w);
+
+        int y_tilda = stride_h / gcd_stride_dilation_h;
+        int x_tilda = stride_w / gcd_stride_dilation_w;
+
+        int y_dot = utility_integer_divide_ceil(y, y_tilda);
+        int x_dot = utility_integer_divide_ceil(x, x_tilda);
+
+        int h_tilda = ho + utility_integer_divide_ceil(dilation_h * (y - 1), stride_h);
+        int w_tilda = wo + utility_integer_divide_ceil(dilation_w * (x - 1), stride_w);
+
+        int h_tilda_left = utility_integer_divide_floor(
+            utility_max(0, pad_h - dilation_h * (y_tilda - 1)), stride_h);
+        int w_tilda_left = utility_integer_divide_floor(
+            utility_max(0, pad_w - dilation_w * (x_tilda - 1)), stride_w);
+
+        int h_tilda_right = utility_min(
+            h_tilda, utility_integer_divide_ceil(pad_h + hi - 1, stride_h) + 1);
+        int w_tilda_right = utility_min(
+            w_tilda, utility_integer_divide_ceil(pad_w + wi - 1, stride_w) + 1);
+
+        int h_tilda_slice = h_tilda_right - h_tilda_left;
+        int w_tilda_slice = w_tilda_right - w_tilda_left;
+        int num_of_gemm = y_tilda * x_tilda;
+
+        int gemm_m = c;
+        int gemm_n = n * h_tilda_slice * w_tilda_slice;
+
+        if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
+            printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
+            return false;
+        }
+
+        if(gemm_n_per_block%tunable->nxb!=0){
+            printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            return false;
+        }
+        //# ho * wo is 4x, gemm_n is 256, hence need batch size 256/4=64x
+        if(n%(gemm_n_per_block/tunable->nxb)!=0){
+            printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            return false;
+        }
+        if( (h_tilda_slice * w_tilda_slice) % tunable->nxb != 0){
+            return false;
+        }
+
+        bool gemm_k_valid = true;
+        for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
+            int i_y_tilda = gemm_id / x_tilda;
+            int i_x_tilda = gemm_id % x_tilda;
+            int y_dot_slice = (i_y_tilda + 1) * y_dot <= y ? y_dot : y % y_dot;
+            int x_dot_slice = (i_x_tilda + 1) * x_dot <= x ? x_dot : x % x_dot;
+            int gemm_k = k * y_dot_slice * x_dot_slice;
+            bool is_gemm_not_empty = gemm_k > 0;
+            if(is_gemm_not_empty){
+                if(gemm_k % gemm_k_per_block != 0)
+                    gemm_k_valid = false;
+            }
+        }
+        if(!gemm_k_valid)
+            return false;
+
+        if(tunable->nxe == 0){
+            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -264,9 +366,10 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
+            //printf("this kernel can not support this config\n");
             return result;
         }
-        
+
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");

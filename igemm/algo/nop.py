@@ -23,36 +23,24 @@
 #  SOFTWARE.
 # 
 ################################################################################
-# simple implementation of node, used for better organize and schedule
-# basically, every instruction arg to be accept is string
+# pylint: disable=maybe-no-member
 
+from ..codegen import *
 
-class node_t(object):
-    '''
-    base class for all node
-    '''
-    pass
-
-
-
-class operand_t(node_t):
-    '''
-    can be sgpr, vgpr, immediate, modifier
-    '''
-
-
-
-class stmt_t(node_t):
-    '''
-    statement can be a single 
-    '''
-    def __init__(self):
-
-class inst_t(node_t):
-    def __init__(self, name):
-        assert type(name) is str
-        self.name = name
-    def __call__(self, *args):
-        return
-    def emit(self):
-        
+class emit_nop_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+        self.mc = mc
+    def __call__(self, nop_count):
+        assert nop_count > 0
+        if nop_count == 0:
+            pass
+        else:
+            nops = nop_count - 1
+            while True:
+                if nops > 15:
+                    self._emit(f"s_nop 15")
+                    nops = nops - 15
+                else:
+                    self._emit(f"s_nop {nops}")
+                    break

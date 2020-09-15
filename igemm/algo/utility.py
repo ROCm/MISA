@@ -25,15 +25,16 @@
 ################################################################################
 
 from ..codegen import *
+import math
 
-class macro_int_div_vv_t(mc_base_t):
+class macro_int_div_vv_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / v_d`, v_q, v_n, v_d all vgpr
     '''
     def name(self):
         return '.v_u32_div'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, v_n, v_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, v_n, v_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -64,14 +65,14 @@ class macro_int_div_vv_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          0,          v[\\v_d]")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_vv_t(mc_base_t):
+class macro_int_div_rem_vv_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / v_d, v_r = v_n % v_d`, v_r, v_q, v_n, v_d all vgpr
     '''
     def name(self):
         return '.v_u32_div_rem'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_r, v_q, v_n, v_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, v_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -81,14 +82,14 @@ class macro_int_div_rem_vv_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], v[\\v_d], v[\\v_q]")
             self._emit(f"v_sub_u32 v[\\v_r], v[\\v_n], v[\\v_tmp4]")
 
-class macro_int_div_vs_t(mc_base_t):
+class macro_int_div_vs_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / s_d`, v_q, v_n are vgpr, s_d is sgpr
     '''
     def name(self):
         return '.v_u32_div_vs'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, v_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, v_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -119,14 +120,14 @@ class macro_int_div_vs_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          s[\\s_d],   0")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_vs_t(mc_base_t):
+class macro_int_div_rem_vs_t(macro_base_t):
     '''
     integer divide to compute `v_q = v_n / s_d, v_r = v_n % s_d`, v_r, v_q, v_n are vgpr, s_d is sgpr
     '''
     def name(self):
         return '.v_u32_div_rem_vs'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_r, v_q, v_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}'.format(self.name(), v_r, v_q, v_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -136,14 +137,14 @@ class macro_int_div_rem_vs_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[\\v_tmp4], s[\\s_d], v[\\v_q]")
             self._emit(f"v_sub_u32 v[\\v_r], v[\\v_n], v[\\v_tmp4]")
 
-class macro_int_div_ss_t(mc_base_t):
+class macro_int_div_ss_t(macro_base_t):
     '''
     integer divide to compute `s_q = s_n / s_d`, s_q, s_n, s_d all sgpr
     '''
     def name(self):
         return '.v_u32_div_ss'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, v_q, s_n, s_d, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}'.format(self.name(), v_q, s_n, s_d, v_tmp4, s_tmp4)
     def emit(self):
@@ -174,14 +175,14 @@ class macro_int_div_ss_t(mc_base_t):
             self._emit("v_cmp_ne_i32      vcc,          s[\\s_d],   0")
             self._emit("v_cndmask_b32     v[\\v_q],      -1,         v[\\v_tmp4+2],      vcc")
 
-class macro_int_div_rem_ss_t(mc_base_t):
+class macro_int_div_rem_ss_t(macro_base_t):
     '''
     integer divide to compute `s_q = s_n / s_d, s_r = s_n % s_d`, s_r, s_q, s_n, s_d all sgpr
     '''
     def name(self):
         return '.v_u32_div_rem_ss'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
 
     def __call__(self, s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4):
         return '{} {}, {}, {}, {}, {}, {}, {}'.format(self.name(), s_r, s_q, s_n, s_d, v_q, v_tmp4, s_tmp4) 
@@ -194,11 +195,11 @@ class macro_int_div_rem_ss_t(mc_base_t):
             self._emit(f"s_mul_i32 s[\\s_tmp4], s[\\s_d], s[\\s_q]")
             self._emit(f"s_sub_i32 s[\\s_r], s[\\s_n], s[\\s_tmp4]")
 
-class macro_c_clear_t(mc_base_t):
+class macro_c_clear_t(macro_base_t):
     def name(self):
         return '.v_clear_nc'
     def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
     def __call__(self, vid, num):
         return '{} {}, {}'.format(self.name(), vid, num)
     def emit(self):
@@ -208,6 +209,25 @@ class macro_c_clear_t(mc_base_t):
             with self._indent_context():
                 self._emit("v_mov_b32 v[_v], 0")
                 self._emit("_v = _v + 1")
+            self._emit(".endr")
+
+class macro_acc_c_clear_t(macro_base_t):
+    '''
+    gfx908 RAW harzard attention!
+    '''
+    def name(self):
+        return '.v_clear_acc_c'
+    def __init__(self, mc):
+        macro_base_t.__init__(self, mc)
+    def __call__(self, a, num):
+        return '{} {}, {}'.format(self.name(), a, num)
+    def emit(self):
+        with self._emit_macro_indented(".macro {} a, num".format(self.name())):
+            self._emit("_a = \\a")
+            self._emit(".rept \\num")
+            with self._indent_context():
+                self._emit("v_accvgpr_write_b32 a[_a], 0")
+                self._emit("_a = _a + 1")
             self._emit(".endr")
 
 class gpr_sequencer_t(object):
@@ -224,46 +244,6 @@ class gpr_sequencer_t(object):
     def get(self):
         return self.cnt
 
-class sym_t(object):
-    '''
-    symbol used in asm source, can use '.set <label>,   <value>'
-    '''
-    def __init__(self, label, value = 0):
-        assert type(label) is str
-        assert type(value) is int
-        self.label = label
-        self.value = value
-    def declare(self):
-        return f'.set {self.label}, {self.value}'
-    @staticmethod
-    def expr(label, index = 0):
-        if type(index) is int:
-            if index == 0:
-                return label
-            return f'{label}+{index}'
-        elif type(index) is tuple:
-            assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
-            return f'{label}+{index[0]}:{label}+{index[1]}'
-        else:
-            assert False
-
-    def __call__(self, index = 0):
-        return self.expr(self.label, index)
-    
-    def __eq__(self, other):
-        return self.label == other.label and self.value == other.value
-    def __ne__(self, other):
-        return not self == other
-
-class msym_t(object):
-    """ reference a symbol inside macro """
-    def __init__(self, sym):
-        assert type(sym) is sym_t
-        self.sym = sym
-        self.label_in_macro = f'\{sym.label}'
-
-    def __call__(self, index = 0):
-        return self.sym.expr(self.label_in_macro, index)
 
 def utility_list_to_string(arr):
     assert type(arr) is list
@@ -278,3 +258,52 @@ class utility_dict_with_default_t(object):
         if key in self.d:
             return self.d[key]
         return default_value
+
+# compute next power of 2
+def utility_next_pow2(n):
+    if n == 0:
+        return 1
+    if n & (n - 1) == 0:
+        return n
+    while n & (n - 1) > 0:
+        n &= (n - 1)
+    return n << 1
+
+def utility_next_mul(n, mul):
+    d = n // mul
+    d = d + (1 if (n % mul != 0) else 0)
+    return d * mul
+
+def utility_is_pow2(v):
+    return v and (not(v & (v - 1)))
+
+def utility_log2(v):
+    assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
+    return int(math.log2(v))
+
+def utility_get_epack_length(precision):
+        # GetEPackLength
+        epack = 1
+        if precision == AMDGPU_PRECISION_FP16:
+            # todo: xdlops check
+            epack = 2
+        elif precision == AMDGPU_PRECISION_BF16:
+            epack = 2
+        return epack
+
+def utility_gcd(a, b):
+    # math.gcd new in python 3.5
+    return math.gcd(a, b)
+
+def utility_lcm(a, b):
+    return abs(a * b) // math.gcd(a, b)
+
+def utility_flatten_list_product(x):
+    assert type(x) is list
+    from functools import reduce
+    return reduce(lambda a, b: a*b, x, 1)
+
+def utility_flatten_list_accumulate(x):
+    assert type(x) is list
+    from functools import reduce
+    return reduce(lambda a, b: a+b, x, 0)

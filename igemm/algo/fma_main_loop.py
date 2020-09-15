@@ -40,7 +40,7 @@ class inst_fma_t(object):
         # xdlops
         assert False, 'unimplemented fma type'
 
-class macro_v_fma_mxn_t(mc_base_t):
+class macro_v_fma_mxn_t(macro_base_t):
     '''
     continuous fma, or strided fma
     TODO: implement any index-ed fma (for rdna)
@@ -50,7 +50,7 @@ class macro_v_fma_mxn_t(mc_base_t):
                 ("" if self.stride == 1 else f"_s{self.stride}")
 
     def __init__(self, mc, m, n, stride):
-        mc_base_t.__init__(self, mc)
+        macro_base_t.__init__(self, mc)
         self.m = m
         self.n = n
         self.stride = stride

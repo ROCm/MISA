@@ -151,7 +151,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 
 #define WARMUP 3
 #define REPEAT 8
-#define SCLK_MHZ 1725
+#define SCLK_MHZ 1283
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -242,7 +242,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
         if(igemm_per_pixel_check){
-            double delta = ABS(ri - pi) / ri;
+            double delta = ABS((ri - pi) / ri);
             printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
@@ -302,7 +302,7 @@ void dump_arg(const args_t *arg) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
-    printf("n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
+    printf("conv_driver.exe conv: n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
            "dx:%d, py:%d, px:%d, ho:%d, wo:%d\n",
            n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
            pad_h, pad_w, ho, wo);
@@ -315,6 +315,7 @@ int main(int argc, char **argv) {
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
+    int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -373,12 +374,29 @@ int main(int argc, char **argv) {
 
     int num_cu;
     int num_simd = 64; // hard coded
+    int gcn_arch = 0;
     {
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
         HIP_CALL(hipGetDevice(&dev));
         HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
         num_cu = dev_prop.multiProcessorCount;
+        gcn_arch = dev_prop.gcnArch;
+#if 0
+#define P_DEVICE_PROP_INT(prop) \
+        printf(#prop":%d\n", dev_prop.prop)
+
+
+        P_DEVICE_PROP_INT(clockRate);
+        P_DEVICE_PROP_INT(memoryClockRate);
+        P_DEVICE_PROP_INT(memoryBusWidth);
+        P_DEVICE_PROP_INT(major);
+        P_DEVICE_PROP_INT(minor);
+        P_DEVICE_PROP_INT(gcnArch);
+#endif
+    }
+    if(gcn_arch == 908){
+        num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
     }
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
@@ -390,7 +408,8 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
 
-            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+            if(!skip_cpu_conv)
+                conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h);
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
@@ -409,11 +428,29 @@ int main(int argc, char **argv) {
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            // for(int i_n = 0; i_n < n; i_n++){
+            //     for(int i_k = 0; i_k < k; i_k++){
+            //         for(int i_ho = 0; i_ho < ho; i_ho++){
+            //             for(int i_wo = 0; i_wo < wo; i_wo++){
+            //                 int data = ((i_n  & 0xff) << 24) |
+            //                             ((i_k  & 0xff) << 16) |
+            //                             ((i_ho & 0xff) << 8) |
+            //                             (i_wo & 0xff);
+            //                 int index = i_n * k * ho * wo + i_k * ho * wo + i_ho * wo + i_wo;
+            //                 memcpy(&host_output[index],&data,4 );
+            //                 // host_output[index] = *(float*)(&data);
+            //             }
+            //         }
+            //     }
+            // }
 
-            conv_bwd_d_nchw(host_input, host_weight, host_output, n,
+
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
+            // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+
+            if(!skip_cpu_conv)
+                conv_bwd_d_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h);
             device_input_to_host = (float *)malloc(n * c * hi * wi * sizeof(float));
@@ -431,7 +468,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("  %s, ", conv_bwd_driver.get_kernel_name(tunable).c_str());
+            printf("[%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0,
@@ -439,8 +476,11 @@ int main(int argc, char **argv) {
             result_t result =
                 conv_bwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
-            if (result.return_code != 0)
+            if (result.return_code != 0){
+                printf("not applicatble\n");
                 continue;
+            }
+
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);

@@ -59,9 +59,18 @@ def igemm_flatten(args, config_content):
     mc = mc_asm_printer_t(emitter, arch)
 
     tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        td['arch'] = sec_root['arch']       # append arch to each section
 
     igemm_codegen_driver_t(mc, tunable_dicts)()
 
+def igemm_out_tunnable_param(args, config_content):
+    sec_root = config_content.get_section('codegen')[0]
+    tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        td['arch'] = sec_root['arch']       # append arch to each section
+        td_item = igemm_gtc_tunable_parameter_t(td)
+        td_item.output()
 
 
 #def igemm_sequence(args, config_content):
@@ -73,12 +82,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", help="config file as input")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
+    parser.add_argument("-o", "--isOut", help="output tunnable parameter list", default = False)
     args = parser.parse_args()
 
     config_parser = config_parser_t(args.config_file)
     #print(os.getcwd())
     config_content = config_parser()
     #config_content.dump()
+    if args.isOut:
+        igemm_out_tunnable_param(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         shutil.rmtree(args.dir, ignore_errors=True)
