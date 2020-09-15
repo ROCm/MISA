@@ -28,25 +28,40 @@
 class sym_t(object):
     '''
     symbol used in asm source, can use '.set <label>,   <value>'
+    if parse in label as tuple or list, then this label serve as indirect-indexed symbol
+    in this case, value can be ommited
     '''
     def __init__(self, label, value = 0, comments = ''):
-        assert type(label) is str
+        if type(label) in (tuple, list):
+            for a in label:
+                assert type(a) is str
+        else:
+            assert type(label) is str
         assert type(value) is int
         self.label = label
         self.value = value
         self.comments = comments
     def declare(self):
+        if type(self.label) in (tuple, list):
+            assert False, "not support label is tuple and call declare"
         comments_str = '' if self.comments == '' else f'  ; {self.comments}'
         return f'.set {self.label}, {self.value}{comments_str}'
     @staticmethod
     def expr(label, index = 0):
         if type(index) is int:
-            if index == 0:
-                return label
-            return f'{label}+{index}'
+            if type(label) in (tuple, list):
+                assert index < len(label)
+                return f'{label[index]}'
+            else:
+                if index == 0:
+                    return label
+                return f'{label}+{index}'
         elif type(index) is tuple:
-            assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
-            return f'{label}+{index[0]}:{label}+{index[1]}'
+            if type(label) in (tuple, list):
+                assert False, "not suppport both label, index are tuple"
+            else:
+                assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
+                return f'{label}+{index[0]}:{label}+{index[1]}'
         else:
             assert False
 
@@ -54,6 +69,17 @@ class sym_t(object):
         return self.expr(self.label, index)
     
     def __eq__(self, other):
+        if type(other) is not sym_t:
+            return False
+        if type(self.label) in (tuple, list):
+            if type(other.label) not in (tuple, list):
+                return False
+            if len(self.label) != len(other.label):
+                return False
+            for a, b in zip(self.label, other.label):
+                if a != b:
+                    return False
+            return True
         return self.label == other.label and self.value == other.value
     def __ne__(self, other):
         return not self == other
