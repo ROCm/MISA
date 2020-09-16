@@ -532,6 +532,11 @@ int main(int argc, char **argv) {
         igemm_wrw_gtc_t conv_wrw_driver;
         float min_duration = 10000000.0f;
         double nrms = get_wrw_nrms();
+        std::string kernel_name;
+
+        std::string selected_kernel;
+
+        selected_kernel = conv_wrw_driver.select_kernel(&conv_args, tunables);
         
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
@@ -555,6 +560,7 @@ int main(int argc, char **argv) {
             if (result.duration_ms < min_duration)
             {
                 min_duration = result.duration_ms;
+                kernel_name = conv_wrw_driver.get_kernel_name(tunable).c_str();
             }
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
@@ -575,6 +581,8 @@ int main(int argc, char **argv) {
                 dilation_h, dilation_w, pad_h, pad_w);
         printf("min cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", min_duration,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
+        std::cout << "kernel_name:" << kernel_name << std::endl;
+        std::cout << "selected kernel:" << selected_kernel << std::endl;
         if (need_verify) 
             free(device_weight_to_host);
     }

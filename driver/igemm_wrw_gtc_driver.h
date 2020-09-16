@@ -360,8 +360,131 @@ public:
         else{
             return 0;
         }
+    }
+
+    static int if_need_atomic_add(const args_t *arg,
+                                  const int gemm_m_per_block,
+                                  const int gemm_n_per_block,
+                                  const int gemm_k_per_block)
+    {
+        int need_atomic_add = 0;
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m = k;
+        int gemm_n = c * y * x;
+        int gemm_k = n * ho * wo;
+
+        int grid_size;
+        grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        if ((grid_size < 512) && ((n >> 1) * ho * wo % gemm_k_per_block == 0)){
+            need_atomic_add = 1;
+        }
+        else {
+            need_atomic_add = 0;
+        }
+        return need_atomic_add;
+    }
+
+    std::string select_kernel(const args_t *arg, const std::vector<igemm_gtc_tunable_t> tunables)
+    {
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int gemm_m_per_block;
+        int gemm_n_per_block;
+        int gemm_k_per_block;
+
+        int gemmk_groups;
+        int need_atomic_add = 0;
+
+        int gemm_m = k;
+        int gemm_n = c * y * x;
+        int gemm_k = n * ho * wo;
+
+        int grid_size;
+        int block_size;
+
+        igemm_gtc_tunable_t selected_tunable;
         
-        
+        // m/n per block 256*128; only for 1x1 stride 2 case
+        if ((gemm_k % 16 == 0) && (gemm_m % 256 == 0) && (gemm_n % 128 == 0) && (x * y == 1) && (stride_h == 2) && (stride_w == 2)){
+            gemm_m_per_block = 256;
+            gemm_n_per_block = 128;
+            gemm_k_per_block = 16;
+            need_atomic_add = if_need_atomic_add(arg, 
+                                                 gemm_m_per_block, 
+                                                 gemm_n_per_block,
+                                                 gemm_k_per_block);
+        }
+
+        // m/n per block 128*128
+        if ((gemm_m % 128 == 0) && (gemm_n % 128 == 0)){
+            gemm_m_per_block = 128;
+            gemm_n_per_block = 128;
+            if (gemm_k % 16 == 0){
+                gemm_k_per_block = 16;
+            }
+            else if (gemm_k % 8 == 0){
+                gemm_k_per_block = 8;
+            }
+            else{
+                assert(false);
+            }
+            need_atomic_add = if_need_atomic_add(arg, 
+                                                 gemm_m_per_block, 
+                                                 gemm_n_per_block,
+                                                 gemm_k_per_block);
+        }
+
+        int max_block_size = 0;
+        int max_grid_size = 0;
+        for (int i = 0; i < tunables.size(); i++) {
+            igemm_gtc_tunable_t *tunable = &tunables[i];
+            if (!tunable_is_valid(arg, &tunable)) {
+                continue;
+            }
+            if (tunable.tunable->tensor_a_cluster_lengths[0] != 1){
+                // if have n0, data locality will be worse
+                continue; 
+            }
+
+            // check m/n perblock
+            if ((tunable.gemm_k_per_block != gemm_k_per_block) || (tunable.gemm_m_per_block != gemm_m_per_block) || (tunable.gemm_n_per_block != gemm_n_per_block)){
+                continue;
+            }
+
+        }
+
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
