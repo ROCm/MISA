@@ -461,6 +461,7 @@ int main(int argc, char **argv) {
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
+            break; 
         }
 
         if (need_verify)
