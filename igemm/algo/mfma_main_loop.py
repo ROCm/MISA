@@ -259,7 +259,7 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
-                    self._emit(f's_waitcnt lgkmcnt(0)')
+                    # self._emit(f's_waitcnt lgkmcnt(0)')
                     self._emit(mfma_step_mxn(0, 0, 0, 0))
 
                     self._emit_empty_line()
@@ -291,10 +291,10 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
-            self._emit_empty_line()
-            self._emit(f_gld_b())                                           # global load
-            self._emit(f_gld_a())                                           # global load
-            self._emit_empty_line()
+            # self._emit_empty_line()
+            # self._emit(f_gld_b())                                           # global load
+            # self._emit(f_gld_a())                                           # global load
+            # self._emit_empty_line()
 
             # Label: start of fma body
             self._emit_front(f"{label_mfma_body}:")
@@ -735,9 +735,9 @@ class mfma_main_loop_t(mc_base_t):
             #    for y in x:
             #        y.dump()
             se_last = create_scheduler(self.mc, mbb_list_last)
-
             self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
+            mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")

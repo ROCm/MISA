@@ -196,9 +196,6 @@ public:
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
-        else{
-            assert(false);
-        }
        
     }
     int get_grid_size(const args_t *arg,
@@ -321,17 +318,17 @@ public:
         int gemm_n = n * h_tilda_slice * w_tilda_slice;
 
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
-            std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+            // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
         }
 
         if(gemm_n_per_block%tunable->nxb!=0){
-            std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
+            // printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
             return false;
         }
         //# ho * wo is 4x, gemm_n is 256, hence need batch size 256/4=64x
         if(n%(gemm_n_per_block/tunable->nxb)!=0){
-            std::cout << __func__ << " false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
+            // printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
             return false;
         }
         if( (h_tilda_slice * w_tilda_slice) % tunable->nxb != 0){

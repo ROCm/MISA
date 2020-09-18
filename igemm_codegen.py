@@ -67,6 +67,16 @@ def igemm_flatten(args, config_content):
     os.chmod(asm_target, 0x777)
 
 
+def igemm_out_tunable_param(output_file, config_content):
+    sec_root = config_content.get_section('codegen')[0]
+    list_emitter = mc_emit_to_file_t(output_file)
+    list_emitter.open()
+    tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        td['arch'] = sec_root['arch']       # append arch to each section
+        td_item = igemm_gtc_tunable_parameter_t(td)
+        list_emitter.emit(td_item.output())
+    list_emitter.close()
 
 #def igemm_sequence(args, config_content):
 #    kseq = v4r1_dynamic_kernel_sequencer_t(amdgpu_get_gfx906_60cu(),
@@ -77,12 +87,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", help="config file as input")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
+    parser.add_argument("-output", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
     args = parser.parse_args()
 
     config_parser = config_parser_t(args.config_file)
     #print(os.getcwd())
     config_content = config_parser()
     #config_content.dump()
+    print(args.output)
+    if args.output:
+        igemm_out_tunable_param(args.output, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         shutil.rmtree(args.dir, ignore_errors=True)

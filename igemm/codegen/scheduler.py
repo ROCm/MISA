@@ -109,6 +109,7 @@ class simple_interleave_scheduler_t(mc_base_t):
         arch_alu_per_interval = get_dict_with_default(options, "arch_alu_per_interval", 2)
         global_mem_per_interval = get_dict_with_default(options, "global_mem_per_interval", 1)
         share_mem_per_interval = get_dict_with_default(options, "share_mem_per_interval", 1)
+        mbb_0_mfma_cnt_after_branch_to_start = get_dict_with_default(options, "mbb_0_mfma_cnt_after_branch_to_start", 1)    # used in pattern_1
 
         assert min_interval[0] == 1, 'currently only support base mbb interval is 1'
         interleave_slot = len(self.mbb_lists[0])
@@ -215,8 +216,8 @@ class simple_interleave_scheduler_t(mc_base_t):
                     pass
             assert num_smem == len(mbb_1)
             #smem_per_interleave = (len(mbb_0) - 1 + num_smem - 1) // num_smem
-            smem_per_interleave = (num_smem + (mbb_0_mfma_cnt - 1) - 1) //  (mbb_0_mfma_cnt - 1)
-            # print(f'__ len(mbb_0):{len(mbb_0)}, num_smem:{num_smem}, smem_per_interleave:{smem_per_interleave}')
+            smem_per_interleave = (num_smem + (mbb_0_mfma_cnt - mbb_0_mfma_cnt_after_branch_to_start) - 1) //  (mbb_0_mfma_cnt - mbb_0_mfma_cnt_after_branch_to_start)
+            #print(f'__ len(mbb_0):{len(mbb_0)},mbb_0_mfma_cnt:{mbb_0_mfma_cnt}, num_smem:{num_smem}, smem_per_interleave:{smem_per_interleave}')
             with self._deferred_context():
                 m0_idx = 0
                 m1_idx = 0

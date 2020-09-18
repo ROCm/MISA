@@ -251,7 +251,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
-
+        
         assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
         assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
 
@@ -294,8 +294,33 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = self.lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
 
-
-
+    def output(self):
+        brace_left='   {'
+        brace_right='}'
+        if self.direction == 'fwd':
+            direction = 0
+        elif self.direction == 'bwd':
+            direction = 1
+        elif self.direction == 'wrw':
+            direction = 2
+        else:
+            assert False
+        if self.precision == 'fp32':
+            precision = 0
+        elif self.precision == 'fp16':
+            precision = 1
+        elif self.precision == 'bfp16':
+            precision = 2
+        else:
+            assert False
+        out_str = (f"{'{':2}{direction},{precision:4},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+        out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
+        out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
+        out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
+        out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
+        out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right:2}{brace_right},")
+        return out_str
+    
     def to_dict(self):
         tunable_dict = {}
         tunable_dict['tensor_layout']                   = self.tensor_layout

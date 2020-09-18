@@ -746,6 +746,12 @@ class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):
 
 
 
+class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):   
+    def name(self):
+        return ''
+
+
+
 class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
@@ -845,7 +851,6 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
         #with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
-        #print(f"ctrl.length_d1={ctrl.length_d1}, ctrl.vector_d1={ctrl.vector_d1}")
         if ctrl.length_d1 == ctrl.vector_d1:
             if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 == 1):
                 if ctrl.length_d0 % 2 == 0 and data_byte == 4 and ctrl.vector_d1 in (1, 2):
@@ -888,10 +893,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         else:
             assert ctrl.length_d1 % ctrl.vector_d1 == 0
             assert ctrl.stride_d1 != 1
-            #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
             num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
             ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
-            #print(f"ctrl.src_order={ctrl.src_order}")
             if ctrl.src_order == 0:
                 for i_d0 in range(ctrl.length_d0):
                     for i_d1 in range(num_vector_d1 // 2):
@@ -904,6 +907,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
                 # assert ctrl.v_tmp != None
                 #print(f"ctrl.length_d0={ctrl.length_d0}, ctrl.length_d1={ctrl.length_d1}")
+                # master branch raise an error
                 ds_write2_s1 = inst_ds_write2_with_vgpr_stride_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
                 trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                 for i_d0 in range(ctrl.length_d0):

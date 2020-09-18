@@ -35,6 +35,7 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+#include <float.h>
 
 #ifdef USE_XDNN
 #include "xdnn_conv.h"
@@ -94,7 +95,9 @@ static int next_pow2(int n) {
 }
 typedef struct {
     int return_code;
-    float duration_ms = 0;
+    float duration_ms;
+    float gflops;
+    float efficiency;
     std::string kernel_name;
 } result_t;
 
@@ -135,6 +138,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 }
 
 #include "igemm_gtc_base.h"
+#include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
 #include "igemm_wrw_gtc_driver.h"
 
@@ -244,7 +248,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS((ri - pi) / ri);
-            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -266,7 +270,11 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
 static inline double get_fwd_nrms()
 {
+#ifdef USE_XDNN
+    return 5e-5;
+#else
     return 1e-6;
+#endif
 }
 static inline double get_bwd_nrms()
 {
@@ -317,6 +325,7 @@ int main(int argc, char **argv) {
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
+    int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -403,11 +412,18 @@ int main(int argc, char **argv) {
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
 
     if (need_fwd){
+        result_t fastest_result_fwd;
+        fastest_result_fwd.duration_ms = FLT_MAX;
+        int fastest_id = 0;
         float *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+
 
             if(!skip_cpu_conv)
                 conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
@@ -421,17 +437,86 @@ int main(int argc, char **argv) {
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
+        igemm_fwd_gtc_t conv_fwd_driver;
+        double nrms = get_fwd_nrms();
+        for (int i = 0; i < tunables.size(); i++) {
+            igemm_gtc_tunable_t *tunable = &tunables[i];
+
+            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+
+            //if (need_verify)
+            //    HIP_CALL(hipMemset(device_output, 0,
+            //                       n * c * ho * wo * sizeof(float)));
+            result_t result =
+                conv_fwd_driver.run(&conv_args, tunable, module, device_input,
+                                device_weight, device_output, warmup, repeat);
+            if (result.return_code != 0){
+                printf("not applicatble\n");
+                continue;
+            }
+
+            double gflops = measured_fp32_conv_gflops(
+                result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+            printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
+            if (need_verify) {
+                HIP_CALL(hipMemcpy(device_output_to_host, device_output,
+                                   n * k * ho * wo * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+                bool is_valid = valid_vector(host_output, device_output_to_host,
+                                            n * k * ho * wo, nrms);
+                printf(", valid:%s", is_valid ? "y" : "n");
+            }
+            printf("\n");
+            if(result.duration_ms < fastest_result_fwd.duration_ms){
+                fastest_result_fwd = result;
+                fastest_result_fwd.gflops = (float)gflops;
+                fastest_result_fwd.efficiency = (gflops / fp32_gflops) * 100;
+                fastest_id = i;
+            }
+        }
+        if(log_fastest_config){
+            dump_arg(&conv_args);
+            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+                    fastest_id,
+                    fastest_result_fwd.kernel_name.c_str(),
+                    fastest_result_fwd.duration_ms,
+                    fastest_result_fwd.gflops / 1000,
+                    fastest_result_fwd.efficiency);
+        }
         if (need_verify)
             free(device_output_to_host);
     }
+
     if (need_bwd){
         float *device_input_to_host = NULL;
+        result_t fastest_result_bwd;
+        fastest_result_bwd.duration_ms = FLT_MAX;
+        int fastest_id;
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
+            // for(int i_n = 0; i_n < n; i_n++){
+            //     for(int i_k = 0; i_k < k; i_k++){
+            //         for(int i_ho = 0; i_ho < ho; i_ho++){
+            //             for(int i_wo = 0; i_wo < wo; i_wo++){
+            //                 int data = ((i_n  & 0xff) << 24) |
+            //                             ((i_k  & 0xff) << 16) |
+            //                             ((i_ho & 0xff) << 8) |
+            //                             (i_wo & 0xff);
+            //                 int index = i_n * k * ho * wo + i_k * ho * wo + i_ho * wo + i_wo;
+            //                 memcpy(&host_output[index],&data,4 );
+            //                 // host_output[index] = *(float*)(&data);
+            //             }
+            //         }
+            //     }
+            // }
+
+
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo,-5, 5);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
+            // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
             if(!skip_cpu_conv)
                 conv_bwd_d_nchw(host_input, host_weight, host_output, n,
@@ -445,14 +530,13 @@ int main(int argc, char **argv) {
                        n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-        
 
         igemm_bwd_gtc_t conv_bwd_driver;
         double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("  %s, ", conv_bwd_driver.get_kernel_name(tunable).c_str());
+            printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0,
@@ -460,8 +544,11 @@ int main(int argc, char **argv) {
             result_t result =
                 conv_bwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
-            if (result.return_code != 0)
+            if (result.return_code != 0){
+                printf("not applicatble\n");
                 continue;
+            }
+
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
@@ -480,6 +567,21 @@ int main(int argc, char **argv) {
                 // }
             }
             printf("\n");
+            if(result.duration_ms < fastest_result_bwd.duration_ms){
+                fastest_result_bwd = result;
+                fastest_result_bwd.gflops = (float)gflops;
+                fastest_result_bwd.efficiency = (gflops / fp32_gflops) * 100;
+                fastest_id = i;
+            }
+        }
+        if(log_fastest_config){
+            dump_arg(&conv_args);
+            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+                    fastest_id,
+                    fastest_result_bwd.kernel_name.c_str(),
+                    fastest_result_bwd.duration_ms,
+                    fastest_result_bwd.gflops / 1000,
+                    fastest_result_bwd.efficiency);
         }
         if (need_verify) 
             free(device_input_to_host);

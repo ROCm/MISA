@@ -46,8 +46,14 @@ class igemm_codegen_driver_t(mc_base_t):
             igemm_gtc_tunable = igemm_gtc_tunable_parameter_t(td)
             if igemm_gtc_tunable.direction == 'bwd':
                 kernel_list.append(igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
-            if igemm_gtc_tunable.direction == 'wrw':
+            elif igemm_gtc_tunable.direction == 'wrw':
                 kernel_list.append(igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
+            elif igemm_gtc_tunable.direction == 'fwd':
+                kernel_list.extend(igemm_fwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
+            else:
+                assert False, f"unknown direcrion? {igemm_gtc_tunable.direction}"
+
+
 
         self.kernel_list = kernel_list
 

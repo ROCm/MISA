@@ -31,6 +31,7 @@ from .shared_memory import *
 from .igemm_base import *
 from .igemm_bwd_gtc import *
 from .igemm_wrw_gtc import *
+from .igemm_fwd_gtc import *
 from .utility import *
 from .thread_mapping import *
 from .coalescing_store import *
