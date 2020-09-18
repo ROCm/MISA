@@ -634,7 +634,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self.s_move_slice_k_y = sym_t("s_move_slice_k_y"                  , sseq(1))
                 self.s_move_slice_k_x= sym_t("s_move_slice_k_x"                   , sseq(1))
 
-            self.s_knum                    = sym_t("s_knum"                   ,1)
+            self.s_knum                    = sym_t("s_knum"                   ,3)
             self.s_gemm_k_num_c1= sym_t("s_gemm_k_num_c1"                     , sseq(1))
             if outer.tunable.nxe != 0:
                 self.s_gemm_k_num_y = sym_t("s_gemm_k_num_y"                      , self.s_y.value)
@@ -644,7 +644,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
 
 
-            self.s_kitr                    = sym_t("s_kitr"                   ,3)
+            self.s_kitr                    = sym_t("s_kitr"                   ,1)
             if outer.tunable.precache_soffset:
                 m_wei_2d_global_load, m_in_2d_global_load         = outer.get_macro_global_load()
                 in_npc = m_in_2d_global_load.get_num_precache_soffset()
@@ -1337,6 +1337,12 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_n()}], {igemm_log2(nb_n0)}")
                 self._emit(f"s_mul_i32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], s[{s.s_tmp()}]")
 
+        # early init s_knum in case shifted
+        if self.tunable.nxe != 0:
+            self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_wei_stride_c()}], s[{s.s_c()}]")
+        else:
+            self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_c()}]")
+
         self._emit_empty_line()
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         if self.tunable.nxe != 0:
@@ -1697,10 +1703,10 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         if not self.is_1d_move_slice_k():
             self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_c1()}], {unmerge_sub_tb_c1}")
-        if self.tunable.nxe != 0:
-            self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_wei_stride_c()}], s[{s.s_c()}]")
-        else:
-            self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_c()}]")
+        #if self.tunable.nxe != 0:
+        #    self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_wei_stride_c()}], s[{s.s_c()}]")
+        #else:
+        #    self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_c()}]")
         self._emit_empty_line()
 
         self._emit(self.try_shift_stride(s.s_in_stride_c_c1, igemm_log2(data_byte)))
