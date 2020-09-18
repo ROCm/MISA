@@ -271,16 +271,41 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
-        auto launch_fwd = [&](){
+        auto launch_fwd = [&]() -> float {
             // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
             // dump_fwd_karg(&karg);
-
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
+            float ms = .0;
+
+#if USE_EXT_MODULE_LAUNCH
+            hipEvent_t start;
+            hipEvent_t stop;
+            hipEventCreate(&start);
+            hipEventCreate(&stop);
+
+            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, start, stop));
+
+            hipEventSynchronize(stop);
+            hipEventElapsedTime(&ms, start, stop);
+            hipEventDestroy(start);
+            hipEventDestroy(stop);
+#else
+            gpu_timer_t timer(NULL);
+            timer.start();
+
             HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config));
+
+            timer.stop();
+            ms = timer.duration();
+#endif
+            return ms;
         };
 
         for (int i = 0; i < warmup; i++) {
@@ -289,11 +314,7 @@ public:
 
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
-            gpu_timer_t timer(NULL);
-            timer.start();
-            launch_fwd();
-            timer.stop();
-            float d = timer.duration();
+            float d = launch_fwd();
             duration_list.push_back(d);
         }
 
