@@ -3,6 +3,7 @@
 export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908.hsaco
 set -v
 export DIR=4
+rm ./wrw_select_kernel.log
 #resnext101
 ./out/conv_driver.exe conv -n 64 -c 1024 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $DIR
 ./out/conv_driver.exe conv -n 64 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $DIR

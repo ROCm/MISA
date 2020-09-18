@@ -531,13 +531,18 @@ int main(int argc, char **argv) {
 
         igemm_wrw_gtc_t conv_wrw_driver;
         float min_duration = 10000000.0f;
+        float selected_duration = 10000000.0f;
         double nrms = get_wrw_nrms();
         std::string kernel_name;
 
         std::string selected_kernel;
 
         selected_kernel = conv_wrw_driver.select_kernel(&conv_args, tunables);
-        
+
+        int min_grid = 0;
+        int sel_grid = 0;
+
+#if 1
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -552,6 +557,7 @@ int main(int argc, char **argv) {
 
             if (result.return_code != 0)
                 continue;
+            int grid_size = conv_wrw_driver.get_grid_size(&conv_args, tunable); 
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
@@ -561,6 +567,12 @@ int main(int argc, char **argv) {
             {
                 min_duration = result.duration_ms;
                 kernel_name = conv_wrw_driver.get_kernel_name(tunable).c_str();
+                min_grid = grid_size;
+            }
+            if (selected_kernel == conv_wrw_driver.get_kernel_name(tunable).c_str())
+            {
+                selected_duration = result.duration_ms;
+                sel_grid = grid_size;
             }
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
@@ -582,7 +594,23 @@ int main(int argc, char **argv) {
         printf("min cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", min_duration,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
         std::cout << "kernel_name:" << kernel_name << std::endl;
+        double selected_gflops = measured_fp32_conv_gflops(
+                selected_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+        printf("selected cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", selected_duration,
+                   selected_gflops / 1000 , (selected_gflops / fp32_gflops) * 100);
         std::cout << "selected kernel:" << selected_kernel << std::endl;
+        // write out log file to see if selected one is good enough.
+        {
+            FILE *debug_log = fopen("./wrw_select_kernel.log", "a+");
+            if (debug_log != nullptr){
+                fprintf(debug_log, "conv n=%d, c=%d, hi=%d, wi=%d, k=%d, y=%d, x=%d, stride_h=%d, stride_w=%d, ho=%d, wo=%d \r\n", n, c, hi, wi, k, y, x, stride_h, stride_w, ho, wo);
+                fprintf(debug_log, "min_kernel: %s, min cost:%.3fms, min grid:%d\r\n", kernel_name.data(), min_duration, min_grid);
+                fprintf(debug_log, "sel_kernel: %s, sel cost:%.3fms, min grid:%d\r\n", selected_kernel.data(), selected_duration, sel_grid);
+            }
+            fclose(debug_log);
+        }
+#endif
         if (need_verify) 
             free(device_weight_to_host);
     }
