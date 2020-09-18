@@ -28,6 +28,7 @@
 #include "config_parser.h"
 #include <chrono>
 #include <functional>
+#include <hip/hip_ext.h>
 #include <hip/hip_runtime.h>
 #include <random>
 #include <stdio.h>
@@ -36,6 +37,10 @@
 #include <time.h>
 #include <vector>
 #include <float.h>
+
+#ifndef USE_EXT_MODULE_LAUNCH
+#define USE_EXT_MODULE_LAUNCH 1
+#endif
 
 #ifdef USE_XDNN
 #include "xdnn_conv.h"
