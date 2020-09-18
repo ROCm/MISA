@@ -441,7 +441,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("\n[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+            // printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
 
             //if (need_verify)
             //    HIP_CALL(hipMemset(device_output, 0,
@@ -450,9 +450,11 @@ int main(int argc, char **argv) {
                 conv_fwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
             if (result.return_code != 0){
-                printf("not applicatble\n");
+                // printf("not applicatble\n");
                 continue;
             }
+
+            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
 
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
@@ -467,6 +469,8 @@ int main(int argc, char **argv) {
                                             n * k * ho * wo, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
+            printf("\n\n"); 
+            break; 
             if(result.duration_ms < fastest_result_fwd.duration_ms){
                 fastest_result_fwd = result;
                 fastest_result_fwd.gflops = (float)gflops;

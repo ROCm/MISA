@@ -183,6 +183,23 @@ public:
         return true;
     }
 
+    bool is_faster_path(const args_t *arg, const igemm_gtc_tunable_t *tunable)
+    {
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+
+        if ( x==1 && y== 1 && stride_h == 1 && stride_w == 1 && dilation_h == 1 && dilation_w == 1 && pad_h == 0 && pad_w == 0 && tunable->nxe == 1 )
+	     return false; 
+
+	return true; 
+    }; 
+
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
                  hipModule_t module, float *p_in, float *p_wei, float *p_out,
                  int warmup, int repeat) {
@@ -192,6 +209,13 @@ public:
             //printf("this kernel can not support this config\n");
             return result;
         }
+
+        if (!is_faster_path(arg, tunable)) {
+            result_t result;
+            result.return_code = -2;
+            //printf("this kernel is not the better selection for this input specification!\n");
+            return result;
+	}; 
 
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");

@@ -46,6 +46,20 @@ def igemm_host_driver(args, config_content):
     if not rtn:
         assert False
 
+def igemm_host_driver2(args, config_content):
+    cpp_src = os.path.join(CPP_DIR, "conv_driver2.cpp")
+    target_exe = os.path.join(args.dir, "conv_driver2.exe")
+    sec_root = config_content.get_section('codegen')[0]
+    arch = amdgpu_arch_config_t({
+        'arch'          :   amdgpu_string_to_arch(sec_root['arch'])})
+    builder = compile_host_t(arch, cpp_src, target_exe)
+    config_file_name = os.path.abspath(args.config_file)
+    hsaco_name = os.path.splitext(os.path.basename(args.config_file))[0] + '.hsaco'
+    rtn = builder.compile(cxxflags=['-DIGEMM_CONFIG_FILE=\"{}\"'.format(config_file_name), \
+                        '-DIGEMM_HSACO=\"{}\"'.format(hsaco_name)])
+    if not rtn:
+        assert False
+
 def igemm_flatten(args, config_content):
     asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
     emitter = mc_emit_to_file_t(asm_target)
@@ -99,6 +113,7 @@ if __name__ == '__main__':
         shutil.rmtree(args.dir, ignore_errors=True)
         os.mkdir(args.dir)
         igemm_host_driver(args, config_content)
+        igemm_host_driver2(args, config_content)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
