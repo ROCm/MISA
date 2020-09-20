@@ -1067,7 +1067,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         # [ta_k0, ta_k1, ta_c0, ta_c1e]
         wei_stride_gprs = [s.s_wei_stride_k0 if ta_k0 != 1 else s_dummy,
-                    s_dummy if self.tunable.nxe != 0 else s.s_c,
+                    s.s_wei_stride_k if self.tunable.nxe != 0 else s.s_c,
                     s_dummy,
                     s_dummy]
         
