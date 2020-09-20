@@ -1066,7 +1066,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
         in_stride_gprs = [s.s_in_stride_c0 if tb_c0 != 1 else s_dummy,
-                    s.s_in_stride_c if self.tunable.nxe != 0 else s.s_stride_hw,
+                    s.s_in_stride_c if self.tunable.nxe != 0 else s.s_in_stride_c,  # TODO: both case is just the same
                     s.s_in_stride_n0 if tb_n0 != 1 else s_dummy,
                     s_dummy]
 
