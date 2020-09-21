@@ -183,7 +183,7 @@ class simple_swap_sequencer_t(object):
 
     '''
     def __init__(self, row, col):
-        assert col == 1 and row in (2, 4, 6, 8)
+        assert col == 2 and row in (2, 4, 6, 8), f"col:{col}, row:{row}"
         self.col = col
         self.row = row
 
@@ -768,7 +768,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
                         issue_cnt += ds_write.get_issues()
             else:
-                if ctrl.length_d1 == 2 and ctrl.length_d0 in (2, 4, 6, 8):
+                #if ctrl.length_d1 == 2 and ctrl.length_d0 in (2, 4, 6, 8):
+                if ctrl.length_d1 == 2 and ctrl.length_d0 == 2:
                     swap_sequencer = simple_swap_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                     swap_per_row = swap_sequencer.get_swap_per_row()
                     start_id_per_row = swap_sequencer.get_start_id_per_row()

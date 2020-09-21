@@ -24,6 +24,7 @@
 # 
 ################################################################################
 import sys
+import os
 import inspect
 from copy import deepcopy
 
@@ -132,6 +133,7 @@ class mc_emit_to_file_t(object):
             # self.emit(';')
     def close(self):
         if self.f != None:
+            os.fsync(self.f)
             self.f.close()
             self.f = None
     def indent_context(self,enter_func=None, exit_func=None):
