@@ -64,7 +64,7 @@ def igemm_flatten(args, config_content):
 
     igemm_codegen_driver_t(mc, tunable_dicts)()
 
-    os.chmod(asm_target, 0x777)
+    # os.chmod(asm_target, 0x777)
 
 
 def igemm_out_tunable_param(output_file, config_content):

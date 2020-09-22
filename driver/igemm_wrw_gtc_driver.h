@@ -275,7 +275,7 @@ public:
         }
 
         if ((ho * wo) % tunable->nxb != 0){
-            std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
+            //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
         }
 

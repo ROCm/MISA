@@ -149,7 +149,7 @@ class igemm_codegen_driver_t(mc_base_t):
                 if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                     self.mc.emitter = emitter_per_inc_dict[k]
                     amdgpu_metadata_t(self.mc, kinfo_per_inc_dict[k]).emit()
-                os.chmod(k, 0x777)
+                # os.chmod(k, 0x777)
                 v.close()
             self.mc.emitter = origin_emitter
             self._emit(f";---------------------------------------------------")
