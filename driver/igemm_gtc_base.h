@@ -236,12 +236,8 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += std::string("_kc");
     if(multihead)
         kernel_name += std::string("_mh");
-<<<<<<< HEAD
     // when split in gemmk, we need call atomic add function
     if(gemm_k_global_split > 0)
-=======
-    if(gemm_k_global_split)
->>>>>>> master
         kernel_name += std::string("_gkgs");
     return kernel_name;
 }
