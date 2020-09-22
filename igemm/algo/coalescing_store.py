@@ -418,7 +418,7 @@ class igemm_coalescing_store_t(mc_base_t):
         return self._get_deferred()
 
 class ctrl_coalescing_store_xdlops_t(object):
-    def __init__(self, use_atomic_add = False):
+    def __init__(self):
         self.cxm = None # ctrl_xdlops_mapping_t
         self.coalescing_groups = 1
         self.block_size = 256
@@ -426,7 +426,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.data_byte = 1
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
-        self.use_atomic_add = use_atomic_add
+        self.gemm_k_global_split = False
 
     def adjust_optimal_coalescing_groups(self):
         '''
@@ -1079,7 +1079,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
         inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
-        if ctrl.use_atomic_add: 
+        if ctrl.gemm_k_global_split: 
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out) 
         else:
             inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)

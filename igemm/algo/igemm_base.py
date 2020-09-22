@@ -119,11 +119,11 @@ def get_igemm_gtc_fma_type(tunable_dict):
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
-def get_igemm_gtc_use_atomic_add(tunable_dict):
+def get_igemm_gtc_gemm_k_global_split(tunable_dict):
     assert type(tunable_dict) is dict
     if tunable_dict['arch'] == 'gfx908':
-        gemmk_groups = utility_dict_with_default_t(tunable_dict)('gemmk_groups', 0)
-        if gemmk_groups > 0:
+        gemm_k_global_split = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
+        if gemm_k_global_split > 0:
             return 1
         else:
             return 0
@@ -174,7 +174,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
-        self.use_atomic_add                     = get_igemm_gtc_use_atomic_add(tunable_dict)
+        self.gemm_k_global_split                = get_igemm_gtc_gemm_k_global_split(tunable_dict)
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
 
@@ -319,7 +319,7 @@ class igemm_gtc_tunable_parameter_t(object):
         out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right:2},")
-        out_str += (f"\t{self.use_atomic_add}  }},")
+        out_str += (f"\t{self.gemm_k_global_split}  }},")
         return out_str
     
     def to_dict(self):
@@ -354,7 +354,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
 
-        tunable_dict['use_atomic_add']                  = self.use_atomic_add
+        tunable_dict['gemm_k_global_split']                  = self.gemm_k_global_split
 
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
@@ -451,8 +451,8 @@ def igemm_gtc_encode_kernel_name(tunable):
     if tunable.multihead:
         kernel_name += "_mh"
 
-    if tunable.use_atomic_add:
-        kernel_name += "_atadd"
+    if tunable.gemm_k_global_split:
+        kernel_name += "_gkgs"
 
     return kernel_name
 

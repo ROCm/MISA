@@ -56,7 +56,7 @@ typedef struct {
     int pad_w;
     int y;
     int x;
-    int gemmk_groups;
+    int gemm_k_global_split;
     int __pack0;
 } __attribute__((packed)) igemm_wrw_gtc_karg_t;
 
@@ -79,7 +79,7 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
     std::cout<<"pad_w:"        <<karg->pad_w<<",";
     std::cout<<"y:"            <<karg->y<<",";
     std::cout<<"x:"            <<karg->x<<",";
-    std::cout<<"gemmk_groups:" <<karg->gemmk_groups;
+    std::cout<<"gemm_k_global_split:" <<karg->gemm_k_global_split;
     std::cout<<std::endl;
 }
 
@@ -197,16 +197,16 @@ public:
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
-        int gemmk_groups             = tunable->gemmk_groups;
+        int gemm_k_global_split      = tunable->gemm_k_global_split;
 
-        gemmk_groups = update_gemmk_groups(arg, tunable);
+        gemm_k_global_split = update_gemm_k_global_split(arg, tunable);
 
         int gemm_m = k;
         int gemm_n = c * y * x;
 
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
-        int num_of_gemm = 1 << gemmk_groups;
+        int num_of_gemm = 1 << gemm_k_global_split;
         grid_size *= num_of_gemm;
         return grid_size;
     }
@@ -243,26 +243,26 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemmk_groups             = tunable->gemmk_groups;
-        int gemmk_blocks             = 1 << gemmk_groups;
+        int gemm_k_global_split      = tunable->gemm_k_global_split;
+        int gemmk_blocks             = 1 << gemm_k_global_split;
         
         if (n % gemmk_blocks != 0){
             return false;
         }
 
-        int n_per_block = n >> gemmk_groups;
+        int n_per_block = n >> gemm_k_global_split;
 
         int gemm_m = k;
         int gemm_n = c * y * x;
         int gemm_k = n * ho * wo;
 
         if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
-            std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+            //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
             return false;
         }
 
         if (gemm_k_per_block % tunable->nxb != 0){
-            std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
+            //std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
         }
 
@@ -270,7 +270,7 @@ public:
             return false;
 
         if ((tunable->nxb != 1) && (tunable->nxe != 0)){
-            std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
+            //std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
             return false;
         }
 
@@ -295,8 +295,8 @@ public:
         return true;
     }
 
-    int update_gemmk_groups(const args_t *arg,
-                            const igemm_gtc_tunable_t *tunable)
+    int update_gemm_k_global_split(const args_t *arg,
+                                   const igemm_gtc_tunable_t *tunable)
     {
         // choose a largest gemmk splits
         int hi = arg->get_int("in_h");
@@ -320,8 +320,7 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemmk_groups             = tunable->gemmk_groups;
-        int gemmk_blocks             = 1 << gemmk_groups;
+        int gemm_k_global_split      = tunable->gemm_k_global_split;
 
         int gemm_m = k;
         int gemm_n = c * y * x;
@@ -332,8 +331,8 @@ public:
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
         
-        if (gemmk_groups > 0){
-            int update_gemmk_split = 1;
+        if (gemm_k_global_split > 0){
+            int update_gemm_k_global_split = 1;
             for (int i = 1; i < 8; i++){
                 if ((grid_size << i) > max_grid_size){
                     break;
@@ -353,21 +352,21 @@ public:
                         break;
                     }
                 }
-                update_gemmk_split = i;
+                update_gemm_k_global_split = i;
             }
-            return update_gemmk_split;
+            return update_gemm_k_global_split;
         }
         else{
             return 0;
         }
     }
 
-    static int if_need_atomic_add(const args_t *arg,
+    static int if_gemm_k_global_split(const args_t *arg,
                                   const int gemm_m_per_block,
                                   const int gemm_n_per_block,
                                   const int gemm_k_per_block)
     {
-        int need_atomic_add = 0;
+        int gemm_k_global_split = 0;
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -393,43 +392,19 @@ public:
         grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         if ((n % 2 == 0) && (grid_size < 512) && ((n >> 1) * ho * wo % gemm_k_per_block == 0)){
-            need_atomic_add = 1;
+            gemm_k_global_split = 1;
         }
         else {
-            need_atomic_add = 0;
+            gemm_k_global_split = 0;
         }
-        return need_atomic_add;
-    }
-
-    static inline bool is_kernel_exist(const std::vector<igemm_gtc_tunable_t> tunables, 
-                                       const int gemm_m_per_block,
-                                       const int gemm_n_per_block,
-                                       const int gemm_k_per_block,
-                                       const int need_atomic_add,
-                                       const int nxb,
-                                       const int nxe)
-    {
-        bool kernel_exist = false;
-        for (int i = 0; i < tunables.size(); i++) {
-            const igemm_gtc_tunable_t *tunable = &tunables[i];
-            if ((tunable->gemm_m_per_block == gemm_m_per_block) &&
-                (tunable->gemm_n_per_block == gemm_n_per_block) &&
-                (tunable->gemm_k_per_block == gemm_k_per_block) &&
-                (tunable->gemmk_groups == need_atomic_add) &&
-                (tunable->nxb == nxb)&&
-                (tunable->nxe == nxe)){
-                kernel_exist = true;
-                break;
-            }
-        }
-        return kernel_exist;
+        return gemm_k_global_split;
     }
 
     static inline int find_tunable(const std::vector<igemm_gtc_tunable_t> tunables, 
                                     const int gemm_m_per_block,
                                     const int gemm_n_per_block,
                                     const int gemm_k_per_block,
-                                    const int need_atomic_add,
+                                    const int gemm_k_global_split,
                                     const int nxb,
                                     const int nxe)
     {
@@ -438,7 +413,7 @@ public:
             if ((tunables[i].gemm_m_per_block == gemm_m_per_block) &&
                 (tunables[i].gemm_n_per_block == gemm_n_per_block) &&
                 (tunables[i].gemm_k_per_block == gemm_k_per_block) &&
-                (tunables[i].gemmk_groups == need_atomic_add) &&
+                (tunables[i].gemm_k_global_split == gemm_k_global_split) &&
                 (tunables[i].nxb == nxb) &&
                 (tunables[i].nxe == nxe)){
                 break;
@@ -470,8 +445,7 @@ public:
         int gemm_n_per_block = 0;
         int gemm_k_per_block = 0;
 
-        int gemmk_groups;
-        int need_atomic_add = 0;
+        int gemm_k_global_split = 0;
 
         int gemm_m = k;
         int gemm_n = c * y * x;
@@ -531,7 +505,7 @@ public:
                         gemm_k_per_block = 1 << j;
                         if (gemm_k % gemm_k_per_block != 0)
                             continue;
-                        need_atomic_add = if_need_atomic_add(arg, 
+                        gemm_k_global_split = if_gemm_k_global_split(arg, 
                                                      gemm_m_per_block, 
                                                      gemm_n_per_block,
                                                      gemm_k_per_block);
@@ -543,26 +517,26 @@ public:
                         if ((x * y * stride_h * stride_w == 1) && (ho * wo % 4 == 0)){
                             nxb = 4;
                             nxe = 0;
-                            tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, need_atomic_add, nxb, nxe);
+                            tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, gemm_k_global_split, nxb, nxe);
                             if (tunable_index < 0 || tunable_index >= tunables.size()){
                                 nxb = 1;
                                 nxe = 1;
 
                                 // std::cout << gemm_m_per_block << ", " << gemm_n_per_block << ", " << gemm_k_per_block << std::endl;
                         
-                                tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, need_atomic_add, nxb, nxe);
+                                tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, gemm_k_global_split, nxb, nxe);
 
                             }
                         }
                         else{
-                            tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, need_atomic_add, nxb, nxe);
+                            tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, gemm_k_global_split, nxb, nxe);
                         }
 
                         
                         if (tunable_index < 0 || tunable_index >= tunables.size())
                             continue;
 
-                        int gemmk_splits = 0;
+                        int log2_gemm_k_splits = 0;
                         int grid_size = gemm_m / gemm_m_per_block * gemm_n / gemm_n_per_block;
                         for (int gs = 0; gs < 8; gs++){
                             if ((grid_size << gs) > 1200)
@@ -575,17 +549,17 @@ public:
                             if ((n >> gs) * ho * wo % gemm_k_per_block !=0){
                                 break;
                             }
-                            gemmk_splits = gs;
+                            log2_gemm_k_splits = gs;
                         }
 
-                        if (!need_atomic_add)
-                            gemmk_splits = 0;
+                        if (!gemm_k_global_split)
+                            log2_gemm_k_splits = 0;
 
                         //std::cout << tunable_index << std::endl;
 
                         int block_size = get_block_size(&tunables[tunable_index]);
 
-                        cur_grid_size = grid_size << gemmk_splits;
+                        cur_grid_size = grid_size << log2_gemm_k_splits;
 
                         if (block_size >= max_block_size && cur_grid_size > max_grid_size)
                         {
@@ -657,11 +631,11 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemmk_groups             = tunable->gemmk_groups;
+        int gemm_k_global_split      = tunable->gemm_k_global_split;
 
-        gemmk_groups = update_gemmk_groups(arg, tunable);
+        gemm_k_global_split = update_gemm_k_global_split(arg, tunable);
         
-        int num_of_gemm = 1 << gemmk_groups;
+        int num_of_gemm = 1 << gemm_k_global_split;
 
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -684,16 +658,16 @@ public:
         karg.pad_w         = pad_w;
         karg.y             = y;
         karg.x             = x;
-        karg.gemmk_groups  = gemmk_groups;
+        karg.gemm_k_global_split  = gemm_k_global_split;
 
-        printf("gemmk split is %d\r\n", 1 << gemmk_groups);
+        //printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+        //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -739,7 +713,7 @@ public:
         // debug section of code
 #if 0
         printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc((1 << gemmk_groups) * k * c * y * x * sizeof(float));
+        float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {

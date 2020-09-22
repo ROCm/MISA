@@ -359,8 +359,9 @@ class igemm_wrw_gtc_t(mc_base_t):
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
 
-            ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t(self.tunable.use_atomic_add)
+            ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t()
             ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
+            ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
@@ -525,7 +526,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.k_pad_w         = sym_t("k_pad_w",         72)
             self.k_y             = sym_t("k_y",             76)
             self.k_x             = sym_t("k_x",             80)
-            self.k_gemmk_groups  = sym_t("k_gemmk_groups",  84)
+            self.k_gemm_k_global_split  = sym_t("k_gemm_k_global_split",  84)
             self.k_pack0         = sym_t("k_pack0",         84)
             self.k_end           = sym_t("k_end",           88)
 
@@ -564,7 +565,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_y                       = sym_t("s_y"                      ,29)
             self.s_x                       = sym_t("s_x"                      ,30)
             sseq                           = gpr_sequencer_t(30 + 1)
-            self.s_gemmkgroups             = sym_t("s_gemmkgroups"           ,sseq(1))
+            self.s_gemmk_split             = sym_t("s_gemmk_split"           ,sseq(1))
 
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
             #if outer.tunable.nxe == 0:
@@ -1111,7 +1112,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             int pad_w;
             int y;
             int x;
-            int gemmk_groups;
+            int k_gemm_k_global_split;
         '''
         kas = []
         # name: {}, .size: {}, .offset: {}, .value_kind: {}, .value_type
@@ -1133,7 +1134,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         kas.append(amdgpu_kernel_arg_t('pad_w'         , 4,  72, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('y'             , 4,  76, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('x'             , 4,  80, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('gemmk_groups'  , 4,  84, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('k_gemm_k_global_split'  , 4,  84, 'by_value', 'i32'))
         return kas
 
 
@@ -1310,7 +1311,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         
         self._emit(f"s_lshr_b32 s[0], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(f"s_lshr_b32 s[{s.s_sub_n()}], s[{s.s_n()}], s[{s.s_gemmkgroups()}]")
+        self._emit(f"s_lshr_b32 s[{s.s_sub_n()}], s[{s.s_n()}], s[{s.s_gemmk_split()}]")
         self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
         self._emit(f"s_mul_i32 s[{s.s_group_stride()}], s[0], s[{s.s_tmp()}]")
         self._emit(m_int_div_rem_ss(s.s_group_left(), s.s_block_gtc_in(), s.s_bx(), s.s_group_stride(), v.v_tmp(5), v.v_tmp(), s.s_tmp()))

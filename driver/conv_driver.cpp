@@ -235,7 +235,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
     double s0 = 0.0;
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
-    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 0);
+    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
     for (int i = 0; i < n; ++i) {
@@ -260,7 +260,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
         }
     }
-    printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+    //printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -326,6 +326,7 @@ int main(int argc, char **argv) {
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
+    int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -644,7 +645,6 @@ int main(int argc, char **argv) {
         int min_grid = 0;
         int sel_grid = 0;
 
-#if 1
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -702,7 +702,9 @@ int main(int argc, char **argv) {
         printf("selected cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", selected_duration,
                    selected_gflops / 1000 , (selected_gflops / fp32_gflops) * 100);
         std::cout << "selected kernel:" << selected_kernel << std::endl;
+
         // write out log file to see if selected one is good enough.
+        if (wrw_kernel_selection == 1)
         {
             FILE *debug_log = fopen("./wrw_select_kernel.log", "a+");
             if (debug_log != nullptr){
@@ -712,7 +714,6 @@ int main(int argc, char **argv) {
             }
             fclose(debug_log);
         }
-#endif
         if (need_verify) 
             free(device_weight_to_host);
     }
