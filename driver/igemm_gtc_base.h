@@ -140,7 +140,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_n_unmerge_cluster   = sec.count("gemm_n_unmerge_cluster") > 0 ? sec.at("gemm_n_unmerge_cluster").get_int() : 0;
             tunable.gemm_k_unmerge_cluster   = sec.count("gemm_k_unmerge_cluster") > 0 ? sec.at("gemm_k_unmerge_cluster").get_int() : 0;
             tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
-            tunable.gemm_k_global_split      = codegen_sec.at("arch").get_string() != "gfx908" ? 0 : sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
+            tunable.gemm_k_global_split      = sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
 
             tunables.push_back(tunable);
         }
@@ -236,8 +236,12 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += std::string("_kc");
     if(multihead)
         kernel_name += std::string("_mh");
+<<<<<<< HEAD
     // when split in gemmk, we need call atomic add function
     if(gemm_k_global_split > 0)
+=======
+    if(gemm_k_global_split)
+>>>>>>> master
         kernel_name += std::string("_gkgs");
     return kernel_name;
 }

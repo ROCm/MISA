@@ -464,7 +464,8 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
-        auto launch_bwd = [&](){
+        auto launch_bwd = [&]() -> float{
+            float ms_total = .0;
             for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
                 int i_y_tilda = gemm_id / x_tilda;
                 int i_x_tilda = gemm_id % x_tilda;
@@ -483,15 +484,38 @@ public:
                 void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                           HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                           HIP_LAUNCH_PARAM_END};
+                float ms = .0;
+
                 if(is_gemm_not_empty){
+#if USE_EXT_MODULE_LAUNCH
+                    hipEvent_t start;
+                    hipEvent_t stop;
+                    hipEventCreate(&start);
+                    hipEventCreate(&stop);
+                    // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+                    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, start, stop));
+                    hipEventSynchronize(stop);
+                    hipEventElapsedTime(&ms, start, stop);
+                    hipEventDestroy(start);
+                    hipEventDestroy(stop);
+#else
+                    gpu_timer_t timer(NULL);
+                    timer.start();
                     HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
                                              block_size, 1, 1, 0, 0, NULL,
                                              (void **)&config));
+                    timer.stop();
+                    ms = timer.duration();
+#endif
                 }
+                ms_total += ms;
             }
+            return ms_total;
         };
 
-        auto launch_bwd_multihead = [&](){
+        auto launch_bwd_multihead = [&]() -> float{
             // if 1x1 and stride/dilation > 1, will have empty gemms which will waste launch grid. better ignore that case at runtime
             int origin_grid_size = grid_size/num_of_gemm;
             karg.dtile_iy = origin_grid_size;
@@ -504,17 +528,37 @@ public:
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
-
-                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config));
+            float ms = .0;
+#if USE_EXT_MODULE_LAUNCH
+            hipEvent_t start;
+            hipEvent_t stop;
+            hipEventCreate(&start);
+            hipEventCreate(&stop);
+            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+                                    block_size, 1, 1, 0, 0, NULL,
+                                    (void **)&config, start, stop));
+            hipEventSynchronize(stop);
+            hipEventElapsedTime(&ms, start, stop);
+            hipEventDestroy(start);
+            hipEventDestroy(stop);
+#else
+            gpu_timer_t timer(NULL);
+            timer.start();
+            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                                        block_size, 1, 1, 0, 0, NULL,
+                                        (void **)&config));
+            timer.stop();
+            ms = timer.duration();
+#endif
+            return ms;
         };
 
         auto launch_bwd_driver = [&](){
             if(tunable->multihead)
-                launch_bwd_multihead();
+                return launch_bwd_multihead();
             else
-                launch_bwd();
+                return launch_bwd();
         };
 
         for (int i = 0; i < warmup; i++) {
@@ -522,11 +566,7 @@ public:
         }
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
-            gpu_timer_t timer(NULL);
-            timer.start();
-            launch_bwd_driver();
-            timer.stop();
-            float d = timer.duration();
+            float d = launch_bwd_driver();
             duration_list.push_back(d);
         }
 

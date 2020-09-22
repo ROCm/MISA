@@ -94,12 +94,13 @@ if __name__ == '__main__':
     #print(os.getcwd())
     config_content = config_parser()
     #config_content.dump()
-    print(args.output)
+    #print(args.output)
     if args.output:
         igemm_out_tunable_param(args.output, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
-        shutil.rmtree(args.dir, ignore_errors=True)
+        if os.path.exists(args.dir):
+            shutil.rmtree(args.dir)
         os.mkdir(args.dir)
         igemm_host_driver(args, config_content)
         igemm_flatten(args, config_content)
