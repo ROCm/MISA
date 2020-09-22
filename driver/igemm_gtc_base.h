@@ -78,6 +78,7 @@ typedef struct {
     int gemm_n_unmerge_cluster;
     int gemm_k_unmerge_cluster;
     int multihead;
+    int gemm_k_global_split;
 } igemm_gtc_tunable_t;
 
 static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const config_section_t &sec){
@@ -139,6 +140,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_n_unmerge_cluster   = sec.count("gemm_n_unmerge_cluster") > 0 ? sec.at("gemm_n_unmerge_cluster").get_int() : 0;
             tunable.gemm_k_unmerge_cluster   = sec.count("gemm_k_unmerge_cluster") > 0 ? sec.at("gemm_k_unmerge_cluster").get_int() : 0;
             tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
+            tunable.gemm_k_global_split      = sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
 
             tunables.push_back(tunable);
         }
@@ -171,6 +173,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
     auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
     auto multihead                = tunable->multihead;
+    auto gemm_k_global_split      = tunable->gemm_k_global_split;
 
     std::string kernel_name = std::string("igemm_") + direction + "_";
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
@@ -233,6 +236,8 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += std::string("_kc");
     if(multihead)
         kernel_name += std::string("_mh");
+    if(gemm_k_global_split)
+        kernel_name += std::string("_gkgs");
     return kernel_name;
 }
 
