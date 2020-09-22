@@ -313,12 +313,13 @@ class igemm_gtc_tunable_parameter_t(object):
             precision = 2
         else:
             assert False
-        out_str = (f"{'{':2}{direction},{precision:4},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+        out_str = (f"\t\t{'{':2}{direction},{precision:4},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
         out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
         out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
-        out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right:2}{brace_right},")
+        out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right:2},")
+        out_str += (f"\t{self.use_atomic_add}  }},")
         return out_str
     
     def to_dict(self):

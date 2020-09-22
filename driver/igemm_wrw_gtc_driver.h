@@ -505,108 +505,6 @@ public:
             1, 1, 1, 1, 0,
             0, 1, 0, 0, 0
         };
-#if 0        
-        // m/n per block 256*128; only for 1x1 stride 2 case
-        if ((gemm_k % 16 == 0) && (gemm_m % 256 == 0) && (gemm_n % 128 == 0) && (x * y == 1) && (stride_h == 2) && (stride_w == 2)){
-            gemm_m_per_block = 256;
-            gemm_n_per_block = 128;
-            gemm_k_per_block = 16;
-            need_atomic_add = if_need_atomic_add(arg, 
-                                                 gemm_m_per_block, 
-                                                 gemm_n_per_block,
-                                                 gemm_k_per_block);
-        }
-        else{
-            // m/n per block 128*128
-            if ((gemm_m % 128 == 0) && (gemm_n % 128 == 0)){
-                gemm_m_per_block = 128;
-                gemm_n_per_block = 128;
-                if (gemm_k % 8 == 0){
-                    //gemm_k_per_block = 8;
-                }
-                else{
-                    assert(false);
-                }
-                need_atomic_add = if_need_atomic_add(arg, 
-                                                     gemm_m_per_block, 
-                                                     gemm_n_per_block,
-                                                     16);
-            }
-            else{
-                bool is_applicable = false;
-                // select gemm m/n per block
-                int i = 0, j = 0;
-                for (i = 0; i < 5; i++){
-                    if (gemm_m % gemm_m_per_block_table[i] == 0){
-                        for (j = 0; j < 4; j++){
-                            if (gemm_n % gemm_n_per_block_table[j] == 0 && applicable_table[j * 5 + i] == 1){
-                                is_applicable = true;
-                                break;
-                            }
-                        }
-                        if (is_applicable){
-                            gemm_m_per_block = gemm_m_per_block_table[i];
-                            gemm_n_per_block = gemm_n_per_block_table[j];
-                            break;
-                        }
-                    }
-                }
-                // select gemm k per block
-                if (gemm_k % 4 != 0){
-                    assert(false);
-                }
-                need_atomic_add = if_need_atomic_add(arg, 
-                                                     gemm_m_per_block, 
-                                                     gemm_n_per_block,
-                                                     16);
-            }
-            std::cout << gemm_m_per_block << " " << gemm_n_per_block << " " << need_atomic_add << std::endl;
-            // 1x1 stride 1 ho*wo // 4 case
-            if (((gemm_m_per_block == 128) && (gemm_n_per_block == 128)) || ((gemm_m_per_block == 256) && (gemm_n_per_block == 64))){
-                if (gemm_k % 16 == 0){
-                    if ((x * y * stride_h * stride_w == 1) && (ho * wo % 4 == 0)){
-                        nxb = 4;
-                        nxe = 0;
-                    }
-                }
-            }
-        }
-
-        //int max_block_size = 0;
-        //int max_grid_size = 0;
-        int max_gemm_k = 0;
-        for (int i = 0; i < tunables.size(); i++) {
-            const igemm_gtc_tunable_t *tunable = &tunables[i];
-            if (!tunable_is_valid(arg, tunable)) {
-                continue;
-            }
-            if (tunable->tensor_a_thread_lengths[0] != 1){
-                // if have n0, data locality will be worse
-                continue; 
-            }
-
-            // check m/n perblock
-            if ((tunable->gemmk_groups != need_atomic_add) || (tunable->gemm_m_per_block != gemm_m_per_block) || (tunable->gemm_n_per_block != gemm_n_per_block)){
-                continue;
-            }
-
-            if ((tunable->nxb != nxb) || (tunable->nxe != nxe)){
-                continue;
-            }
-
-            // choose a max gemm k
-            int gemmk_splits = update_gemmk_groups(arg, tunable);
-            int grid_size = get_grid_size(arg, tunable);
-            // if ()
-
-            if (tunable->gemm_k_per_block > max_gemm_k){
-                max_gemm_k = tunable->gemm_k_per_block;
-                selected_kernel = get_kernel_name(tunable).c_str();
-            }
-
-        }
-        return selected_kernel;
-#else
         int i, j, r, l;
         int max_grid_size = 0;
         int cur_grid_size = 0;
@@ -726,8 +624,6 @@ public:
             return get_kernel_name(tunable_return);
         }
         
-        
-#endif
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,

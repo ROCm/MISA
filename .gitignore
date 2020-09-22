@@ -7,3 +7,4 @@ driver/xdnn_conv.h
 *.log
 *.inc
 *_bak
+*.txt
