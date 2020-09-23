@@ -41,19 +41,27 @@ class igemm_codegen_driver_t(mc_base_t):
 
         kernel_list = []
 
-        # gtc driver
-        for td in tunable_dicts:
-            igemm_gtc_tunable = igemm_gtc_tunable_parameter_t(td)
-            if igemm_gtc_tunable.direction == 'bwd':
-                kernel_list.append(igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
-            elif igemm_gtc_tunable.direction == 'wrw':
-                kernel_list.append(igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
-            elif igemm_gtc_tunable.direction == 'fwd':
-                kernel_list.append(igemm_fwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)))
-            else:
-                assert False, f"unknown direcrion? {igemm_gtc_tunable.direction}"
+        # currently only support direction in tunable_dicts all the same.
+        if tunable_dicts[0]['direction'] == 'fwd':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'fwd'
+            # gtc fwd
+            kernel_list.extend([igemm_fwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
+        elif tunable_dicts[0]['direction'] == 'bwd':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'bwd'
+            # gtc bwd
+            kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
+        elif tunable_dicts[0]['direction'] == 'wrw':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'wrw'
+            # gtc bwd
+            kernel_list.extend([igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+
+        else:	
+            assert False, f"unknown direcrion? {tunable_dicts[0]['direction']}"
 
         self.kernel_list = kernel_list
 
