@@ -909,15 +909,16 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 # assert ctrl.v_tmp != None
                 #print(f"ctrl.length_d0={ctrl.length_d0}, ctrl.length_d1={ctrl.length_d1}")
                 # master branch raise an error
-                ds_write2_s1 = inst_ds_write2_with_vgpr_stride_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
+                #ds_write2_s1 = inst_ds_write2_with_vgpr_stride_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
                 trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                 for i_d0 in range(ctrl.length_d0):
                     s_id = trans_seq.get_start_id_per_row()[i_d0]
                     for i_d1 in range(num_vector_d1 // 2):
                         i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                        self._emit(ds_write2_s1(f'{self.v_sst_os()}',
-                                f'{self.v_src()}+{(s_id[i_d1 * 2])}', s_id[i_d1 * 2 + 1] - s_id[i_d1 * 2], i_offset))
-                        issue_cnt += ds_write2_s1.get_issues(i_offset)
+                        self._emit(ds_write2(f'{self.v_sst_os()}',
+                                (self.v_src(s_id[i_d1 * 2]), self.v_src(s_id[i_d1 * 2 + 1])),
+                                i_offset))
+                        issue_cnt += ds_write2.get_issues(i_offset)
 
         self.issue_cnt = issue_cnt
 
