@@ -649,102 +649,6 @@ class inst_ds_write2_likely_t(mc_base_t):
                 return self.vec_count // 2
         return self.vec_count
 
-class inst_ds_write2_with_vgpr_stride_likely_t(mc_base_t):   
-    def name(self):
-        return ''
-    def __init__(self, mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        mc_base_t.__init__(self, mc)
-        self.vec_count    = vec_count
-        self.vec_byte     = vec_byte
-        self.vec_stride   = vec_stride
-        self.sst_base     = sst_base
-    def likely_write2_b32(self, sst_offset = 0):
-        if self.vec_byte != 4:
-            return False
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2st64_b32(self, sst_offset = 0):
-        if self.vec_byte != 4:
-            return False
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
-            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2_b64(self, sst_offset = 0):
-        if self.vec_byte != 8:
-            return False
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
-            if ((self.sst_base + sst_offset) // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2st64_b64(self, sst_offset = 0):
-        if self.vec_byte != 8:
-            return False
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
-            if ((self.sst_base + sst_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def __call__(self, v_sst, v_src, vgpr_stride, sst_offset = 0):
-        if type(v_src) in (tuple , list):
-            assert len(v_src) == self.vec_count
-        #else:
-        v_src = sym_t(v_src)
-        v_sst = sym_t(v_sst)
-        def emit_write2_fallback(sst_offset = 0):
-            sstx1 = inst_ds_write_t(self.vec_byte)
-            with self._deferred_context():
-                for n in range(self.vec_count):
-                    self._emit(sstx1(v_sst(), v_src(n*(self.vec_byte // 4)), (self.sst_base + sst_offset) + n * self.vec_stride))
-            return self._get_deferred()
-
-        def emit_write2_b32(sst_offset = 0):
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2_b32 v[{v_sst()}], v[{v_src(n)}], v[{v_src(n+vgpr_stride)}], offset0:{((self.sst_base + sst_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sst_base + sst_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
-            return self._get_deferred()
-
-        def emit_write2st64_b32(sst_offset = 0):
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2st64_b32 v[{v_sst()}], v[{v_src(n)}], v[{v_src(n+vgpr_stride)}], offset0:{((self.sst_base + sst_offset)//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{((self.sst_base + sst_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
-            return self._get_deferred()
-
-        def likely_emit(sst_offset = 0):
-            if self.vec_byte == 4:
-                if self.likely_write2_b32(sst_offset):
-                    return emit_write2_b32(sst_offset)
-                if self.likely_write2st64_b32(sst_offset):
-                    return emit_write2st64_b32(sst_offset)
-                return emit_write2_fallback(sst_offset)
-            return emit_write2_fallback(sst_offset)
-        return likely_emit(sst_offset)
-
-    #def emit(self):
-    #    assert False, 'dont use emit of this'
-    def get_issues(self, sst_offset = 0):
-        if self.vec_byte == 4:
-            if self.likely_write2_b32(sst_offset) or self.likely_write2st64_b32(sst_offset):
-                return self.vec_count // 2
-        if self.vec_byte == 8:
-            if self.likely_write2_b64(sst_offset) or self.likely_write2st64_b64(sst_offset):
-                return self.vec_count // 2
-        return self.vec_count
-
-class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):   
-    def name(self):
-        return ''
-
-
 
 class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):   
     def name(self):
@@ -907,12 +811,17 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             else:
                 # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
                 # assert ctrl.v_tmp != None
-                #print(f"ctrl.length_d0={ctrl.length_d0}, ctrl.length_d1={ctrl.length_d1}")
-                # master branch raise an error
-                #ds_write2_s1 = inst_ds_write2_with_vgpr_stride_likely_t(self.mc, 2, ctrl.vector_d1 * data_byte, ctrl.stride_d1)
                 trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                 for i_d0 in range(ctrl.length_d0):
                     s_id = trans_seq.get_start_id_per_row()[i_d0]
+                    # for j in range(len(s_id)):
+                    #     self._emit(f"v_mov_b32 v[{ctrl.v_tmp(j)}], v[{self.v_src()}+{s_id[j]}]")
+                    # for i_d1 in range(num_vector_d1 // 2):
+                    #     i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                    #     self._emit(ds_write2(f'{self.v_sst_os()}',
+                    #             ctrl.v_tmp(i_d1 * num_vector_d1 // 2),
+                    #             i_offset))
+                    #     issue_cnt += ds_write2.get_issues(i_offset)
                     for i_d1 in range(num_vector_d1 // 2):
                         i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
                         self._emit(ds_write2(f'{self.v_sst_os()}',
