@@ -70,6 +70,21 @@ class inst_buffer_store_dword_t(object):
             return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
+class inst_buffer_atomic_add_dword_t(object):
+    ''' TODO: this implementation always offen '''
+    def __init__(self, dwords):
+        self.dwords = dwords
+
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+        if type(soffset) is int and soffset == 0:
+            soffset_str = "0"
+        else:
+            soffset_str = f"s[{soffset}]"
+
+        if self.dwords == 1:
+            return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False
+
 class ctrl_2d_global_load_t(object):
     def __init__(self):
         self.length_d0 = 1           # if d0 is 1, it is indeed 1d access
