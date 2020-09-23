@@ -8,5 +8,3 @@ driver/xdnn_conv.h
 *.inc
 *_bak
 *.txt
-igemm/codegen/compile.py
-script/v4r1_compile.sh
