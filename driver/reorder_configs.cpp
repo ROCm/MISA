@@ -41,14 +41,22 @@
 //static std::pair<int,int> macro_tiles[] = { {256,128}, {128,256}, {256,64}, {64,256}, {256,32}, {32,256}, {128,128}, {128,64}, {64,128}, {128,32},{32,128},{256,16},{16,256}, 
 //	                                    {64,64}, {64,32}, {32,64}, {128,16}, {16,128}, {32,32}, {64,16}, {16,64}, {64,8}, {8,64}, {32,16}, {16,32}, {64,4}, {4,64} }; 
 
-static std::pair<int,int> macro_tiles[] = { {128,256}, {256,128}, {64,256}, {256,64}, {32,256}, {256,32}, {128,128}, {64,128}, {128,64}, {32,128},{128,32},{16,256},{256,16}, 
-	                                    {64,64}, {32,64}, {64,32}, {16,128}, {128,16}, {32,32}, {16,64}, {64,16}, {8,64}, {64,8}, {16,32}, {32,16}, {4,64}, {64,4} }; 
+//static std::pair<int,int> macro_tiles[] = { {128,256}, {256,128}, {64,256}, {256,64}, {32,256}, {256,32}, {128,128}, {64,128}, {128,64}, {32,128},{128,32},{16,256},{256,16}, 
+//	                                    {64,64}, {32,64}, {64,32}, {16,128}, {128,16}, {32,32}, {16,64}, {64,16}, {8,64}, {64,8}, {16,32}, {32,16}, {4,64}, {64,4} }; 
+
+// Give more importance to gemm_n than gemm_m
+//static std::pair<int,int> macro_tiles[] = { {128,256}, {256,128}, {64,256}, {128,128}, {256,64}, {32,256}, {64,128}, {128,64}, {256,32}, {16,256}, {32,128}, {64,64}, {128,32},
+//	                                    {256,16}, {16,128}, {32,64}, {64,32}, {128,16}, {16,64}, {32,32}, {64,16}, {8,64}, {16,32}, {32,16}, {64,8}, {4,64}, {64,4} }; 
 
 //static std::pair<int,int> macro_tiles[] = { {256,128}, {128,256}, {256,64}, {64,256}, {256,32}, {32,256}, {128,128}, {128,64}, {64,128}, {128,32},{32,128}, 
 //	                                    {64,64}, {64,32}, {32,64}, {32,32}, {64,16}, {16,64}, {64,8}, {8,64}, {32,16}, {16,32}, {64,4}, {4,64} }; 
 	                                    
 //static std::pair<int,int> macro_tiles[] = { {128,256}, {256,128}, {64,256}, {256,64}, {32,256}, {256,32}, {128,128}, {64,128}, {128,64}, {32,128},{128,32}, 
 //	                                    {64,64}, {32,64}, {64,32}, {32,32}, {16,64}, {64,16}, {8,64}, {64,8}, {16,32}, {32,16}, {4,64}, {64,4} }; 
+
+// Give more importance to gemm_n than gemm_m
+static std::pair<int,int> macro_tiles[] = { {128,256}, {256,128}, {64,256}, {128,128}, {256,64}, {32,256}, {64,128}, {128,64}, {256,32}, {32,128}, {64,64}, {128,32},
+	                                    {32,64}, {64,32}, {16,64}, {32,32}, {64,16}, {8,64}, {16,32}, {32,16}, {64,8}, {4,64}, {64,4} }; 
 
 #define NUM_MACRO_TILES (sizeof(macro_tiles)/sizeof(macro_tiles[0]))
 
@@ -78,18 +86,18 @@ struct sorterClass
      if ( cfg1.tensor_a_cluster_lengths[3] < cfg2.tensor_a_cluster_lengths[3] )
           return(false); 
 
-     // Tensor_a c_c1e compare
-     if ( cfg1.tensor_a_cluster_lengths[1] > cfg2.tensor_a_cluster_lengths[1] )
-	  return(true); 
-
-     if ( cfg1.tensor_a_cluster_lengths[1] < cfg2.tensor_a_cluster_lengths[1] )
-	  return(false); 
-
      if ( cfg1.nxb > cfg2.nxb ) 
 	  return(true); 
 
      if ( cfg1.nxb < cfg2.nxb ) 
 	  return(false); 
+
+     // Tensor_a c_c1e compare
+     if ( cfg1.tensor_a_cluster_lengths[1] > cfg2.tensor_a_cluster_lengths[1] )
+	  return(true); 
+
+     if ( cfg1.tensor_a_cluster_lengths[1] < cfg2.tensor_a_cluster_lengths[1] )
+          return(false); 
 
      // This is needed to ensure tunable with nxe==0 is selected for x=y=1
      // Check the tunable_is_valid() which is not touched by me 
