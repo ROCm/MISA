@@ -39,7 +39,8 @@ IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 = 0
 IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B = 4
 IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 = 5
-
+IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_K_M= 0
+IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K= 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -1243,7 +1244,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
         s_dummy = sym_t("s_dummy")
 
-        
+        global_load_ta_order = IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K   # for fwd, it seems always K dimension first is better
 
         # start emit
         #self._emit(f"; unmerge_sub_k:{unmerge_sub_k}, unmerge_sub_k1:{unmerge_sub_k1}, unmerge_sub_n:{unmerge_sub_n}, unmerge_sub_n1:{unmerge_sub_n1}")
@@ -1263,14 +1264,25 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         self._emit(f"; wei(c0, c1e, k0, k1) thread_lengths: {ta_c0}x{ta_c1e}x{ta_k0}x{ta_k1}, cluster_lengths:{ca_c0}x{ca_c1e}x{ca_k0}x{ca_k1}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
-        self._emit(tc_index_dispatcher(v.v_gtc_ta_ik1(),    v.v_tmp(),  ca_k1,  ta_k1))
-        self._emit(tc_index_dispatcher(v.v_gtc_ta_ik0(),    v.v_tmp(),  ca_k0,  ta_k0))
-        if ca_c0 != 1:
+        if global_load_ta_order == IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K:
             self._emit(tc_index_dispatcher(v.v_gtc_ta_ic1e(),   v.v_tmp(),  ca_c1e, ta_c1e))
-            self._emit(tc_index_dispatcher(v.v_gtc_ta_ic0(),    v.v_tmp(),  ca_c0,  ta_c0,  True))
+            if ca_c0 != 1:
+                self._emit(tc_index_dispatcher(v.v_gtc_ta_ic0(),    v.v_tmp(),  ca_c0,  ta_c0))
+            else:
+                self._emit(f"v_mov_b32 v[{v.v_gtc_ta_ic0()}], 0")
+
+            self._emit(tc_index_dispatcher(v.v_gtc_ta_ik1(),    v.v_tmp(),  ca_k1,  ta_k1))
+            self._emit(tc_index_dispatcher(v.v_gtc_ta_ik0(),    v.v_tmp(),  ca_k0,  ta_k0, True))
+
         else:
-            self._emit(tc_index_dispatcher(v.v_gtc_ta_ic1e(),   v.v_tmp(),  ca_c1e, ta_c1e, True))
-            self._emit(f"v_mov_b32 v[{v.v_gtc_ta_ic0()}], 0")
+            self._emit(tc_index_dispatcher(v.v_gtc_ta_ik1(),    v.v_tmp(),  ca_k1,  ta_k1))
+            self._emit(tc_index_dispatcher(v.v_gtc_ta_ik0(),    v.v_tmp(),  ca_k0,  ta_k0))
+            if ca_c0 != 1:
+                self._emit(tc_index_dispatcher(v.v_gtc_ta_ic1e(),   v.v_tmp(),  ca_c1e, ta_c1e))
+                self._emit(tc_index_dispatcher(v.v_gtc_ta_ic0(),    v.v_tmp(),  ca_c0,  ta_c0,  True))
+            else:
+                self._emit(tc_index_dispatcher(v.v_gtc_ta_ic1e(),   v.v_tmp(),  ca_c1e, ta_c1e, True))
+                self._emit(f"v_mov_b32 v[{v.v_gtc_ta_ic0()}], 0")
         # assert ta_c0 == 1 and ca_c0 == 1, "re-assert again to make sure for weight no copy in c0 dimension"
         self._emit_empty_line()
 
