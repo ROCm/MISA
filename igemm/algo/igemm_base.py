@@ -119,6 +119,17 @@ def get_igemm_gtc_fma_type(tunable_dict):
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
+def get_igemm_gtc_gemm_k_global_split(tunable_dict):
+    assert type(tunable_dict) is dict
+    if tunable_dict['arch'] == 'gfx908':
+        gemm_k_global_split = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
+        if gemm_k_global_split > 0:
+            return 1
+        else:
+            return 0
+    else:
+        return 0
+
 def igemm_get_fma_type_from_arch_config(arch_config):
     assert type(arch_config) is amdgpu_arch_config_t
     if arch_config.use_xdlops:
@@ -163,12 +174,14 @@ class igemm_gtc_tunable_parameter_t(object):
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
+        self.gemm_k_global_split                = get_igemm_gtc_gemm_k_global_split(tunable_dict)
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
 
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
+        self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
@@ -212,10 +225,10 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
             self.unmerge_sub_c = 1                             # not used
         else:
-            # TODO: wrw maybe different
-            self.unmerge_sub_n = 1
+            assert self.gemm_k_per_block % self.nxb == 0
+            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, 1)
             self.unmerge_sub_k = 1
-            self.unmerge_sub_c = 1
+            self.unmerge_sub_c = self.gemm_n_per_block
 
         self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1
@@ -285,28 +298,15 @@ class igemm_gtc_tunable_parameter_t(object):
     def output(self):
         brace_left='   {'
         brace_right='}'
-        if self.direction == 'fwd':
-            direction = 0
-        elif self.direction == 'bwd':
-            direction = 1
-        elif self.direction == 'wrw':
-            direction = 2
-        else:
-            assert False
-        if self.precision == 'fp32':
-            precision = 0
-        elif self.precision == 'fp16':
-            precision = 1
-        elif self.precision == 'bfp16':
-            precision = 2
-        else:
-            assert False
-        out_str = (f"{'{':2}{direction},{precision:4},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+        direction = "\"" + self.direction + "\""
+        precision = "\"" + self.precision + "\""
+        out_str = (f"{'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
         out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
         out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
-        out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right:2}{brace_right},")
+        out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right},")
+        out_str += (f"{self.gemm_k_global_split:4}{brace_right},")
         return out_str
     
     def to_dict(self):
@@ -340,6 +340,8 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['precision']                       = self.precision
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
+
+        tunable_dict['gemm_k_global_split']                  = self.gemm_k_global_split
 
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
@@ -435,6 +437,9 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     if tunable.multihead:
         kernel_name += "_mh"
+
+    if tunable.gemm_k_global_split:
+        kernel_name += "_gkgs"
 
     return kernel_name
 

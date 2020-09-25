@@ -78,6 +78,9 @@ def igemm_flatten(args, config_content):
 
     igemm_codegen_driver_t(mc, tunable_dicts)()
 
+    # os.chmod(asm_target, 0x777)
+
+
 def igemm_out_tunable_param(output_file, config_content):
     sec_root = config_content.get_section('codegen')[0]
     list_emitter = mc_emit_to_file_t(output_file)
