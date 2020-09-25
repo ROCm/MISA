@@ -180,6 +180,11 @@ public:
                 return false;
             }
         }
+
+        // added for testing
+	if ( tunable->tensor_b_thread_lengths[1] > 1 && ( x !=1 || y != 1) )
+	     return false; 
+	     
         return true;
     }
 

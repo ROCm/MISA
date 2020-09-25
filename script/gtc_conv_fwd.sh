@@ -1,7 +1,7 @@
 
 #!/bin/sh
-##export IGEMM_HSACO=out/igemm_fwd_gtc_gfx908_all_ordered.hsaco
-export IGEMM_HSACO=out/tmp_all_reordered.hsaco
+export IGEMM_HSACO=out/igemm_fwd_gtc_gfx908.hsaco
+##export IGEMM_HSACO=out/tmp_all_reduced_reordered.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=0
 

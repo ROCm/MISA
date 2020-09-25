@@ -157,66 +157,14 @@ static void output_configurations(std::vector<igemm_gtc_tunable_t> &configs, con
     };
 }; 
 
-static void output_h_file(std::vector<igemm_gtc_tunable_t> &configs, const char *strDirection, const char *strPrecision, std::ostream &myout)
-{
-    static const char *dataItemName = "TunableImplicitGemmGTCDynamic_t"; 
-    static const char *comma = ", "; 
-    static const char *ident = "    "; 
-
-    myout << "static inline std::vector<" << dataItemName << ">& " << std::endl; 
-    myout << "GetImplicitGemmFwdGTCDynamicXdlopsKernelList()" << std::endl; 
-    myout << '{' << std::endl; 
-
-    myout << ident << "// list all the dynamic igemm conv-fwd kernels" << std::endl; 
-    myout << ident << "// clang-format off" << std::endl; 
-
-    myout << ident << "static std::vector<TunableImplicitGemmGTCDynamic_t> kernel_param_list {" << std::endl; 
-
-    for (const auto& cfg : configs) {
-         myout << ident << ident << '{'; 
-
-         myout << strDirection << comma; 
-	 myout << strPrecision << comma;
-
-	 myout << cfg.nxb << comma;
-	 myout << cfg.nxe << comma;
-
-         myout << cfg.gemm_m_per_block << comma << cfg.gemm_n_per_block << comma << cfg.gemm_k_per_block << comma; 
-
-         myout << cfg.wave_tile_m << comma << cfg.wave_tile_n << comma; 	 
-
-         myout << cfg.wave_step_m << comma << cfg.wave_step_n << comma; 	 
-
-         myout << cfg.wave_repeat_m << comma << cfg.wave_repeat_n << comma; 	 
-
-         myout << '{' << cfg.tensor_a_thread_lengths[0] << comma << cfg.tensor_a_thread_lengths[1] << comma;
-	 myout << cfg.tensor_a_thread_lengths[2] << comma << cfg.tensor_a_thread_lengths[3] << '}' << comma;  
-         myout << '{' << cfg.tensor_a_cluster_lengths[0] << comma << cfg.tensor_a_cluster_lengths[1] << comma;
-	 myout << cfg.tensor_a_cluster_lengths[2] << comma << cfg.tensor_a_cluster_lengths[3] << '}' << comma; 
-
-         myout << '{' << cfg.tensor_b_thread_lengths[0] << comma << cfg.tensor_b_thread_lengths[1] << comma;
-	 myout << cfg.tensor_b_thread_lengths[2] << comma << cfg.tensor_b_thread_lengths[3] << '}' << comma; 
-         myout << '{' << cfg.tensor_b_cluster_lengths[0] << comma << cfg.tensor_b_cluster_lengths[1] << comma;
-	 myout << cfg.tensor_b_cluster_lengths[2] << comma << cfg.tensor_b_cluster_lengths[3] << '}' << comma; 
-
-         myout << '}' << comma << std::endl; 	 
-    };  
-
-    myout << ident << '}' << ';' << std::endl; 
-    myout << std::endl;
-    myout << ident << "return kernel_param_list;" << std::endl; 
-    myout << '}' << std::endl; 
-}; 
-
 int main(int argc, char **argv) 
 {
-    if ( argc < 3 ) {
-         fprintf(stdout, "Usage: %s, <src configuration file> <dst configuration file> <C++ vector of Tuables -- optional> \n", argv[0]);
+    if ( argc != 3 ) {
+         fprintf(stdout, "Usage: %s, <src configuration file> <dst configuration file> \n", argv[0]);
          return(-1); 
     }; 
 
     const char *config_file = argv[1]; 
-    const char *tunables_h_file = (argc == 4) ?  argv[3] : nullptr;  
 
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
@@ -271,13 +219,7 @@ int main(int argc, char **argv)
 
     fprintf(stdout, "\nSize of the orderred configs array %d\n", (int)ordered_configs.size()); 
 
-    const char *strDirection = "\'fwd\'";
-    const char *strPrecision = "\'fp32\'"; 
+    const char *strDirection = "\"fwd\"";
+    const char *strPrecision = "\"fp32\""; 
     output_configurations(ordered_configs, strDirection, strPrecision, ofs); 
-
-    if ( tunables_h_file ) {
-         std::ofstream ofs2(tunables_h_file, std::ofstream::out);
-
-         output_h_file(ordered_configs, strDirection, strPrecision, ofs2); 
-    };  
 };
