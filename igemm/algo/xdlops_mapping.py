@@ -290,7 +290,8 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  1,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  1,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
+        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 16,  16,  16,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
 
 def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     target_mfma_tiling_fp32 = list()
