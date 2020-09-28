@@ -7,7 +7,7 @@ export IGEMM_LOG_FASTEST_CONFIG=0
 
 # Flag enables fwd, bwd, wrw convolutions
 FORW=1
-Verify=0
+Verify=1
 
 set -x 
 
