@@ -149,6 +149,7 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #include "igemm_gtc_base.h"
 #include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
+#include "igemm_wrw_gtc_driver.h"
 
 #ifndef ABS
 #define ABS(x) ((x) > 0 ? (x) : -1 * (x))
@@ -334,6 +335,7 @@ int main(int argc, char **argv) {
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
+    int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -595,7 +597,134 @@ int main(int argc, char **argv) {
             free(device_input_to_host);
     }
     if (need_wrw){
-        // un implemented
+        float *device_weight_to_host = NULL;
+        if (need_verify) {
+            // gen rand
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+
+            conv_bwd_f_nchw(host_input, host_weight, host_output, n,
+                                         wi, hi, c, k, x, y, pad_w,
+                                         pad_h, stride_w, stride_h, dilation_w, dilation_h);
+            device_weight_to_host = (float *)malloc(k * c * y * x * sizeof(float));
+            // printf("len:%d\n", k * c * y * x * sizeof(float));
+        }
+
+        HIP_CALL(hipMemcpy(device_input, host_input,
+                       n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+        HIP_CALL(hipMemcpy(device_output, host_output,
+                       n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+
+#if 0
+        printf("input\r\n");
+        for (int i_check = 0; i_check < (0+32); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
+        }
+        printf("output\r\n");
+        for (int i_check = 0; i_check < (0+32); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*ho*wo, host_output[i_check*ho*wo], ((int *)host_output)[i_check*ho*wo]);
+        }
+        printf("input\r\n");
+        for (int i_check = 0; i_check < (0+32); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_input[i_check], ((int *)host_input)[i_check]);
+        }
+        printf("output\r\n");
+        for (int i_check = 0; i_check < (0+32); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_output[i_check], ((int *)host_output)[i_check]);
+        }
+        printf("workspace debug end \r\n");
+#endif   
+
+        igemm_wrw_gtc_t conv_wrw_driver;
+        float min_duration = 10000000.0f;
+        float selected_duration = 10000000.0f;
+        double nrms = get_wrw_nrms();
+        std::string kernel_name;
+
+        std::string selected_kernel;
+
+        selected_kernel = conv_wrw_driver.select_kernel(&conv_args, tunables);
+
+        int min_grid = 0;
+        int sel_grid = 0;
+
+        for (int i = 0; i < tunables.size(); i++) {
+            igemm_gtc_tunable_t *tunable = &tunables[i];
+
+            printf("  %s, ", conv_wrw_driver.get_kernel_name(tunable).c_str());
+
+            if (need_verify)
+                HIP_CALL(hipMemset(device_weight, 0,
+                                   k * c * y * x * sizeof(float)));
+            result_t result =
+                conv_wrw_driver.run(&conv_args, tunable, module, device_input,
+                                device_weight, device_output, warmup, repeat);
+
+            if (result.return_code != 0)
+                continue;
+            int grid_size = conv_wrw_driver.get_grid_size(&conv_args, tunable); 
+            double gflops = measured_fp32_conv_gflops(
+                result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+            printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
+            if (result.duration_ms < min_duration)
+            {
+                min_duration = result.duration_ms;
+                kernel_name = conv_wrw_driver.get_kernel_name(tunable).c_str();
+                min_grid = grid_size;
+            }
+            if (selected_kernel == conv_wrw_driver.get_kernel_name(tunable).c_str())
+            {
+                selected_duration = result.duration_ms;
+                sel_grid = grid_size;
+            }
+            if (need_verify) {
+                HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
+                                   k * c * y * x * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+                bool is_valid = valid_vector(host_weight, device_weight_to_host,
+                                            k * c * y * x, nrms);
+                printf(", valid:%s", is_valid ? "y" : "n");
+                // if (!is_valid) {
+                //     printf("\n");
+                //     break;
+                // }
+            }
+            printf("\n");
+        }
+        double gflops = measured_fp32_conv_gflops(
+                min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+        printf("min cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", min_duration,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100);
+        std::cout << "kernel_name:" << kernel_name << std::endl;
+        double selected_gflops = measured_fp32_conv_gflops(
+                selected_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
+                dilation_h, dilation_w, pad_h, pad_w);
+        printf("selected cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", selected_duration,
+                   selected_gflops / 1000 , (selected_gflops / fp32_gflops) * 100);
+        std::cout << "selected kernel:" << selected_kernel << std::endl;
+
+        // write out log file to see if selected one is good enough.
+        if (wrw_kernel_selection == 1)
+        {
+            FILE *debug_log = fopen("./wrw_select_kernel.log", "a+");
+            if (debug_log != nullptr){
+                fprintf(debug_log, "conv n=%d, c=%d, hi=%d, wi=%d, k=%d, y=%d, x=%d, stride_h=%d, stride_w=%d, ho=%d, wo=%d \r\n", n, c, hi, wi, k, y, x, stride_h, stride_w, ho, wo);
+                fprintf(debug_log, "min_kernel: %s, min cost:%.3fms, min grid:%d\r\n", kernel_name.data(), min_duration, min_grid);
+                fprintf(debug_log, "sel_kernel: %s, sel cost:%.3fms, min grid:%d\r\n", selected_kernel.data(), selected_duration, sel_grid);
+            }
+            fclose(debug_log);
+        }
+        if (need_verify) 
+            free(device_weight_to_host);
     }
 
     free(host_input);

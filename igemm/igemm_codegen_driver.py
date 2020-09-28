@@ -54,7 +54,13 @@ class igemm_codegen_driver_t(mc_base_t):
             # gtc bwd
             kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
-        else:
+        elif tunable_dicts[0]['direction'] == 'wrw':
+            for tdd in tunable_dicts:
+                assert tdd['direction'] == 'wrw'
+            # gtc bwd
+            kernel_list.extend([igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+
+        else:	
             assert False, f"unknown direcrion? {tunable_dicts[0]['direction']}"
 
         self.kernel_list = kernel_list
@@ -158,6 +164,7 @@ class igemm_codegen_driver_t(mc_base_t):
                 if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                     self.mc.emitter = emitter_per_inc_dict[k]
                     amdgpu_metadata_t(self.mc, kinfo_per_inc_dict[k]).emit()
+                # os.chmod(k, 0x777)
                 v.close()
             self.mc.emitter = origin_emitter
             self._emit(f";---------------------------------------------------")
