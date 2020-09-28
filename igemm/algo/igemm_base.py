@@ -338,6 +338,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
         tunable_dict['source_access_order']             = self.source_access_order
+        tunable_dict['gemm_k_global_split']                  = self.gemm_k_global_split
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
