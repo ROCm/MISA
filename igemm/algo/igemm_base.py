@@ -37,6 +37,7 @@ IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
 IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
 IGEMM_GTC_FEAT_MAGIC_DIVISION = 0
+IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -420,7 +421,9 @@ def igemm_gtc_encode_kernel_name(tunable):
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         kernel_name += 'gtcx_'                                  # generic tensor contraction with xdlops
 
-    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_sa{tunable.source_access_order}_"
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    if IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME:
+        kernel_name += f"sa{tunable.source_access_order}_"
     kernel_name += f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_"
     if tunable.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
         kernel_name +=   f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
