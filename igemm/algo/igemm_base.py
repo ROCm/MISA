@@ -36,6 +36,7 @@ IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
 IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
+IGEMM_GTC_FEAT_MAGIC_DIVISION = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -45,6 +46,10 @@ IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
 IGEMM_GTC_TUNABLE_FMA_TYPE_MAC               = 'mac'
 IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS             = 'dlops'
 IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS            = 'xdlops'
+
+
+IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N       = 0    # m*n, load gemm_n first
+IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M       = 1    # n*m, load gemm_m first
 
 def igemm_get_vector_size(v):
     vec_size = 1
@@ -166,6 +171,10 @@ class igemm_gtc_tunable_parameter_t(object):
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
 
+        default_source_access_order             = IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M if self.direction == 'fwd' \
+                                                        else IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N
+        self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', default_source_access_order)
+
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
@@ -240,7 +249,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
-        
+
         assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
         assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
 
@@ -328,7 +337,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['precision']                       = self.precision
         tunable_dict['nxb']                             = self.nxb
         tunable_dict['nxe']                             = self.nxe
-
+        tunable_dict['source_access_order']             = self.source_access_order
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
@@ -398,7 +407,7 @@ def igemm_gtc_encode_kernel_name(tunable):
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         kernel_name += 'gtcx_'                                  # generic tensor contraction with xdlops
 
-    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_sa{tunable.source_access_order}_"
     kernel_name += f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_"
     if tunable.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
         kernel_name +=   f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\

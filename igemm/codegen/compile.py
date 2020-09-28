@@ -30,6 +30,7 @@ from .amdgpu import *
 import os
 
 IGEMM_HOST_USE_XDNN = False
+IGEMM_HOST_USE_MAGIC_DIV = 0
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')
@@ -139,6 +140,8 @@ class compile_host_t(object):
             cmd += ['-Wall','-O2', '-std=c++11']
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-I{bytes.fromhex(xdnnroot).decode()}/include', '-DUSE_XDNN']
+            if IGEMM_HOST_USE_MAGIC_DIV:
+                cmd += ['-DUSE_MAGIC_DIV']
             if 'cflags' in kwargs:
                 cmd += kwargs['cflags']
             if 'cxxflags' in kwargs:
@@ -162,6 +165,8 @@ class compile_host_t(object):
             cmd += ['-Wall','-O2', '-std=c++11']
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-I{bytes.fromhex(xdnnroot).decode()}/include', '-DUSE_XDNN']
+            if IGEMM_HOST_USE_MAGIC_DIV:
+                cmd += ['-DUSE_MAGIC_DIV']
             if 'cflags' in kwargs:
                 cmd += kwargs['cflags']
             if 'cxxflags' in kwargs:
