@@ -42,6 +42,10 @@
 #define USE_EXT_MODULE_LAUNCH 1
 #endif
 
+#ifndef USE_MAGIC_DIV
+#define USE_MAGIC_DIV 1
+#endif
+
 #ifdef USE_XDNN
 #include "xdnn_conv.h"
 #define conv_fwd_nchw xdnn_conv_fwd_nchw
