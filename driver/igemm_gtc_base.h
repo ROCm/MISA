@@ -41,6 +41,61 @@
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_NA               "fma_na"
 #define AMDGPU_WAVE_SIZE        64
 
+#if USE_MAGIC_DIV
+typedef struct {
+    uint32_t magic;
+    uint8_t shift;
+} magic_div_u32_t;
+
+/*
+*
+* numer / denom = quotient, reminder
+*
+* use magic number to do integer division of uint32 (acctually INT32_MAX, the 31 bit divisoin)
+* most algorithm to compute uint32 need branching if cover all 32 bit of uint32.
+* since we compute the magic number on host side, implement the division in gpu side, it is better not use branching
+* hence add more restriction to numer and denom, to be 1 bit less. hence need less-or-equal than INT32_MAX 
+*
+* magic_div_u32_gen() compute from input arg d, to get a magic and a shift.
+* to use the value, below is a example host-side code to do this
+*
+* // host side version
+* static inline uint32_t magic_div_mulhi_u32(uint32_t x, uint32_t y) {
+*     uint64_t xl = x, yl = y;
+*     uint64_t rl = xl * yl;
+*     return (uint32_t)(rl >> 32);
+* }
+* uint32_t magic_div_u32_do(uint32_t numer, const struct magic_div_u32_t *denom) {
+*     uint32_t tmp = magic_div_mulhi_u32(denom->magic, numer);
+*     return (tmp + numer) >> denom->shift;
+* }
+*
+*/
+static inline magic_div_u32_t magic_div_u32_gen(uint32_t d) {
+    assert(d >= 1 && d <= INT32_MAX);
+    uint8_t shift;
+    for (shift = 0; shift < 32; shift++)
+        if ((1U << shift) >= d)
+            break;
+
+    uint64_t one = 1;
+    uint64_t magic = ((one << 32) * ((one << shift) - d)) / d + 1;
+    assert(magic <= 0xffffffffUL);
+
+    magic_div_u32_t result;
+    result.magic = magic;
+    result.shift = shift;
+    return result;
+}
+static inline uint32_t magic_div_u32_pack_shift(uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3)
+{
+    uint32_t shift_0 = static_cast<uint32_t>(s0);
+    uint32_t shift_1 = static_cast<uint32_t>(s1);
+    uint32_t shift_2 = static_cast<uint32_t>(s2);
+    uint32_t shift_3 = static_cast<uint32_t>(s3);
+    return (shift_3 << 24) | (shift_2 << 16) | (shift_1 << 8) | shift_0;
+}
+#endif
 
 typedef struct {
     std::string tensor_layout;
@@ -78,6 +133,7 @@ typedef struct {
     int gemm_n_unmerge_cluster;
     int gemm_k_unmerge_cluster;
     int multihead;
+    int source_access_order;
     int gemm_k_global_split;
 } igemm_gtc_tunable_t;
 
@@ -140,6 +196,8 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_n_unmerge_cluster   = sec.count("gemm_n_unmerge_cluster") > 0 ? sec.at("gemm_n_unmerge_cluster").get_int() : 0;
             tunable.gemm_k_unmerge_cluster   = sec.count("gemm_k_unmerge_cluster") > 0 ? sec.at("gemm_k_unmerge_cluster").get_int() : 0;
             tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
+            int default_source_access_order  = tunable.direction == "fwd" ? 1 : 0;
+            tunable.source_access_order      = sec.count("source_access_order") > 0 ? sec.at("source_access_order").get_int() : default_source_access_order;
             tunable.gemm_k_global_split      = sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
 
             tunables.push_back(tunable);
@@ -172,6 +230,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
     auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
     auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
+    auto source_access_order      = tunable->source_access_order;
     auto multihead                = tunable->multihead;
     auto gemm_k_global_split      = tunable->gemm_k_global_split;
 
@@ -182,10 +241,12 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += "gtc_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS)
         kernel_name += "gtcx_";
-    
+
     kernel_name += tensor_layout + std::string("_") + precision +
         std::string("_bx") + std::to_string(nxb) + 
-        std::string("_ex") + std::to_string(nxe) + "_";
+        std::string("_ex") + std::to_string(nxe) +
+        std::string("_sa") + std::to_string(source_access_order) + "_";
+
     kernel_name += std::string("bt") +
             std::to_string(gemm_m_per_block) + "x" +
             std::to_string(gemm_n_per_block) + "x" +

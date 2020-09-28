@@ -195,6 +195,76 @@ class macro_int_div_rem_ss_t(macro_base_t):
             self._emit(f"s_mul_i32 s[\\s_tmp4], s[\\s_d], s[\\s_q]")
             self._emit(f"s_sub_i32 s[\\s_r], s[\\s_n], s[\\s_tmp4]")
 
+
+class macro_mdiv_u32_ss_t(macro_base_t):
+    def name(self):
+        return '.mdiv_u32_ss'
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("s_quot")
+        self.declare_arg("s_numer")
+        self.declare_arg("s_magic")
+        self.declare_arg("s_shift")
+        self.declare_arg("s_tmp")
+    def expr(self):
+        self._emit(f"s_mul_hi_u32 s[{self.s_tmp()}], s[{self.s_magic()}], s[{self.s_numer()}]")
+        self._emit(f"s_add_u32 s[{self.s_tmp()}], s[{self.s_tmp()}], s[{self.s_numer()}]")
+        self._emit(f"s_lshr_b32 s[{self.s_quot()}], s[{self.s_tmp()}], s[{self.s_shift()}]")
+
+
+class macro_mdiv_u32_rem_ss_t(macro_base_t):
+    def name(self):
+        return '.mdiv_u32_rem_ss'
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("s_rem")
+        self.declare_arg("s_quot")
+        self.declare_arg("s_numer")
+        self.declare_arg("s_magic")
+        self.declare_arg("s_shift")
+        self.declare_arg("s_denom")
+        self.declare_arg("s_tmp")
+    def expr(self):
+        mdiv_u32_ss = macro_mdiv_u32_ss_t(self.mc, self.inline)
+        self._emit(mdiv_u32_ss(self.s_quot(), self.s_numer(), self.s_magic(), self.s_shift(), self.s_tmp()))
+        self._emit(f"s_mul_i32 s[{self.s_tmp()}], s[{self.s_denom()}], s[{self.s_quot()}]")
+        self._emit(f"s_sub_u32 s[{self.s_rem()}], s[{self.s_numer()}], s[{self.s_tmp()}]")
+
+
+class macro_mdiv_u32_vs_t(macro_base_t):
+    def name(self):
+        return '.mdiv_u32_vs'
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("v_quot")
+        self.declare_arg("v_numer")
+        self.declare_arg("s_magic")
+        self.declare_arg("s_shift")
+        self.declare_arg("v_tmp")
+    def expr(self):
+        self._emit(f"v_mul_hi_u32 v[{self.v_tmp()}], s[{self.s_magic()}], v[{self.v_numer()}]")
+        self._emit(f"v_add_u32 v[{self.v_tmp()}], v[{self.v_tmp()}], v[{self.v_numer()}]")
+        self._emit(f"v_lshrrev_b32 v[{self.v_quot()}], s[{self.s_shift()}], v[{self.v_tmp()}]")
+
+class macro_mdiv_u32_rem_vs_t(macro_base_t):
+    def name(self):
+        return '.mdiv_u32_rem_vs'
+    def __init__(self, mc, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.declare_arg("v_rem")
+        self.declare_arg("v_quot")
+        self.declare_arg("v_numer")
+        self.declare_arg("s_magic")
+        self.declare_arg("s_shift")
+        self.declare_arg("s_denom")
+        self.declare_arg("v_tmp")
+    def expr(self):
+        mdiv_u32_vs = macro_mdiv_u32_vs_t(self.mc, self.inline)
+        self._emit(mdiv_u32_vs( self.v_quot(), self.v_numer(), self.s_magic(), self.s_shift(), self.v_tmp()  ))
+        self._emit(f"v_mul_lo_u32 v[{self.v_tmp()}], s[{self.s_denom()}], v[{self.v_quot()}]")
+        self._emit(f"v_sub_u32 v[{self.v_rem()}], v[{self.v_numer()}], v[{self.v_tmp()}]")
+
+
 class macro_c_clear_t(macro_base_t):
     def name(self):
         return '.v_clear_nc'
