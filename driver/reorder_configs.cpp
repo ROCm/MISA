@@ -73,7 +73,7 @@ struct sorterClass
      if ( cfg1.tensor_b_cluster_lengths[1] * cfg1.tensor_b_cluster_lengths[3] < cfg2.tensor_b_cluster_lengths[1] * cfg2.tensor_b_cluster_lengths[3] )
           return(false);
 
-     // Tensor_b c_n0b compare
+     // Tensor_b c_n1b compare
      if ( cfg1.tensor_b_cluster_lengths[3] > cfg2.tensor_b_cluster_lengths[3] )
           return(true); 
 
