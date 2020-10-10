@@ -46,6 +46,10 @@
 #define USE_MAGIC_DIV 1
 #endif
 
+#ifndef USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME
+#define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
+#endif
+
 #ifdef USE_XDNN
 #include "xdnn_conv.h"
 #define conv_fwd_nchw xdnn_conv_fwd_nchw

@@ -245,7 +245,11 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     kernel_name += tensor_layout + std::string("_") + precision +
         std::string("_bx") + std::to_string(nxb) + 
         std::string("_ex") + std::to_string(nxe) +
+#if USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME
         std::string("_sa") + std::to_string(source_access_order) + "_";
+#else
+        "_";
+#endif
 
     kernel_name += std::string("bt") +
             std::to_string(gemm_m_per_block) + "x" +
