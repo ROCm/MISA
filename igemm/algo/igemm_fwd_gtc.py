@@ -1677,7 +1677,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 if ca_k0 == 1:
                     self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik1()}]")
                 else:
-                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ia0()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik1()}]")
+                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik0()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik1()}]")
         else:
             if ca_k1 == 1:
                 assert ca_k0 != 1
@@ -1737,12 +1737,12 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             if nb_n0 != 1:
                 self._emit(f"v_and_b32 v[{v.v_out_in0()}], {nb_n0 - 1}, v[{v.v_co_sub_n_index()}]     ; => N0")
-                if nb_n1b != 0:
+                if nb_n1b != 1:
                     self._emit(f"v_lshrrev_b32 v[{v.v_out_in1b()}], {igemm_log2(nb_n0)}, v[{v.v_co_sub_n_index()}]   ; => N1B")
                 else:
                     assert False, "un implemented, should rarely be used"
             else:
-                if nb_n1b != 0:
+                if nb_n1b != 1:
                     self._emit(f"v_mov_b32 v[{v.v_out_in1b()}], v[{v.v_co_sub_n_index()}]   ; => N1B")
                 else:
                     assert False, "un implemented, should rarely be used"
