@@ -1636,7 +1636,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.xdlops_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
 
-        self._emit(f"; LDS store, out: c0,c1e,n0,n1b: {tb_c0}x{tb_c1e}x{tb_n0}x{tb_n1b}, {cb_c0}x{cb_c1e}x{cb_n0}x{cb_n1b}, order:{gemm_n_order}")
+        self._emit(f"; LDS store, in: c0,c1e,n0,n1b: {tb_c0}x{tb_c1e}x{tb_n0}x{tb_n1b}, {cb_c0}x{cb_c1e}x{cb_n0}x{cb_n1b}, order:{gemm_n_order}")
         if gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
             if cb_n1b == 1:
                 # TODO: remove this path, not possible go here
