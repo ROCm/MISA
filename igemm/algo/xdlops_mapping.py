@@ -243,6 +243,8 @@ class ctrl_xdlops_mapping_t(object):
         s += f"{self.inst_mfma.m}x{self.inst_mfma.n}x{self.inst_mfma.k}, " + \
                 f"lanegroup_m_tcbw:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}x{self.lanegroup_m_per_block()}x{self.lanegroup_m_per_wave()}, " + \
                 f"lanegroup_n_tcbw:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}x{self.lanegroup_n_per_block()}x{self.lanegroup_n_per_wave()}"
+        # s += "\n" + f"   lanegroup_m_per_thread:{self.lanegroup_m_per_thread()}, lanegroup_m_per_cluster:{self.lanegroup_m_per_cluster()}, lanegroup_m_per_block:{self.lanegroup_m_per_block()}, block_m_per_lanegroup:{self.block_m_per_lanegroup()}, lanegroup_m_per_wave:{self.lanegroup_m_per_wave()}"
+        # s += "\n" + f"   lanegroup_n_per_thread:{self.lanegroup_n_per_thread()}, lanegroup_n_per_cluster:{self.lanegroup_n_per_cluster()}, lanegroup_n_per_block:{self.lanegroup_n_per_block()}, block_n_per_lanegroup:{self.block_n_per_lanegroup()}, lanegroup_n_per_wave:{self.lanegroup_n_per_wave()}"
         return s
 
 #                             mt_m,mt_n,wt_m,wt_n, ws,r_m,r_n,s_m,s_n, inst_mfma
@@ -261,10 +263,14 @@ ctrl_xdlops_mapping_fp32 = [
         #ctrl_xdlops_mapping_t( 16 , 256,  16,  64,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),     # TODO: this will fail in coalescing
 
         ctrl_xdlops_mapping_t( 128, 128,  32,  32,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  64,  4,  1,  1,  2,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 128,  32,  64,  4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
+        ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 128,  16,  64,  4,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 128, 16 ,  64,  4 ,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 16 , 128,  4 ,  64,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
