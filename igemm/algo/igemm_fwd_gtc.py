@@ -1649,7 +1649,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.xdlops_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
 
-        self._emit(f"; LDS store, out: c0,c1e,n0,n1b: {tb_c0}x{tb_c1e}x{tb_n0}x{tb_n1b}, {cb_c0}x{cb_c1e}x{cb_n0}x{cb_n1b}, order:{gemm_n_order}")
+        self._emit(f"; LDS store, in: c0,c1e,n0,n1b: {tb_c0}x{tb_c1e}x{tb_n0}x{tb_n1b}, {cb_c0}x{cb_c1e}x{cb_n0}x{cb_n1b}, order:{gemm_n_order}")
         if gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
             if cb_n1b == 1:
                 # TODO: remove this path, not possible go here
@@ -1690,7 +1690,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 if ca_k0 == 1:
                     self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik1()}]")
                 else:
-                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ia0()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik1()}]")
+                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik0()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik1()}]")
         else:
             if ca_k1 == 1:
                 assert ca_k0 != 1
@@ -1750,12 +1750,12 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             if nb_n0 != 1:
                 self._emit(f"v_and_b32 v[{v.v_out_in0()}], {nb_n0 - 1}, v[{v.v_co_sub_n_index()}]     ; => N0")
-                if nb_n1b != 0:
+                if nb_n1b != 1:
                     self._emit(f"v_lshrrev_b32 v[{v.v_out_in1b()}], {igemm_log2(nb_n0)}, v[{v.v_co_sub_n_index()}]   ; => N1B")
                 else:
                     assert False, "un implemented, should rarely be used"
             else:
-                if nb_n1b != 0:
+                if nb_n1b != 1:
                     self._emit(f"v_mov_b32 v[{v.v_out_in1b()}], v[{v.v_co_sub_n_index()}]   ; => N1B")
                 else:
                     assert False, "un implemented, should rarely be used"
