@@ -139,11 +139,13 @@ public:
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int nxe                      = tunable->nxe;
+        int nxb                      = tunable->nxb;
+        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
         int gemm_m = k;
-        int gemm_n = n * ho * wo;
+        int gemm_n = n * b;
 
-        // this also valid considering pad to modulo
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         return grid_size;
@@ -173,15 +175,17 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
-        int gemm_m = k;
-        int gemm_n = n * ho * wo;
-        int gemm_k = c * y * x;
+        int nxe                      = tunable->nxe;
+        int nxb                      = tunable->nxb;
+        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-#if 0
-        // support pad to modulo, no need to check valid
-        if(gemm_n % gemm_n_per_block != 0)
+        int gemm_m                   = k;
+        int gemm_n                   = n * b;
+        int gemm_k                   = c * y * x;
+
+        // support pad to modulo, hence only check when nxe is 0
+        if((nxe == 0) && (gemm_n % gemm_n_per_block != 0))
             return false;
-#endif
 
         if(gemm_m % gemm_m_per_block != 0)
             return false;
@@ -199,13 +203,11 @@ public:
             return false;
         }
 
-#if 0
-        if((ho * wo) % tunable->nxb != 0){
+        if((nxe == 0) && ((ho * wo) % tunable->nxb != 0)){
             return false;
         }
-#endif
 
-        if(tunable->nxe == 0){
+        if(nxe == 0){
             if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
                 return false;
             }

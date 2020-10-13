@@ -706,7 +706,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
                                         outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
-                                        8       # from v_sst_a_os to v_wei_os
+                                        16       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
@@ -727,9 +727,6 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self.v_in_flag       = sym_t("v_in_flag"      ,vseq(1))
             self.v_wei_os            = sym_t("v_wei_os"       ,vseq(1))
 
-            self.v_co_sst            = sym_t("v_co_sst"       ,vseq(1))
-            self.v_co_sld            = sym_t("v_co_sld"       ,vseq(1))
-
             self.v_gtc_ta_ik1        = sym_t("v_gtc_ta_ik1"   ,vseq(1))
             self.v_gtc_ta_ik0        = sym_t("v_gtc_ta_ik0"   ,vseq(1))
             self.v_gtc_ta_ic1e       = sym_t("v_gtc_ta_ic1e"  ,vseq(1))
@@ -743,6 +740,9 @@ class igemm_fwd_gtc_t(mc_base_t):
             self.v_gtc_tb_ib         = sym_t("v_gtc_tb_ib"    ,vseq(1))
             if outer.tunable.nxe != 0:
                 self.v_gtc_tb_ic1     = sym_t("v_gtc_tb_ic1"  ,vseq(1))
+
+            self.v_co_sst            = sym_t("v_co_sst"       ,vseq(1))
+            self.v_co_sld            = sym_t("v_co_sld"       ,vseq(1))
 
             self.v_out_os            = sym_t("v_out_os"       ,vseq(1))
             if outer.tunable.nxe != 0:
