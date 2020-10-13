@@ -143,6 +143,7 @@ public:
         int gemm_m = k;
         int gemm_n = n * ho * wo;
 
+        // this also valid considering pad to modulo
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         return grid_size;
@@ -176,10 +177,17 @@ public:
         int gemm_n = n * ho * wo;
         int gemm_k = c * y * x;
 
-        if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0) || (gemm_k % gemm_k_per_block != 0)){
-            // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
+#if 0
+        // support pad to modulo, no need to check valid
+        if(gemm_n % gemm_n_per_block != 0)
             return false;
-        }
+#endif
+
+        if(gemm_m % gemm_m_per_block != 0)
+            return false;
+
+        if(gemm_k % gemm_k_per_block != 0)
+            return false;
 
         if(gemm_n_per_block % tunable->nxb != 0){
             // printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -191,9 +199,11 @@ public:
             return false;
         }
 
-        if( (ho * wo) % tunable->nxb != 0){
+#if 0
+        if((ho * wo) % tunable->nxb != 0){
             return false;
         }
+#endif
 
         if(tunable->nxe == 0){
             if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){

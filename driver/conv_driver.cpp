@@ -43,7 +43,7 @@
 #endif
 
 #ifndef USE_MAGIC_DIV
-#define USE_MAGIC_DIV 1
+#define USE_MAGIC_DIV 0
 #endif
 
 #ifndef USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME
