@@ -428,7 +428,7 @@ int main(int argc, char **argv) {
     if (need_fwd){
         result_t fastest_result_fwd;
         fastest_result_fwd.duration_ms = FLT_MAX;
-        int fastest_id = 0;
+        int fastest_id = -1;
         float *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
@@ -492,7 +492,10 @@ int main(int argc, char **argv) {
         }
         if(log_fastest_config){
             dump_arg(&conv_args);
-            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+            if(fastest_id == -1)
+                printf("  fastest: no suitable kernel\n");
+            else
+                printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
                     fastest_result_fwd.kernel_name.c_str(),
                     fastest_result_fwd.duration_ms,
@@ -507,7 +510,7 @@ int main(int argc, char **argv) {
         float *device_input_to_host = NULL;
         result_t fastest_result_bwd;
         fastest_result_bwd.duration_ms = FLT_MAX;
-        int fastest_id;
+        int fastest_id = -1;
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
@@ -590,7 +593,10 @@ int main(int argc, char **argv) {
         }
         if(log_fastest_config){
             dump_arg(&conv_args);
-            printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+            if(fastest_id == -1)
+                printf("  fastest: no suitable kernel\n");
+            else
+                printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
                     fastest_result_bwd.kernel_name.c_str(),
                     fastest_result_bwd.duration_ms,
