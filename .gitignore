@@ -8,3 +8,4 @@ driver/xdnn_conv.h
 *.inc
 *_bak
 *.txt
+config/igemm_wrw_gtc_gfx908_multi_k.config
