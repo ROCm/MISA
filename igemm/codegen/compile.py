@@ -29,7 +29,7 @@ import subprocess
 from .amdgpu import *
 import os
 
-IGEMM_HOST_USE_XDNN = False
+IGEMM_HOST_USE_XDNN = True
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')

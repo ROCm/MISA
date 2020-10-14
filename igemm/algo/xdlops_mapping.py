@@ -93,12 +93,17 @@ class ctrl_xdlops_mapping_t(object):
     level_0/1   describe wave-tile level
     level_2/3/4 describte macro-tile level, same as matric C layout above
 
+    k_dim   | thread_length                | cluster_length
+    --------+------------------------------+-----------------------------+
+    level_0 | 1                            | block_k()                   |
+
     '''
-    def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
+    def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
         self.macro_tile_m = macro_tile_m
         self.macro_tile_n = macro_tile_n
         self.wave_tile_m = wave_tile_m
         self.wave_tile_n = wave_tile_n
+        self.wave_tile_k = wave_tile_k
         self.waves = waves
         self.wave_repeat_m = wave_repeat_m
         self.wave_repeat_n = wave_repeat_n
@@ -154,7 +159,7 @@ class ctrl_xdlops_mapping_t(object):
         assert self.wave_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block() * self.block_n_per_lanegroup() * self.lanegroup_n_per_wave()
         assert self.lanegroup_m_per_cluster() * self.block_m_per_lanegroup() * self.lanegroup_n_per_cluster() * self.block_n_per_lanegroup() == AMDGPU_WAVE_SIZE
         assert self.block_m() * self.block_m_per_wave() == self.wave_tile_m and self.block_n() * self.block_n_per_wave() == self.wave_tile_n
-        assert self.block_n() == self.block_m() and self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert self.block_n() == self.block_m() and self.block_k() * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.wave_tile_m * self.wave_step_m * self.wave_repeat_m * self.waves_per_m()
@@ -182,6 +187,10 @@ class ctrl_xdlops_mapping_t(object):
         ''' [among different thread] '''
         assert self.wave_tile_m % (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) == 0
         assert self.inst_mfma.m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()
+        #print(f"wave_tile_m={self.wave_tile_m}, waves={self.waves}") 
+        #print(f"lanegroup_m_per_cluster={self.lanegroup_m_per_cluster()}, lanegroup_n_per_cluster={self.lanegroup_n_per_cluster()}")
+        #print(f"lanegroup_m_per_block={self.lanegroup_m_per_block()}, lanegroup_n_per_block={self.lanegroup_n_per_block()}")
+        #print(f"lanegroup_m_per_wave={self.lanegroup_m_per_wave()}, lanegroup_n_per_wave={self.lanegroup_n_per_wave()}")
         return self.wave_tile_m // (self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_block()) 
 
     def block_n_per_wave(self):
@@ -245,52 +254,53 @@ class ctrl_xdlops_mapping_t(object):
                 f"lanegroup_n_tcbw:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}x{self.lanegroup_n_per_block()}x{self.lanegroup_n_per_wave()}"
         return s
 
-#                             mt_m,mt_n,wt_m,wt_n, ws,r_m,r_n,s_m,s_n, inst_mfma
+#                             mt_m,mt_n,wt_m,wt_n,wt_k,ws,r_m,r_n,s_m,s_n, inst_mfma
 ctrl_xdlops_mapping_fp32 = [
         # ctrl_xdlops_mapping_t( 256, 256,  32,  64,  4,  2,  2,  2,  1,  v_mfma_f32_32x32x1f32),
-        ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
-        ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
-        ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
-        ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
-        ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 256, 128,  64,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
+        ctrl_xdlops_mapping_t( 128, 256,  32,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
+        ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  1, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  1, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
 
         #ctrl_xdlops_mapping_t( 256, 16 ,  64,  16,  2,  1,  1,  2,  1,  v_mfma_f32_16x16x1f32),     # TODO: this will fail in coalescing
         #ctrl_xdlops_mapping_t( 16 , 256,  16,  64,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),     # TODO: this will fail in coalescing
 
-        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
-        ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  1, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  1, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 128, 16 ,  64,  4 ,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 16 , 128,  4 ,  64,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
-        ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
-        ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  1, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  1, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  1, 4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  1, 4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4, 4,  1,  1,  1,  1,  v_mfma_f32_16x16x4f32),
         #ctrl_xdlops_mapping_t( 256, 4  ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
         #ctrl_xdlops_mapping_t( 4  , 256,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
-        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  2,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  2,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  1, 2,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  1, 2,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         # 2waves, block_size=128
         #ctrl_xdlops_mapping_t( 128, 4  ,  64,  4 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
         #ctrl_xdlops_mapping_t( 4  , 128,  4 ,  64,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
-        ctrl_xdlops_mapping_t( 64 , 8  ,  64,  4 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 8  , 64 ,  4 ,  64,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 8  ,  64,  4 ,  1, 2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 8  , 64 ,  4 ,  64,  1, 2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  1, 2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  1, 2,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         # 1 wave
-        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  1,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  1,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
-        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
+        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  1, 1,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  1, 1,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,   1, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   1, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)]
 
 def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     target_mfma_tiling_fp32 = list()
@@ -302,11 +312,11 @@ def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling_fp32[0]
 
-def get_ctrl_xdlops_mapping_from_wave_tile_fp32(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves):
+def get_ctrl_xdlops_mapping_from_wave_tile_fp32(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves):
     target_mfma_tiling_fp32 = list()
     for t in ctrl_xdlops_mapping_fp32:
         if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and\
-                t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and \
+                t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and t.wave_tile_k == wave_tile_k and \
                 t.wave_repeat_m == wave_repeat_m and t.wave_repeat_n == wave_repeat_n and \
                 t.wave_step_m == wave_step_m and t.wave_step_n == wave_step_n and \
                 t.waves == waves:
@@ -334,12 +344,21 @@ class igemm_xdlops_mapping_t(mc_base_t):
         C matrix output describe is in coalescint_store
         '''
         ctrl = self.ctrl
-        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        #print(f"ctrl.block_n()={ctrl.block_n()}, ctrl.block_m()={ctrl.block_m()}")
+        #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
+        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
         with self._deferred_context():
             self._emit(f"; xdlops mapping, get source matrix gemm index")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
-            self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n())}, v[{v_thread_id}]        ; ")
+            self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n())}, v[{v_thread_id}]")
+            if ctrl.block_k() != 1:
+                self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k())}, v[{v_thread_id}]")
+                pass
+
             if ctrl.block_n_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_n_per_wave() - 1}, v[{v_thread_id}]          ; block_n_per_wave index")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.block_n())}, v[{v_gemm_in}]")

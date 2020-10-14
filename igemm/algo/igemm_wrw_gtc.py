@@ -39,6 +39,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 = 0
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
+IGEMM_WRW_GTC_DEBUG = 1
 
 
 def _find_non_1_index_in_list(list_object):
@@ -353,7 +354,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             def flatten(x):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
-            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n,
+            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k, 
                     self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
@@ -625,7 +626,8 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_sub_n                   = sym_t("s_sub_n"                  ,sseq(1))
             self.s_group_stride            = sym_t("s_group_stride"           ,sseq(1))
             self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
-            self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
+            if IGEMM_WRW_GTC_DEBUG == 1:
+                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             self.s_end                     = sym_t("s_end"                    ,sseq())
 
@@ -1241,11 +1243,12 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit("; clear vector r")
         self._emit(".v_clear_nc v_c+1, v_end-1")
         self._emit_empty_line()
-        self._emit("; debug vgpr")
-        self._emit("v_mov_b32 v1, 0")
-        self._emit("v_add_lshl_u32 v[v_tmp+6], v0, v1, 2")
-        self._emit(";v_lshlrev_b32 v[114], 2, v0 ; every thread write one float")
-        self._emit(f"s_load_dwordx2 s[{s.s_dbg((0,1))}], s[s_ka:s_ka+1], k_p_wei")
+        if IGEMM_WRW_GTC_DEBUG == 1:
+            self._emit("; debug vgpr")
+            self._emit("v_mov_b32 v1, 0")
+            self._emit("v_add_lshl_u32 v[v_tmp+6], v0, v1, 2")
+            self._emit(";v_lshlrev_b32 v[114], 2, v0 ; every thread write one float")
+            self._emit(f"s_load_dwordx2 s[{s.s_dbg((0,1))}], s[s_ka:s_ka+1], k_p_wei")
 
         self._emit(f"; input, thread(n0,n1b,c0,c1e): {t_n0}x{t_n1b}x{t_c0}x{t_c1e}, cluster(n0,n1b,c0,c1e): {c_n0}x{c_n1b}x{c_c0}x{c_c1e}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
@@ -1734,7 +1737,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
-            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n,
+            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
                                                                         self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
             fctrl.cxm                         = ctrl_xdlops_mapping
@@ -1799,43 +1802,44 @@ class igemm_wrw_gtc_t(mc_base_t):
             else:
                 assert False
 
+        if IGEMM_WRW_GTC_DEBUG == 1:
+            self._emit_empty_line()
+            self._emit(f"s_branch {self.label_out}")
+            self._emit("; debug code to cpy vgpr to host")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"L_debug_{self.label_out}_0:")
+            else: 
+                self._emit(f"L_debug_{self.label_out}_1:")
+            self._emit("s_waitcnt lgkmcnt(0)")
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
+            self._emit("s_cmp_lg_u32 s[s_bx], 0")
+            #self._emit("s_cbranch_scc1  L_program_end_0")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_0")
+            else: 
+                self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_1")
+            self._emit(";s_cmp_lg_u32 s[s_wave_id], 0")
+            self._emit(";s_cbranch_scc1  L_program_end")
+            self._emit(";v_add_co_u32 v34, vcc, 0, v[v_a0+2]")
+            self._emit("v_mov_b32 v[v_tmp], s[s_in_offset]")
+            self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0")
+            self._emit_empty_line()
 
-        self._emit_empty_line()
-        self._emit(f"s_branch {self.label_out}")
-        self._emit("; debug code to cpy vgpr to host")
-        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            self._emit(f"L_debug_{self.label_out}_0:")
-        else: 
-            self._emit(f"L_debug_{self.label_out}_1:")
-        self._emit("s_waitcnt lgkmcnt(0)")
-        self._emit("s_waitcnt vmcnt(0)")
-        self._emit("s_barrier")
-        self._emit("s_cmp_lg_u32 s[s_bx], 0")
-        #self._emit("s_cbranch_scc1  L_program_end_0")
-        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_0")
-        else: 
-            self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_1")
-        self._emit(";s_cmp_lg_u32 s[s_wave_id], 0")
-        self._emit(";s_cbranch_scc1  L_program_end")
-        self._emit(";v_add_co_u32 v34, vcc, 0, v[v_a0+2]")
-        self._emit("v_mov_b32 v[v_tmp], s[s_in_offset]")
-        self._emit_empty_line()
+            self._emit(f"buffer_store_dword v[v_in_os], v[v_tmp+6], s[{s.s_p_wei((0,3))}], s[{s.s_tmp()}] offen")
 
-        self._emit(f"global_store_dword v[v_tmp+6:v_tmp+7], v[v_in_os], s[{s.s_dbg((0,1))}]")
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
+            self._emit_empty_line()
 
-        self._emit("s_waitcnt vmcnt(0)")
-        self._emit("s_barrier")
-        self._emit_empty_line()
-
-        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            self._emit(f"L_program_end_{self.label_out}_0:")
-        else: 
-            self._emit(f"L_program_end_{self.label_out}_1:")
-        self._emit("s_nop 2")
-        self._emit("s_waitcnt lgkmcnt(0)")
-        self._emit("s_waitcnt vmcnt(0)")
-        self._emit("s_barrier")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"L_program_end_{self.label_out}_0:")
+            else: 
+                self._emit(f"L_program_end_{self.label_out}_1:")
+            self._emit("s_nop 2")
+            self._emit("s_waitcnt lgkmcnt(0)")
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
 
         self._emit_empty_line()
         self._emit_front(f"{self.label_out}:")

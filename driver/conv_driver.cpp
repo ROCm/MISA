@@ -252,8 +252,8 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
         if(igemm_per_pixel_check){
-            double delta = ABS((ri - pi) / ri);
-            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            double delta = ABS(ABS(ri - pi) / ri);
+            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -596,10 +596,10 @@ int main(int argc, char **argv) {
         float *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
+            gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
 
             conv_bwd_f_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
