@@ -1,11 +1,31 @@
 
 #!/bin/sh
-export IGEMM_HSACO=out/igemm_bwd_gtc_gfx908.hsaco
+if [ $# -ne 1 ]
+then 
+    echo "please give this script a direction"
+    echo "now I use bwd as default"
+    DIR=bwd
+else
+    DIR=$1
+fi
+export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 
 # Flag enables fwd, bwd, wrw convolutions
-FORW=2
+if [ "${DIR}" = "fwd" ]
+then
+    FORW=1
+elif [ "${DIR}" = "bwd" ]
+then
+    FORW=2
+elif [ "${DIR}" = "wrw" ]
+then
+    FORW=4
+else
+    echo "wrong direction"
+    exit 1
+fi
 
 #resnext101
 ./out/conv_driver.exe conv -n 64 -c 1024 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW

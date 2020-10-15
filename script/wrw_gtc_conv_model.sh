@@ -1,7 +1,7 @@
 
 #!/bin/sh
 export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908.hsaco
-export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908_multi_k.hsaco
+#export IGEMM_HSACO=out/igemm_wrw_gtc_gfx908_multi_k.hsaco
 set -v
 export DIR=4
 rm ./wrw_select_kernel.log
