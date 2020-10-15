@@ -247,14 +247,11 @@ public:
         int w_tilda_slice = w_tilda_right - w_tilda_left;
 
         int gemm_m = c;
-
-        int gemm_n = n * h_tilda_slice * w_tilda_slice;
-
         int nxe = tunable->nxe;
         int nxb = tunable->nxb;
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
-        gemm_n = n * b;
+        int gemm_n = n * b;
 
         int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
@@ -322,8 +319,12 @@ public:
         int num_of_gemm = y_tilda * x_tilda;
 
         int gemm_m = c;
-        int gemm_n = n * h_tilda_slice * w_tilda_slice;
-/*
+        int nxe = tunable->nxe;
+        int nxb = tunable->nxb;
+        int b = h_tilda_slice * w_tilda_slice;
+        b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        int gemm_n = n * b;
+
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
             // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
@@ -338,10 +339,9 @@ public:
             // printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
             return false;
         }
-        if( (h_tilda_slice * w_tilda_slice) % tunable->nxb != 0){
+        if( (tunable->nxe == 0)&& ((h_tilda_slice * w_tilda_slice) % tunable->nxb != 0) ){
             return false;
         }
-*/
         bool gemm_k_valid = true;
         for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
             int i_y_tilda = gemm_id / x_tilda;
@@ -467,7 +467,7 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+        //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 

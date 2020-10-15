@@ -1493,7 +1493,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_hw()}],  s[{s.s_dslice_h()}], s[{s.s_dslice_w()}]")
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
 
-            self._emit(f"; change for padding")
+            self._emit(f"; pad b into multiplier of nxb")
             self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
             self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
             self._emit(f"s_lshl_b32 s[{s.s_dslice_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
