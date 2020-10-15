@@ -52,7 +52,7 @@ def igemm_flatten(args, config_content):
     sec_root = config_content.get_section('codegen')[0]
     arch = amdgpu_arch_config_t({
         'arch'          :   amdgpu_string_to_arch( sec_root['arch'] ),
-        'data_type'     :   AMDGPU_PRECISION_FP32,
+        'data_type'     :   amdgpu_string_to_precision( sec_root['data_type'] ),
         'code_object'   :   amdgpu_string_to_codeobj( sec_root['code_object']) })
 
     # create mc
