@@ -273,7 +273,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
         }
     }
-    // printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+     printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -604,10 +604,10 @@ int main(int argc, char **argv) {
         float *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
 
             conv_bwd_f_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
