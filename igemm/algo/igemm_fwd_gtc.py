@@ -243,7 +243,7 @@ class macro_igemm_fwd_gtc_move_slice_window_k_tb_t(macro_base_t):
         unmerge_sub_tb_c1 = unmerge_sub_c // nb_c0
         assert nb_c1e % unmerge_sub_tb_c1 == 0
 
-        diff_c0_c1 = self.tunable.gemm_c_per_block - unmerge_sub_tb_c1 # !!! the diff of 2 unmerged dimension (like K=K0*K1)
+        diff_c0_c1 = self.tunable.gemm_k_per_block - unmerge_sub_tb_c1 # !!! the diff of 2 unmerged dimension (like K=K0*K1)
 
         with self._deferred_context():
             self._emit(f"s_mul_i32 s[{s_in_stride_c_c0_c1_diff}], {diff_c0_c1}, s[{s_in_stride_c}]")
@@ -474,7 +474,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             return False        # if not nxe 0, it is possible that we can do move slice, but that will lead to extra index calculation
         if nb_c1e != 1 and nb_c0 == 1:
             return True
-        # it is meanless to let n_k1e==1 and n_k0!=1
+        # it is meanless to let n_c1e==1 and n_c0!=1
         return False
 
     class global_load_wei_t(mc_base_t):
@@ -917,18 +917,16 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
 
+        # give the LDS strides of wei dimensions [ta_k0, ta_k1, ta_c0, ta_c1e]
         if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
-            # na_c0, na_c1e, na_k0, na_k1
             wei_stride_list = [na_k1, 1, na_c1e*na_k0*na_k1, na_k0*na_k1]
         else:
-            # na_c0, na_c1e, na_k1, na_k0
             wei_stride_list = [1, na_k0, na_c1e*na_k0*na_k1, na_k0*na_k1]
 
+        # give the LDS strides of in dimensions [tb_c0, tb_c1e, tb_n0, tb_n1b]
         if gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
-            # nb_c0, nb_c1e, nb_n0, nb_n1b
             in_stride_list = [nb_c1e*nb_n0*nb_n1b, nb_n0*nb_n1b, nb_n1b, 1]
         else:
-            # nb_c0, nb_c1e, nb_n1b, nb_n0
             in_stride_list = [nb_c1e*nb_n0*nb_n1b, nb_n0*nb_n1b, 1, nb_n0]
 
         # print(f"__ wei_stride_list:{wei_stride_list}, wei_thread_copy_index:{wei_thread_copy_index}")
