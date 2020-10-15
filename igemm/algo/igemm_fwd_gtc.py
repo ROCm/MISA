@@ -297,8 +297,6 @@ class macro_igemm_fwd_gtc_move_slice_window_k_1d_tb_t(macro_base_t):
         unmerge_sub_tb_c1 = unmerge_sub_c // nb_c0
         assert nb_c1e % unmerge_sub_tb_c1 == 0
 
-        diff_c0_c1 = self.tunable.gemm_k_per_block - unmerge_sub_tb_c1 # !!! the diff of 2 unmerged dimension (like K=K0*K1)
-
         with self._deferred_context():
             self._emit(f"s_mul_i32 s[{s_in_stride_c_c1}], s[{s_move_slice_k_c1}], s[{s_in_stride_c}]  ; might be 0 or larger")
         return self._get_deferred()
@@ -761,16 +759,10 @@ class igemm_fwd_gtc_t(mc_base_t):
             self.v_gemm_in       = sym_t("v_gemm_in"      , vseq(1))
             self.v_gemm_im       = sym_t("v_gemm_im"      , vseq(1))
 
-            if outer.tunable.nxe != 0:
-                self.v_out_iho        = sym_t("v_out_iho" ,vseq(1))
-                self.v_out_iwo        = sym_t("v_out_iwo" ,vseq(1))
-                self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
-                self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
-            else:
-                self.v_out_iho        = sym_t("v_out_iho" ,vseq(1))
-                self.v_out_iwo        = sym_t("v_out_iwo" ,vseq(1))
-                self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
-                self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
+            self.v_out_iho        = sym_t("v_out_iho" ,vseq(1))
+            self.v_out_iwo        = sym_t("v_out_iwo" ,vseq(1))
+            self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
+            self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
 
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
