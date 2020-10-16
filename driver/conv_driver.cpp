@@ -260,7 +260,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s0 += dd;
         s1 += rr;
         if(igemm_per_pixel_check){
-            double delta = ABS((ri - pi) / ri);
+            double delta = ABS(ABS(ri - pi) / ri);
             printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
@@ -712,15 +712,15 @@ int main(int argc, char **argv) {
         double gflops = measured_fp32_conv_gflops(
                 min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
-        printf("min cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", min_duration,
-                   gflops / 1000 , (gflops / fp32_gflops) * 100);
-        std::cout << "kernel_name:" << kernel_name << std::endl;
+        printf("min cost:%.3fms, tflops:%.3f(%.2f%%),  min grid:%d\r\n", min_duration,
+                   gflops / 1000 , (gflops / fp32_gflops) * 100, min_grid);
+        std::cout << "min name:" << kernel_name << std::endl;
         double selected_gflops = measured_fp32_conv_gflops(
                 selected_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w);
-        printf("selected cost:%.3fms, tflops:%.3f(%.2f%%)\r\n", selected_duration,
-                   selected_gflops / 1000 , (selected_gflops / fp32_gflops) * 100);
-        std::cout << "selected kernel:" << selected_kernel << std::endl;
+        printf("sel cost:%.3fms, tflops:%.3f(%.2f%%), sel grid:%d\r\n", selected_duration,
+                   selected_gflops / 1000 , (selected_gflops / fp32_gflops) * 100, sel_grid);
+        std::cout << "sel name:" << selected_kernel << std::endl;
 
         // write out log file to see if selected one is good enough.
         if (wrw_kernel_selection == 1)
@@ -729,7 +729,7 @@ int main(int argc, char **argv) {
             if (debug_log != nullptr){
                 fprintf(debug_log, "conv n=%d, c=%d, hi=%d, wi=%d, k=%d, y=%d, x=%d, stride_h=%d, stride_w=%d, ho=%d, wo=%d \r\n", n, c, hi, wi, k, y, x, stride_h, stride_w, ho, wo);
                 fprintf(debug_log, "min_kernel: %s, min cost:%.3fms, min grid:%d\r\n", kernel_name.data(), min_duration, min_grid);
-                fprintf(debug_log, "sel_kernel: %s, sel cost:%.3fms, min grid:%d\r\n", selected_kernel.data(), selected_duration, sel_grid);
+                fprintf(debug_log, "sel_kernel: %s, sel cost:%.3fms, sel grid:%d\r\n", selected_kernel.data(), selected_duration, sel_grid);
             }
             fclose(debug_log);
         }
