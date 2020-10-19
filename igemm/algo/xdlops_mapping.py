@@ -95,7 +95,8 @@ class ctrl_xdlops_mapping_t(object):
 
     k_dim   | thread_length                | cluster_length
     --------+------------------------------+-----------------------------+
-    level_0 | 1                            | block_k()                   |
+    level_0 | lanegroup_k_per_thread()     | 1                           |
+    level_1 | 1                            | block_k()                   |
 
     '''
     def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
@@ -159,7 +160,7 @@ class ctrl_xdlops_mapping_t(object):
         assert self.wave_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block() * self.block_n_per_lanegroup() * self.lanegroup_n_per_wave()
         assert self.lanegroup_m_per_cluster() * self.block_m_per_lanegroup() * self.lanegroup_n_per_cluster() * self.block_n_per_lanegroup() == AMDGPU_WAVE_SIZE
         assert self.block_m() * self.block_m_per_wave() == self.wave_tile_m and self.block_n() * self.block_n_per_wave() == self.wave_tile_n
-        assert self.block_n() == self.block_m() and self.block_k() * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert self.block_n() == self.block_m() and (self.block_k() // self.lanegroup_k_per_thread()) * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.wave_tile_m * self.wave_step_m * self.wave_repeat_m * self.waves_per_m()
@@ -216,6 +217,20 @@ class ctrl_xdlops_mapping_t(object):
     def lanegroup_n_per_thread(self):
         ''' [within thread] for xdlops, always 1 column per lanegroup'''
         return 1
+
+    def lanegroup_k_per_thread(self):
+        ''' [within thread] for xdlops, 
+            fp32 1/
+            fp16 4/
+            bf16 2
+            columns per lanegroup'''
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_FP32:
+            return 1
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_FP16:
+            return 4
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_BF16:
+            return 2
+        assert False
 
     def lanegroup_m_per_cluster(self):
         ''' [among different thread] for xdlops, always m per block as clusters. perthread agpr do not contain this'''
@@ -364,19 +379,30 @@ def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling_fp32[0]
 
-def get_ctrl_xdlops_mapping_from_wave_tile_fp32(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves):
-    target_mfma_tiling_fp32 = list()
-    for t in ctrl_xdlops_mapping_fp32:
+def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves, precision):
+    if type(precision) is str:
+        precision = amdgpu_string_to_precision(precision)
+    ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
+    if precision == AMDGPU_PRECISION_FP32:
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
+    elif precision == AMDGPU_PRECISION_FP16:
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
+    elif precision == AMDGPU_PRECISION_BF16:
+        assert False, f"not support bf16 now"
+    else:
+        assert False, f"wrong data type"
+    target_mfma_tiling = list()
+    for t in ctrl_xdlops_mapping:
         if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and\
                 t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and t.wave_tile_k == wave_tile_k and \
                 t.wave_repeat_m == wave_repeat_m and t.wave_repeat_n == wave_repeat_n and \
                 t.wave_step_m == wave_step_m and t.wave_step_n == wave_step_n and \
                 t.waves == waves:
-            target_mfma_tiling_fp32.append(t)
+            target_mfma_tiling.append(t)
 
-    assert len(target_mfma_tiling_fp32) != 0, f"unsupported wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m},  wave_repeat_n:{wave_repeat_n}"
+    assert len(target_mfma_tiling) != 0, f"unsupported wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m},  wave_repeat_n:{wave_repeat_n}"
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
-    return target_mfma_tiling_fp32[0]
+    return target_mfma_tiling[0]
 
 class igemm_xdlops_mapping_t(mc_base_t):
     '''
@@ -398,7 +424,7 @@ class igemm_xdlops_mapping_t(mc_base_t):
         ctrl = self.ctrl
         #print(f"ctrl.block_n()={ctrl.block_n()}, ctrl.block_m()={ctrl.block_m()}")
         #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
-        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert ctrl.block_n() == ctrl.block_m() and (ctrl.block_k() // ctrl.lanegroup_k_per_thread()) * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
         with self._deferred_context():
             self._emit(f"; xdlops mapping, get source matrix gemm index")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")

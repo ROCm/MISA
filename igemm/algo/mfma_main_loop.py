@@ -139,7 +139,14 @@ class mfma_main_loop_t(mc_base_t):
                         b_index = i_local_buffer_n * local_buffer_n + \
                                     i_repeat_n * cxm.wave_step_n * mfma.num_v_b + \
                                     i_step_n * mfma.num_v_b
-                        self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        if mfma.num_v_a == 1 and mfma.num_v_b == 1:
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        elif mfma.num_v_a == 2 and mfma.num_v_b == 2:
+                            a_index_end = a_index + mfma.num_v_a - 1
+                            b_index_end = b_index + mfma.num_v_b - 1
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_a((a_index, a_index_end)), v_b((b_index, b_index_end)), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        else:
+                            assert False, "patern of num v_a or v_b non-valid"
             return self._get_deferred()
 
         def mfma_loop_repeat_1x1_lp2():
