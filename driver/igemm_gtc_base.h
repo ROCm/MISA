@@ -111,6 +111,7 @@ typedef struct {
             int gemm_n_per_thread;
             int gemm_n_level0_cluster;
             int gemm_n_level1_cluster;
+            int dummy;
         };
         struct{
             int wave_tile_m;
@@ -119,6 +120,7 @@ typedef struct {
             int wave_tile_n;
             int wave_step_n;
             int wave_repeat_n;
+            int wave_tile_k;
         };
     };
     std::vector<int> tensor_a_thread_lengths;
@@ -183,6 +185,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
                 tunable.wave_tile_n              = sec.at("wave_tile_n").get_int();
                 tunable.wave_step_n              = sec.at("wave_step_n").get_int();
                 tunable.wave_repeat_n            = sec.at("wave_repeat_n").get_int();
+                tunable.wave_tile_k              = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 1;
             }
             tunable.tensor_a_thread_lengths  = sec.at("tensor_a_thread_lengths").get_list_int();
             tunable.tensor_a_cluster_lengths = sec.at("tensor_a_cluster_lengths").get_list_int();
@@ -282,7 +285,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             std::to_string(gemm_n_level0_cluster) + "x" +
             std::to_string(gemm_n_level1_cluster) + "_";
     }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
-        kernel_name +=   std::string("wt") + std::to_string(tunable->wave_tile_m) + "x" + std::to_string(tunable->wave_tile_n) + "_" + 
+        kernel_name +=   std::string("wt") + std::to_string(tunable->wave_tile_m) + "x" + std::to_string(tunable->wave_tile_n) + "x" + std::to_string(tunable->wave_tile_k) + "_" + 
                          "ws" + std::to_string(tunable->wave_step_m) + "x" + std::to_string(tunable->wave_step_n) + "_" +
                          "wr" + std::to_string(tunable->wave_repeat_m) + "x" + std::to_string(tunable->wave_repeat_n) + "_";
     }

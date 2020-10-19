@@ -501,7 +501,7 @@ public:
                     
                     if (gemm_m % gemm_m_per_block != 0 || gemm_n % gemm_n_per_block != 0)
                         continue;
-                    for (j = 4; j > 1; j--){
+                    for (j = 5; j > 1; j--){
                         gemm_k_per_block = 1 << j;
                         if (gemm_k % gemm_k_per_block != 0)
                             continue;
