@@ -1696,8 +1696,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; LDS load")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}]")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_in()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
 
@@ -1886,7 +1886,6 @@ class igemm_fwd_gtc_t(mc_base_t):
         s = self.sgpr
         v = self.vgpr
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
-        gemmk_pack = 2 if data_byte == 2 else 1
 
         m_move_slice_window_ta, m_move_slice_window_tb = self.get_macro_move_slice_window()
         def move_slice_window_b():
@@ -1992,13 +1991,13 @@ class igemm_fwd_gtc_t(mc_base_t):
             fctrl.shared_store_a_functor      = self.shared_store_wei
             fctrl.shared_store_b_functor      = self.shared_store_in
             if ctrl_xdlops_mapping.wave_step_m == 1:
-                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * gemmk_pack)   # xdlops load from LDS always single load
+                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
                 fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
-                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * gemmk_pack)   # xdlops load from LDS always single load
+                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
                 fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(4)))

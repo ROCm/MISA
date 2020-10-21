@@ -193,6 +193,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
         self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
+        self.gemm_k_pack                        = utility_dict_with_default_t(tunable_dict)('gemm_k_pack', 0)
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
@@ -203,6 +204,15 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.precision in ('fp32', 'fp16', 'bf16')
         assert self.nxb in (1,4,8,16,32,64,256)
         assert self.nxe in (0,1)
+
+        # gemm_k_pack static value
+        # TODO: make gemm_k_pack to be tunable 
+        if self.precision == 'fp32':
+            self.gemm_k_pack = 1
+        elif self.precision == 'fp16':
+            self.gemm_k_pack = 4
+        else:
+            self.gemm_k_pack = 2
 
         # TODO: better specify
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):

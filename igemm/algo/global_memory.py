@@ -51,22 +51,27 @@ class inst_buffer_load_dword_t(object):
 
 class inst_buffer_store_dword_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, dwords):
-        self.dwords = dwords
+    def __init__(self, total_bytes):
+        self.total_bytes = total_bytes
 
-    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi = 0):
         if type(soffset) is int and soffset == 0:
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.total_bytes == 2:
+            if lo_hi == 0:
+                return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            else:
+                return f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.total_bytes == 4:
             return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 2:
+        if self.total_bytes == 8:
             return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 3:
+        if self.total_bytes == 12:
             return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 4:
+        if self.total_bytes == 16:
             return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 

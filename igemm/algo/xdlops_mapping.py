@@ -160,7 +160,7 @@ class ctrl_xdlops_mapping_t(object):
         assert self.wave_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block() * self.block_n_per_lanegroup() * self.lanegroup_n_per_wave()
         assert self.lanegroup_m_per_cluster() * self.block_m_per_lanegroup() * self.lanegroup_n_per_cluster() * self.block_n_per_lanegroup() == AMDGPU_WAVE_SIZE
         assert self.block_m() * self.block_m_per_wave() == self.wave_tile_m and self.block_n() * self.block_n_per_wave() == self.wave_tile_n
-        assert self.block_n() == self.block_m() and (self.block_k() // self.lanegroup_k_per_thread()) * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert self.block_n() == self.block_m() and self.block_k_per_wave() * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.wave_tile_m * self.wave_step_m * self.wave_repeat_m * self.waves_per_m()
@@ -199,6 +199,10 @@ class ctrl_xdlops_mapping_t(object):
         assert self.wave_tile_n % (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()) == 0
         assert self.inst_mfma.n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()
         return self.wave_tile_n // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block())
+
+    def block_k_per_wave(self):
+        assert self.block_k() % self.lanegroup_k_per_thread() == 0
+        return self.block_k() // self.lanegroup_k_per_thread()
 
     def block_m_per_lanegroup(self):
         ''' [among different thread] '''
@@ -424,14 +428,14 @@ class igemm_xdlops_mapping_t(mc_base_t):
         ctrl = self.ctrl
         #print(f"ctrl.block_n()={ctrl.block_n()}, ctrl.block_m()={ctrl.block_m()}")
         #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
-        assert ctrl.block_n() == ctrl.block_m() and (ctrl.block_k() // ctrl.lanegroup_k_per_thread()) * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k_per_wave() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
         with self._deferred_context():
             self._emit(f"; xdlops mapping, get source matrix gemm index")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
             self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n())}, v[{v_thread_id}]")
-            if ctrl.block_k() != 1:
-                self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
+            if ctrl.block_k_per_wave() != 1:
+                self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k_per_wave() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k())}, v[{v_thread_id}]")
