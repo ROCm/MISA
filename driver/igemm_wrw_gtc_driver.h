@@ -238,6 +238,7 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;   // pad to nxb modulo when nxe != 0
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -254,7 +255,7 @@ public:
 
         int gemm_m = k;
         int gemm_n = c * y * x;
-        int gemm_k = n * ho * wo;
+        int gemm_k = n * b;
 
         if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
@@ -269,12 +270,12 @@ public:
         if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
             return false;
 
-        if ((tunable->nxb != 1) && (tunable->nxe != 0)){
-            //std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
-            return false;
-        }
+        // if ((tunable->nxb != 1) && (tunable->nxe != 0)){
+        //     //std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
+        //     return false;
+        // }
 
-        if ((ho * wo) % tunable->nxb != 0){
+        if (b % tunable->nxb != 0){
             //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
         }
@@ -287,7 +288,7 @@ public:
             }
         }
         else {
-            if (n_per_block * ho * wo % gemm_k_per_block !=0){
+            if (n_per_block * b % gemm_k_per_block !=0){
                 return false;
             }
         }
@@ -316,6 +317,8 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
+        int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
+
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -324,6 +327,7 @@ public:
 
         int gemm_m = k;
         int gemm_n = c * y * x;
+        
 
         int max_grid_size = 1200;
 
@@ -348,7 +352,7 @@ public:
                     }
                 }
                 else {
-                    if (n_per_block * ho * wo % gemm_k_per_block !=0){
+                    if (n_per_block * b % gemm_k_per_block !=0){
                         break;
                     }
                 }
@@ -384,6 +388,7 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
 
+        // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int gemm_m = k;
         int gemm_n = c * y * x;
         int gemm_k = n * ho * wo;
@@ -667,6 +672,7 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
+        //dump_wrw_karg(&karg);
         //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
