@@ -202,7 +202,7 @@ class igemm_gtc_tunable_parameter_t(object):
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
         assert self.precision in ('fp32', 'fp16', 'bf16')
-        assert self.nxb in (1,4,8,16,32,64,256)
+        assert self.nxb in (1,4,8,16,32,64,128,256)
         assert self.nxe in (0,1)
 
         # gemm_k_pack static value

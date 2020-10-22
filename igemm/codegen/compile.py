@@ -141,7 +141,7 @@ class compile_host_t(object):
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-I{bytes.fromhex(xdnnroot).decode()}/include', '-DUSE_XDNN']
             if IGEMM_HOST_USE_MAGIC_DIV:
-                cmd += ['-DUSE_MAGIC_DIV']
+                cmd += ['-DUSE_MAGIC_DIV=1']
             if 'cflags' in kwargs:
                 cmd += kwargs['cflags']
             if 'cxxflags' in kwargs:
