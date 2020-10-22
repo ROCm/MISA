@@ -1083,7 +1083,6 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * ctrl.data_byte) 
         else:
             inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out * ctrl.data_byte)
-       
 
         s_out_offset_itr = sym_t(s_tmp4(0))
         # s_thread_m_stride = sym_t(s_tmp4(1))
