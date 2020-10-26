@@ -94,17 +94,6 @@ class macro_igemm_wrw_gtc_in_update_hw_t(macro_base_t):
         self._emit(f"v_mul_lo_u32 v[{self.v_tmp(1)}], s[{self.s_stride_w()}], v[{self.v_out_iwo()}]")   
         self._emit(f"v_add_i32 v[{self.v_in_iwi()}], v[{self.v_tmp(1)}], v[{self.v_wei_ix()}]")
 
-        # self._emit(f"; transform iho, iwo, iy, ix -> hip, wip")
-        # self._emit(f"v_mul_lo_u32 v[{self.v_tmp()}], s[{self.s_stride_h()}], v[{self.v_out_iho()}]")
-        # self._emit(f"v_mul_lo_u32 v[{self.v_tmp(1)}], s[{self.s_stride_w()}], v[{self.v_out_iwo()}]")
-        # self._emit(f"v_mul_lo_u32 v[{self.v_tmp(2)}], s[{self.s_dilation_h()}], v[{self.v_wei_iy()}]")
-        # self._emit(f"v_mul_lo_u32 v[{self.v_tmp(3)}], s[{self.s_dilation_w()}], v[{self.v_wei_ix()}]")
-        # self._emit(f"; transform hip, wip -> hi, wi")
-        # self._emit(f"v_add_u32 v[{self.v_tmp()}], v[{self.v_tmp()}], v[{self.v_tmp(2)}]")
-        # self._emit(f"v_add_u32 v[{self.v_tmp(1)}], v[{self.v_tmp(1)}], v[{self.v_tmp(3)}]")
-        # self._emit(f"v_sub_i32 v[{self.v_in_ihi()}], v[{self.v_tmp()}], s[{self.s_pad_h()}]")
-        # self._emit(f"v_sub_i32 v[{self.v_in_iwi()}], v[{self.v_tmp(1)}], s[{self.s_pad_w()}]")
-
 
 class macro_igemm_wrw_gtc_out_update_os_t(macro_base_t):
     def __init__(self, mc, data_byte, inline = False):

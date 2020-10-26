@@ -270,11 +270,6 @@ public:
         if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
             return false;
 
-        // if ((tunable->nxb != 1) && (tunable->nxe != 0)){
-        //     //std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
-        //     return false;
-        // }
-
         if (b % tunable->nxb != 0){
             //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
