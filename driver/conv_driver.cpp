@@ -272,7 +272,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
@@ -286,11 +286,11 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
-                        printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
+                        printf("diff at %4d, ref:%lf(0x%08x), pred:%lf(0x%08x), d:%lf\n", i, ri, ((uint32_t *)ref)[i], 
                             pi, ((uint32_t *)pred)[i], delta);
                 }
                 pp_err++;
@@ -554,6 +554,19 @@ int main(int argc, char **argv) {
                 printf("not applicatble\n");
                 continue;
             }
+
+#if 0
+            printf("input\r\n");
+            for (int i_check = 0; i_check < (0+32); i_check++)
+            {
+                printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
+            }
+            printf("input fp16\r\n");
+            for (int i_check = 0; i_check < (0+32); i_check++)
+            {
+                printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, (float)(host_input_f16[i_check*hi*wi]), ((unsigned short *)host_input_f16)[i_check*hi*wi]);
+            }
+#endif
 
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
