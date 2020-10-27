@@ -8,7 +8,7 @@ then
 else
     DIR=$1
 fi
-export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908_multi_k.hsaco
+export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908_fp16.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 
@@ -27,11 +27,7 @@ else
     exit 1
 fi
 
-./out/conv_driver.exe conv -n 16 -c 32 -H 8 -W 8 -k 4 -y 1 -x 2 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1  -F $FORW
-#./out/conv_driver.exe conv -n 4 -c 32 -H 33 -W 129 -k 4 -y 2 -x 2 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $DIR -t 1 -w 1
-#./out/conv_driver.exe conv -n 4 -c 32 -H 79 -W 341 -k 4 -y 5 -x 10 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -g 1 -F $DIR -t 1 -w 1
-
-#./out/conv_driver.exe conv -n 128 -c 128 -H 17 -W 17 -k 128 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1  -F $FORW
+./out/conv_driver.exe convfp16 -n 128 -c 128 -H 17 -W 17 -k 128 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1  -F $FORW
 #./out/conv_driver.exe conv -n 128 -c 160 -H 17 -W 17 -k 160 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1  -F $FORW
 #./out/conv_driver.exe conv -n 128 -c 1024 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW
 exit 1

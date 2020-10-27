@@ -37,10 +37,11 @@
 #include <algorithm>
 #include <numeric>
 
-typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+template <class Tgpu>
+struct igemm_fwd_gtc_karg_t{
+    Tgpu *p_in;
+    Tgpu *p_wei;
+    Tgpu *p_out;
     int hi;
     int wi;
     int n;
@@ -67,9 +68,9 @@ typedef struct {
     uint32_t shift_pack_1;
 #endif
     int __pack0;
-} __attribute__((packed)) igemm_fwd_gtc_karg_t;
+} __attribute__((packed));
 
-static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
+static void dump_fwd_karg(igemm_fwd_gtc_karg_t<float> * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -217,8 +218,9 @@ public:
         return true;
     }
 
+    template <class Tgpu>
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
+                 hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
                  int warmup, int repeat) {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
@@ -249,7 +251,7 @@ public:
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
 
-        igemm_fwd_gtc_karg_t karg;
+        igemm_fwd_gtc_karg_t<Tgpu> karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;

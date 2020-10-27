@@ -256,7 +256,7 @@ public:
         int gemm_n = c * y * x;
         int gemm_k = n * ho * wo;
 
-        if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
+        if ((c % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
             return false;
         }
@@ -499,7 +499,7 @@ public:
                         gemm_n_per_block = 1 << r;
                     }
                     
-                    if (gemm_m % gemm_m_per_block != 0 || gemm_n % gemm_n_per_block != 0)
+                    if (gemm_m % gemm_m_per_block != 0 || c % gemm_n_per_block != 0)
                         continue;
                     for (j = 5; j > 1; j--){
                         gemm_k_per_block = 1 << j;
@@ -711,7 +711,7 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
-#if 0
+#if 1
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);

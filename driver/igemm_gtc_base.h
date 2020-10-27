@@ -28,6 +28,10 @@
 #ifndef __IGEMM_GTC_BASE_H
 #define __IGEMM_GTC_BASE_H
 
+#include "half.hpp"
+
+using float16 = half_float::half;
+
 #include "config_parser.h"
 #include "utility.h"
 #include <string>
@@ -40,6 +44,13 @@
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS           "xdlops"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_NA               "fma_na"
 #define AMDGPU_WAVE_SIZE        64
+
+typedef enum {
+    driverHalf  = 0, /*!< 16-bit floating point (Fully supported) */
+    driverFloat = 1, /*!< 32-bit floating point (Fully supported) */
+    driverBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)
+                           (Partially supported) */
+} driverDataType_t;
 
 #if USE_MAGIC_DIV
 typedef struct {

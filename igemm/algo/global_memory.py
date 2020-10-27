@@ -80,13 +80,13 @@ class inst_buffer_atomic_add_dword_t(object):
     def __init__(self, dwords):
         self.dwords = dwords
 
-    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi=0):
         if type(soffset) is int and soffset == 0:
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.dwords == 4:
             return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 

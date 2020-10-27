@@ -29,7 +29,7 @@ import subprocess
 from .amdgpu import *
 import os
 
-IGEMM_HOST_USE_XDNN = False
+IGEMM_HOST_USE_XDNN = True
 IGEMM_HOST_USE_MAGIC_DIV = 0
 
 def _check_hip_clang():
