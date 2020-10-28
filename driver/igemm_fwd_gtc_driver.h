@@ -184,15 +184,9 @@ public:
         int gemm_k                   = c * y * x;
 
         // support pad to modulo, hence only check when nxe is 0
-        if((nxe == 0) && (gemm_n % gemm_n_per_block != 0)){
-            return false;
-        }
-
-        if(gemm_m % gemm_m_per_block != 0){
-            return false;
-        }
-
-        if(gemm_k % gemm_k_per_block != 0){
+        if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0) ||
+           (gemm_k % gemm_k_per_block != 0))
+        {
             return false;
         }
 
