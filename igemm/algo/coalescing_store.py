@@ -304,7 +304,7 @@ class igemm_coalescing_store_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
+        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0(), ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
         inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):

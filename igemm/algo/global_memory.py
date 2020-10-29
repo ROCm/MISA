@@ -30,8 +30,8 @@ from ..codegen import *
 
 class inst_buffer_load_dword_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, dwords):
-        self.dwords = dwords
+    def __init__(self, data_bytes):
+        self.data_bytes = data_bytes
 
     def __call__(self, vdst, vaddr, srsrc, soffset, offset):
         if type(soffset) is int and soffset == 0:
@@ -39,13 +39,15 @@ class inst_buffer_load_dword_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.data_bytes == 2:
+            return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_bytes == 4:
             return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 2:
+        if self.data_bytes == 8:
             return f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 3:
+        if self.data_bytes == 12:
             return f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 4:
+        if self.data_bytes == 16:
             return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
@@ -92,12 +94,13 @@ class inst_buffer_atomic_add_dword_t(object):
 
 class ctrl_2d_global_load_t(object):
     def __init__(self):
-        self.length_d0 = 1           # if d0 is 1, it is indeed 1d access
-        self.length_d1 = 1
-        self.vector_d1 = 1
-        self.precision = 'fp32'      # 'fp32', 'fp16', ...
-        self.src_order = 0           # 0-d0xd1, 1-d1xd0
-        self.dst_order = 0           # 0-d0xd1, 1-d1xd0
+        self.length_d0  = 1           # if d0 is 1, it is indeed 1d access
+        self.length_d1  = 1
+        self.vector_d1  = 1
+        self.precision  = 'fp32'      # 'fp32', 'fp16', ...
+        self.src_order  = 0           # 0-d0xd1, 1-d1xd0
+        self.dst_order  = 0           # 0-d0xd1, 1-d1xd0
+        self.data_bytes = 4           # 0-d0xd1, 1-d1xd0
 
 class macro_igemm_2d_global_load_t(macro_base_t):
     # TODO: if need vectorize further LDS write, need shuffle dst gpr while load
@@ -139,7 +142,7 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1 * ctrl.data_bytes)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -313,7 +316,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1 * ctrl.data_bytes)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
         if ctrl.src_order == 0 and ctrl.dst_order == 0:

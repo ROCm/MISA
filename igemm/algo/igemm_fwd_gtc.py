@@ -878,6 +878,15 @@ class igemm_fwd_gtc_t(mc_base_t):
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
 
+        if self.tunable.precision == "fp32":
+            ctrl_wei_gld.data_bytes = 4
+            ctrl_in_gld.data_bytes  = 4
+        elif self.tunable.precision == "fp16" or self.tunable.precision == "bf16":
+            ctrl_wei_gld.data_bytes = 2
+            ctrl_in_gld.data_bytes  = 2
+        else:
+            assert False, "not support data type"
+
         ctrl_wei_gld.vector_d1 = utility_gcd(ta_c1e, 4) if ta_c1e != 1 else 1
         ctrl_in_gld.vector_d1 = utility_gcd(tb_n1b, 4) if tb_n1b != 1 else 1
 
@@ -941,6 +950,12 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_sst_ctrl.src_order = 1                  # for weight, always reverse order in register.
         wei_sst_ctrl.v_tmp = self.vgpr.v_tmp
         in_sst_ctrl = ctrl_2d_shared_store_t()
+
+        wei_sst_ctrl.data_bytes = data_byte
+        in_sst_ctrl.data_bytes  = data_byte
+        wei_sst_ctrl.precision  = self.tunable.precision
+        in_sst_ctrl.precision   = self.tunable.precision
+
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3):
@@ -966,22 +981,25 @@ class igemm_fwd_gtc_t(mc_base_t):
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+            #print(f"wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
 
             if (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 and ta_k1 != 1) or \
                 (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and ta_k0 != 1):
                 wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             else:
-                wei_sst_ctrl.vector_d1 = 1
+                wei_sst_ctrl.vector_d1 = 4 // wei_sst_ctrl.data_bytes
+
+            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
             wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
+            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
                 wei_sst_ctrl.length_d1 = 4
                 wei_sst_ctrl.vector_d1 = 4
-                wei_sst_ctrl.stride_d0 = 4 * data_byte
+                wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
         else:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[-1]
@@ -993,14 +1011,14 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.vector_d1 = 1
 
             wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte
+            wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
             if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
                 wei_sst_ctrl.length_d1 = 4
                 wei_sst_ctrl.vector_d1 = 4
-                wei_sst_ctrl.stride_d0 = 4 * data_byte
+                wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
         if self.in_thread_copy_ndim == 2:
@@ -1011,8 +1029,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 in_sst_ctrl.vector_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
             #in_sst_ctrl.vector_d1 = t_n1b
-            in_sst_ctrl.stride_d0 = in_stride_list[in_thread_copy_index[0]] * data_byte
-            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[1]] * data_byte
+            in_sst_ctrl.stride_d0 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
             #in_sst_ctrl.stride_d1 = 1
         elif self.in_thread_copy_ndim == 1:
             in_sst_ctrl.length_d0 = 1
@@ -1023,14 +1041,14 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 in_sst_ctrl.vector_d1 = 1
             in_sst_ctrl.stride_d0 = 1
-            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte
+            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 in_sst_ctrl.length_d0 = 2
                 in_sst_ctrl.length_d1 = 4
                 in_sst_ctrl.vector_d1 = 4
-                in_sst_ctrl.stride_d0 = 4 * data_byte
+                in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
         else:
             in_sst_ctrl.length_d0 = 1
             in_sst_ctrl.length_d1 = in_thread_copy_dims[-1]
@@ -1040,14 +1058,14 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 in_sst_ctrl.vector_d1 = 1
             in_sst_ctrl.stride_d0 = 1
-            in_sst_ctrl.stride_d1 = in_stride_list[-1] * data_byte
+            in_sst_ctrl.stride_d1 = in_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
             if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 in_sst_ctrl.length_d0 = 2
                 in_sst_ctrl.length_d1 = 4
                 in_sst_ctrl.vector_d1 = 4
-                in_sst_ctrl.stride_d0 = 4 * data_byte
+                in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
         # print(f"in_sst_ctrl.vector_d1:{in_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
         # print(f"wei_sst_ctrl, {wei_sst_ctrl.serialize()}")
@@ -1642,28 +1660,35 @@ class igemm_fwd_gtc_t(mc_base_t):
             if cb_n1b == 1:
                 # TODO: remove this path, not possible go here
                 assert cb_n0 != 1
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(nb_n1b)},  v[{v.v_gtc_tb_in0()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(nb_n1b * self.tunable.gemm_k_pack)},  v[{v.v_gtc_tb_in0()}]")
             else:
                 if cb_n0 == 1:
-                    self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_in1b()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_tb_in1b()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_in0()}], {igemm_log2(nb_n1b)}, v[{v.v_gtc_tb_in1b()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         else:
             assert tb_n0 != 1
             if cb_n1b == 1:
                 # this is not prefered
                 assert cb_n0 != 1
-                self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_in0()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_tb_in0()}]")
             else:
                 if cb_n0 == 1:
-                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(nb_n0)}, v[{v.v_gtc_tb_in1b()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(nb_n0 * self.tunable.gemm_k_pack)}, v[{v.v_gtc_tb_in1b()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_in1b()}], {igemm_log2(nb_n0)}, v[{v.v_gtc_tb_in0()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
 
         if cb_c1e != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_ic1e()}], {igemm_log2(nb_n0*nb_n1b)}, v[{v.v_tmp()}]")
-        #if cb_c0 != 1:
-        #    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_ic0()}], {igemm_log2(nb_c1e*nb_n0*nb_n1b)}, v[{v.v_tmp()}]")
+            if self.tunable.gemm_k_pack == 1:
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_ic1e()}], {igemm_log2(nb_n0*nb_n1b)}, v[{v.v_tmp()}]")
+            else:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_tb_ic1e()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_n0*nb_n1b*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+                self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_tb_ic1e()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp(1)}]")
+
 
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
@@ -1673,26 +1698,35 @@ class igemm_fwd_gtc_t(mc_base_t):
         if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
             if ca_k1 == 1:
                 assert ca_k0 != 1
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik0}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(na_k1 * self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ik0()}]")
             else:
                 if ca_k0 == 1:
-                    self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ik1()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik0()}], {igemm_log2(na_k1)}, v[{v.v_gtc_ta_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         else:
             if ca_k1 == 1:
                 assert ca_k0 != 1
-                self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik0}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ik0}]")
             else:
                 if ca_k0 == 1:
-                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(na_k0)}, v[{v.v_gtc_ta_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(na_k0 * self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ik1()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ik1()}], {igemm_log2(na_k0)}, v[{v.v_gtc_ta_ik0()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
 
         if ca_c1e != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic1e()}], {igemm_log2(na_k0*na_k1)}, v[{v.v_tmp()}]")
+            if self.tunable.gemm_k_pack == 1:
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic1e()}], {igemm_log2(na_k0*na_k1)}, v[{v.v_tmp()}]")
+            else:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ic1e()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_k0*na_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+                self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ta_ic1e()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp(1)}]")
         if ca_c0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic0()}], {igemm_log2(na_c1e*na_k0*na_k1)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic0()}], {igemm_log2(na_c1e*na_k0*na_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
