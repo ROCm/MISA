@@ -968,7 +968,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
                 wei_sst_ctrl.vector_d1 = ta_k1
             else:
-                assert False, "tobe implement"
+                assert False, "to be implement"
                 wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
 
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3):
