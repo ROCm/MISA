@@ -366,7 +366,20 @@ public:
         assert(duration_list.size() == (repeat - 2));
         float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
-        usleep(1000 * 5);
+        // debug section of code
+#if 1
+        printf("workspace debug \n");
+        float* gemmc_host_check = (float* )malloc(block_size * sizeof(float));
+        hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);
+        for (int i_check = 0; i_check < (0+block_size); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
+        }
+        printf("workspace debug end \n");
+        free(gemmc_host_check);
+#endif
+
+        usleep(1000 * 1);
 
         result_t result;
         result.return_code = 0;

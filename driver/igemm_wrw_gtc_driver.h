@@ -720,6 +720,7 @@ public:
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
         }
         printf("workspace debug end \r\n");
+        free(gemmc_host_check);
 #endif
         result_t result;
         result.return_code = 0;

@@ -286,8 +286,10 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
-            if (delta > 3e-5) {
+            if (pp_err < 100){
+                // printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            }
+            if (delta > 3e-5 || delta < 0) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
                         printf("diff at %4d, ref:%lf(0x%08x), pred:%lf(0x%08x), d:%lf\n", i, ri, ((uint32_t *)ref)[i], 
@@ -498,10 +500,10 @@ int main(int argc, char **argv) {
         float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
+            gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
                 // move to different data type
                 tensor_movement<float16, float>(host_input_f16, host_input, n * c * hi * wi);
@@ -522,12 +524,18 @@ int main(int argc, char **argv) {
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
             device_output_to_host_f16 = (float16 *)malloc(n * k * ho * wo * sizeof(float16));
         }
-
-        HIP_CALL(hipMemcpy(device_input, host_input,
-                       n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
-        HIP_CALL(hipMemcpy(device_weight, host_weight,
-                       k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-
+        if(driver_data_type == driverFloat){
+            HIP_CALL(hipMemcpy(device_input, host_input,
+                        n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight,
+                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+        }
+        else if(driver_data_type == driverHalf){
+            HIP_CALL(hipMemcpy(device_input_f16, host_input_f16,
+                        n * c * hi * wi * sizeof(float16), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_f16, host_weight_f16,
+                        k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
+        }
         igemm_fwd_gtc_t conv_fwd_driver;
         double nrms = get_fwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {

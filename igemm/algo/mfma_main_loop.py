@@ -37,7 +37,8 @@ class ctrl_mfma_main_loop_t(object):
 
         self.unroll_k                    = 0
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
-        self.data_type                   = AMDGPU_PRECISION_FP32
+        self.data_type                   = AMDGPU_PRECISION_FP32 # c matrix data type
+        self.precision                   = 'fp32'                # a/b matrix data type
 
         self.lds_single_size             = 0                    # in byte, should be power of 2
         self.lds_buffer_num              = 2
@@ -106,7 +107,8 @@ class mfma_main_loop_t(mc_base_t):
         s_knum = self.ctrl.s_knum
         cxm = self.ctrl.cxm
 
-        data_byte = amdgpu_precision_data_byte(self.ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(self.ctrl.precision)
+        print(data_byte)
 
         lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
         lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n

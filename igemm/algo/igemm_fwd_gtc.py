@@ -41,6 +41,7 @@ IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B = 4
 IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 = 5
 IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_K_M= 0
 IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K= 1
+IGEMM_FWD_GTC_DEBUG = 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -772,6 +773,8 @@ class igemm_fwd_gtc_t(mc_base_t):
 
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
+            if IGEMM_FWD_GTC_DEBUG == 1:
+                self.v_dbg           = sym_t("v_dbg"          ,vseq(2, 2))
             total_vgpr           = vseq()
             if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
                 # if xdlops agpr is larger than vgpr usage, must change vgpr count to agpr
@@ -1331,6 +1334,11 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"s_load_dwordx2 s[{s.s_tmp((4, 5))}], s[{s.s_ka((0, 1))}],  0+{k.k_magic_4()}")
             self._emit(f"s_load_dwordx2 s[{s.s_shift_pack_0((0, 1))}], s[{s.s_ka((0, 1))}],  0+{k.k_shift_pack_0()}")
 
+        if IGEMM_FWD_GTC_DEBUG == 1:
+            self._emit("; debug vgpr")
+            self._emit("v_mov_b32 v1, 0")
+            self._emit(f"v_add_lshl_u32 v[{v.v_dbg()}], v0, v1, 2")
+
         self._emit(f"; wei(c0, c1e, k0, k1) thread_lengths: {ta_c0}x{ta_c1e}x{ta_k0}x{ta_k1}, cluster_lengths:{ca_c0}x{ca_c1e}x{ca_k0}x{ca_k1}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
         if global_load_ta_order == IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K:
@@ -1367,6 +1375,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], 0x27000")
         self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
+        self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
+        self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
 
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()
@@ -1687,7 +1697,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_tb_ic1e()}]")
                 self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_n0*nb_n1b*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
                 self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_tb_ic1e()}]")
-                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp(1)}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
 
 
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
@@ -1723,7 +1733,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ta_ic1e()}]")
                 self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_k0*na_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
                 self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ta_ic1e()}]")
-                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp(1)}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
         if ca_c0 != 1:
             self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic0()}], {igemm_log2(na_c1e*na_k0*na_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
 
@@ -1903,8 +1913,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(self.try_shift_stride(s.s_out_stride_k, igemm_log2(data_byte)))
 
         self._emit(self.try_shift_stride(s.s_move_slice_k_c1e, igemm_log2(data_byte)))
-        self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
-        self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
+        
 
 
     def emit_kernel_fma_main_loop(self):
@@ -1997,6 +2006,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
+            fctrl.precision                   = self.tunable.precision
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
@@ -2064,6 +2074,45 @@ class igemm_fwd_gtc_t(mc_base_t):
 
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
                     None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None))
+
+        if IGEMM_FWD_GTC_DEBUG == 1:
+            self._emit_empty_line()
+            self._emit(f"s_branch {self.label_out}")
+            self._emit("; debug code to cpy vgpr to host")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"L_debug_{self.label_out}_0:")
+            else: 
+                self._emit(f"L_debug_{self.label_out}_1:")
+            self._emit("s_waitcnt lgkmcnt(0)")
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
+            self._emit("s_cmp_lg_u32 s[s_bx], 0")
+            #self._emit("s_cbranch_scc1  L_program_end_0")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_0")
+            else: 
+                self._emit(f"s_cbranch_scc1 L_program_end_{self.label_out}_1")
+            self._emit(";s_cmp_lg_u32 s[s_wave_id], 0")
+            self._emit(";s_cbranch_scc1  L_program_end")
+            self._emit(";v_add_co_u32 v34, vcc, 0, v[v_a0+2]")
+            self._emit("v_mov_b32 v[v_tmp], s[s_in_offset]")
+            self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0")
+            self._emit_empty_line()
+
+            self._emit(f"buffer_store_dword v[v_in_os], v[{v.v_dbg()}], s[{s.s_p_out((0,3))}], s[{s.s_tmp()}] offen")
+
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
+            self._emit_empty_line()
+
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"L_program_end_{self.label_out}_0:")
+            else: 
+                self._emit(f"L_program_end_{self.label_out}_1:")
+            self._emit("s_nop 2")
+            self._emit("s_waitcnt lgkmcnt(0)")
+            self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_barrier")
 
         self._emit_front(f"{self.label_out}:")
 
