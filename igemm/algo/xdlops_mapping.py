@@ -373,15 +373,27 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 16 , 16,  16,  16,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16)]
 
-def get_ctrl_xdlops_mapping_fp32(macro_tile_m, macro_tile_n, waves = 4):
-    target_mfma_tiling_fp32 = list()
-    for t in ctrl_xdlops_mapping_fp32:
-        if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and t.waves == waves:
-            target_mfma_tiling_fp32.append(t)
+def get_ctrl_xdlops_mapping(macro_tile_m, macro_tile_n, precision, waves = 4):
+    if type(precision) is str:
+        precision = amdgpu_string_to_precision(precision)
+    ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
+    if precision == AMDGPU_PRECISION_FP32:
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
+    elif precision == AMDGPU_PRECISION_FP16:
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
+    elif precision == AMDGPU_PRECISION_BF16:
+        assert False, f"not support bf16 now"
+    else:
+        assert False, f"wrong data type"
 
-    assert len(target_mfma_tiling_fp32) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, waves:{waves}"
+    target_mfma_tiling = list()
+    for t in ctrl_xdlops_mapping:
+        if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and t.waves == waves:
+            target_mfma_tiling.append(t)
+
+    assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, waves:{waves}"
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
-    return target_mfma_tiling_fp32[0]
+    return target_mfma_tiling[0]
 
 def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves, precision):
     if type(precision) is str:
