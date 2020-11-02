@@ -308,7 +308,7 @@ class igemm_coalescing_store_t(mc_base_t):
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
         inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):
-        inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
+        inst_gst = inst_buffer_store_dword_t(self.mc, ctrl.vector_write_out)
 
         s_out_offset_itr = sym_t(s_tmp4(0))
         s_thread_m_stride = sym_t(s_tmp4(1))
@@ -1082,7 +1082,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         if ctrl.gemm_k_global_split: 
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * ctrl.data_byte) 
         else:
-            inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out * ctrl.data_byte)
+            inst_gst = inst_buffer_store_dword_t(self.mc, ctrl.vector_write_out * ctrl.data_byte)
 
         s_out_offset_itr = sym_t(s_tmp4(0))
         # s_thread_m_stride = sym_t(s_tmp4(1))

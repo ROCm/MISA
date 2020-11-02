@@ -28,9 +28,10 @@ import sys
 from ..codegen import *
 
 
-class inst_buffer_load_dword_t(object):
+class inst_buffer_load_dword_t(mc_base_t):
     ''' TODO: this implementation always offen '''
-    def __init__(self, data_bytes):
+    def __init__(self, mc, data_bytes):
+        mc_base_t.__init__(self, mc)
         self.data_bytes = data_bytes
 
     def __call__(self, vdst, vaddr, srsrc, soffset, offset):
@@ -38,22 +39,27 @@ class inst_buffer_load_dword_t(object):
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
+        assert self.data_bytes in (2,4,6,8,12,16) 
+        with self._deferred_context(): 
+            if self.data_bytes == 2:
+                self._emit(f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.data_bytes == 4:
+                self._emit(f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.data_bytes == 6:
+                self._emit(f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+                self._emit(f"buffer_load_short_d16 v[{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}+4")
+            if self.data_bytes == 8:
+                self._emit(f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.data_bytes == 12:
+                self._emit(f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.data_bytes == 16:
+                self._emit(f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+        return self._get_deferred()
 
-        if self.data_bytes == 2:
-            return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 4:
-            return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 8:
-            return f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 12:
-            return f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 16:
-            return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        assert False
-
-class inst_buffer_store_dword_t(object):
+class inst_buffer_store_dword_t(mc_base_t):
     ''' TODO: this implementation always offen '''
-    def __init__(self, total_bytes):
+    def __init__(self, mc, total_bytes):
+        mc_base_t.__init__(self, mc)
         self.total_bytes = total_bytes
 
     def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi = 0):
@@ -61,21 +67,25 @@ class inst_buffer_store_dword_t(object):
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
-
-        if self.total_bytes == 2:
-            if lo_hi == 0:
-                return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-            else:
-                return f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.total_bytes == 4:
-            return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.total_bytes == 8:
-            return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.total_bytes == 12:
-            return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.total_bytes == 16:
-            return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        assert False
+        assert self.total_bytes in (2,4,6,8,12,16) 
+        with self._deferred_context():
+            if self.total_bytes == 2:
+                if lo_hi == 0:
+                    self._emit(f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+                else:
+                    self._emit(f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.total_bytes == 4:
+                self._emit(f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.total_bytes == 6:
+                self._emit(f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+                self._emit(f"buffer_store_short v[{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}+4")
+            if self.total_bytes == 8:
+                self.emit(f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.total_bytes == 12:
+                self.emit(f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+            if self.total_bytes == 16:
+                self.emit(f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
+        return self._get_deferred()
 
 class inst_buffer_atomic_add_dword_t(object):
     ''' TODO: this implementation always offen '''
@@ -142,7 +152,7 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1 * ctrl.data_bytes)
+        buffer_load_dword = inst_buffer_load_dword_t(self.mc, ctrl.vector_d1 * ctrl.data_bytes)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -316,7 +326,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1 * ctrl.data_bytes)
+        buffer_load_dword = inst_buffer_load_dword_t(self.mc, ctrl.vector_d1 * ctrl.data_bytes)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
