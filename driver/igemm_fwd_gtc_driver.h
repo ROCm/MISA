@@ -44,8 +44,8 @@ typedef struct {
     int hi;
     int wi;
     int n;
-    int k;
-    int c;
+    int k;                      // this is indeed k_per_group
+    int c;                      // this is indeed c_per_group
     int ho;
     int wo;
     int stride_h;
@@ -56,6 +56,7 @@ typedef struct {
     int pad_w;
     int y;
     int x;
+    int group;
 #if USE_MAGIC_DIV
     uint32_t magic_0;           // denom: n*ho*wo / n_per_block
     uint32_t magic_1;           // denom: ((n / nb_n0) * ho*wo) / nb_n1b
@@ -66,7 +67,6 @@ typedef struct {
     uint32_t shift_pack_0;
     uint32_t shift_pack_1;
 #endif
-    int __pack0;
 } __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
 static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
@@ -88,6 +88,7 @@ static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"pad_w:"        <<karg->pad_w<<",";
     std::cout<<"y:"            <<karg->y<<",";
     std::cout<<"x:"            <<karg->x<<",";
+    std::cout<<"group:"        <<karg->group<<",";
 #if USE_MAGIC_DIV
     std::cout<<"magic_0:"      <<karg->magic_0<<",";
     std::cout<<"magic_1:"      <<karg->magic_1<<",";
@@ -136,6 +137,7 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -143,10 +145,10 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m = k;
+        int gemm_m = k / group;
         int gemm_n = n * b;
 
-        int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         return grid_size;
     }
@@ -170,6 +172,9 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+
+        assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -179,9 +184,9 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m                   = k;
+        int gemm_m                   = k / group;
         int gemm_n                   = n * b;
-        int gemm_k                   = c * y * x;
+        int gemm_k                   = (c / group) * y * x;
 
         // support pad to modulo, hence only check when nxe is 0
         if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0) ||
@@ -241,11 +246,13 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+
+        assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
-
 
         igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -255,8 +262,8 @@ public:
         karg.hi            = hi;
         karg.wi            = wi;
         karg.n             = n;
-        karg.k             = k;
-        karg.c             = c;
+        karg.k             = k / group;
+        karg.c             = c / group;
         karg.ho            = ho;
         karg.wo            = wo;
 
@@ -268,6 +275,7 @@ public:
         karg.pad_w         = pad_w;
         karg.y             = y;
         karg.x             = x;
+        karg.group         = group;
 #if USE_MAGIC_DIV
         {
             // init magic division parameters
