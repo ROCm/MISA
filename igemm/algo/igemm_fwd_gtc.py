@@ -995,7 +995,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = 4 // wei_sst_ctrl.data_bytes
 
-            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
+            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
             wei_sst_ctrl.stride_d0 = 1
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
