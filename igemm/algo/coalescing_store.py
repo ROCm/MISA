@@ -1077,7 +1077,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
-        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
+
+        if ctrl.data_byte == 2:
+            inst_sst = inst_ds_write_words_t(self.mc, AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+        else:
+            inst_sst = inst_ds_write_dwords_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+        
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         if ctrl.gemm_k_global_split: 
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * ctrl.data_byte) 

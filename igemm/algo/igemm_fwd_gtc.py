@@ -881,6 +881,9 @@ class igemm_fwd_gtc_t(mc_base_t):
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
 
+        ctrl_wei_gld.precision = self.tunable.precision
+        ctrl_in_gld.precision = self.tunable.precision
+
         if self.tunable.precision == "fp32":
             ctrl_wei_gld.data_bytes = 4
             ctrl_in_gld.data_bytes  = 4
