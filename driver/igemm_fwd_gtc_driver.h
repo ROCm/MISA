@@ -58,14 +58,16 @@ typedef struct {
     int x;
     int group;
 #if USE_MAGIC_DIV
-    uint32_t magic_0;           // denom: n*ho*wo / n_per_block
-    uint32_t magic_1;           // denom: ((n / nb_n0) * ho*wo) / nb_n1b
-    uint32_t magic_2;           // denom: y*x, if nxe==0 not used
-    uint32_t magic_3;           // denom: x, if nxe==0 not used
-    uint32_t magic_4;           // denom: ho*wo
-    uint32_t magic_5;           // denom: wo
+    uint32_t magic_0;                       // denom: n*b / n_per_block
+    uint32_t magic_1;                       // denom: ((n / nb_n0) * b) / nb_n1b
+    uint32_t magic_2;                       // denom: y*x, if nxe==0 not used
+    uint32_t magic_3;                       // denom: x, if nxe==0 not used
+    uint32_t magic_4;                       // denom: b
+    uint32_t magic_5;                       // denom: wo
+    uint32_t magic_6;                       // denom: n*b*k / (m_per_block*n_per_block)
     uint32_t shift_pack_0;
     uint32_t shift_pack_1;
+    uint32_t __pack_0;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
@@ -96,6 +98,7 @@ static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"magic_3:"      <<karg->magic_3<<",";
     std::cout<<"magic_4:"      <<karg->magic_4<<",";
     std::cout<<"magic_5:"      <<karg->magic_5<<",";
+    std::cout<<"magic_6:"      <<karg->magic_6<<",";
     std::cout<<"shift_pack_0:" <<karg->shift_pack_0<<",";
     std::cout<<"shift_pack_1:" <<karg->shift_pack_1<<",";
 #endif
@@ -253,7 +256,10 @@ public:
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
-
+        int nxe                      = tunable->nxe;
+        int nxb                      = tunable->nxb;
+        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        
         igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
@@ -279,21 +285,20 @@ public:
 #if USE_MAGIC_DIV
         {
             // init magic division parameters
-            uint32_t nb_n0 = tunable->tensor_b_cluster_lengths[2] * tunable->tensor_b_thread_lengths[2];
-            uint32_t nb_n1b = tunable->tensor_b_cluster_lengths[3] * tunable->tensor_b_thread_lengths[3];
-            uint32_t denom_0 = (tunable->source_access_order == 0) ? ((n * ho * wo) / gemm_n_per_block) : (k / gemm_m_per_block);
-            uint32_t denom_1 = ((n / nb_n0) * ho * wo) / nb_n1b;
-            uint32_t denom_2 = y * x;
-            uint32_t denom_3 = x;
-            uint32_t denom_4 = ho * wo;
-            uint32_t denom_5 = wo;
+            uint32_t nb_n0          = tunable->tensor_b_cluster_lengths[2] * tunable->tensor_b_thread_lengths[2];
+            uint32_t nb_n1b         = tunable->tensor_b_cluster_lengths[3] * tunable->tensor_b_thread_lengths[3];
+            uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
+            uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
 
-            magic_div_u32_t mdiv_0 = magic_div_u32_gen(denom_0);
-            magic_div_u32_t mdiv_1 = magic_div_u32_gen(denom_1);
-            magic_div_u32_t mdiv_2 = magic_div_u32_gen(denom_2);
-            magic_div_u32_t mdiv_3 = magic_div_u32_gen(denom_3);
-            magic_div_u32_t mdiv_4 = magic_div_u32_gen(denom_4);
-            magic_div_u32_t mdiv_5 = magic_div_u32_gen(denom_5);
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen(tunable->source_access_order == 0 ? ((n * b) / gemm_n_per_block) : (k / gemm_m_per_block));
+            magic_div_u32_t mdiv_1 = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ? 
+                                                                            b * unmerge_sub_n1 / nb_n1b :
+                                                                            (n / nb_n0) * b / nb_n1b   );
+            magic_div_u32_t mdiv_2 = magic_div_u32_gen(y * x);
+            magic_div_u32_t mdiv_3 = magic_div_u32_gen(x);
+            magic_div_u32_t mdiv_4 = magic_div_u32_gen(b);
+            magic_div_u32_t mdiv_5 = magic_div_u32_gen(wo);
+            magic_div_u32_t mdiv_6 = magic_div_u32_gen((n * b * k) / (gemm_m_per_block * gemm_n_per_block));
 
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;
@@ -301,8 +306,9 @@ public:
             karg.magic_3        = mdiv_3.magic;
             karg.magic_4        = mdiv_4.magic;
             karg.magic_5        = mdiv_5.magic;
+            karg.magic_6        = mdiv_6.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
+            karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
         }
 #endif
 

@@ -563,9 +563,11 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self.k_magic_3      = sym_t('k_magic_3'         ,100)
                 self.k_magic_4      = sym_t('k_magic_4'         ,104)
                 self.k_magic_5      = sym_t('k_magic_5'         ,108)
-                self.k_shift_pack_0 = sym_t('k_shift_pack_0'    ,112)
-                self.k_shift_pack_1 = sym_t('k_shift_pack_1'    ,116)
-                self.k_end          = sym_t('k_end'             ,120)
+                self.k_magic_6      = sym_t('k_magic_6'         ,112)
+                self.k_shift_pack_0 = sym_t('k_shift_pack_0'    ,116)
+                self.k_shift_pack_1 = sym_t('k_shift_pack_1'    ,120)
+                self.k__pack_0      = sym_t('k__pack_0'         ,124)
+                self.k_end          = sym_t('k_end'             ,128)
             else:
                 self.k_end          = sym_t('k_end'             ,88)
 
@@ -664,6 +666,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self.s_in_offset           = sym_t("s_in_offset"              ,sseq(in_npc))   # if this number is zero, it is also OK, since we would not use
                 self.s_wei_offset          = sym_t("s_wei_offset"             ,sseq(wei_npc))
 
+            # TODO: this sgpr allocation is a mess
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 # allocate several sgpr to hold magic/shift value.
                 self.s_shift_pack_0        = sym_t("s_shift_pack_0"           ,self.s_p_out.value + 2)
@@ -674,11 +677,13 @@ class igemm_fwd_gtc_t(mc_base_t):
 
                 self.s_magic_4             = sym_t("s_magic_4"                ,self.s_move_slice_k_c1e.value)
                 self.s_magic_5             = sym_t("s_magic_5"                ,self.s_gemm_k_num_c1.value)
+                self.s_magic_6             = sym_t("s_magic_6"                ,self.s_block_gtc_in0.value)
 
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-                self.s_magic_0             = sym_t("s_magic_0"                ,self.s_tmp.value + 2)
-                self.s_magic_1             = sym_t("s_magic_1"                ,self.s_tmp.value + 3)
+                self.s_magic_0             = sym_t("s_magic_0"                ,self.s_p_wei.value + 2)
+                self.s_magic_1             = sym_t("s_magic_1"                ,self.s_p_wei.value + 3)
+                
 
             self.s_end                     = sym_t("s_end"                    ,sseq())
 
@@ -1157,14 +1162,16 @@ class igemm_fwd_gtc_t(mc_base_t):
         int x;
         int group;
         /* if use magic division */
-        uint32_t magic_0;           // denom: sa=0: n*ho*wo / n_per_block, sa=1: k / m_per_block
-        uint32_t magic_1;           // denom: ((n / nb_n0) * ho*wo) / nb_n1b
+        uint32_t magic_0;           // denom: sa=0: n*b / n_per_block, sa=1: k / m_per_block
+        uint32_t magic_1;           // denom: ((n / nb_n0) * b) / nb_n1b
         uint32_t magic_2;           // denom: y*x, if nxe==0 not used
         uint32_t magic_3;           // denom: x, if nxe==0 not used
-        uint32_t magic_4;           // denom: ho*wo
+        uint32_t magic_4;           // denom: b
         uint32_t magic_5;           // denom: wo
+        uint32_t magic_6;           // denom: n*b*k / (m_per_block*n_per_block)
         uint32_t shift_pack_0;
         uint32_t shift_pack_1;
+        uint32_t __pack_0;
         '''
         kas = []
         # name: {}, .size: {}, .offset: {}, .value_kind: {}, .value_type
@@ -1194,12 +1201,14 @@ class igemm_fwd_gtc_t(mc_base_t):
             kas.append(amdgpu_kernel_arg_t('magic_3'        , 4, 100, 'by_value','i32'))
             kas.append(amdgpu_kernel_arg_t('magic_4'        , 4, 104, 'by_value','i32'))
             kas.append(amdgpu_kernel_arg_t('magic_5'        , 4, 108, 'by_value','i32'))
-            kas.append(amdgpu_kernel_arg_t('shift_pack_0'   , 4, 112, 'by_value','i32'))
-            kas.append(amdgpu_kernel_arg_t('shift_pack_1'   , 4, 116, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('magic_6'        , 4, 112, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('shift_pack_0'   , 4, 116, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('shift_pack_1'   , 4, 120, 'by_value','i32'))
+            kas.append(amdgpu_kernel_arg_t('__pack_0'       , 4, 124, 'by_value','i32'))
         else:
             pass
         return kas
-    
+
     def get_kernel_info(self):
         kernel_code = self.get_kernel_code()
         kernel_args = self.get_kernel_args()
@@ -1263,7 +1272,6 @@ class igemm_fwd_gtc_t(mc_base_t):
         unmerge_sub_tb_c  = self.tunable.unmerge_sub_c
         unmerge_sub_tb_c1 = unmerge_sub_tb_c // nb_c0
 
-
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         m_in_update_hw = self.get_macro_in_update_hw()
@@ -1306,9 +1314,10 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"s_load_dword s[{s.s_group()}],    s[{s.s_ka((0, 1))}],    0+{k.k_group()}")
 
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            self._emit(f"s_load_dwordx2 s[{s.s_magic_0((0, 1))}], s[{s.s_ka((0, 1))}],  0+{k.k_magic_0()}")
-            self._emit(f"s_load_dwordx2 s[{s.s_tmp((0, 1))}], s[{s.s_ka((0, 1))}],  0+{k.k_magic_2()}")
-            self._emit(f"s_load_dwordx2 s[{s.s_tmp((4, 5))}], s[{s.s_ka((0, 1))}],  0+{k.k_magic_4()}")
+            self._emit(f"s_load_dwordx2 s[{s.s_magic_0((0, 1))}],  s[{s.s_ka((0, 1))}],  0+{k.k_magic_0()}")
+            self._emit(f"s_load_dwordx2 s[{s.s_tmp((2, 3))}],  s[{s.s_ka((0, 1))}],  0+{k.k_magic_2()}")
+            self._emit(f"s_load_dwordx2 s[{s.s_tmp((4, 5))}],  s[{s.s_ka((0, 1))}],  0+{k.k_magic_4()}")
+            self._emit(f"s_load_dword s[{s.s_magic_6()}],  s[{s.s_ka((0, 1))}],  0+{k.k_magic_6()}")
             self._emit(f"s_load_dwordx2 s[{s.s_shift_pack_0((0, 1))}], s[{s.s_ka((0, 1))}],  0+{k.k_shift_pack_0()}")
 
         self._emit(f"; wei(c0, c1e, k0, k1) thread_lengths: {ta_c0}x{ta_c1e}x{ta_k0}x{ta_k1}, cluster_lengths:{ca_c0}x{ca_c1e}x{ca_k0}x{ca_k1}")
@@ -1345,14 +1354,12 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         self._emit(f"s_mov_b32 s[{s.s_p_in(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], 0x27000")
-        self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
-        self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
 
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            self._emit(f"s_mov_b32 s[{s.s_magic_2()}], s[{s.s_tmp(0)}]")
-            self._emit(f"s_mov_b32 s[{s.s_magic_3()}], s[{s.s_tmp(1)}]")
+            self._emit(f"s_mov_b32 s[{s.s_magic_2()}], s[{s.s_tmp(2)}]")
+            self._emit(f"s_mov_b32 s[{s.s_magic_3()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_mov_b32 s[{s.s_magic_4()}], s[{s.s_tmp(4)}]")
             self._emit(f"s_mov_b32 s[{s.s_magic_5()}], s[{s.s_tmp(5)}]")
         self._emit(f"; calculate index")
@@ -1368,8 +1375,8 @@ class igemm_fwd_gtc_t(mc_base_t):
 
             # stride for in
             self._emit(f"s_mul_i32 s[{s.s_in_stride_c()}], s[{s.s_hi()}], s[{s.s_wi()}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(3)}], s[{s.s_c()}], s[{s.s_group()}]")
-            self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_tmp(3)}], s[{s.s_in_stride_c()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_c()}], s[{s.s_group()}]")
+            self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_tmp()}], s[{s.s_in_stride_c()}]")
             if tb_c0 != 1:
                 self._emit(f"s_lshl_b32 s[{s.s_in_stride_c0()}], s[{s.s_in_stride_c()}], {utility_log2(unmerge_sub_tb_c1)}")
             if tb_n0 != 1:
@@ -1380,9 +1387,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(f"s_mul_i32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}],")
 
             # stride for out
-            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_group()}], s[{s.s_k()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_group()}], s[{s.s_k()}]")
             self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}], s[{s.s_ho()}], s[{s.s_wo()}]")
-            self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_tmp(2)}], s[{s.s_out_stride_k()}]")
+            self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_tmp()}], s[{s.s_out_stride_k()}]")
             if gemm_n_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_n()}], {igemm_log2(nb_n0)}")
                 self._emit(f"s_mul_i32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], s[{s.s_tmp()}]")
@@ -1397,8 +1404,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"s_mov_b32 s[{s.s_in_stride_c()}],       s[{s.s_stride_hw()}]")
 
             # stride for in
-            self._emit(f"s_mul_i32 s[{s.s_tmp(3)}], s[{s.s_c()}], s[{s.s_group()}]")
-            self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_tmp(3)}], s[{s.s_stride_hw()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_c()}], s[{s.s_group()}]")
+            self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_tmp()}], s[{s.s_stride_hw()}]")
             if tb_c0 != 1:
                 self._emit(f"s_lshl_b32 s[{s.s_in_stride_c0()}], s[{s.s_in_stride_c()}], {utility_log2(unmerge_sub_tb_c1)}")
             if tb_n0 != 1:
@@ -1409,8 +1416,8 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(f"s_mul_i32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}]")
 
             # stride for out
-            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_group()}], s[{s.s_k()}]")
-            self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_tmp(2)}], s[{s.s_stride_hw()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_group()}], s[{s.s_k()}]")
+            self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_tmp()}], s[{s.s_stride_hw()}]")
             if gemm_n_unmerge_cluster == 1:
                 self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_n()}], {igemm_log2(nb_n0)}")
                 self._emit(f"s_mul_i32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], s[{s.s_tmp()}]")
@@ -1435,7 +1442,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], s[{s.s_k()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block * self.tunable.gemm_n_per_block)}")
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            pass
+            self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_1()}], 0x00080010 ; offset:16, width:8")
+            self._emit(m_mdiv_u32_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), s.s_magic_6(), s.s_tmp(3), '0', s.s_tmp()))
         else:
             self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
 
@@ -1612,6 +1620,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         # load in
         self._emit(self.global_load_in())
         self._emit_empty_line()
+        self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
+        self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
 
         self._emit(f"; calculate wei offset")
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}]")
