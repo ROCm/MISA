@@ -437,7 +437,6 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         return gemm_m_order, gemm_n_order
 
-
     class global_load_in_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
@@ -880,6 +879,9 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
+
+        ctrl_wei_gld.precision = self.tunable.precision
+        ctrl_in_gld.precision = self.tunable.precision
 
         if self.tunable.precision == "fp32":
             ctrl_wei_gld.data_bytes = 4
@@ -2029,13 +2031,13 @@ class igemm_fwd_gtc_t(mc_base_t):
                 fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, 1, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
                 fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, 1, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(4)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 

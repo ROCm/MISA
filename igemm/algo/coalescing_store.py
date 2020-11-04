@@ -306,7 +306,7 @@ class igemm_coalescing_store_t(mc_base_t):
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
         inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0(), ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
-        inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
+        inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out, ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):
         inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
 
@@ -353,7 +353,7 @@ class igemm_coalescing_store_t(mc_base_t):
                     c_sub_start_index = c_group_start_index + i_d * 2 * ctrl.vector_write_out
                     sld_offset = i_d * 2 * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
                     self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
-                    issue_list.append(inst_sld.get_issues(sld_offset))
+                    issue_list.append(inst_sld.get_issues())
 
                 if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
@@ -1077,7 +1077,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
-        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
+
+        if ctrl.data_byte == 2:
+            inst_sst = inst_ds_write_words_t(self.mc, AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+        else:
+            inst_sst = inst_ds_write_dwords_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+        
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         if ctrl.gemm_k_global_split: 
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * ctrl.data_byte) 
@@ -1187,7 +1192,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
                         sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
-                        issue_list.append(inst_sld.get_issues(sld_offset))
+                        issue_list.append(inst_sld.get_issues())
 
                 if v_store_flag is not None and type(v_store_flag) is str:
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
