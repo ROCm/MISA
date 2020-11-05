@@ -253,9 +253,13 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 256, 64 ,  64,  32,  4,  1,  1,  2,  1,  v_mfma_f32_32x32x1f32), #add by jane
+
         ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
+        ctrl_xdlops_mapping_t( 64 , 256,  32,  64,  4,  1,  1,  1,  2,  v_mfma_f32_32x32x1f32), #add by jane
         ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
+        #ctrl_xdlops_mapping_t( 32 , 256,  16 ,  64,  4,  1,  1,  1,  2,  v_mfma_f32_16x16x1f32),   #add by jane, can not because coleasing group assert
         ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
 
@@ -266,18 +270,24 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 128, 128,  32,  64,  4,  1,  1,  2,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 64 ,  64,  32 ,  4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),   #add by jane
+
         ctrl_xdlops_mapping_t( 64 , 128,  32,  64,  4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 128, 32 ,  64,  16 ,  4,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32), #add by jane, it's better
         ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 128,  16,  64,  4,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  32,  32,  4,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32), #add by jane; it's better
         #ctrl_xdlops_mapping_t( 128, 16 ,  64,  4 ,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 16 , 128,  4 ,  64,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  32,  32 ,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),  #add by jane; it's better
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
+        ctrl_xdlops_mapping_t( 32 , 64 ,  32 ,  32,  2,  1,  1,  1,  1,  v_mfma_f32_16x16x1f32),   #add by jane;
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         #ctrl_xdlops_mapping_t( 256, 4  ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
         #ctrl_xdlops_mapping_t( 4  , 256,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
