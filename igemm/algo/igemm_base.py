@@ -168,6 +168,7 @@ class igemm_gtc_tunable_parameter_t(object):
             self.wave_tile_n                    = tunable_dict['wave_tile_n']
             self.wave_step_n                    = tunable_dict['wave_step_n']
             self.wave_repeat_n                  = tunable_dict['wave_repeat_n']
+            self.wave_tile_k                    = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 1)
         else:
             assert False
 
@@ -236,7 +237,7 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_c = 1                             # not used
         else:
             assert self.gemm_k_per_block % self.nxb == 0
-            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, 1)
+            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = self.gemm_n_per_block
 
@@ -310,8 +311,8 @@ class igemm_gtc_tunable_parameter_t(object):
         brace_right='}'
         direction = "\"" + self.direction + "\""
         precision = "\"" + self.precision + "\""
-        out_str = (f"{'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
-        out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
+        out_str = (f"\t\t{'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+        out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_tile_k:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
         out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
@@ -340,6 +341,7 @@ class igemm_gtc_tunable_parameter_t(object):
             tunable_dict['wave_tile_n']                 = self.wave_tile_n
             tunable_dict['wave_step_n']                 = self.wave_step_n
             tunable_dict['wave_repeat_n']               = self.wave_repeat_n
+            tunable_dict['wave_tile_k']                 = self.wave_tile_k
         else:
             assert False
         tunable_dict['tensor_a_thread_lengths']         = self.tensor_a_thread_lengths
@@ -385,7 +387,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_starter + 'wave_repeat_m              : {}'.format(self.wave_repeat_m) + '\n' + \
                 line_starter + 'wave_tile_n                : {}'.format(self.wave_tile_n) + '\n' + \
                 line_starter + 'wave_step_n                : {}'.format(self.wave_step_n) + '\n' + \
-                line_starter + 'wave_repeat_n              : {}'.format(self.wave_repeat_n) + '\n'
+                line_starter + 'wave_repeat_n              : {}'.format(self.wave_repeat_n) + '\n' + \
+                line_starter + 'wave_tile_k                : {}'.format(self.wave_tile_k) + '\n'
         sstr += \
                 line_starter + 'tensor_a_thread_lengths    : {}'.format(self.tensor_a_thread_lengths) + '\n' + \
                 line_starter + 'tensor_a_cluster_lengths   : {}'.format(self.tensor_a_cluster_lengths) + '\n' + \
@@ -430,7 +433,7 @@ def igemm_gtc_encode_kernel_name(tunable):
                          f"gm{tunable.gemm_m_repeat}x{tunable.gemm_m_level0_cluster}x{tunable.gemm_m_level1_cluster}_" +\
                          f"gn{tunable.gemm_n_repeat}x{tunable.gemm_n_level0_cluster}x{tunable.gemm_n_level1_cluster}_"
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-        kernel_name +=   f'wt{tunable.wave_tile_m}x{tunable.wave_tile_n}_' +\
+        kernel_name +=   f'wt{tunable.wave_tile_m}x{tunable.wave_tile_n}x{tunable.wave_tile_k}_' +\
                          f'ws{tunable.wave_step_m}x{tunable.wave_step_n}_' +\
                          f'wr{tunable.wave_repeat_m}x{tunable.wave_repeat_n}_'
 
