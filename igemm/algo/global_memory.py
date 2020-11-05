@@ -48,7 +48,7 @@ class inst_buffer_load_dword_t(object):
             return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
-class inst_buffer_load_word_t(mc_base_t):
+class inst_buffer_load_short_t(mc_base_t):
     def __init__(self, mc, words):
         mc_base_t.__init__(self, mc)
         self.words = words
@@ -174,20 +174,20 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         ##assert ctrl.precision == 'fp16', "TO BE supported"
         if ctrl.precision == 'fp32':
-            buffer_load_dw_w = inst_buffer_load_dword_t(ctrl.vector_d1)
+            buffer_load_dword_short = inst_buffer_load_dword_t(ctrl.vector_d1)
         else:
-            buffer_load_dw_w = inst_buffer_load_word_t(self.mc, ctrl.vector_d1)
+            buffer_load_dword_short = inst_buffer_load_short_t(self.mc, ctrl.vector_d1)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
                     if i_d1 == 0 and i_d0 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d1 == 0 and i_d0 != 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
                     else:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
 
                     if i_d1 != (n_d1 - 1):
                         if i_d1 == 0 and i_d0 ==  0:
@@ -208,11 +208,11 @@ class macro_igemm_2d_global_load_t(macro_base_t):
             for i_d1 in range(ctrl.length_d1):
                 for i_d0 in range(ctrl.length_d0):
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 != 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}+1", 0))
                     else:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_d0 * ctrl.length_d1 + i_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_tmp2()}", 0))
 
                     if i_d0 != (ctrl.length_d0 - 1):
                         if i_d0 == 0 and i_d1 ==  0:
@@ -354,9 +354,9 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         ##assert ctrl.precision == 'fp16', "TO BE supported"
         if ctrl.precision == 'fp32':
-            buffer_load_dw_w = inst_buffer_load_dword_t(ctrl.vector_d1)
+            buffer_load_dword_short = inst_buffer_load_dword_t(ctrl.vector_d1)
         else:
-            buffer_load_dw_w = inst_buffer_load_word_t(self.mc, ctrl.vector_d1)
+            buffer_load_dword_short = inst_buffer_load_short_t(self.mc, ctrl.vector_d1)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
@@ -365,13 +365,13 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                     elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
                     i_dst = i_dst + 1
 
@@ -381,15 +381,15 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             for i_d1 in range(ctrl.length_d1):
                 for i_d0 in range(ctrl.length_d0):
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                     elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
                         i_soffset = index_mapping[i_d0][i_d1]
                         assert i_soffset != 1, "impossible"
-                        self._emit(buffer_load_dw_w(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        self._emit(buffer_load_dword_short(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
         elif ctrl.src_order == 0 and ctrl.dst_order == 1:
             assert False, "un implemented"
         elif ctrl.src_order == 1 and ctrl.dst_order == 1:
