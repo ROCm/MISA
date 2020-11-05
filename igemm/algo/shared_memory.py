@@ -321,8 +321,6 @@ class inst_ds_read2_likely_t(mc_base_t):
             self.issues = self.vec_count
             ## for fp16/bp16
             if self.data_byte == 2:
-                if self.vector == 3:
-                    self.issues = self.vec_count * 2
                 return emit_read2_fallback(sld_offset)
 
             if self.vec_byte == 4:
@@ -504,8 +502,6 @@ class inst_ds_write2_likely_t(mc_base_t):
             self.issues = self.vec_count
             ## for fp16/bp16
             if self.data_byte == 2:
-                if self.vector == 3: 
-                    self.issues = self.vec_count * 2
                 return emit_write2_fallback(sst_offset)
 
             if self.vec_byte == 4:
@@ -596,12 +592,7 @@ class inst_ds_read_b16_t(mc_base_t):
                 self._emit(f"v_lshrrev_b32 v[{vdst}+1], 16, v[{vdst}]")
                 self._emit(f"v_and_b32 v[{vdst}], 0xffff, v[{vdst}]")
             if self.words == 3:
-                self._emit('ds_read_b32 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset)))
-                self._emit(f"v_lshrrev_b32 v[{vdst}+1], 16, v[{vdst}]")
-                self._emit(f"v_and_b32 v[{vdst}], 0xffff, v[{vdst}]")
-                self._emit(f"v_mov_b32 v[{vdst}+2], 0")
-                self._emit('ds_read_u16_d16 v[{}+2], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset)))
-                self.issues = 2
+                assert false, "LDS vector read does not support vector size 3 for fp16/bp16"
             if self.words == 4:
                 self._emit('ds_read_b64 v[{}:{}+1], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset)))
                 self._emit(f"v_lshrrev_b32 v[{vdst}+3], 16, v[{vdst}+1]")
@@ -660,11 +651,7 @@ class inst_ds_write_b16_t(mc_base_t):
                 self._emit('ds_write_b32 v[{}] v[{}] {}'.format(vaddr, vdata, self.get_offset(offset)))
 
             if self.words == 3:
-                self._emit(f"v_lshlrev_b32 v[{vdata}+1], 16, v[{vdata}+1]")
-                self._emit(f"v_or_b32 v[{vdata}], v[{vdata}+1], v[{vdata}]") 
-                self._emit('ds_write_b32 v[{}] v[{}] {}'.format(vaddr, vdata, self.get_offset(offset)))
-                self._emit('ds_write_b32 v[{}] v[{}+1] {}'.format(vaddr, vdata, self.get_offset(offset+4)))
-                issues = 2
+                assert false, "LDS vector write does not support vector size 3 for fp16/bp16"
 
             if self.words == 4:
                 self._emit(f"v_lshlrev_b32 v[{vdata}+1], 16, v[{vdata}+1]")

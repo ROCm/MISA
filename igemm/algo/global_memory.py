@@ -68,11 +68,7 @@ class inst_buffer_load_short_t(mc_base_t):
                 self._emit(f"v_lshrrev_b32 v[{vdst}+1], 16, v[{vdst}]")
                 self._emit(f"v_and_b32 v[{vdst}], 0xffff, v[{vdst}]")
             if self.words == 3:
-                self._emit(f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
-                self._emit(f"v_lshrrev_b32 v[{vdst}+1], 16, v[{vdst}]")
-                self._emit(f"v_and_b32 v[{vdst}], 0xffff, v[{vdst}]")
-                self._emit(f"v_mov_b32 v[{vdst}+2], 0")
-                self._emit(f"buffer_load_short_d16 v[{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}+4")
+                assert false, "vector load does not support vector size 3 with fp16/bp16"
             if self.words == 4:
                 self._emit(f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}")
                 self._emit(f"v_lshrrev_b32 v[{vdst}+3], 16, v[{vdst}+1]")
@@ -238,9 +234,6 @@ class macro_igemm_2d_global_load_t(macro_base_t):
     def get_issues(self):
         ctrl = self.ctrl
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        ## for fp16/bp16 two instructions needed to load three words
-        if ctrl.precision != 'fp32' and ctrl.vector_d1 == 3:
-            n_d1 = n_d1 * 2
         return  ctrl.length_d0 * n_d1
 
 
