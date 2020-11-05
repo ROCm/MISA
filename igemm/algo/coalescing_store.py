@@ -1079,9 +1079,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
 
         if ctrl.data_byte == 2:
-            inst_sst = inst_ds_write_words_t(self.mc, AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+            inst_sst = inst_ds_write_b16_t(self.mc, AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
         else:
-            inst_sst = inst_ds_write_dwords_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+            inst_sst = inst_ds_write_b32_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
         
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         if ctrl.gemm_k_global_split: 

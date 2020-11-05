@@ -285,9 +285,9 @@ class inst_ds_read2_likely_t(mc_base_t):
         v_sld_os = sym_t(v_sld_os)
         def emit_read2_fallback(sld_offset = 0):
             if self.data_byte == 2:
-                sldx1 = inst_ds_read_words_t(self.mc, self.vector)
+                sldx1 = inst_ds_read_b16_t(self.mc, self.vector)
             else:
-                sldx1 = inst_ds_read_dwords_t(self.vector)
+                sldx1 = inst_ds_read_b32_t(self.vector)
             with self._deferred_context():
                 for n in range(self.vec_count):
                     self._emit(sldx1(v_dst(n*self.vector), v_sld_os(), (self.sld_base + sld_offset) + n * self.vec_stride))
@@ -468,9 +468,9 @@ class inst_ds_write2_likely_t(mc_base_t):
             #print(f"vec_byte={self.vec_byte}")
             #print(f"vec_count={self.vec_count}")
             if self.data_byte == 2: 
-               sstx1 = inst_ds_write_words_t(self.mc, self.vector)
+               sstx1 = inst_ds_write_b16_t(self.mc, self.vector)
             else:
-               sstx1 = inst_ds_write_dwords_t(self.vector)
+               sstx1 = inst_ds_write_b32_t(self.vector)
             with self._deferred_context():
                 for n in range(self.vec_count):
                     self._emit(sstx1(v_sst(), v_src(n*self.vector), (self.sst_base + sst_offset) + n * self.vec_stride))
@@ -552,7 +552,7 @@ class inst_ds_read_t(object):
     def get_issues(self):
         return 1
 
-class inst_ds_read_dwords_t(object):
+class inst_ds_read_b32_t(object):
     def __init__(self, dwords):
         self.dwords = dwords
 
@@ -574,7 +574,7 @@ class inst_ds_read_dwords_t(object):
     def get_issues(self):
         return 1
 
-class inst_ds_read_words_t(mc_base_t):
+class inst_ds_read_b16_t(mc_base_t):
     def __init__(self, mc, words):
         mc_base_t.__init__(self, mc)
         self.words = words
@@ -613,7 +613,7 @@ class inst_ds_read_words_t(mc_base_t):
     def get_issues(self):
         return self.issues 
 
-class inst_ds_write_dwords_t(object):
+class inst_ds_write_b32_t(object):
     def __init__(self, dwords):
         self.dwords = dwords
 
@@ -638,7 +638,7 @@ class inst_ds_write_dwords_t(object):
     def get_issues(self):
         return 1
 
-class inst_ds_write_words_t(mc_base_t):
+class inst_ds_write_b16_t(mc_base_t):
     def __init__(self, mc, words):
         mc_base_t.__init__(self, mc)
         self.words = words
@@ -743,9 +743,9 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         issue_cnt += ds_write2.get_issues()
                 else:
                     if ctrl.precision == "fp32":
-                        ds_write = inst_ds_write_dwords_t(ctrl.vector_d1)
+                        ds_write = inst_ds_write_b32_t(ctrl.vector_d1)
                     else:
-                        ds_write = inst_ds_write_words_t(self.mc, ctrl.vector_d1)
+                        ds_write = inst_ds_write_b16_t(self.mc, ctrl.vector_d1)
                     for i_d0 in range(ctrl.length_d0):
                         self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
                         issue_cnt += ds_write.get_issues()
@@ -759,9 +759,9 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     assert ctrl.length_d0 == len(swap_per_row) and ctrl.length_d0 == start_id_per_row
 
                     if ctrl.precision == "fp32":
-                        ds_write = inst_ds_write_dwords_t(ctrl.vector_d1)
+                        ds_write = inst_ds_write_b32_t(ctrl.vector_d1)
                     else:
-                        ds_write = inst_ds_write_words_t(self.mc, ctrl.vector_d1)
+                        ds_write = inst_ds_write_b16_t(self.mc, ctrl.vector_d1)
                     for i_d0 in range(ctrl.length_d0):
                         swap = swap_per_row[i_d0]
                         s_id = start_id_per_row[i_d0]
@@ -774,9 +774,9 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     assert ctrl.v_tmp != None
                     trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                     if ctrl.precision == "fp32":
-                        ds_write = inst_ds_write_dwords_t(ctrl.vector_d1)
+                        ds_write = inst_ds_write_b32_t(ctrl.vector_d1)
                     else:
-                        ds_write = inst_ds_write_words_t(self.mc, ctrl.vector_d1)
+                        ds_write = inst_ds_write_b16_t(self.mc, ctrl.vector_d1)
                     for i_d0 in range(ctrl.length_d0):
                         s_id = trans_seq.get_start_id_per_row()[i_d0]
                         for j in range(len(s_id)):
