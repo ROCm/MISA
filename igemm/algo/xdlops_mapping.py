@@ -450,7 +450,7 @@ class igemm_xdlops_mapping_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k_per_wave() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k())}, v[{v_thread_id}]")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k_per_wave())}, v[{v_thread_id}]")
                 pass
 
             if ctrl.block_n_per_wave() != 1:

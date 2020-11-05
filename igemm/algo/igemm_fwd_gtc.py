@@ -990,9 +990,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and ta_k0 != 1):
                 wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             else:
-                wei_sst_ctrl.vector_d1 = 4 // wei_sst_ctrl.data_bytes
-
-            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
+                wei_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, wei_sst_ctrl.length_d1)
 
             wei_sst_ctrl.stride_d0 = 1
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack

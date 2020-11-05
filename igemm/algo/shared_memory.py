@@ -843,7 +843,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             #print("under development")
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:
-                if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 == 2):
+                if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (2, 4)):
                     ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                     for i_d0 in range(ctrl.length_d0):
                         self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
@@ -854,8 +854,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                print(self.v_src())
-                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                #print(self.v_src())
+                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
                 #print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:

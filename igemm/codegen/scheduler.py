@@ -145,6 +145,7 @@ class simple_interleave_scheduler_t(mc_base_t):
             gmem_mbb_0_ratio = 2 / 3                          # if num global mem bigger than this of mbb_0 length, need add more per interval
             gmem_per_interval = 1
             #while num_gmem * gmem_per_interval >= int(len(mbb_0) * gmem_mbb_0_ratio):
+            print(f"num_gmem={num_gmem}, gmem_per_interval={gmem_per_interval}, len(mbb_0)={len(mbb_0)}")
             while (num_gmem + gmem_per_interval - 1) // gmem_per_interval  >= int(len(mbb_0) * gmem_mbb_0_ratio):
                 gmem_per_interval += 1
 
