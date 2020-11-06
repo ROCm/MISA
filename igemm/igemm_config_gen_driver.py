@@ -33,6 +33,7 @@ import copy
 
 # micro-tile: 
 # 128x128,256x128,256x64,128x256,64x256,128x64,64x128,256x32,32x256,64x64,128x32,32x128,256x16,16x256,128x16,16x128,64x32,32x64,32x32,64x16,16x64,32x16,16x32,64x8,8x64,16x16,64x4,4x64
+'''
 ctrl_xdlops_mapping_fp32_config = [
         ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
@@ -91,6 +92,8 @@ ctrl_xdlops_mapping_fp32_config = [
         ctrl_xdlops_mapping_t( 16 , 16,  16,  16,  1,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32)
         ]
 
+'''
+
 class igemm_config_gen_driver_t():
     def __init__(self, emitter, config_content):
         self.emitter = emitter
@@ -132,7 +135,7 @@ class igemm_config_gen_driver_t():
 
     def get_specific_ctrl_xdlops_mapping_t(self, macro_tile_m, macro_tile_n):
         target_mfma_tiling = list()
-        for t in ctrl_xdlops_mapping_fp32_config:
+        for t in ctrl_xdlops_mapping_fp32:
             if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n:
                 target_mfma_tiling.append(t)
         return target_mfma_tiling
