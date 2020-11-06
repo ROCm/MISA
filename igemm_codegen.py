@@ -78,10 +78,11 @@ def igemm_out_tunable_param(output_file, config_content):
         list_emitter.emit(td_item.output())
     list_emitter.close()
 
-#def igemm_sequence(args, config_content):
-#    kseq = v4r1_dynamic_kernel_sequencer_t(amdgpu_get_gfx906_60cu(),
-#            config_content.get_section('v4r1_dynamic_kernel')[0].to_dict())
-#    kseq()
+def igemm_generate(args, config_content):
+    sec_root = config_content.get_section('codegen')[0]
+    config_file_name = f"igemm_{sec_root['direction']}_gtc_{sec_root['arch']}.config"
+    emitter = mc_emit_to_file_t(config_file_name)
+    igemm_config_gen_driver_t(emitter, config_content)()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -105,7 +106,6 @@ if __name__ == '__main__':
         igemm_host_driver(args, config_content)
         igemm_flatten(args, config_content)
 
-    if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
-        # config_content.dump()
-        # igemm_sequence(args, config_content)
+    if config_content.get_section('codegen')[0]['mode'] in ('gen', 'generate'):
+        igemm_generate(args, config_content)
         pass

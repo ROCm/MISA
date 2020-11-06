@@ -142,7 +142,7 @@ class igemm_codegen_driver_t(mc_base_t):
                     self.mc.emitter = emitter_per_inc_dict[kpi_file_name]
                     if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                         kinfo_per_inc_dict[kpi_file_name].append(kernel.get_kernel_info())
-
+            
             self._emit(';----------------------------------------------------------')
             self._emit('; starting of kernel {}'.format(kernel.name()))
             self._emit(kernel.tunable.serialize())
