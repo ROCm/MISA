@@ -73,6 +73,32 @@ typedef struct {
     int __pack0;
 } __attribute__((packed)) igemm_bwd_gtc_karg_t;
 
+typedef struct {
+    float *p_in;
+    int hi;
+    int wi;
+    int n;
+    int k;
+    int c;
+    int ho;
+    int wo;
+    int stride_h;
+    int stride_w;
+    int dilation_h;
+    int dilation_w;
+    int pad_h;
+    int pad_w;
+    int y;
+    int x;
+    int __pack_0;
+#if USE_MAGIC_DIV
+    uint32_t magic_0;            // denom of wi
+    uint32_t magic_1;            // denom of stride_h
+    uint32_t magic_2;            // denom of stride_w
+    uint32_t shift_pack_0;
+#endif
+} __attribute__((packed)) igemm_upsampling_clear_karg_t;
+
 static void dump_bwd_karg(igemm_bwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
@@ -461,6 +487,9 @@ public:
         karg.dslice_h_left = h_tilda_left;
         karg.dslice_w_left = w_tilda_left;
 
+        bool need_set_zero = false;
+        if(y < stride_h || x < stride_w || dilation_h != 1 || dilation_w != 1)
+            need_set_zero = true;
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
@@ -470,9 +499,64 @@ public:
         //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+        
+        hipFunction_t upsampling_clear_kernel_func;
+        std::string upsampling_clear_kernel_name = std::string("igemm_upsampling_clear_") + tunable->tensor_layout + "_" + tunable->precision;
+        HIP_CALL(
+            hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 
         auto launch_bwd = [&]() -> float{
             float ms_total = .0;
+            if(need_set_zero){
+                igemm_upsampling_clear_karg_t ukarg;
+                ukarg.p_in          = p_in;
+                ukarg.hi            = hi;
+                ukarg.wi            = wi;
+                ukarg.n             = n;
+                ukarg.k             = k;
+                ukarg.c             = c;
+                ukarg.ho            = ho;
+                ukarg.wo            = wo;
+                ukarg.stride_h      = stride_h;
+                ukarg.stride_w      = stride_w;
+                ukarg.dilation_h    = dilation_h;
+                ukarg.dilation_w    = dilation_w;
+                ukarg.pad_h         = pad_h;
+                ukarg.pad_w         = pad_w;
+                ukarg.y             = y;
+                ukarg.x             = x;
+#if USE_MAGIC_DIV
+                magic_div_u32_t mdiv_0 = magic_div_u32_gen(wi);
+                magic_div_u32_t mdiv_1 = magic_div_u32_gen(stride_h);
+                magic_div_u32_t mdiv_2 = magic_div_u32_gen(stride_w);
+                ukarg.magic_0       = mdiv_0.magic;
+                ukarg.magic_1       = mdiv_1.magic;
+                ukarg.magic_2       = mdiv_2.magic;
+                ukarg.shift_pack_0  = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, 0);
+#endif
+                size_t ukarg_size = sizeof(ukarg);
+
+                int block_size = 256;
+                int grid_size = n*c;
+                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
+                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
+                          HIP_LAUNCH_PARAM_END};
+                float ms = .0;
+                hipEvent_t start;
+                hipEvent_t stop;
+                hipEventCreate(&start);
+                hipEventCreate(&stop);
+                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, grid_size * block_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, start, stop));
+                hipEventSynchronize(stop);
+                hipEventElapsedTime(&ms, start, stop);
+                hipEventDestroy(start);
+                hipEventDestroy(stop);
+
+                ms_total += ms;
+            }
+
             for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
                 int i_y_tilda = gemm_id / x_tilda;
                 int i_x_tilda = gemm_id % x_tilda;
