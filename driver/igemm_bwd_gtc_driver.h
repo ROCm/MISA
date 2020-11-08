@@ -494,6 +494,37 @@ public:
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
+        igemm_upsampling_clear_karg_t ukarg;
+        ukarg.p_in          = p_in;
+        ukarg.hi            = hi;
+        ukarg.wi            = wi;
+        ukarg.n             = n;
+        ukarg.k             = k;
+        ukarg.c             = c;
+        ukarg.ho            = ho;
+        ukarg.wo            = wo;
+        ukarg.stride_h      = stride_h;
+        ukarg.stride_w      = stride_w;
+        ukarg.dilation_h    = dilation_h;
+        ukarg.dilation_w    = dilation_w;
+        ukarg.pad_h         = pad_h;
+        ukarg.pad_w         = pad_w;
+        ukarg.y             = y;
+        ukarg.x             = x;
+#if USE_MAGIC_DIV
+        magic_div_u32_t mdiv_0 = magic_div_u32_gen(wi);
+        magic_div_u32_t mdiv_1 = magic_div_u32_gen(stride_h);
+        magic_div_u32_t mdiv_2 = magic_div_u32_gen(stride_w);
+        ukarg.magic_0       = mdiv_0.magic;
+        ukarg.magic_1       = mdiv_1.magic;
+        ukarg.magic_2       = mdiv_2.magic;
+        ukarg.shift_pack_0  = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, 0);
+#endif
+        size_t ukarg_size = sizeof(ukarg);
+
+        int u_block_size = 256;
+        int u_grid_size = n * c;
+
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
@@ -508,36 +539,6 @@ public:
         auto launch_bwd = [&]() -> float{
             float ms_total = .0;
             if(need_set_zero){
-                igemm_upsampling_clear_karg_t ukarg;
-                ukarg.p_in          = p_in;
-                ukarg.hi            = hi;
-                ukarg.wi            = wi;
-                ukarg.n             = n;
-                ukarg.k             = k;
-                ukarg.c             = c;
-                ukarg.ho            = ho;
-                ukarg.wo            = wo;
-                ukarg.stride_h      = stride_h;
-                ukarg.stride_w      = stride_w;
-                ukarg.dilation_h    = dilation_h;
-                ukarg.dilation_w    = dilation_w;
-                ukarg.pad_h         = pad_h;
-                ukarg.pad_w         = pad_w;
-                ukarg.y             = y;
-                ukarg.x             = x;
-#if USE_MAGIC_DIV
-                magic_div_u32_t mdiv_0 = magic_div_u32_gen(wi);
-                magic_div_u32_t mdiv_1 = magic_div_u32_gen(stride_h);
-                magic_div_u32_t mdiv_2 = magic_div_u32_gen(stride_w);
-                ukarg.magic_0       = mdiv_0.magic;
-                ukarg.magic_1       = mdiv_1.magic;
-                ukarg.magic_2       = mdiv_2.magic;
-                ukarg.shift_pack_0  = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, 0);
-#endif
-                size_t ukarg_size = sizeof(ukarg);
-
-                int block_size = 256;
-                int grid_size = n*c;
                 void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
                           HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
                           HIP_LAUNCH_PARAM_END};
@@ -546,8 +547,8 @@ public:
                 hipEvent_t stop;
                 hipEventCreate(&start);
                 hipEventCreate(&stop);
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, grid_size * block_size, 1, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
+                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
+                                            u_block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
                 hipEventSynchronize(stop);
                 hipEventElapsedTime(&ms, start, stop);
@@ -607,6 +608,26 @@ public:
         };
 
         auto launch_bwd_multihead = [&]() -> float{
+            float ms_total = .0;
+            if(need_set_zero){
+                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
+                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
+                          HIP_LAUNCH_PARAM_END};
+                float ms = .0;
+                hipEvent_t start;
+                hipEvent_t stop;
+                hipEventCreate(&start);
+                hipEventCreate(&stop);
+                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
+                                            u_block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, start, stop));
+                hipEventSynchronize(stop);
+                hipEventElapsedTime(&ms, start, stop);
+                hipEventDestroy(start);
+                hipEventDestroy(stop);
+
+                ms_total += ms;
+            }
             // if 1x1 and stride/dilation > 1, will have empty gemms which will waste launch grid. better ignore that case at runtime
             int origin_grid_size = grid_size/num_of_gemm;
             karg.dtile_iy = origin_grid_size;
@@ -642,7 +663,8 @@ public:
             timer.stop();
             ms = timer.duration();
 #endif
-            return ms;
+            ms_total += ms;
+            return ms_total;
         };
 
         auto launch_bwd_driver = [&](){
