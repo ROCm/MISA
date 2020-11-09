@@ -515,24 +515,8 @@ int main(int argc, char **argv) {
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            // for(int i_n = 0; i_n < n; i_n++){
-            //     for(int i_k = 0; i_k < k; i_k++){
-            //         for(int i_ho = 0; i_ho < ho; i_ho++){
-            //             for(int i_wo = 0; i_wo < wo; i_wo++){
-            //                 int data = ((i_n  & 0xff) << 24) |
-            //                             ((i_k  & 0xff) << 16) |
-            //                             ((i_ho & 0xff) << 8) |
-            //                             (i_wo & 0xff);
-            //                 int index = i_n * k * ho * wo + i_k * ho * wo + i_ho * wo + i_wo;
-            //                 memcpy(&host_output[index],&data,4 );
-            //                 // host_output[index] = *(float*)(&data);
-            //             }
-            //         }
-            //     }
-            // }
-
-
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
             // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
             // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
@@ -549,6 +533,7 @@ int main(int argc, char **argv) {
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
+
         igemm_bwd_gtc_t conv_bwd_driver;
         double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
@@ -557,8 +542,8 @@ int main(int argc, char **argv) {
             printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0,
-                                   n * c * hi * wi * sizeof(float)));
+                HIP_CALL(hipMemset(device_input, 0x7f,
+                                   n * c * hi * wi * sizeof(float)));   // 0x7f7f7f7f ~= 7.41e+28, a very large number
             result_t result =
                 conv_bwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
