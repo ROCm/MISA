@@ -590,6 +590,7 @@ class inst_ds_write2_likely_t(mc_base_t):
     def __call__(self, v_sst, v_src, sst_offset = 0):
         if type(v_src) in (tuple , list):
             assert len(v_src) == self.vec_count
+        print(v_src)
         v_src = sym_t(v_src)
         v_sst = sym_t(v_sst)
         def emit_write2_fallback(sst_offset = 0):
@@ -615,8 +616,14 @@ class inst_ds_write2_likely_t(mc_base_t):
 
         def emit_write2_b64(sst_offset = 0):
             with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
+                print(f"self.vec_count={self.vec_count}")
+                print(f"len(v_src.label)={len(v_src.label)}")
+                if len(v_src.label) > 1:
+                    for n in range(self.vec_count // 4):
+                        self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src(4*n)}:{v_src(4*n+1)}], v[{v_src(4*n+2)}:{v_src(4*n+3)}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
+                else:
+                    for n in range(self.vec_count // 2):
+                        self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
             return self._get_deferred()
 
         def emit_write2st64_b64(sst_offset = 0):
@@ -626,6 +633,7 @@ class inst_ds_write2_likely_t(mc_base_t):
             return self._get_deferred()
 
         def likely_emit(sst_offset = 0):
+            print(f"self.vec_byte={self.vec_byte}")
             if self.vec_byte == 4:
                 if self.likely_write2_b32(sst_offset):
                     return emit_write2_b32(sst_offset)
@@ -633,6 +641,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                     return emit_write2st64_b32(sst_offset)
                 return emit_write2_fallback(sst_offset)
             if self.vec_byte == 8:
+                print(f"likely_write2_b64(sst_offset)={self.likely_write2_b64(sst_offset)}")
+                print(f"likely_write2st64_b64(sst_offset)={self.likely_write2st64_b64(sst_offset)}")
                 if self.likely_write2_b64(sst_offset):
                     return emit_write2_b64(sst_offset)
                 if self.likely_write2st64_b64(sst_offset):
@@ -854,8 +864,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                #print(self.v_src())
-                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                print(self.v_src())
+                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
                 #print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
@@ -869,7 +879,34 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 else:
                     # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
                     # assert ctrl.v_tmp != None
-                    assert False, "not support shared mem store, order==1"
+                    # assert False, "not support shared mem store, order==1"
+                    trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1 // ctrl.vector_d1)
+                    if ctrl.vector_d1 == 2:
+                        for i_d0 in range(ctrl.length_d0):
+                            s_id = trans_seq.get_start_id_per_row()[i_d0]
+                            print(f"s_id={s_id}")
+                            for i_d1 in range(num_vector_d1 // 2):
+                                i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                                print(f"i_offset={i_offset}")
+                                self._emit(ds_write2(f'{self.v_sst_os()}',
+                                    (self.v_src(s_id[i_d1 * 2]), self.v_src(s_id[i_d1 * 2 + 1])),
+                                    i_offset))
+                                issue_cnt += ds_write2.get_issues(i_offset)
+                    elif ctrl.vector_d1 == 4:
+                        ds_write2.vec_count = 4
+                        for i_d0 in range(ctrl.length_d0):
+                            s_id = trans_seq.get_start_id_per_row()[i_d0]
+                            print(f"s_id={s_id}")
+                            for i_d1 in range(num_vector_d1 // 2):
+                                i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                                print(f"i_offset={i_offset}")
+                                self._emit(ds_write2(f'{self.v_sst_os()}',
+                                    (self.v_src(s_id[i_d1 * 2] * 4), self.v_src(s_id[i_d1 * 2] * 4 + 1), self.v_src(s_id[i_d1 * 2 + 1] * 4), self.v_src(s_id[i_d1 * 2 + 1] * 4 + 1)),
+                                    i_offset))
+                                issue_cnt += ds_write2.get_issues(i_offset)
+                    else:
+                        assert False, f"not support vector_d1={ctrl.vector_d1} in fp16 and bf16 cases"
+
         else:
             pass
 

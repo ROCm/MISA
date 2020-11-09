@@ -1184,7 +1184,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     self._emit(f";   load from lds")
                     #for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
                     for i_d in range(ctrl.get_num_dword_per_group() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M):
-                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                         sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                         issue_list.append(inst_sld.get_issues(sld_offset))

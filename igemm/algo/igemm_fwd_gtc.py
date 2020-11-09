@@ -959,27 +959,35 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_sst_ctrl.precision  = self.tunable.precision
         in_sst_ctrl.precision   = self.tunable.precision
 
+        print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
-            if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3):
+            print(f"wei_thread_copy_index={wei_thread_copy_index}")
+            print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
+            sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, wei_thread_copy_dims[wei_thread_copy_index[1]])
+            if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3): 
                 # when store into LDS, reorder back. indeed we always wish this pattern, if ndim is 2
-                wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-                wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[1]] // sst_gemm_k_pack
+                wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]] * sst_gemm_k_pack
             else:
                 wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
                 wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
             if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
-                wei_sst_ctrl.vector_d1 = ta_k1
+                wei_sst_ctrl.vector_d1 = ta_k1 * sst_gemm_k_pack
             else:
                 assert False, "to be implement"
                 wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
 
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3):
-                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[1]] * data_byte
-                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
+                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             else:
-                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte
-                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
+
+            print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+            print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
+            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
@@ -2004,6 +2012,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
+            fctrl.lds_gemm_k_pack             = self.tunable.gemm_k_pack
             fctrl.precision                   = self.tunable.precision
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,

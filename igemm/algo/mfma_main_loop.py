@@ -36,6 +36,7 @@ class ctrl_mfma_main_loop_t(object):
         self.cxm                         = None
 
         self.unroll_k                    = 0
+        self.lds_gemm_k_pack             = 0
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
         self.data_type                   = AMDGPU_PRECISION_FP32 # c matrix data type
         self.precision                   = 'fp32'                # a/b matrix data type
@@ -106,6 +107,7 @@ class mfma_main_loop_t(mc_base_t):
         s_kitr = self.ctrl.s_kitr
         s_knum = self.ctrl.s_knum
         cxm = self.ctrl.cxm
+        lds_gemm_k_pack = self.ctrl.lds_gemm_k_pack
 
         data_byte = amdgpu_precision_data_byte(self.ctrl.precision)
 
@@ -119,6 +121,7 @@ class mfma_main_loop_t(mc_base_t):
         assert self.ctrl.unroll_k % cxm.block_k() == 0
         unroll_k = self.ctrl.unroll_k
         k_per_inst = cxm.block_k()
+        print(f"k_per_inst={k_per_inst}")
 
         def mfma_step_mxn(i_repeat_m, i_repeat_n, i_local_buffer_m = 0, i_local_buffer_n = 0):
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m
@@ -606,16 +609,16 @@ class mfma_main_loop_t(mc_base_t):
                             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst) + \
                                                             f" ; load i_k:{1} into local buffer {1}, repeat {0}")
                         else:
-                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{2*i_k+1} into local buffer {1}, repeat {1}")
+                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1) * lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) + f" ; load i_k:{2*i_k+1} into local buffer {1}, repeat {1}")
                         self._emit_empty_line()
 
                         # 2nd fma
                         self._emit(f's_waitcnt lgkmcnt({3 if i_k == 0 else 5})')
                         self._emit(mfma_step_mxn(0, 1, 0, 0))
                         if i_k == 0:
-                            self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst + lds_width_n // 2 ) + \
+                            self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2 ) + \
                                                             f" ; load i_k:{1} into local buffer {1}, repeat {1}")
-                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m * k_per_inst + lds_width_m // 2 ) + \
+                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2 ) + \
                                                             f" ; load i_k:{1} into local buffer {1}, repeat {1}")
                         else:
                             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst) + f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {0}")
@@ -631,7 +634,7 @@ class mfma_main_loop_t(mc_base_t):
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 0, 0))
-                        self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+2) * lds_width_n * k_per_inst + lds_width_n // 2) + \
+                        self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+2) * lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) + \
                                                     f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {1}")
                         self._emit_empty_line()
 
@@ -639,7 +642,7 @@ class mfma_main_loop_t(mc_base_t):
                         # 1st fma
                         self._emit(f's_waitcnt lgkmcnt(5)')
                         self._emit(mfma_step_mxn(0, 0, 1, 1))
-                        self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst + lds_width_m // 2)+ \
+                        self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2)+ \
                                                     f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {1}")
                         self._emit_empty_line()
 
@@ -657,9 +660,9 @@ class mfma_main_loop_t(mc_base_t):
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 1, 1))
-                        self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+3) * lds_width_n * k_per_inst + lds_width_n//2) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {1}")
+                        self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+3) * lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n//2) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {1}")
                         if i_k == unroll_k_sub - 1:
-                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (unroll_k // k_per_inst - 1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
+                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (unroll_k // k_per_inst - 1) * lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
                         self._emit_empty_line()
                 return self._get_deferred()
 
@@ -739,8 +742,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
-            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
+            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_gemm_k_pack * lds_width_n // 2 ))
+            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_gemm_k_pack * lds_width_m // 2 ))
 
 
             mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
@@ -781,8 +784,8 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
-            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
+            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_gemm_k_pack * lds_width_n // 2 ))
+            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_gemm_k_pack * lds_width_m // 2 ))
             self._emit(do_interleave_unroll_k_sub())
 
             self._emit(f"; k iteration : {unroll_k - 2}")
