@@ -616,8 +616,8 @@ class inst_ds_write2_likely_t(mc_base_t):
 
         def emit_write2_b64(sst_offset = 0):
             with self._deferred_context():
-                print(f"self.vec_count={self.vec_count}")
-                print(f"len(v_src.label)={len(v_src.label)}")
+                #print(f"self.vec_count={self.vec_count}")
+                #print(f"len(v_src.label)={len(v_src.label)}")
                 if len(v_src.label) > 1:
                     for n in range(self.vec_count // 4):
                         self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src(4*n)}:{v_src(4*n+1)}], v[{v_src(4*n+2)}:{v_src(4*n+3)}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
@@ -633,7 +633,7 @@ class inst_ds_write2_likely_t(mc_base_t):
             return self._get_deferred()
 
         def likely_emit(sst_offset = 0):
-            print(f"self.vec_byte={self.vec_byte}")
+            #print(f"self.vec_byte={self.vec_byte}")
             if self.vec_byte == 4:
                 if self.likely_write2_b32(sst_offset):
                     return emit_write2_b32(sst_offset)
@@ -641,8 +641,8 @@ class inst_ds_write2_likely_t(mc_base_t):
                     return emit_write2st64_b32(sst_offset)
                 return emit_write2_fallback(sst_offset)
             if self.vec_byte == 8:
-                print(f"likely_write2_b64(sst_offset)={self.likely_write2_b64(sst_offset)}")
-                print(f"likely_write2st64_b64(sst_offset)={self.likely_write2st64_b64(sst_offset)}")
+                #print(f"likely_write2_b64(sst_offset)={self.likely_write2_b64(sst_offset)}")
+                #print(f"likely_write2st64_b64(sst_offset)={self.likely_write2st64_b64(sst_offset)}")
                 if self.likely_write2_b64(sst_offset):
                     return emit_write2_b64(sst_offset)
                 if self.likely_write2st64_b64(sst_offset):
@@ -884,10 +884,10 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     if ctrl.vector_d1 == 2:
                         for i_d0 in range(ctrl.length_d0):
                             s_id = trans_seq.get_start_id_per_row()[i_d0]
-                            print(f"s_id={s_id}")
+                            #print(f"s_id={s_id}")
                             for i_d1 in range(num_vector_d1 // 2):
                                 i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                                print(f"i_offset={i_offset}")
+                                #print(f"i_offset={i_offset}")
                                 self._emit(ds_write2(f'{self.v_sst_os()}',
                                     (self.v_src(s_id[i_d1 * 2]), self.v_src(s_id[i_d1 * 2 + 1])),
                                     i_offset))
@@ -896,10 +896,10 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         ds_write2.vec_count = 4
                         for i_d0 in range(ctrl.length_d0):
                             s_id = trans_seq.get_start_id_per_row()[i_d0]
-                            print(f"s_id={s_id}")
+                            #print(f"s_id={s_id}")
                             for i_d1 in range(num_vector_d1 // 2):
                                 i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                                print(f"i_offset={i_offset}")
+                                #print(f"i_offset={i_offset}")
                                 self._emit(ds_write2(f'{self.v_sst_os()}',
                                     (self.v_src(s_id[i_d1 * 2] * 4), self.v_src(s_id[i_d1 * 2] * 4 + 1), self.v_src(s_id[i_d1 * 2 + 1] * 4), self.v_src(s_id[i_d1 * 2 + 1] * 4 + 1)),
                                     i_offset))

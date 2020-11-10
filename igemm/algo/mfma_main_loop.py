@@ -121,7 +121,7 @@ class mfma_main_loop_t(mc_base_t):
         assert self.ctrl.unroll_k % cxm.block_k() == 0
         unroll_k = self.ctrl.unroll_k
         k_per_inst = cxm.block_k()
-        print(f"k_per_inst={k_per_inst}")
+        #print(f"k_per_inst={k_per_inst}")
 
         def mfma_step_mxn(i_repeat_m, i_repeat_n, i_local_buffer_m = 0, i_local_buffer_n = 0):
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m

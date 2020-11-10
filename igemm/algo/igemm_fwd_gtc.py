@@ -959,11 +959,11 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_sst_ctrl.precision  = self.tunable.precision
         in_sst_ctrl.precision   = self.tunable.precision
 
-        print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
+        #print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
-            print(f"wei_thread_copy_index={wei_thread_copy_index}")
-            print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
+            #print(f"wei_thread_copy_index={wei_thread_copy_index}")
+            #print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
             sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, wei_thread_copy_dims[wei_thread_copy_index[1]])
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3): 
                 # when store into LDS, reorder back. indeed we always wish this pattern, if ndim is 2
@@ -985,9 +985,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
-            print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
-            print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
-            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
+            #print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+            #print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
+            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
@@ -1030,6 +1030,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
+        print(f"in_thread_copy_ndim={self.in_thread_copy_ndim}")
         if self.in_thread_copy_ndim == 2:
             in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
             in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
@@ -1076,8 +1077,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 4
                 in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
-        # print(f"in_sst_ctrl.vector_d1:{in_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
-        # print(f"wei_sst_ctrl, {wei_sst_ctrl.serialize()}")
+        print(f"in_sst_ctrl.length_d0={in_sst_ctrl.length_d0}, in_sst_ctrl.length_d1={in_sst_ctrl.length_d1}")
+        print(f"in_sst_ctrl.stride_d0={in_sst_ctrl.stride_d0}, in_sst_ctrl.stride_d1={in_sst_ctrl.stride_d1}")
+        print(f"in_sst_ctrl.vector_d1={in_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_2d_shared_store_t(self.mc, in_sst_ctrl, inline), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl, inline)
 
@@ -2092,6 +2094,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"L_debug_{self.label_out}_1:")
             self._emit("s_waitcnt lgkmcnt(0)")
             self._emit("s_waitcnt vmcnt(0)")
+            self._emit("s_nop 128")
             self._emit("s_barrier")
             self._emit("s_cmp_lg_u32 s[s_bx], 0")
             #self._emit("s_cbranch_scc1  L_program_end_0")
@@ -2104,6 +2107,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(";v_add_co_u32 v34, vcc, 0, v[v_a0+2]")
             self._emit("v_mov_b32 v[v_tmp], s[s_in_offset]")
             self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0")
+            self._emit("v_accvgpr_read_b32 v[v_c], a[a_c]")
+            self._emit("s_nop 128")
             self._emit_empty_line()
 
             self._emit(f"buffer_store_dword v[v_in_os], v[{v.v_dbg()}], s[{s.s_p_out((0,3))}], s[{s.s_tmp()}] offen")
