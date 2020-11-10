@@ -851,6 +851,12 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                             issue_cnt += ds_write2.get_issues(i_offset)
         elif ctrl.precision in ('fp16', 'bf16'):
             #print("under development")
+            # TODO: don't know how to pass gemm_k_pack
+            if ctrl.precision == 'fp16':
+                lds_gemm_k_pack = 4
+            else:
+                lds_gemm_k_pack = 2
+
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:
                 if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (2, 4)):
@@ -867,11 +873,11 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 print(self.v_src())
                 print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
-                #print(f"ctrl.src_order={ctrl.src_order}")
+                print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
                     for i_d0 in range(ctrl.length_d0):
                         for i_d1 in range(num_vector_d1 // 2):
-                            i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
+                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + i_d0 * data_byte + 2* i_d1 * ctrl.stride_d1 
                             self._emit(ds_write2(f'{self.v_sst_os()}',
                                     f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
                                     i_offset))

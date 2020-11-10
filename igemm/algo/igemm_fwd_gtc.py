@@ -1031,6 +1031,8 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
         print(f"in_thread_copy_ndim={self.in_thread_copy_ndim}")
+        print(f"in_thread_copy_index={in_thread_copy_index}")
+        print(f"in_stride_list={in_stride_list}")
         if self.in_thread_copy_ndim == 2:
             in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
             in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
