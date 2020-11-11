@@ -152,6 +152,7 @@ public:
         return grid_size;
     }
 
+    template <typename gpu_data_type>
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
@@ -171,6 +172,30 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        std::string precision = tunable->precision;
+        //std::cout << std::endl;
+        if(precision == "fp16"){
+            //std::cout << "is same type=" << std::is_same<gpu_data_type, float16>::value << std::endl;
+            if(!std::is_same<gpu_data_type, float16>::value){
+                return false;
+            }
+        }
+        else if(precision == "fp32"){
+            //std::cout << "is same type=" << std::is_same<gpu_data_type, float>::value << std::endl;
+            if(!std::is_same<gpu_data_type, float>::value){
+                return false;
+            }
+        }
+        else if(precision == "bf16"){
+            return false;
+        }
+        else
+        {
+            std::cout << std::endl;
+            std::cout << precision << std::endl;
+            return false;
+        }
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -222,7 +247,7 @@ public:
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
                  hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
                  int warmup, int repeat) {
-        if (!tunable_is_valid(arg, tunable)) {
+        if (!tunable_is_valid<Tgpu>(arg, tunable)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
@@ -367,7 +392,7 @@ public:
         float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
         // debug section of code
-#if 1
+#if 0
         printf("workspace debug \n");
         float* gemmc_host_check = (float* )malloc(block_size * sizeof(float));
         hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);

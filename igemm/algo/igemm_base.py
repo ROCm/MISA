@@ -153,6 +153,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
         self.gemm_n_per_block                   = tunable_dict['gemm_n_per_block']
         self.gemm_k_per_block                   = tunable_dict['gemm_k_per_block']
+        self.precision                          = tunable_dict['precision']
         self.fma_type                           = get_igemm_gtc_fma_type(tunable_dict)
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             self.gemm_m_per_thread              = tunable_dict['gemm_m_per_thread']
@@ -168,7 +169,14 @@ class igemm_gtc_tunable_parameter_t(object):
             self.wave_tile_n                    = tunable_dict['wave_tile_n']
             self.wave_step_n                    = tunable_dict['wave_step_n']
             self.wave_repeat_n                  = tunable_dict['wave_repeat_n']
-            self.wave_tile_k                    = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 1)
+            if self.precision == "fp32":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 1)
+            elif self.precision == "fp16":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 4)
+            elif self.precision == "bf16":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 2)
+            else:
+                self.wave_tile_k                = 1
         else:
             assert False
 
@@ -177,7 +185,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.tensor_b_thread_lengths            = tunable_dict['tensor_b_thread_lengths']     # list!
         self.tensor_b_cluster_lengths           = tunable_dict['tensor_b_cluster_lengths']    # list!
         self.direction                          = tunable_dict['direction']
-        self.precision                          = tunable_dict['precision']
+        #self.precision                          = tunable_dict['precision']
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)

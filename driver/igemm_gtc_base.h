@@ -181,6 +181,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_n_per_block         = sec.at("gemm_n_per_block").get_int();
             tunable.gemm_k_per_block         = sec.at("gemm_k_per_block").get_int();
             tunable.fma_type                 = get_igemm_gtc_fma_type(codegen_sec.at("arch").get_string(), sec);
+            tunable.precision                = sec.at("precision").get_string();
             assert(tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_NA);
             if(tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
                 tunable.gemm_m_per_thread        = sec.at("gemm_m_per_thread").get_int();
@@ -196,14 +197,22 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
                 tunable.wave_tile_n              = sec.at("wave_tile_n").get_int();
                 tunable.wave_step_n              = sec.at("wave_step_n").get_int();
                 tunable.wave_repeat_n            = sec.at("wave_repeat_n").get_int();
-                tunable.wave_tile_k              = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 1;
+                if(tunable.precision == "fp32")
+                    tunable.wave_tile_k          = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 1;
+                else if(tunable.precision == "fp16")
+                    tunable.wave_tile_k          = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 4;
+                else if(tunable.precision == "bf16")
+                    tunable.wave_tile_k          = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 2;
+                else
+                    tunable.wave_tile_k          = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 1;
+                
             }
             tunable.tensor_a_thread_lengths  = sec.at("tensor_a_thread_lengths").get_list_int();
             tunable.tensor_a_cluster_lengths = sec.at("tensor_a_cluster_lengths").get_list_int();
             tunable.tensor_b_thread_lengths  = sec.at("tensor_b_thread_lengths").get_list_int();
             tunable.tensor_b_cluster_lengths = sec.at("tensor_b_cluster_lengths").get_list_int();
             tunable.direction                = sec.at("direction").get_string();
-            tunable.precision                = sec.at("precision").get_string();
+            //tunable.precision                = sec.at("precision").get_string();
             tunable.nxb                      = sec.at("nxb").get_int();
             tunable.nxe                      = sec.at("nxe").get_int();
             tunable.gemm_m_unmerge_cluster   = sec.count("gemm_m_unmerge_cluster") > 0 ? sec.at("gemm_m_unmerge_cluster").get_int() : 0;
