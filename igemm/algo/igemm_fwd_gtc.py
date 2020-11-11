@@ -2040,6 +2040,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
+                print(f"data_byte={data_byte}, ctrl_xdlops_mapping.wave_tile_m={ctrl_xdlops_mapping.wave_tile_m}")
                 fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:

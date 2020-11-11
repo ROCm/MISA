@@ -255,6 +255,7 @@ class mfma_main_loop_t(mc_base_t):
                     for i_k in range(unroll_k_sub):
                         self._emit(f's_waitcnt lgkmcnt(2)')
                         self._emit(mfma_step_mxn(0, 0, 0, 0))
+                        print(f"lds_base_m={lds_base_m}, k_per_inst={k_per_inst}, lds_width_m={lds_width_m}")
                         self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m  + (2*i_k+2) * k_per_inst *  lds_width_m))
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n  + (2*i_k+2) * k_per_inst * lds_width_n))
 

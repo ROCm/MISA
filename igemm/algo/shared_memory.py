@@ -290,6 +290,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         def emit_read2_b32(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
+                    print(f"sld_base={self.sld_base}, sld_offset={sld_offset}")
                     self._emit(f'ds_read2_b32 v[{v_dst((2*n, 2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sld_base + sld_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
             return self._get_deferred()
 
