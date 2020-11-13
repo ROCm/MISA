@@ -987,14 +987,18 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
-            #print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
-            #print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
-            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
-
         elif self.wei_thread_copy_ndim == 1:
-            wei_sst_ctrl.length_d0 = 1
-            wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            #print(f"wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+            #print(f"wei_thread_copy_index={wei_thread_copy_index}")
+            if wei_thread_copy_index[0] in (2, 3): 
+                wei_sst_ctrl.length_d0 = 1
+                wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                wei_sst_ctrl.stride_d0 = 1
+                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            else:
+                wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                wei_sst_ctrl.length_d1 = 1
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+                wei_sst_ctrl.stride_d1 = 1
 
             if (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 and ta_k1 != 1) or \
                 (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and ta_k0 != 1):
@@ -1002,8 +1006,6 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, wei_sst_ctrl.length_d1)
 
-            wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
@@ -1030,6 +1032,11 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.length_d1 = 4
                 wei_sst_ctrl.vector_d1 = 4
                 wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
+
+        # check wei sst ctrl config
+        #print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+        #print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
+        #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
         #print(f"in_thread_copy_ndim={self.in_thread_copy_ndim}")

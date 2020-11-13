@@ -866,7 +866,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             if ctrl.length_d1 == ctrl.vector_d1:
                 #print(self.v_src())
                 #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
-                if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (1, 2, 4)):
+                if ctrl.src_order == 0:
                     #print(self.v_src())
                     #print(f"length_d0={ctrl.length_d0}")
                     ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
@@ -875,7 +875,11 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
                         issue_cnt += ds_write.get_issues()
                 else:
-                    assert False, "not support shared mem store"
+                    ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                    for i_d0 in range(ctrl.length_d0):
+                        i_offset = i_d0 * ctrl.stride_d0
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
+                        issue_cnt += ds_write.get_issues()
             else:
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
