@@ -891,8 +891,9 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             assert False, "not support data type"
 
-        ctrl_wei_gld.vector_d1 = utility_gcd(ta_c1e, 4) if ta_c1e != 1 else 1
-        ctrl_in_gld.vector_d1 = utility_gcd(tb_n1b, 4) if tb_n1b != 1 else 1
+        # one vgpr can hold one fp32 pixel or 2 fp16/bf16 pixel: 4 // data_bytes
+        ctrl_wei_gld.vector_d1 = utility_gcd(ta_c1e, 4 * (4 // ctrl_wei_gld.data_bytes)) if ta_c1e != 1 else 1
+        ctrl_in_gld.vector_d1 = utility_gcd(tb_n1b, 4 * (4 // ctrl_wei_gld.data_bytes)) if tb_n1b != 1 else 1
 
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
@@ -963,8 +964,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         #print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
-            print(f"wei_thread_copy_index={wei_thread_copy_index}")
-            print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
+            #print(f"wei_thread_copy_index={wei_thread_copy_index}")
+            #print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
             sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, wei_thread_copy_dims[wei_thread_copy_index[1]])
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3): 
                 # when store into LDS, reorder back. indeed we always wish this pattern, if ndim is 2
@@ -986,9 +987,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
-            print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
-            print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
-            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
+            #print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+            #print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
+            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1

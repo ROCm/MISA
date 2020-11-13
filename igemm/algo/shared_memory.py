@@ -629,8 +629,12 @@ class inst_ds_write2_likely_t(mc_base_t):
 
         def emit_write2st64_b64(sst_offset = 0):
             with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2st64_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+                if len(v_src.label) > 1:
+                    for n in range(self.vec_count // 4):
+                        self._emit(f'ds_write2st64_b64 v[{v_sst()}], v[{v_src(4*n)}:{v_src(4*n+1)}], v[{v_src(4*n+2)}:{v_src(4*n+3)}], offset0:{((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+                else:
+                    for n in range(self.vec_count // 2):
+                        self._emit(f'ds_write2st64_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
             return self._get_deferred()
 
         def likely_emit(sst_offset = 0):

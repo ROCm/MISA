@@ -9,3 +9,4 @@ driver/xdnn_conv.h
 *_bak
 *.txt
 config/igemm_fwd_gtc_gfx908_fp16_fail.config
+script/gtc_conv_model_fp16_fail.sh
