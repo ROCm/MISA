@@ -290,7 +290,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         def emit_read2_b32(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    print(f"sld_base={self.sld_base}, sld_offset={sld_offset}")
+                    #print(f"sld_base={self.sld_base}, sld_offset={sld_offset}")
                     self._emit(f'ds_read2_b32 v[{v_dst((2*n, 2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sld_base + sld_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
             return self._get_deferred()
 
@@ -591,7 +591,7 @@ class inst_ds_write2_likely_t(mc_base_t):
     def __call__(self, v_sst, v_src, sst_offset = 0):
         if type(v_src) in (tuple , list):
             assert len(v_src) == self.vec_count
-        print(v_src)
+        #print(v_src)
         v_src = sym_t(v_src)
         v_sst = sym_t(v_sst)
         def emit_write2_fallback(sst_offset = 0):
@@ -860,10 +860,15 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
 
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:
+                #print(self.v_src())
+                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (2, 4)):
+                    #print(self.v_src())
+                    #print(f"length_d0={ctrl.length_d0}")
                     ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                     for i_d0 in range(ctrl.length_d0):
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+                        i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
                         issue_cnt += ds_write.get_issues()
                 else:
                     assert False, "not support shared mem store"
@@ -871,14 +876,14 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                print(self.v_src())
-                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                #print(self.v_src())
+                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
-                print(f"ctrl.src_order={ctrl.src_order}")
+                #print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
                     for i_d0 in range(ctrl.length_d0):
                         for i_d1 in range(num_vector_d1 // 2):
-                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + i_d0 * data_byte + 2* i_d1 * ctrl.stride_d1 
+                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1 
                             self._emit(ds_write2(f'{self.v_sst_os()}',
                                     f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
                                     i_offset))
@@ -908,7 +913,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                                 i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
                                 #print(f"i_offset={i_offset}")
                                 self._emit(ds_write2(f'{self.v_sst_os()}',
-                                    (self.v_src(s_id[i_d1 * 2] * 4), self.v_src(s_id[i_d1 * 2] * 4 + 1), self.v_src(s_id[i_d1 * 2 + 1] * 4), self.v_src(s_id[i_d1 * 2 + 1] * 4 + 1)),
+                                    (self.v_src(s_id[i_d1 * 2] * 2), self.v_src(s_id[i_d1 * 2] * 2 + 1), self.v_src(s_id[i_d1 * 2 + 1] * 2), self.v_src(s_id[i_d1 * 2 + 1] * 2 + 1)),
                                     i_offset))
                                 issue_cnt += ds_write2.get_issues(i_offset)
                     else:

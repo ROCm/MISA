@@ -251,11 +251,9 @@ class mfma_main_loop_t(mc_base_t):
             def do_interleave_unroll_k_sub():
                 with self._deferred_context():
                     unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
-                    #print(f"unroll_k_sub={unroll_k_sub}")
                     for i_k in range(unroll_k_sub):
                         self._emit(f's_waitcnt lgkmcnt(2)')
                         self._emit(mfma_step_mxn(0, 0, 0, 0))
-                        print(f"lds_base_m={lds_base_m}, k_per_inst={k_per_inst}, lds_width_m={lds_width_m}")
                         self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m  + (2*i_k+2) * k_per_inst *  lds_width_m))
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n  + (2*i_k+2) * k_per_inst * lds_width_n))
 
@@ -327,7 +325,7 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + k_per_inst * lds_width_n))
 
 
-            if len(do_interleave_unroll_k_sub()) != 0:
+            if ((unroll_k // k_per_inst) // 2 - 1) != 0:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
                             create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
                 se_sub = create_scheduler(self.mc, mbb_list_sub)

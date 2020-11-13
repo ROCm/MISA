@@ -141,7 +141,7 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
+        assert ctrl.precision in ('fp32', 'fp16'), "TO BE supported"
         buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1 * ctrl.data_bytes)
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
@@ -322,16 +322,17 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
             i_soffset = 0
+            num_vgpr_per_vector = ctrl.vector_d1 // (4 // ctrl.data_bytes)
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                     elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
                     i_dst = i_dst + 1
 

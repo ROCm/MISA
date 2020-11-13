@@ -712,6 +712,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 v_c_needed           = v_c_needed if v_c_needed > 2 else 2  # let at least 2
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
+            #wei_data_per_vgpr        = 1 #if outer.tunable.precision == "fp32" else 2
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
             self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
@@ -962,8 +963,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         #print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
-            #print(f"wei_thread_copy_index={wei_thread_copy_index}")
-            #print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
+            print(f"wei_thread_copy_index={wei_thread_copy_index}")
+            print(f"wei_thread_copy_dims={wei_thread_copy_dims}")
             sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, wei_thread_copy_dims[wei_thread_copy_index[1]])
             if wei_thread_copy_index[0] in (0, 1) and wei_thread_copy_index[1] in (2, 3): 
                 # when store into LDS, reorder back. indeed we always wish this pattern, if ndim is 2
@@ -985,9 +986,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
-            #print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
-            #print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
-            #print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
+            print(f"wei_sst_ctrl.length_d0={wei_sst_ctrl.length_d0}, wei_sst_ctrl.length_d1={wei_sst_ctrl.length_d1}")
+            print(f"wei_sst_ctrl.stride_d0={wei_sst_ctrl.stride_d0}, wei_sst_ctrl.stride_d1={wei_sst_ctrl.stride_d1}")
+            print(f"wei_sst_ctrl.vector_d1={wei_sst_ctrl.vector_d1}")
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
@@ -1030,9 +1031,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
-        print(f"in_thread_copy_ndim={self.in_thread_copy_ndim}")
-        print(f"in_thread_copy_index={in_thread_copy_index}")
-        print(f"in_stride_list={in_stride_list}")
+        #print(f"in_thread_copy_ndim={self.in_thread_copy_ndim}")
+        #print(f"in_thread_copy_index={in_thread_copy_index}")
+        #print(f"in_stride_list={in_stride_list}")
         if self.in_thread_copy_ndim == 2:
             in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
             in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
@@ -1045,15 +1046,32 @@ class igemm_fwd_gtc_t(mc_base_t):
             in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
             #in_sst_ctrl.stride_d1 = 1
         elif self.in_thread_copy_ndim == 1:
-            in_sst_ctrl.length_d0 = 1
-            in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
+            # if the only thread length copy is c1e, we need to store them to lds vertically;
+            """
+            case gemm_k_pack = 1
+            vpgrs                     =>            lds
+            v0  v1  v2  v3                   v0 
+                            ===========>     v1 
+                                             v2
+                                             v3
+            """
+            if in_thread_copy_index[0] in (2, 3): 
+                in_sst_ctrl.length_d0 = 1
+                in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
+                in_sst_ctrl.stride_d0 = 1
+                in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            else:
+                in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
+                in_sst_ctrl.length_d1 = 1
+                in_sst_ctrl.stride_d0 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+                in_sst_ctrl.stride_d1 = 1
+
             if (gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and tb_n1b != 1) or \
                 (gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 and tb_n0 != 1):
                 in_sst_ctrl.vector_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
             else:
                 in_sst_ctrl.vector_d1 = 1
-            in_sst_ctrl.stride_d0 = 1
-            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            
             if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
@@ -1062,6 +1080,8 @@ class igemm_fwd_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 4
                 in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
         else:
+            if data_byte != 4:
+                print("fp16 is not right for this branch")
             in_sst_ctrl.length_d0 = 1
             in_sst_ctrl.length_d1 = in_thread_copy_dims[-1]
             if (gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and tb_n1b != 1) or \
@@ -1079,9 +1099,9 @@ class igemm_fwd_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 4
                 in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
 
-        print(f"in_sst_ctrl.length_d0={in_sst_ctrl.length_d0}, in_sst_ctrl.length_d1={in_sst_ctrl.length_d1}")
-        print(f"in_sst_ctrl.stride_d0={in_sst_ctrl.stride_d0}, in_sst_ctrl.stride_d1={in_sst_ctrl.stride_d1}")
-        print(f"in_sst_ctrl.vector_d1={in_sst_ctrl.vector_d1}")
+        #print(f"in_sst_ctrl.length_d0={in_sst_ctrl.length_d0}, in_sst_ctrl.length_d1={in_sst_ctrl.length_d1}")
+        #print(f"in_sst_ctrl.stride_d0={in_sst_ctrl.stride_d0}, in_sst_ctrl.stride_d1={in_sst_ctrl.stride_d1}")
+        #print(f"in_sst_ctrl.vector_d1={in_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_2d_shared_store_t(self.mc, in_sst_ctrl, inline), macro_igemm_2d_shared_store_t(self.mc, wei_sst_ctrl, inline)
 
@@ -2040,7 +2060,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                print(f"data_byte={data_byte}, ctrl_xdlops_mapping.wave_tile_m={ctrl_xdlops_mapping.wave_tile_m}")
+                #print(f"data_byte={data_byte}, ctrl_xdlops_mapping.wave_tile_m={ctrl_xdlops_mapping.wave_tile_m}")
                 fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
