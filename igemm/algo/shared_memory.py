@@ -576,7 +576,7 @@ class inst_ds_write2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
-            if ((self.sst_base + sst_offset) // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
+            if ((self.sst_base + sst_offset) // 8) + (self.vec_stride // 8) * (self.vec_count // 2 - 1) < 256:
                 return True
         return False
     def likely_write2st64_b64(self, sst_offset = 0):
@@ -585,7 +585,7 @@ class inst_ds_write2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sst_base + sst_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
-            if ((self.sst_base + sst_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
+            if ((self.sst_base + sst_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count // 2 - 1) < 256:
                 return True
         return False
     def __call__(self, v_sst, v_src, sst_offset = 0):
