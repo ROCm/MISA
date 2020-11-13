@@ -866,7 +866,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             if ctrl.length_d1 == ctrl.vector_d1:
                 #print(self.v_src())
                 #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
-                if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (2, 4)):
+                if ctrl.src_order == 0 or (ctrl.src_order == 1 and ctrl.vector_d1 in (1, 2, 4)):
                     #print(self.v_src())
                     #print(f"length_d0={ctrl.length_d0}")
                     ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)

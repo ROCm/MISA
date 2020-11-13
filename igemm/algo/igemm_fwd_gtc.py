@@ -1081,8 +1081,8 @@ class igemm_fwd_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 4
                 in_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
         else:
-            if data_byte != 4:
-                print("fp16 is not right for this branch")
+            #if data_byte != 4:
+            #    print("fp16 is not right for this branch")
             in_sst_ctrl.length_d0 = 1
             in_sst_ctrl.length_d1 = in_thread_copy_dims[-1]
             if (gemm_n_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and tb_n1b != 1) or \
