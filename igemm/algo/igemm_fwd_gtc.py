@@ -989,21 +989,30 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         elif self.wei_thread_copy_ndim == 1:
             #print(f"wei_thread_copy_index={wei_thread_copy_index}")
-            if wei_thread_copy_index[0] in (2, 3): 
+            if wei_thread_copy_index[0] in (2, 3):   ## the only copy dim is c0/c1e
                 wei_sst_ctrl.length_d0 = 1
                 wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
                 wei_sst_ctrl.stride_d0 = 1
                 wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-            else:
-                wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-                wei_sst_ctrl.length_d1 = 1
-                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-                wei_sst_ctrl.stride_d1 = 1
+            else:                                    ## the only copy dim is k0/k1
+                if self.tunable.gemm_k_pack > 1:
+                    wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                    wei_sst_ctrl.length_d1 = 1
+                    wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+                    wei_sst_ctrl.stride_d1 = 1
+                else:
+                    wei_sst_ctrl.length_d0 = 1
+                    wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                    wei_sst_ctrl.stride_d0 = 1
+                    wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
 
             if (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 and ta_k1 != 1) or \
-                (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and ta_k0 != 1):
-                wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            else:
+                (gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and ta_k0 != 1):       ## the only copy dim is k0/k1
+                if self.tunable.gemm_k_pack == 1:
+                    wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[0]],4)
+                else:
+                    wei_sst_ctrl.vector_d1 = 1
+            else:                                                                                  ## the only copy dim is c0/c1e
                 wei_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, wei_sst_ctrl.length_d1)
 
             if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
