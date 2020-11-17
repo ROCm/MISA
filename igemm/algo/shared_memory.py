@@ -712,6 +712,7 @@ class ctrl_2d_shared_store_t(object):
         self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0  # 0-d0,d1, 1-d1,d0
+        self.need_transpose = 1
         self.v_tmp = None   # used when order is 1 and consider shuffle
 
     def serialize(self):
@@ -769,7 +770,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         issue_cnt += ds_write.get_issues()
             else:
                 #if ctrl.length_d1 == 2 and ctrl.length_d0 in (2, 4, 6, 8):
-                if ctrl.length_d1 == 2 and ctrl.length_d0 == 2:
+                if ctrl.length_d1 == 2 and ctrl.length_d0 == 2 and ctrl.need_transpose == 1:
                     swap_sequencer = simple_swap_sequencer_t(ctrl.length_d0, ctrl.length_d1)
                     swap_per_row = swap_sequencer.get_swap_per_row()
                     start_id_per_row = swap_sequencer.get_start_id_per_row()
@@ -786,15 +787,21 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         issue_cnt += ds_write.get_issues()
 
                 else:
-                    assert ctrl.v_tmp != None
-                    trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
-                    ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
-                    for i_d0 in range(ctrl.length_d0):
-                        s_id = trans_seq.get_start_id_per_row()[i_d0]
-                        for j in range(len(s_id)):
-                            self._emit(f"v_mov_b32 v[{ctrl.v_tmp(j)}], v[{self.v_src()}+{s_id[j]}]")
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_d0 * ctrl.stride_d0))
-                        issue_cnt += ds_write.get_issues()
+                    if ctrl.need_transpose == 1:
+                        assert ctrl.v_tmp != None
+                        trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1)
+                        ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                        for i_d0 in range(ctrl.length_d0):
+                            s_id = trans_seq.get_start_id_per_row()[i_d0]
+                            for j in range(len(s_id)):
+                                self._emit(f"v_mov_b32 v[{ctrl.v_tmp(j)}], v[{self.v_src()}+{s_id[j]}]")
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_d0 * ctrl.stride_d0))
+                                issue_cnt += ds_write.get_issues()
+                    else:
+                        ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                        for i_d0 in range(ctrl.length_d0):
+                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_d0 * ctrl.stride_d0))
+                            issue_cnt += ds_write.get_issues()
         else:
             assert ctrl.length_d1 % ctrl.vector_d1 == 0
             assert ctrl.stride_d1 != 1
