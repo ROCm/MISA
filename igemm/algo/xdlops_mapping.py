@@ -379,7 +379,7 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 16 , 16,  16,  16,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16)]
 
-def get_ctrl_xdlops_mapping(macro_tile_m, macro_tile_n, precision, waves = 4):
+def get_ctrl_xdlops_mapping(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, precision, waves = 4):
     if type(precision) is str:
         precision = amdgpu_string_to_precision(precision)
     ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
@@ -394,7 +394,7 @@ def get_ctrl_xdlops_mapping(macro_tile_m, macro_tile_n, precision, waves = 4):
 
     target_mfma_tiling = list()
     for t in ctrl_xdlops_mapping:
-        if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and t.waves == waves:
+        if t.macro_tile_m == macro_tile_m and t.macro_tile_n == macro_tile_n and t.wave_tile_m == wave_tile_m and t.wave_tile_n == wave_tile_n and t.waves == waves:
             target_mfma_tiling.append(t)
 
     assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, waves:{waves}"
