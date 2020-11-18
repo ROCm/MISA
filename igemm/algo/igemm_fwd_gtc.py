@@ -1152,6 +1152,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         # get the symbol object that load 2d may use
         s = self.sgpr
         s_dummy = sym_t("s_dummy")
+        s_immed = sym_t("s_immed")
         wei_thread_copy_index, in_thread_copy_index  = self.get_thread_copy_index()
 
         # [tb_c0, tb_c1e, tb_n0, tb_n1b]
@@ -1164,7 +1165,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_stride_gprs = [s.s_wei_stride_k0 if ta_k0 != 1 else s_dummy,
                     s.s_wei_stride_k if self.tunable.nxe != 0 else s.s_c,
                     s.s_wei_stride_c1e if ta_c0 != 1 else s_dummy,
-                    s_dummy]
+                    s_immed]
         
         # print(f" ___ wei_thread_copy_index:{wei_thread_copy_index}")
 
@@ -1357,6 +1358,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
         s_dummy = sym_t("s_dummy")
+        s_immed = sym_t("s_immed")
 
         global_load_ta_order = IGEMM_FWD_GTC_GLOBAL_LOAD_TA_ORDER_M_K   # for fwd, it seems always K dimension first is better
 
@@ -1691,7 +1693,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             if s_wei_stride_d0 != s_dummy:
                 #self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
                 self._emit(self.try_shift_stride(s_wei_stride_d0, igemm_log2(data_byte)))
-        if s_wei_stride_d1 != s_dummy:
+        if s_wei_stride_d1 not in (s_dummy, s_immed):
             #self._emit(f"s_lshl_b32 s[{s_wei_stride_d1()}], s[{s_wei_stride_d1()}], {igemm_log2(data_byte)}")
             self._emit(self.try_shift_stride(s_wei_stride_d1, igemm_log2(data_byte)))
         self._emit_empty_line()

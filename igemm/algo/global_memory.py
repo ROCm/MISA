@@ -328,7 +328,10 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                     if i_d0 == 0 and i_d1 == 0:
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        if self.s_stride_d1() != "s_immed":
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        else:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", 0, ctrl.vector_d1 * ctrl.data_bytes))
                     elif i_d0 == 1 and i_d1 == 0:
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
