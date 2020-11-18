@@ -358,6 +358,7 @@ class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
         self.last_sld_offset = 0
 
     def any_read2_likely(self, sld_offset = 0):
+        print(f"vec_count={self.ds_read2_likely.vec_count}, vec_byte={self.ds_read2_likely.vec_byte}, vec_stride={self.ds_read2_likely.vec_stride}, sld_offset={sld_offset}")
         return self.ds_read2_likely.likely_read2_b32(sld_offset) or \
                 self.ds_read2_likely.likely_read2st64_b32(sld_offset) or \
                 self.ds_read2_likely.likely_read2_b64(sld_offset) or \
