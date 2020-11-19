@@ -158,10 +158,12 @@ class args_t {
 };
 
 static inline args_t create_conv_args(int argc, char *argv[]) {
-    const std::string base("conv");
-    if (argc >= 2 && argv[1] != base) {
-        printf("not proper base arg name");
-        exit(1);
+    if(argc >= 2){
+        const std::string base(argv[1]);
+        if(base.substr(0, 4) != "conv"){
+            printf("not proper base arg name");
+            exit(1);
+        }
     }
 
     args_t args;

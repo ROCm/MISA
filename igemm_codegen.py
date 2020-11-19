@@ -85,10 +85,19 @@ def igemm_out_tunable_param(output_file, config_content):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", help="config file as input")
+    parser.add_argument("config_file", nargs='?', help="config file as input")
+    parser.add_argument("--reference", help="generate reference kernel", action="store_true")
+    parser.add_argument("--arch", help="gpu arch used to compile code. currently only used in reference kernel", default="gfx908")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
     parser.add_argument("-output", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
     args = parser.parse_args()
+
+    if args.reference:
+        if os.path.exists(args.dir):
+            shutil.rmtree(args.dir)
+        os.mkdir(args.dir)
+        reference_codegen(args)
+        sys.exit(0) 
 
     config_parser = config_parser_t(args.config_file)
     #print(os.getcwd())

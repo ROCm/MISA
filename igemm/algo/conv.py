@@ -28,6 +28,8 @@
 CONV_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 CONV_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
 CONV_TENSOR_LAYOUT_CNHW = ((1 << 4) | 2)
+CONV_TENSOR_LAYOUT_NCDHW = ((1 << 4) | 7)
+
 
 CONV_DIRECTION_FWD = 0      # forward
 CONV_DIRECTION_BWD = 1      # backward data
@@ -58,6 +60,8 @@ def conv_string_to_tensor_layout(tensor_layout):
         return CONV_TENSOR_LAYOUT_NHWC
     if tensor_layout == 'cnhw':
         return CONV_TENSOR_LAYOUT_CNHW
+    if tensor_layout == 'ncdhw':
+        return CONV_TENSOR_LAYOUT_NCDHW
     assert False
 
 def conv_tensor_layout_to_string(tensor_layout):
