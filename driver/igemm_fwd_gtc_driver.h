@@ -217,7 +217,7 @@ public:
             return false;
 
         if(gemm_k % gemm_k_per_block != 0)
-            return false;
+            ;//return false;
 
         if(gemm_n_per_block % tunable->nxb != 0){
             // printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -392,7 +392,7 @@ public:
         float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
         // debug section of code
-#if 1
+#if 0
         printf("workspace debug \n");
         float* gemmc_host_check = (float* )malloc(block_size * sizeof(float));
         hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);

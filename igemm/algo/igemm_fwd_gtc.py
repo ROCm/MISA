@@ -61,6 +61,7 @@ class macro_igemm_fwd_gtc_set_flag_hw(macro_base_t):
         self.declare_arg("s_h")
         self.declare_arg("s_w")
         self.declare_arg("s_c")
+        self.padding_check = True
     def name(self):
         return '.v_set_flag_hw'
 
@@ -69,8 +70,9 @@ class macro_igemm_fwd_gtc_set_flag_hw(macro_base_t):
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, 1, vcc")
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_w()}], v[{self.v_iw()}]")
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
-        #self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")
-        #self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
+        if self.padding_check == True:
+            self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")
+            self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
 
 
 class macro_igemm_fwd_gtc_in_update_hw_t(macro_base_t):
@@ -1914,7 +1916,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit(f"v_add3_u32 v[{v.v_out_os()}], v[{v.v_out_os()}], v[{v.v_tmp(1)}], v[{v.v_out_iwo()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_out_os()}], {igemm_log2(data_byte)}, v[{v.v_out_os()}]")
         if self.tunable.nxe != 0:
-            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), v.v_move_slice_k_ic1(), s.s_hi(), s.s_wi(), s.s_c()))
+            m_set_flag_hw.padding_check = False
+            self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), v.v_move_slice_k_ic1(), s.s_ho(), s.s_wo(), s.s_c()))
 
         self._emit(f"; move slice stride")
         assert na_c0 * na_c1e == self.tunable.gemm_k_per_block and nb_c0 * nb_c1e == self.tunable.gemm_k_per_block
