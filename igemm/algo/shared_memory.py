@@ -558,8 +558,9 @@ class inst_ds_write2_likely_t(mc_base_t):
             return False
         if self.vec_count % 2 != 0:
             return False
+        # print(f"sst_base={self.sst_base}, sst_offset={sst_offset}, vec_stride={self.vec_stride}, vec_count={self.vec_count}")
         if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
+            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count // 2 - 1) < 256:
                 return True
         return False
     def likely_write2st64_b32(self, sst_offset = 0):
@@ -567,8 +568,9 @@ class inst_ds_write2_likely_t(mc_base_t):
             return False
         if self.vec_count % 2 != 0:
             return False
+        # print(f"sst_base={self.sst_base}, sst_offset={sst_offset}, vec_stride={self.vec_stride}, vec_count={self.vec_count}")
         if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
-            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
+            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count // 2 - 1) < 256:
                 return True
         return False
     def likely_write2_b64(self, sst_offset = 0):
@@ -640,6 +642,8 @@ class inst_ds_write2_likely_t(mc_base_t):
 
         def likely_emit(sst_offset = 0):
             #print(f"self.vec_byte={self.vec_byte}")
+            #print(f"self.likely_write2_b32(sst_offset)={self.likely_write2_b32(sst_offset)}")
+            #print(f"self.likely_write2st64_b32(sst_offset)={self.likely_write2st64_b32(sst_offset)}")
             if self.vec_byte == 4:
                 if self.likely_write2_b32(sst_offset):
                     return emit_write2_b32(sst_offset)
@@ -865,8 +869,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
 
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:
-                print(self.v_src())
-                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                #print(self.v_src())
+                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 if ctrl.src_order == 0:
                     #print(self.v_src())
                     #print(f"length_d0={ctrl.length_d0}")

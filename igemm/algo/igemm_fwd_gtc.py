@@ -57,8 +57,10 @@ class macro_igemm_fwd_gtc_set_flag_hw(macro_base_t):
         self.declare_arg("v_flag")
         self.declare_arg("v_ih")
         self.declare_arg("v_iw")
+        self.declare_arg("v_move_slice_k_ic1")
         self.declare_arg("s_h")
         self.declare_arg("s_w")
+        self.declare_arg("s_c")
     def name(self):
         return '.v_set_flag_hw'
 
@@ -67,6 +69,8 @@ class macro_igemm_fwd_gtc_set_flag_hw(macro_base_t):
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, 1, vcc")
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_w()}], v[{self.v_iw()}]")
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
+        #self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")
+        #self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
 
 
 class macro_igemm_fwd_gtc_in_update_hw_t(macro_base_t):
@@ -195,10 +199,10 @@ class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(macro_base_t):
         self._emit(f"v_add_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_move_slice_k_c1()}], v[{self.v_move_slice_k_ic1()}]")
         self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c1()}], v[{self.v_in_os_base()}]")
         # self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k_c1()}], v[{self.v_wei_os_base()}]")
-        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
-        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
-        self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c0_c1_diff()}], v[{self.v_in_os_base()}]")
-        self._emit(f"s_mov_b64 exec, -1")
+        #self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
+        #self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
+        #self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c0_c1_diff()}], v[{self.v_in_os_base()}]")
+        #self._emit(f"s_mov_b64 exec, -1")
         self._emit_empty_line()
 
 class macro_igemm_fwd_gtc_move_slice_window_k_tb_t(macro_base_t):
@@ -458,12 +462,20 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(f".v_clear_nc {v.v_gld_b()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
                     self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                     self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
+                    #self._emit(f"v_mov_b32 v[{v.v_in_os()}], -1")
+                    #self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                else:
+                    pass 
+                    #self._emit(f"s_and_saveexec_b64 0xffffffffffffffff, vcc")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
                 else:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
                 if self.outer.tunable.nxe != 0:
                     self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                else:
+                    pass
+                    #self._emit(f"s_or_b64 exec, exec, 0xffffffffffffffff")
             return self._get_deferred()
 
     def is_1d_move_slice_k(self):
@@ -821,7 +833,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             assert ta_c0 == 1
             assert tb_c0 == 1
         else:
-            # assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
+            assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
             assert tb_c0 == 1
 
             # there should be a case that tb_c1e not be 1 and nxe != 0. this should only be allowed in 1x1 and with stride or dilation or pad
@@ -1649,7 +1661,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         if self.tunable.nxe != 0:
             self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
             self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
-            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
+            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), v.v_move_slice_k_ic1(), s.s_hi(), s.s_wi(), s.s_c()))
         else:
             self._emit(f"v_add_lshl_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
             self._emit(m_in_update_os(v.v_in_os(), v.v_tmp(4), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
@@ -1697,6 +1709,10 @@ class igemm_fwd_gtc_t(mc_base_t):
             #self._emit(f"s_lshl_b32 s[{s_wei_stride_d1()}], s[{s_wei_stride_d1()}], {igemm_log2(data_byte)}")
             self._emit(self.try_shift_stride(s_wei_stride_d1, igemm_log2(data_byte)))
         self._emit_empty_line()
+
+        self._emit("; config for weight range")
+        #self._emit(f"s_mul_i32 s[{s.s_p_wei(2)}], s[{s.s_wei_stride_k()}], s[{s.s_k()}]")
+        #self._emit(f"s_lshl_b32 s[{s.s_p_wei(2)}], s[{s.s_p_wei(2)}], igemm_log2(data_byte)")
 
         if self.tunable.precache_soffset:
             self._emit(m_wei_2d_global_load.init_precache_soffset(s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset(), s.s_tmp()))
@@ -1898,7 +1914,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit(f"v_add3_u32 v[{v.v_out_os()}], v[{v.v_out_os()}], v[{v.v_tmp(1)}], v[{v.v_out_iwo()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_out_os()}], {igemm_log2(data_byte)}, v[{v.v_out_os()}]")
         if self.tunable.nxe != 0:
-            self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
+            self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), v.v_move_slice_k_ic1(), s.s_hi(), s.s_wi(), s.s_c()))
 
         self._emit(f"; move slice stride")
         assert na_c0 * na_c1e == self.tunable.gemm_k_per_block and nb_c0 * nb_c1e == self.tunable.gemm_k_per_block
@@ -1982,7 +1998,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                             s.s_in_stride_c(), s.s_in_stride_c_c1(), s.s_in_stride_c_c0_c1_diff()))
                     self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_in_iho(), v.v_in_iwo(), v.v_in_iy(), v.v_in_ix(), s.s_dilation_h(), s.s_dilation_w()))
                     self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
-                    self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
+                    self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), v.v_move_slice_k_ic1(), s.s_hi(), s.s_wi(), s.s_c()))
                 return self._get_deferred()
             else:
                 with self._deferred_context():

@@ -98,10 +98,11 @@ if __name__ == '__main__':
     if args.output:
         igemm_out_tunable_param(args.output, config_content)
 
-    if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
-        if os.path.exists(args.dir):
-            shutil.rmtree(args.dir)
+    if os.path.exists(args.dir):
+        shutil.rmtree(args.dir)
         os.mkdir(args.dir)
+
+    if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         igemm_host_driver(args, config_content)
         igemm_flatten(args, config_content)
 

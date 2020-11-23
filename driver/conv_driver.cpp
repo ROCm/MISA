@@ -487,7 +487,12 @@ int main(int argc, char **argv) {
 #endif
     }
     if(gcn_arch == 908){
-        num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
+        if(driver_data_type == driverFloat)
+            num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
+        else if(driver_data_type == driverHalf)
+            num_simd = 4 * 128; // 4x miSIMD, 128x mac unit for fp16
+        else if(driver_data_type == driverHalf)
+            num_simd = 4 * 64 ; // 4x miSIMD, 64x mac unit for bf16
     }
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
