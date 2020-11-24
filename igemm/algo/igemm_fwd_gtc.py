@@ -466,18 +466,12 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                     #self._emit(f"v_mov_b32 v[{v.v_in_os()}], -1")
                     #self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
-                else:
-                    pass 
-                    #self._emit(f"s_and_saveexec_b64 0xffffffffffffffff, vcc")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
                 else:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
                 if self.outer.tunable.nxe != 0:
                     self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
-                else:
-                    pass
-                    #self._emit(f"s_or_b64 exec, exec, 0xffffffffffffffff")
             return self._get_deferred()
 
     def is_1d_move_slice_k(self):
@@ -1029,7 +1023,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:                                                                                  ## the only copy dim is c0/c1e
                 wei_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, wei_sst_ctrl.length_d1)
 
-            if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
+            if wei_sst_ctrl.length_d1 == 8 and data_byte == 4 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
@@ -1048,7 +1042,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
             wei_sst_ctrl.stride_d0 = 1
             wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
-            if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
+            if wei_sst_ctrl.length_d1 == 8 and data_byte == 4 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 wei_sst_ctrl.length_d0 = 2
