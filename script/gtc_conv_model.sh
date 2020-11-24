@@ -42,7 +42,7 @@ then
     ./out/conv_driver.exe conv -n 64 -c 256 -H 56 -W 56 -k 256 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -g 32 -F $FORW
     ./out/conv_driver.exe conv -n 64 -c 512 -H 14 -W 14 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 32 -F $FORW
     ./out/conv_driver.exe conv -n 64 -c 512 -H 28 -W 28 -k 512 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -g 32 -F $FORW
-    exit 1
+    #exit 1
 
 fi
 
