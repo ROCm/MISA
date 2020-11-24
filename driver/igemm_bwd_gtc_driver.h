@@ -372,10 +372,11 @@ public:
         for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
             int i_y_tilda = gemm_id / x_tilda;
             int i_x_tilda = gemm_id % x_tilda;
-            int y_dot_slice = (i_y_tilda + 1) * y_dot <= y ? y_dot : y % y_dot;
-            int x_dot_slice = (i_x_tilda + 1) * x_dot <= x ? x_dot : x % x_dot;
+            int y_dot_slice = utility_integer_divide_ceil(y - i_y_tilda, y_tilda);
+            int x_dot_slice = utility_integer_divide_ceil(x - i_x_tilda, x_tilda);
+
             int gemm_k = k * y_dot_slice * x_dot_slice;
-            bool is_gemm_not_empty = gemm_k > 0;
+            bool is_gemm_not_empty = gemm_k > 0 && y_dot_slice > 0 && x_dot_slice > 0;
             if(is_gemm_not_empty){
                 if(gemm_k % gemm_k_per_block != 0)
                     gemm_k_valid = false;
@@ -561,10 +562,11 @@ public:
             for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
                 int i_y_tilda = gemm_id / x_tilda;
                 int i_x_tilda = gemm_id % x_tilda;
-                int y_dot_slice = (i_y_tilda + 1) * y_dot <= y ? y_dot : y % y_dot;
-                int x_dot_slice = (i_x_tilda + 1) * x_dot <= x ? x_dot : x % x_dot;
+                int y_dot_slice = utility_integer_divide_ceil(y - i_y_tilda,  y_tilda);
+                int x_dot_slice = utility_integer_divide_ceil(x - i_x_tilda,  x_tilda);
+
                 int gemm_k = k * y_dot_slice * x_dot_slice;
-                bool is_gemm_not_empty = gemm_k > 0;
+                bool is_gemm_not_empty = gemm_k > 0 && y_dot_slice > 0 && x_dot_slice > 0;
 
                 karg.dtile_iy = i_y_tilda;
                 karg.dtile_ix = i_x_tilda;
