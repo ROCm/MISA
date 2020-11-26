@@ -1047,7 +1047,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
-    def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
+    def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, s_k, v_cur_k, s_block_gtc_ik, v_co_sub_m_index, v_tmp, s_tmp2, s_tmp3, v_store_flag = None):
+
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
         def flatten(x):
@@ -1059,6 +1060,14 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
         s_tmp4 = sym_t(s_tmp4)
+
+        s_k = sym_t(s_k)
+        v_cur_k = sym_t(v_cur_k)
+        s_block_gtc_ik = sym_t(s_block_gtc_ik)
+        v_co_sub_m_index = sym_t(v_co_sub_m_index)
+        v_tmp = sym_t(v_tmp)
+        s_tmp2 = sym_t(s_tmp2)
+        s_tmp3 = sym_t(s_tmp3)
 
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
@@ -1201,16 +1210,20 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         if i_m == 0:
                             if no_s_out_offset:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
+                                self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                self._emit(f"v_mov_b32 v[{v_tmp()}], v[{v_cur_k()}]")
                             else:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
                         elif i_m == 1:
                             if no_s_out_offset:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
+                                self._emit(f"v_add_u32 v[{v_tmp()}], 1, v[{v_cur_k()}]")
                             else:
                                 self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                         else:
                             if no_s_out_offset:
                                 self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
+                                self._emit(f"v_add_u32 v[{v_tmp()}], {i_m}, v[{v_cur_k()}]")
                             else:
                                 self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m}, s[{s_gemm_m1_stride}]")
                                 self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]" + comments)
@@ -1225,7 +1238,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                             self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp()}]")
+                    self._emit(f"s_and_saveexec_b64 s[{s_tmp2()}:{s_tmp3()}], vcc")
                     self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    self._emit(f"s_or_b64 exec, exec, s[{s_tmp2()}:{s_tmp3()}]")
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                         i_m = m_index_per_group[i_group][0][i_gst+1]
                         # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")

@@ -109,8 +109,43 @@ class igemm_fwd_gtc_t {
 public:
     igemm_fwd_gtc_t(){}
     ~igemm_fwd_gtc_t(){}
-    std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
+    std::string get_real_kernel_name(const igemm_gtc_tunable_t *tunable) {
         return igemm_gtc_encode_kernel_name(tunable);
+    }
+    std::string get_kernel_name(const args_t *arg, const igemm_gtc_tunable_t *tunable) {
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int nxe                      = tunable->nxe;
+        int nxb                      = tunable->nxb;
+        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        k = k / group;
+        int gemm_m = ((k + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
+        std::string pad_info = std::string("");
+        if(b != ho*wo){
+            pad_info = pad_info + "; pad b to " + std::to_string(b);
+        }
+        if(gemm_m != k){
+            pad_info = pad_info + "; pad gemm_m to " + std::to_string(gemm_m);
+        }
+        return (igemm_gtc_encode_kernel_name(tunable)+pad_info);
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
         if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
@@ -148,7 +183,8 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m = k / group;
+        k = k / group;
+        int gemm_m = ((k + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
         int gemm_n = n * b;
 
         int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
@@ -187,7 +223,8 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m                   = k / group;
+        k = k / group;
+        int gemm_m = ((k + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
         int gemm_n                   = n * b;
         int gemm_k                   = (c / group) * y * x;
 
@@ -232,7 +269,7 @@ public:
             //printf("this kernel can not support this config\n");
             return result;
         }
-
+        
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -316,14 +353,14 @@ public:
         int grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
-        std::string kernel_name = get_kernel_name(tunable);
+        std::string kernel_name = get_real_kernel_name(tunable);
         // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
         auto launch_fwd = [&]() -> float {
-            // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
-            // dump_fwd_karg(&karg);
+             // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
+             // dump_fwd_karg(&karg);
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
