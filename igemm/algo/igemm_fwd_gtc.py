@@ -462,16 +462,23 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"; load input")
                 if self.outer.tunable.nxe != 0:
                     self._emit(f".v_clear_nc {v.v_gld_b()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
-                    self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
-                    self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
-                    #self._emit(f"v_mov_b32 v[{v.v_in_os()}], -1")
-                    #self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                    if IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB == 1:
+                        self._emit(f"v_cmp_ne_u32 vcc, 1, v[{v.v_in_flag()}]")
+                        self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
+                        self._emit(f"v_mov_b32 v[{v.v_in_os()}], -1")
+                        self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                    else:
+                        self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
+                        self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
                 else:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
                 if self.outer.tunable.nxe != 0:
-                    self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                    if IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB == 1:
+                        pass
+                    else:
+                        self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
             return self._get_deferred()
 
     def is_1d_move_slice_k(self):

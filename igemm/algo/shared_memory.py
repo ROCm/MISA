@@ -28,6 +28,7 @@ import sys
 
 from ..codegen import *
 from .utility import *
+from .igemm_base import *
 
 class amdgpu_swap_sequencer_t(object):
     '''
@@ -609,11 +610,15 @@ class inst_ds_write2_likely_t(mc_base_t):
                     if self.vec_count == 1:
                         self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), (self.sst_base + sst_offset) ))
                     else:
-                        swap_start = (self.vec_count*(self.vec_byte//self.data_byte)) // 2
-                        for n in range(self.vec_count // 2):
-                            self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n + 1), v_src(2*n + swap_start)))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), (self.sst_base + sst_offset) + 2*n * self.vec_stride))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), (self.sst_base + sst_offset) + (2*n+1) * self.vec_stride))
+                        if self.data_byte == 2:
+                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(0), v_src(1), (self.sst_base + sst_offset)))
+                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2) , v_src(3), (self.sst_base + sst_offset) + self.vec_stride))
+                        if self.data_byte == 4:
+                            swap_start = (self.vec_count*(self.vec_byte//self.data_byte)) // 2
+                            for n in range(self.vec_count // 2):
+                                self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n + 1), v_src(2*n + swap_start)))
+                                self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), (self.sst_base + sst_offset) + 2*n * self.vec_stride))
+                                self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), (self.sst_base + sst_offset) + (2*n+1) * self.vec_stride))
                 elif self.vec_byte == 16:
                     if self.vec_count == 1:
                         self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), (self.sst_base + sst_offset) ))
@@ -681,9 +686,15 @@ class inst_ds_write2_likely_t(mc_base_t):
                 #print(f"likely_write2_b64(sst_offset)={self.likely_write2_b64(sst_offset)}")
                 #print(f"likely_write2st64_b64(sst_offset)={self.likely_write2st64_b64(sst_offset)}")
                 if self.likely_write2_b64(sst_offset):
-                    return emit_write2_b64(sst_offset)
+                    if IGEMM_GTC_FEAT_USE_DS_WRITE2_b64 == 1:
+                        return emit_write2_b64(sst_offset)
+                    else:
+                        pass
                 if self.likely_write2st64_b64(sst_offset):
-                    return emit_write2st64_b64(sst_offset)
+                    if IGEMM_GTC_FEAT_USE_DS_WRITE2_b64 == 1:
+                        return emit_write2st64_b64(sst_offset)
+                    else:
+                        pass
                 return emit_write2_fallback(sst_offset)
             return emit_write2_fallback(sst_offset)
         return likely_emit(sst_offset)
