@@ -1655,7 +1655,11 @@ class igemm_fwd_gtc_t(mc_base_t):
         # load in
         self._emit(self.global_load_in())
         self._emit_empty_line()
-        self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
+        #self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
+	    # config weight range
+        self._emit("; config for weight range")
+        self._emit(f"s_mul_i32 s[{s.s_p_wei(2)}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}], s[{s.s_k()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_p_wei(2)}], s[{s.s_p_wei(2)}], {igemm_log2(data_byte)}")
         self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
 
         self._emit(f"; calculate wei offset")

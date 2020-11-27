@@ -27,7 +27,7 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-
+ENABLE_K_PADDING = 0
 class inst_buffer_load_dword_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, dwords):
@@ -323,17 +323,17 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
             i_soffset = 0
-            if ctrl.isGemmA == 1:
+            if ENABLE_K_PADDING and ctrl.isGemmA == 1:
                 self._emit(f"v_mov_b32 v[{self.v_tmp()}], v[{self.v_cur_k()}]")
                 if ctrl.d0_gemm_m_stride==0 and ctrl.d1_gemm_m_stride==0:
                     self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_tmp()}]")
                     self._emit(f"s_and_saveexec_b64 s[{self.s_tmp2()}:{self.s_tmp3()}], vcc")
             for i_d0 in range(ctrl.length_d0):
-                if ctrl.d0_gemm_m_stride!=0:
+                if ENABLE_K_PADDING and ctrl.d0_gemm_m_stride!=0:
                     self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_tmp()}]")
                     self._emit(f"s_and_saveexec_b64 s[{self.s_tmp2()}:{self.s_tmp3()}], vcc")
                 for i_d1 in range(n_d1):
-                    if ctrl.d1_gemm_m_stride != 0:
+                    if ENABLE_K_PADDING and ctrl.d1_gemm_m_stride != 0:
                         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_tmp()}]")
                         self._emit(f"s_and_saveexec_b64 s[{self.s_tmp2()}:{self.s_tmp3()}], vcc")
                     if i_d0 == 0 and i_d1 == 0:
@@ -346,13 +346,13 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
                     i_dst = i_dst + 1
-                    if ctrl.d1_gemm_m_stride != 0:
+                    if ENABLE_K_PADDING and ctrl.d1_gemm_m_stride != 0:
                         self._emit(f"s_or_b64 exec, exec, s[{self.s_tmp2()}:{self.s_tmp3()}]")
                         self._emit(f"v_add_u32 v[{self.v_tmp()}], {ctrl.d1_gemm_m_stride}, v[{self.v_tmp()}]")
-                if ctrl.d0_gemm_m_stride!=0:
+                if ENABLE_K_PADDING and ctrl.d0_gemm_m_stride!=0:
                     self._emit(f"s_or_b64 exec, exec, s[{self.s_tmp2()}:{self.s_tmp3()}]")
                     self._emit(f"v_add_u32 v[{self.v_tmp()}], {ctrl.d0_gemm_m_stride}, v[{self.v_tmp()}]")
-            if ctrl.isGemmA and ctrl.d0_gemm_m_stride==0 and ctrl.d1_gemm_m_stride==0:
+            if ENABLE_K_PADDING and ctrl.isGemmA and ctrl.d0_gemm_m_stride==0 and ctrl.d1_gemm_m_stride==0:
                 self._emit(f"s_or_b64 exec, exec, s[{self.s_tmp2()}:{self.s_tmp3()}]")
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
