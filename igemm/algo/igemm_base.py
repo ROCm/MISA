@@ -217,18 +217,27 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # gemm_k_pack static value
         # TODO: make gemm_k_pack to be tunable 
-        if self.precision == 'fp32':
-            self.gemm_k_pack = 1
-        elif self.precision == 'fp16':
-            self.gemm_k_pack = 4
+        if self.gemm_k_pack == 0:
+            if self.precision == 'fp32':
+                self.gemm_k_pack = 1
+            elif self.precision == 'fp16':
+                self.gemm_k_pack = 4
+            else:
+                self.gemm_k_pack = 2
         else:
-            self.gemm_k_pack = 2
+            if self.precision == 'fp32':
+                assert self.gemm_k_pack >= 1 and self.gemm_k_pack <= 4, f"wrong gemm_k_pack"
+            elif self.precision == 'fp16':
+                assert self.gemm_k_pack >= 4 and self.gemm_k_pack <= 8 and self.gemm_k_pack % 4 == 0, f"wrong gemm_k_pack"
+            else:
+                assert self.gemm_k_pack >= 2 and self.gemm_k_pack <= 8 and self.gemm_k_pack % 2 == 0, f"wrong gemm_k_pack"
 
         # TODO: better specify
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             self.block_size                     = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
 
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            assert self.wave_tile_k % self.gemm_k_pack == 0
             assert self.gemm_m_per_block % (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m) == 0
             assert self.gemm_n_per_block % (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n) == 0
             waves_per_m = self.gemm_m_per_block // (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m)

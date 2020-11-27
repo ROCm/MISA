@@ -248,7 +248,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sld_base + sld_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
+            if ((self.sld_base + sld_offset) // 4) + (self.vec_stride // 4) * (self.vec_count//2 - 1) < 256:
                 return True
         return False
     def likely_read2st64_b32(self, sld_offset = 0):
@@ -257,7 +257,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
-            if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
+            if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count//2 - 1) < 256:
                 return True
         return False
     def likely_read2_b64(self, sld_offset = 0):
@@ -266,7 +266,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
-            if ((self.sld_base + sld_offset) // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
+            if ((self.sld_base + sld_offset) // 8) + (self.vec_stride // 8) * (self.vec_count//2 - 1) < 256:
                 return True
         return False
     def likely_read2st64_b64(self, sld_offset = 0):
@@ -275,7 +275,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
-            if ((self.sld_base + sld_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
+            if ((self.sld_base + sld_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count//2 - 1) < 256:
                 return True
         return False
     def __call__(self, v_dst, v_sld_os, sld_offset = 0):
@@ -777,6 +777,7 @@ class ctrl_2d_shared_store_t(object):
         self.src_order = 0  # 0-d0,d1, 1-d1,d0
         self.v_tmp = None   # used when order is 1 and consider shuffle
         self.data_bytes = 4
+        self.lds_gemm_k_pack = 1
 
     def serialize(self):
         return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, vector_d1:{self.vector_d1}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
@@ -900,10 +901,8 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         elif ctrl.precision in ('fp16', 'bf16'):
             #print("under development")
             # TODO: don't know how to pass gemm_k_pack
-            if ctrl.precision == 'fp16':
-                lds_gemm_k_pack = 4
-            else:
-                lds_gemm_k_pack = 2
+
+            lds_gemm_k_pack = ctrl.lds_gemm_k_pack
 
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:

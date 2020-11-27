@@ -463,10 +463,11 @@ class igemm_fwd_gtc_t(mc_base_t):
                 if self.outer.tunable.nxe != 0:
                     self._emit(f".v_clear_nc {v.v_gld_b()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
                     if IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB == 1:
-                        self._emit(f"v_cmp_ne_u32 vcc, 1, v[{v.v_in_flag()}]")
-                        self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
+                        self._emit(f"v_cmpx_ne_u32 vcc, 1, v[{v.v_in_flag()}]")
+                        #self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                         self._emit(f"v_mov_b32 v[{v.v_in_os()}], -1")
-                        self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                        #self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
+                        self._emit(f"s_mov_b64 exec, -1")
                     else:
                         self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                         self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
@@ -971,10 +972,12 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_sst_ctrl.v_tmp = self.vgpr.v_tmp
         in_sst_ctrl = ctrl_2d_shared_store_t()
 
-        wei_sst_ctrl.data_bytes = data_byte
-        in_sst_ctrl.data_bytes  = data_byte
-        wei_sst_ctrl.precision  = self.tunable.precision
-        in_sst_ctrl.precision   = self.tunable.precision
+        wei_sst_ctrl.data_bytes       = data_byte
+        in_sst_ctrl.data_bytes        = data_byte
+        wei_sst_ctrl.precision        = self.tunable.precision
+        in_sst_ctrl.precision         = self.tunable.precision
+        wei_sst_ctrl.lds_gemm_k_pack  = self.tunable.gemm_k_pack
+        in_sst_ctrl.lds_gemm_k_pack   = self.tunable.gemm_k_pack
 
         #print(f"self.wei_thread_copy_ndim={self.wei_thread_copy_ndim}")
         if self.wei_thread_copy_ndim == 2:
