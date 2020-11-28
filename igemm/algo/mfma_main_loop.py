@@ -365,8 +365,6 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(mfma_step_mxn(0, 0, 1, 1))
 
 
-
-
         def mfma_loop_repeat_2x2_lp2():
             mfma = cxm.inst_mfma
             repeat_m_thread_offset = cxm.wave_step_m * mfma.num_v_a
@@ -374,169 +372,135 @@ class mfma_main_loop_t(mc_base_t):
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m
             local_buffer_n = cxm.inst_mfma.num_v_b * cxm.wave_step_n * cxm.wave_repeat_n
 
-            # right after clear acc
-            self._emit(f_move_slice_window_b())
-            self._emit(f_move_slice_window_a())
-
-            #self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {hex(lds_single_size)}, v[{v_sst_b_os()}] ; switch double buffer b store")
-            #self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {hex(lds_single_size)}, v[{v_sst_a_os()}] ; switch double buffer a store")
-            self._emit(f"s_waitcnt lgkmcnt(0)")
-            self._emit(f"s_barrier")
-            self._emit_empty_line()
-            self._emit(f_gld_b())                                           # global load
-            self._emit(f_gld_a())                                           # global load
-            self._emit_empty_line()
+            self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {hex(lds_single_size)}, v[{v_sst_b_os()}] ; switch double buffer b store")
+            self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {hex(lds_single_size)}, v[{v_sst_a_os()}] ; switch double buffer a store")
 
             # Label: start of fma body
             self._emit_front(f"{label_mfma_body}:")
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
+
+            self._emit(f"s_waitcnt lgkmcnt(0)")
+            self._emit(f"s_barrier")
+            self._emit_empty_line()
+
+            self._emit(f_move_slice_window_b())
+            self._emit(f_move_slice_window_a())
+
+            self._emit(f_gld_b())                                           # global load
+            self._emit(f_gld_a())                                           # global load
+            self._emit_empty_line()
+
+            ## load the a and b data of the first repeat of the first k_per_inst of the first iteration
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+            ## load the b and a data of the second repeat of the first k_per_inst of the first iteration
             self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_gemm_k_pack * lds_width_n // 2 ))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_gemm_k_pack * lds_width_m // 2 ))
 
             def do_unroll_k_sub():
-                unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
-                for i_k in range(unroll_k_sub):
-                    self._emit(f"; k iteration : {2 * i_k + 0}")
-                    # 1st fma
-                    self._emit(f's_waitcnt lgkmcnt({2 if i_k == 0 else 5})')
-                    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    if i_k == 0:
-                        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + lds_width_m * k_per_inst) + \
-                                                        f" ; load i_k:{1} into local buffer {1}, repeat {0}")
-                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst) + \
-                                                        f" ; load i_k:{1} into local buffer {1}, repeat {0}")
-                    else:
-                        self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{2*i_k+1} into local buffer {1}, repeat {1}")
-                    self._emit_empty_line()
+                with self._deferred_context():
+                    unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+                    for i_k in range(unroll_k_sub):
+                        self._emit(f's_waitcnt lgkmcnt(2)')
+                        self._emit(mfma_step_mxn(0, 0, 0, 0))
 
-                    # 2nd fma
-                    self._emit(f's_waitcnt lgkmcnt({3 if i_k == 0 else 5})')
-                    self._emit(mfma_step_mxn(0, 1, 0, 0))
-                    if i_k == 0:
-                        self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2 ) + \
-                                                        f" ; load i_k:{1} into local buffer {1}, repeat {1}")
-                        self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2 ) + \
-                                                        f" ; load i_k:{1} into local buffer {1}, repeat {1}")
-                    else:
-                        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst) + f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {0}")
-                    self._emit_empty_line()
+                        self._emit(f's_waitcnt lgkmcnt(1)')
+                        self._emit(mfma_step_mxn(0, 1, 0, 0))
+                   
+                        ## load the a and b data of the first repeat of the second k_per_inst of the current iteration
+                        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + (2*i_k+1)*lds_width_m * k_per_inst) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + (2*i_k+1)*lds_width_n * k_per_inst) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit(f's_waitcnt lgkmcnt(2)')
+                        self._emit(mfma_step_mxn(1, 0, 0, 0))
+                        self._emit(mfma_step_mxn(1, 1, 0, 0))
 
-                    # 3rd fma
-                    self._emit(f's_waitcnt lgkmcnt({4 if i_k == 0 else 5})')
-                    self._emit(mfma_step_mxn(1, 0, 0, 0))
-                    if i_k == 0:
-                        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst) + f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {0}")
-                    self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n + (2*i_k+2) * lds_width_n * k_per_inst) + f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {0}")
-                    self._emit_empty_line()
+                        ## load the b and a data of the second repeat of the second k_per_inst of the current iteration
+                        self._emit(f_sld_b(v_b(local_buffer_n+repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+1)*lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {1}")
+                        self._emit(f_sld_a(v_a(local_buffer_m+repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1)*lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {1}")
+                        self._emit(f's_waitcnt lgkmcnt(2)')
+                        self._emit(mfma_step_mxn(0, 0, 1, 1))
 
-                    # 4th fma
-                    self._emit(mfma_step_mxn(1, 1, 0, 0))
-                    self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+2) * lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) + \
-                                                f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {1}")
-                    self._emit_empty_line()
+                        self._emit(f's_waitcnt lgkmcnt(1)')
+                        self._emit(mfma_step_mxn(0, 1, 1, 1))
 
-                    self._emit(f"; k iteration : {2 * i_k + 1}")
-                    # 1st fma
-                    self._emit(f's_waitcnt lgkmcnt(5)')
-                    self._emit(mfma_step_mxn(0, 0, 1, 1))
-                    self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+2) * lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2)+ \
-                                                f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {1}")
-                    self._emit_empty_line()
+                        ## load the a and b data of the first repeat of the first k_per_inst of the next iteration
+                        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m + (2*i_k+2)*lds_width_m * k_per_inst) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {0}, repeat {0}")
+                        self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n + (2*i_k+2)*lds_width_n * k_per_inst) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {0}, repeat {0}")
+                        self._emit(f's_waitcnt lgkmcnt(2)')
+                        self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        self._emit(mfma_step_mxn(1, 1, 1, 1))
 
-                    # 2nd fma
-                    self._emit(f's_waitcnt lgkmcnt(5)')
-                    self._emit(mfma_step_mxn(0, 1, 1, 1))
-                    self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + (2*i_k+3) * lds_width_m * k_per_inst) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {0}")
-                    self._emit_empty_line()
+                        ## load the b and a data of the second repeat of the first k_per_inst of the next iteration
+                        self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+2)*lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) +  \
+                                                                          f" ; load b i_k:{2} into local buffer {0}, repeat {1}")
+                        self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+2)*lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) +  \
+                                                                          f" ; load a i_k:{2} into local buffer {0}, repeat {1}")
+                return self._get_deferred() 
 
-                    # 3rd fma
-                    self._emit(f's_waitcnt lgkmcnt(5)')
-                    self._emit(mfma_step_mxn(1, 0, 1, 1))
-                    self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + (2*i_k+3) * lds_width_n * k_per_inst) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {0}")
-                    self._emit_empty_line()
+            self._emit(do_unroll_k_sub())
 
-                    # 4th fma
-                    self._emit(mfma_step_mxn(1, 1, 1, 1))
-                    self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + (2*i_k+3) * lds_width_n * k_per_inst + lds_width_n//2) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {1}")
-                    if i_k == unroll_k_sub - 1:
-                        self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (unroll_k // k_per_inst - 1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
-                    self._emit_empty_line()
-
-            do_unroll_k_sub()
-
-            self._emit(f"; k iteration : {unroll_k - 2}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(6)')
+            self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(mfma_step_mxn(0, 0, 0, 0))
-            self._emit(f_move_slice_window_b())
-            self._emit(f_move_slice_window_a())
-            self._emit_empty_line()
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(0)')
-            self._emit(f"s_barrier")
-            self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
-            self._emit(f_sst_b())
+            self._emit(f's_waitcnt lgkmcnt(1)')
             self._emit(mfma_step_mxn(0, 1, 0, 0))
 
-            self._emit_empty_line()
+            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+            i_k_per_inst = unroll_k // k_per_inst -1 if unroll_k_sub > 0 else 1
 
-            # 3rd fma
-            #self._emit(f's_waitcnt lgkmcnt(0)')
+            ## load the a and b data of the first repeat of the second k_per_inst of the last iteration
+            self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + i_k_per_inst*lds_width_m * k_per_inst) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {0}")
+            self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + i_k_per_inst*lds_width_n * k_per_inst) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {0}")
+            self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(mfma_step_mxn(1, 0, 0, 0))
-            self._emit_empty_line()
-
-            # 4th fma
             self._emit(mfma_step_mxn(1, 1, 0, 0))
+
+            ## load the b and a data of the second repeat of the second k_per_inst of the last iteration
+            self._emit(f_sld_b(v_b(local_buffer_n+repeat_n_thread_offset), v_sld_b_os(), lds_base_n + i_k_per_inst*lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {1}")
+            self._emit(f_sld_a(v_a(local_buffer_m+repeat_m_thread_offset), v_sld_a_os(), lds_base_m + i_k_per_inst*lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {1}")
+            self._emit(f's_waitcnt lgkmcnt(2)')
+            self._emit(mfma_step_mxn(0, 0, 1, 1))
+            self._emit(f's_waitcnt lgkmcnt(1)')
+            self._emit(mfma_step_mxn(0, 1, 1, 1))
+
+            self._emit(f's_waitcnt lgkmcnt(0)')
+            self._emit(mfma_step_mxn(1, 0, 1, 1))
+            self._emit(mfma_step_mxn(1, 1, 1, 1))
+
+            #  wait for the global load to be done 
+            self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
+            self._emit(f_sst_b())
             self._emit(f"s_waitcnt vmcnt(0)")
             self._emit(f_sst_a())
 
-            self._emit(f"; k iteration : {unroll_k - 1}")
-            # 1st fma
-            #self._emit(f's_waitcnt lgkmcnt(0)')
-            #self._emit(f"s_barrier")
-            #       wait global and store to LDS
-            
+            self._emit(f"v_xor_b32 v[{v_sld_b_os()}], {lds_single_size}, v[{v_sld_b_os()}] ; switch double buffer b load")
+            self._emit(f"v_xor_b32 v[{v_sld_a_os()}], {lds_single_size}, v[{v_sld_a_os()}] ; switch double buffer a load")
 
-            self._emit(mfma_step_mxn(0, 0, 1, 1))
-            
-
-            self._emit_empty_line()
-
-            # 2nd fma
-            self._emit(mfma_step_mxn(0, 1, 1, 1))
-            self._emit_empty_line()
-            #       iteration--
+            #  check the left number of unroll-k 
             self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
             self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
             self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
 
-            # 3rd fma
-            self._emit(mfma_step_mxn(1, 0, 1, 1))
-            self._emit_empty_line()
+            self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {lds_single_size}, v[{v_sst_b_os()}] ; switch double buffer b store")
+            self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {lds_single_size}, v[{v_sst_a_os()}] ; switch double buffer a store")
 
-            # 4th fma
-            self._emit(mfma_step_mxn(1, 1, 1, 1))
-            self._emit(f"s_waitcnt lgkmcnt(0)")
-            self._emit(f"s_barrier")
-            #       load next from global
-            self._emit(f_gld_b())
-            self._emit(f_gld_a())
             self._emit(f"s_branch {label_mfma_body}")
             self._emit_empty_line()
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
-            # 3rd fma
-            self._emit(mfma_step_mxn(1, 0, 1, 1))
-            self._emit_empty_line()
 
-            # 4th fma
-            self._emit(mfma_step_mxn(1, 1, 1, 1))
-            self._emit_empty_line()
-
+            # do the last unroll_k
             self._emit_front(f"{label_mfma_end}:")
             self._emit("s_waitcnt lgkmcnt(0)")
             self._emit("s_barrier")
@@ -545,46 +509,41 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
             self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_gemm_k_pack * lds_width_n // 2 ))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_gemm_k_pack * lds_width_m // 2 ))
-            do_unroll_k_sub()
-            self._emit(f"; k iteration : {unroll_k - 2}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(6)')
+
+            self._emit(do_unroll_k_sub())
+
+            self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(mfma_step_mxn(0, 0, 0, 0))
-            self._emit_empty_line()
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(5)')
+            self._emit(f's_waitcnt lgkmcnt(1)')
             self._emit(mfma_step_mxn(0, 1, 0, 0))
-            self._emit_empty_line()
 
-            # 3rd fma
-            self._emit(f's_waitcnt lgkmcnt(4)')
+            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+            i_k_per_inst = unroll_k // k_per_inst -1 if unroll_k_sub > 0 else 1
+
+            ## load the a and b data of the first repeat of the second k_per_inst of the last iteration
+            self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + i_k_per_inst*lds_width_m * k_per_inst) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {0}")
+            self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + i_k_per_inst*lds_width_n * k_per_inst) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {0}")
+            self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(mfma_step_mxn(1, 0, 0, 0))
-            self._emit_empty_line()
-
-            # 4th fma
             self._emit(mfma_step_mxn(1, 1, 0, 0))
-            #       iteration--
 
-            self._emit(f"; k iteration : {unroll_k - 1}")
-            # 1st fma
+            ## load the b and a data of the second repeat of the second k_per_inst of the last iteration
+            self._emit(f_sld_b(v_b(local_buffer_n+repeat_n_thread_offset), v_sld_b_os(), lds_base_n + i_k_per_inst*lds_width_n * k_per_inst + lds_gemm_k_pack * lds_width_n // 2) +  \
+                                                                          f" ; load b i_k:{1} into local buffer {1}, repeat {1}")
+            self._emit(f_sld_a(v_a(local_buffer_m+repeat_m_thread_offset), v_sld_a_os(), lds_base_m + i_k_per_inst*lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) +  \
+                                                                          f" ; load a i_k:{1} into local buffer {1}, repeat {1}")
             self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(mfma_step_mxn(0, 0, 1, 1))
-            self._emit_empty_line()
-
-            # 2nd fma
             self._emit(f's_waitcnt lgkmcnt(1)')
             self._emit(mfma_step_mxn(0, 1, 1, 1))
-            self._emit_empty_line()
 
-            # 3rd fma
             self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(mfma_step_mxn(1, 0, 1, 1))
-            self._emit_empty_line()
-
-            # 4th fma
             self._emit(mfma_step_mxn(1, 1, 1, 1))
-            self._emit_empty_line()
+
 
 
         def mfma_loop_repeat_2x2_lp2_with_interleave():
