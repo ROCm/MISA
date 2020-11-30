@@ -363,8 +363,8 @@ public:
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
         auto launch_fwd = [&]() -> float {
-             // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
-             // dump_fwd_karg(&karg);
+            // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
+            // dump_fwd_karg(&karg);
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};

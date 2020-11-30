@@ -27,7 +27,6 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-ENABLE_K_PADDING = 0
 class inst_buffer_load_dword_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, dwords):
