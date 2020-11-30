@@ -2032,7 +2032,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 
