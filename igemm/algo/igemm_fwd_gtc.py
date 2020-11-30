@@ -458,7 +458,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                     self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                 if self.outer.tunable.precache_soffset:
-                    self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset(), s.s_k(), v.v_cur_k(), s.s_tmp(2), s.s_tmp(3), v.v_tmp()))
+                    self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
                 else:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
                 if self.outer.tunable.nxe != 0:
@@ -495,7 +495,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 self._emit(f"; load weight")
                 self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
-                    self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset(), s.s_k(), v.v_cur_k(), s.s_tmp(2), s.s_tmp(3), v.v_tmp()))
+                    self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
                     self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_tmp()))
             return self._get_deferred() 
@@ -885,28 +885,9 @@ class igemm_fwd_gtc_t(mc_base_t):
         wei_thread_copy_index, in_thread_copy_index = self.get_thread_copy_index()
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
-        ctrl_wei_gld.isGemmA = 1
 
         ctrl_wei_gld.vector_d1 = utility_gcd(ta_c1e, 4) if ta_c1e != 1 else 1
         ctrl_in_gld.vector_d1 = utility_gcd(tb_n1b, 4) if tb_n1b != 1 else 1
-        #tensor_a_thread_lengths  = [1, 4, 4, 1]       # C0xC1ExK0xK1
-        #wei_thread_copy_dims    = [ta_k0, ta_k1, ta_c0, ta_c1e]     # always reordered!
-        wei_thread_copy_k0_index = 0
-        wei_thread_copy_k1_index = 1
-        if self.wei_thread_copy_ndim == 2:
-            if wei_thread_copy_index[0] == wei_thread_copy_k0_index:
-                ctrl_wei_gld.d0_gemm_m_stride = na_k1
-            elif wei_thread_copy_index[0] == wei_thread_copy_k1_index:
-                ctrl_wei_gld.d0_gemm_m_stride = 1
-            if wei_thread_copy_index[1] == wei_thread_copy_k0_index:
-                ctrl_wei_gld.d1_gemm_m_stride = na_k1
-            elif wei_thread_copy_index[1] == wei_thread_copy_k1_index:
-                ctrl_wei_gld.d1_gemm_m_stride = 1
-        elif self.wei_thread_copy_ndim == 1:
-            if wei_thread_copy_index[0] == wei_thread_copy_k0_index:
-                ctrl_wei_gld.d1_gemm_m_stride = na_k1
-            elif wei_thread_copy_index[0] == wei_thread_copy_k1_index:
-                ctrl_wei_gld.d1_gemm_m_stride = 1
 
         if self.wei_thread_copy_ndim == 2:
             # [ta_k0, ta_k1, ta_c0, ta_c1e]
@@ -920,10 +901,6 @@ class igemm_fwd_gtc_t(mc_base_t):
         elif self.wei_thread_copy_ndim == 1:
             ctrl_wei_gld.length_d0 = 1
             ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            if wei_thread_copy_index[0] == ta_k1:
-                ctrl_wei_gld.d1_gemm_m_stride = 1
-            elif wei_thread_copy_index[0] == ta_k0:
-                ctrl_wei_gld.d1_gemm_m_stride = na_k1
         else:
             ctrl_wei_gld.length_d0 = 1
             ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
