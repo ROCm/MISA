@@ -422,7 +422,7 @@ public:
         result_t result;
         result.return_code = 0;
         result.duration_ms = avg_duration;
-        result.kernel_name = kernel_name;
+        result.kernel_name = get_kernel_name(arg, tunable);
         return result;
     }
 };
