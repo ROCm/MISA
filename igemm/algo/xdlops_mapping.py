@@ -331,6 +331,8 @@ ctrl_xdlops_mapping_fp32 = [
 
 #                             mt_m,mt_n,wt_m,wt_n,wt_k,ws,r_m,r_n,s_m,s_n, inst_mfma
 ctrl_xdlops_mapping_fp16 = [
+        ctrl_xdlops_mapping_t( 256, 256,  64,  32,  4, 4,  2,  2,  1,  2,  v_mfma_f32_32x32x4f16),
+        ctrl_xdlops_mapping_t( 256, 256,  32,  32,  8, 4,  2,  2,  2,  2,  v_mfma_f32_32x32x8f16),
         ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x4f16),
         ctrl_xdlops_mapping_t( 256, 128,  32,  32,  8, 4,  2,  2,  2,  1,  v_mfma_f32_32x32x8f16),
         ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x4f16),

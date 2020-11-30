@@ -248,7 +248,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sld_base + sld_offset) // 4) + (self.vec_stride // 4) * (self.vec_count//2 - 1) < 256:
+            if ((self.sld_base + sld_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_read2st64_b32(self, sld_offset = 0):
@@ -257,7 +257,7 @@ class inst_ds_read2_likely_t(mc_base_t):
         if self.vec_count % 2 != 0:
             return False
         if ((self.sld_base + sld_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
-            if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count//2 - 1) < 256:
+            if ((self.sld_base + sld_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_read2_b64(self, sld_offset = 0):
@@ -561,7 +561,7 @@ class inst_ds_write2_likely_t(mc_base_t):
             return False
         # print(f"sst_base={self.sst_base}, sst_offset={sst_offset}, vec_stride={self.vec_stride}, vec_count={self.vec_count}")
         if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count // 2 - 1) < 256:
+            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_write2st64_b32(self, sst_offset = 0):
@@ -571,7 +571,7 @@ class inst_ds_write2_likely_t(mc_base_t):
             return False
         # print(f"sst_base={self.sst_base}, sst_offset={sst_offset}, vec_stride={self.vec_stride}, vec_count={self.vec_count}")
         if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % (4*64) == 0):
-            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count // 2 - 1) < 256:
+            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
                 return True
         return False
     def likely_write2_b64(self, sst_offset = 0):
