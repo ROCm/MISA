@@ -340,6 +340,7 @@ int main(int argc, char **argv) {
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
+    int assert_when_invalid = env_get_int("IGEMM_ASSERT_WHEN_INVALID", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -482,6 +483,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_output, device_output_to_host,
                                             n * k * ho * wo, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
             }
             printf("\n");
             if(result.duration_ms < fastest_result_fwd.duration_ms){
@@ -564,6 +566,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_input, device_input_to_host,
                                             n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
                 // if (!is_valid) {
                 //     printf("\n");
                 //     break;
@@ -688,6 +691,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
                                             k * c * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
                 // if (!is_valid) {
                 //     printf("\n");
                 //     break;

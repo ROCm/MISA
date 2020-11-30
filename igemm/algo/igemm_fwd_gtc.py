@@ -593,8 +593,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             self.s_hi                     = sym_t('s_hi'                      , sseq(1))
             self.s_wi                     = sym_t('s_wi'                      , sseq(1))
             self.s_n                      = sym_t('s_n'                       , sseq(1))
-            self.s_k                      = sym_t('s_k'                       , sseq(1))    # this is indeed k_per_group, and always k when nxe=0
-            self.s_c                      = sym_t('s_c'                       , sseq(1))    # this is indeed c_per_group, and always c when nxe=0
+            self.s_k                      = sym_t('s_k'                       , sseq(1))    # this is indeed k_per_group
+            self.s_c                      = sym_t('s_c'                       , sseq(1))    # this is indeed c_per_group
             if outer.tunable.nxe != 0:
                 self.s_ho                 = sym_t('s_ho'                      , sseq(1))
                 self.s_wo                 = sym_t('s_wo'                      , sseq(1))
@@ -1438,7 +1438,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}, source_access_order:{self.tunable.source_access_order}")
 
-        # calculate group index, only in nxe != 0 situation
+        # calculate group index
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dim_b() if self.tunable.nxe != 0 else s.s_stride_hw()}], s[{s.s_n()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], s[{s.s_k()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block * self.tunable.gemm_n_per_block)}")

@@ -663,8 +663,9 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.k_y             = sym_t("k_y",             76)
             self.k_x             = sym_t("k_x",             80)
             self.k_gemm_k_global_split  = sym_t("k_gemm_k_global_split",  84)
-            self.k_pack0         = sym_t("k_pack0",         84)
-            self.k_end           = sym_t("k_end",           88)
+            self.k_group         = sym_t("k_group",         88)
+            self.k_pack_0        = sym_t("k_pack_0",        92)
+            self.k_end           = sym_t("k_end",           96)
 
         def get_count(self):
             return self.k_end.value
@@ -702,6 +703,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_x                       = sym_t("s_x"                      ,30)
             sseq                           = gpr_sequencer_t(30 + 1)
             self.s_gemmk_split             = sym_t("s_gemmk_split"           ,sseq(1))
+            self.s_group                   = sym_t("s_group"                 ,sseq(1))
 
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
             #if outer.tunable.nxe == 0:
@@ -747,6 +749,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_block_gtc_ic0           = sym_t("s_block_gtc_ic0"          ,sseq(1))
             self.s_block_gtc_ic1e          = sym_t("s_block_gtc_ic1e"         ,sseq(1))
             self.s_block_gtc_in            = sym_t('s_block_gtc_in'           ,sseq(1))
+            self.s_block_gtc_ig            = sym_t('s_block_gtc_ig'           ,sseq(1))
 
             self.s_knum                    = sym_t("s_knum"                   ,1)
             self.s_gemm_k_num_n1           = sym_t("s_gemm_k_num_n1"          ,0)
@@ -762,8 +765,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 self.s_in_offset          = sym_t("s_in_offset"             ,sseq(out_npc))   # if this number is zero, it is also OK, since we would not use
                 self.s_out_offset          = sym_t("s_out_offset"             ,sseq(wei_npc))
             self.s_sub_n                   = sym_t("s_sub_n"                  ,sseq(1))
-            self.s_group_stride            = sym_t("s_group_stride"           ,sseq(1))
-            self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
+            # self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
             if IGEMM_WRW_GTC_DEBUG == 1:
                 self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
@@ -1263,7 +1265,9 @@ class igemm_wrw_gtc_t(mc_base_t):
             int pad_w;
             int y;
             int x;
-            int k_gemm_k_global_split;
+            int gemm_k_global_split;
+            int group;
+            int __pack_0;
         '''
         kas = []
         # name: {}, .size: {}, .offset: {}, .value_kind: {}, .value_type
@@ -1285,7 +1289,9 @@ class igemm_wrw_gtc_t(mc_base_t):
         kas.append(amdgpu_kernel_arg_t('pad_w'         , 4,  72, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('y'             , 4,  76, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('x'             , 4,  80, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('k_gemm_k_global_split'  , 4,  84, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('gemm_k_global_split'  , 4,  84, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('group'         , 4,  88, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('__pack_0'      , 4,  92, 'by_value', 'i32'))
         return kas
 
 
@@ -1388,9 +1394,10 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_load_dwordx2  s[{s.s_p_wei((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_wei()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_out((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_out()}")
         self._emit(f"s_load_dwordx16 s[{s.s_hi((0,15))}],        s[{s.s_ka((0, 1))}],    0+{k.k_hi()}")
+        self._emit(f"s_load_dword s[{s.s_group()}],         s[{s.s_ka((0, 1))}],    0+{k.k_group()}")
 
-        self._emit("; clear vector r")
-        self._emit(".v_clear_nc v_c+1, v_end-1")
+        # self._emit("; clear vector r")
+        # self._emit(".v_clear_nc v_c+1, v_end-1")
         self._emit_empty_line()
         if IGEMM_WRW_GTC_DEBUG == 1:
             self._emit("; debug vgpr")
@@ -1423,7 +1430,8 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; calculate index")
 
         self._emit(f"s_mul_i32 s[{s.s_in_stride_c()}],      s[{s.s_hi()}],       s[{s.s_wi()}]")
-        self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}],      s[{s.s_c()}],        s[{s.s_in_stride_c()}]")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}],  s[{s.s_in_stride_c()}], s[{s.s_c()}]")
+        self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}],      s[{s.s_group()}],        s[{s.s_tmp()}]")
         self._emit(f"s_mul_i32 s[{s.s_wei_stride_c()}],       s[{s.s_y()}],       s[{s.s_x()}]")
         self._emit(f"s_mul_i32 s[{s.s_wei_stride_k()}],       s[{s.s_c()}],        s[{s.s_wei_stride_c()}]")
         if gemm_m_unmerge_cluster == 1:
@@ -1433,7 +1441,8 @@ class igemm_wrw_gtc_t(mc_base_t):
             self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_c()}], {igemm_log2(n_c0)}")
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_c0()}], s[{s.s_wei_stride_c()}], s[{s.s_tmp()}]")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}],      s[{s.s_ho()}],        s[{s.s_wo()}]")
-        self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}],      s[{s.s_k()}],        s[{s.s_out_stride_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}],  s[{s.s_out_stride_k()}],  s[{s.s_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}],      s[{s.s_group()}],        s[{s.s_tmp()}]")
         if t_n0 != 1:
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], {igemm_log2(unmerge_sub_n1)}")
             self._emit(f"s_lshl_b32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], {igemm_log2(unmerge_sub_n1)}")
@@ -1447,7 +1456,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             if gemm_m_unmerge_cluster == 0:
                 self._emit(f"s_lshl_b32 s[{s.s_out_stride_k0()}], s[{s.s_out_stride_k()}], {igemm_log2(n_k1)}")
             else:
-                self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_c()}], {igemm_log2(n_k0)}")
+                self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(n_k0)}")
                 self._emit(f"s_mul_i32 s[{s.s_out_stride_k0()}], s[{s.s_out_stride_k()}], s[{s.s_tmp()}]")
 
         if self.tunable.nxe != 0:
@@ -1470,15 +1479,17 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"; add block i_n")
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
-        
+        # calculate group index
         self._emit(f"s_lshr_b32 s[0], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(f"s_lshr_b32 s[{s.s_sub_n()}], s[{s.s_n()}], s[{s.s_gemmk_split()}]")
         self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-        self._emit(f"s_mul_i32 s[{s.s_group_stride()}], s[0], s[{s.s_tmp()}]")
-        self._emit(m_int_div_rem_ss(s.s_group_left(), s.s_block_gtc_in(), s.s_bx(), s.s_group_stride(), v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(f"s_mul_i32 s[1], s[0], s[{s.s_tmp()}]")
+        self._emit(f"s_lshl_b32 s[3], s[1], s[{s.s_gemmk_split()}]")
+        self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), '3', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_bx(), s.s_block_gtc_in(), s.s_tmp(4), '1', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(f"s_lshr_b32 s[{s.s_sub_n()}], s[{s.s_n()}], s[{s.s_gemmk_split()}]")
         self._emit(f"s_mul_i32 s[{s.s_block_gtc_in()}], s[{s.s_block_gtc_in()}], s[{s.s_sub_n()}]")
 
-        self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_tmp(5), s.s_group_left(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_tmp(5), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         self._emit(f"; s_tmp+4:block_gtc_in, s_tmp+5:block_gtc_im")
         if gemm_m_unmerge_cluster == 0:
             self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ik()}], s[{s.s_tmp(5)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
@@ -1538,6 +1549,13 @@ class igemm_wrw_gtc_t(mc_base_t):
         #self._emit(f"v_sub_i32 v[{v.v_in_iwi()}], v[{v.v_tmp(1)}], s[{s.s_pad_w()}]")
 
         self._emit(f"; calculate input offset")
+        # compute group distance
+        self._emit(f"s_mul_i32 s[{s.s_tmp(5)}], s[{s.s_c()}], s[{s.s_in_stride_c()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], {igemm_log2(data_byte)}")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(5)}]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(5)}]")
+        self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_in_stride_c()}], s[{s.s_tmp(3)}]")
@@ -1591,7 +1609,12 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; calculate out offset")
-            
+        self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_out_stride_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
+        self._emit(f"s_add_u32 s[{s.s_p_out()}], s[{s.s_p_out()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_out(1)}], s[{s.s_p_out(1)}], s[{s.s_tmp(1)}]")
+        self._emit_empty_line()
         self._emit(tc_index_accumulator(v.v_tmp(), v.v_gtc_ik0(), v.v_gtc_ik1(), c_k0, c_k1, n_k0, n_k1))
         self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ik()}], v[{v.v_tmp()}]")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_out_stride_k()}], v[{v.v_tmp(5)}]")
@@ -1702,6 +1725,11 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; weight offset")
+        self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
+        self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_wei_stride_c()}], s[{s.s_tmp(3)}]")
