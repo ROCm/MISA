@@ -124,7 +124,9 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         else:
             assert False
 
-        if ctrl.vector_d1 == 4:
+        if ctrl.vector_d1 == 8:
+            vec_str = 'v8'
+        elif ctrl.vector_d1 == 4:
             vec_str = 'v4'
         elif ctrl.vector_d1 == 2:
             vec_str = 'v2'
@@ -229,7 +231,9 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         else:
             assert False
 
-        if ctrl.vector_d1 == 4:
+        if ctrl.vector_d1 == 8:
+            vec_str = 'v8'
+        elif ctrl.vector_d1 == 4:
             vec_str = 'v4'
         elif ctrl.vector_d1 == 2:
             vec_str = 'v2'
