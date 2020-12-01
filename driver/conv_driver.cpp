@@ -250,7 +250,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
-    
+
     for (int i = 0; i < n; ++i) {
         double ri = (double)ref[i];
         double pi = (double)pred[i];
@@ -457,7 +457,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(&conv_args, tunable).c_str());
+            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
 
             //if (need_verify)
             //    HIP_CALL(hipMemset(device_output, 0,
