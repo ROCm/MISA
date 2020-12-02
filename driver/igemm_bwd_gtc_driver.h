@@ -636,8 +636,8 @@ public:
                 karg.dslice_y = y_dot_slice;
                 karg.dslice_x = x_dot_slice;
 #if USE_MAGIC_DIV
-                magic_div_u32_t mdiv_0  = magic_div_u32_gen(y_dot_slice * x_dot_slice);
-                magic_div_u32_t mdiv_1  = magic_div_u32_gen(x_dot_slice);
+                magic_div_u32_t mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
+                magic_div_u32_t mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
                 karg.magic_0        = mdiv_0.magic;
                 karg.magic_1        = mdiv_1.magic;
 
