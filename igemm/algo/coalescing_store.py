@@ -1062,7 +1062,6 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         s_tmp6 = sym_t(s_tmp6)
 
         if s_k is not None:
-            print("erro here!")
             s_k = sym_t(s_k)
             v_cur_k = sym_t(v_cur_k)
             s_block_gtc_ik = sym_t(s_block_gtc_ik)
