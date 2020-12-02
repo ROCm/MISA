@@ -493,6 +493,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             s_in_stride_d0, s_in_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load weight")
+                self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
@@ -665,6 +666,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 wei_npc = m_wei_2d_global_load.get_num_precache_soffset()
                 self.s_in_offset           = sym_t("s_in_offset"              ,sseq(in_npc))   # if this number is zero, it is also OK, since we would not use
                 self.s_wei_offset          = sym_t("s_wei_offset"             ,sseq(wei_npc))
+            self.s_k_padded                = sym_t("s_k_padded"             ,sseq(1))
 
             # TODO: this sgpr allocation is a mess
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
@@ -774,6 +776,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             self.v_co_sub_m_index = sym_t("v_co_sub_m_index" ,vseq(1))
             self.v_co_sub_n_index = sym_t("v_co_sub_n_index" ,vseq(1))
 
+            self.v_cur_k          = sym_t("v_cur_k" ,vseq(1))
 
             self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
             total_vgpr           = vseq()
@@ -876,9 +879,10 @@ class igemm_fwd_gtc_t(mc_base_t):
         '''
         inline = True if self.tunable.fma_interleave else False
         ta_c0, ta_c1e, ta_k0, ta_k1, tb_c0, tb_c1e, tb_n0, tb_n1b = self.get_thread_lengths()
+        na_c0, na_c1e, na_k0, na_k1, nb_c0, nb_c1e, nb_n0, nb_n1b = self.get_dims_lengths()
+
         wei_thread_copy_dims, in_thread_copy_dims = self.get_thread_copy_dims()
         wei_thread_copy_index, in_thread_copy_index = self.get_thread_copy_index()
-
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
 
@@ -1435,12 +1439,19 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
             self._emit(f"s_lshl_b32 s[{s.s_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
 
+        # for gemm_m pad
+        self._emit_empty_line()
+        self._emit(f"; pad k if need")
+        self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_m_per_block - 1}, s[{s.s_k()}]")
+        self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(f"s_lshl_b32 s[{s.s_k_padded()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+
         self._emit_empty_line()
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}, source_access_order:{self.tunable.source_access_order}")
 
         # calculate group index
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dim_b() if self.tunable.nxe != 0 else s.s_stride_hw()}], s[{s.s_n()}]")
-        self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], s[{s.s_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], s[{s.s_k_padded()}]")
         self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block * self.tunable.gemm_n_per_block)}")
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
             self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_1()}], 0x00080010 ; offset:16, width:8")
@@ -1464,7 +1475,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_tmp(5), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         else:
-            self._emit(f"s_lshr_b32 s[0], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+            self._emit(f"s_lshr_b32 s[0], s[{s.s_k_padded()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080000 ; offset:0, width:8")
                 self._emit(m_mdiv_u32_ss(s.s_tmp(5), s.s_tmp(4), s.s_bx(), s.s_magic_0(), s.s_tmp(3), '0', s.s_tmp()))
@@ -1621,7 +1632,11 @@ class igemm_fwd_gtc_t(mc_base_t):
         # load in
         self._emit(self.global_load_in())
         self._emit_empty_line()
-        self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
+        #self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
+	    # config weight range
+        self._emit("; config for weight range")
+        self._emit(f"s_mul_i32 s[{s.s_p_wei(2)}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}], s[{s.s_k()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_p_wei(2)}], s[{s.s_p_wei(2)}], {igemm_log2(data_byte)}")
         self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
 
         self._emit(f"; calculate wei offset")
@@ -1633,8 +1648,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         #if self.tunable.nxe != 0:
         # one important thing is we let wei=k*c*y*x, c*y*x -> e, treat e as a single dimension
         self._emit(tc_index_accumulator(v.v_tmp(), v.v_gtc_ta_ik0(), v.v_gtc_ta_ik1(), ca_k0, ca_k1, na_k0, na_k1))
-        self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ik()}], v[{v.v_tmp()}]")
-        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}], v[{v.v_tmp(5)}]")
+        self._emit(f"v_add_u32 v[{v.v_cur_k()}], s[{s.s_block_gtc_ik()}], v[{v.v_tmp()}]")
+        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}], v[{v.v_cur_k()}]")
         if ca_c0 != 1:
             self._emit(tc_index_accumulator(v.v_tmp(2), v.v_gtc_ta_ic0(), v.v_gtc_ta_ic1e(), ca_c0, ca_c1e, na_c0, na_c1e))
             self._emit(f"v_add_lshl_u32 v[{v.v_wei_os()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}], {igemm_log2(data_byte)}")
@@ -1660,7 +1675,7 @@ class igemm_fwd_gtc_t(mc_base_t):
 
         if self.tunable.precache_soffset:
             self._emit(m_wei_2d_global_load.init_precache_soffset(s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset(), s.s_tmp()))
-
+            
         self._emit(self.global_load_wei())
         self._emit_empty_line()
 
@@ -2068,9 +2083,9 @@ class igemm_fwd_gtc_t(mc_base_t):
             pass
         else:
             a = self.agpr
-
+            
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
-                    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None))
+                    None, s.s_out_stride_k(), s.s_tmp(), s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None))
 
         self._emit_front(f"{self.label_out}:")
 
