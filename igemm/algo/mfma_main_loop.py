@@ -780,20 +780,22 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit(f"v_xor_b32 v[{v_sld_b_os()}], {lds_single_size}, v[{v_sld_b_os()}] ; switch double buffer b load")
                         self._emit(f"v_xor_b32 v[{v_sld_a_os()}], {lds_single_size}, v[{v_sld_a_os()}] ; switch double buffer a load")
 
-                        #       iteration--
-                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
-                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
-                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
-
-                        self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {lds_single_size}, v[{v_sst_b_os()}] ; switch double buffer b store")
-                        self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {lds_single_size}, v[{v_sst_a_os()}] ; switch double buffer a store")
-
                         # 3rd fma
                         self._emit(mfma_step_mxn(1, 0, 1, 1))
                         self._emit_empty_line()
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 1, 1))
+
+                        #       iteration--
+                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_end}")
+
+                        self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {lds_single_size}, v[{v_sst_b_os()}] ; switch double buffer b store")
+                        self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {lds_single_size}, v[{v_sst_a_os()}] ; switch double buffer a store")
+
+                        
                         #self._emit(do_interleave_global_load())
                         #       load next from global
                         self._emit(f"s_branch {label_mfma_body}")
@@ -812,7 +814,7 @@ class mfma_main_loop_t(mc_base_t):
                         #       iteration--
                         self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
                         self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
-                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_end}")
 
                         self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {lds_single_size}, v[{v_sst_b_os()}] ; switch double buffer b store")
                         self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {lds_single_size}, v[{v_sst_a_os()}] ; switch double buffer a store")
@@ -836,6 +838,7 @@ class mfma_main_loop_t(mc_base_t):
                 return self._get_deferred()
 
             #self._emit(do_interleave_share_store_double_buffer())
+            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
 
             mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last_double_buffer(), group_mbb_by_end_of_inst_op="v_mfma"),
                              create_machine_basic_block(do_interleave_share_store_double_buffer(), group_mbb_by_end_of_inst_op="ds_write")]
@@ -845,24 +848,10 @@ class mfma_main_loop_t(mc_base_t):
             #    for y in x:
             #        y.dump()
             se_last = create_scheduler(self.mc, mbb_list_last)
-            mbb_0_mfma_cnt_after_branch_to_start = 0#2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+            mbb_0_mfma_cnt_after_branch_to_start = 0 # if unroll_k_sub == 0 else 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
             self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
             
-
-            # Label: finishing of fma body
-            self._emit_front(f"{label_mfma_finishing}:")
-            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
-            if unroll_k_sub > 0:
-
-                # 3rd fma
-                self._emit(mfma_step_mxn(1, 0, 1, 1))
-                self._emit_empty_line()
-
-                # 4th fma
-                self._emit(mfma_step_mxn(1, 1, 1, 1))
-                self._emit_empty_line()
-
             self._emit_front(f"{label_mfma_end}:")
             self._emit("s_waitcnt lgkmcnt(0)")
             self._emit("s_barrier")
