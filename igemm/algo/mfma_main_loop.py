@@ -647,7 +647,7 @@ class mfma_main_loop_t(mc_base_t):
                             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n * k_per_inst) + \
                                                         f" ; load i_k:{1} into local buffer {1}, repeat {0}")
                         else:
-                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{2*i_k+1} into local buffer {1}, repeat {1}")
+                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (2*i_k+1) * lds_width_m * k_per_inst + lds_gemm_k_pack * lds_width_m // 2) + f" ; load i_k:{2*i_k+1} into local buffer {1}, repeat {1}")
                         self._emit_empty_line()
 
                         # 2nd fma
