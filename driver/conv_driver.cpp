@@ -367,6 +367,7 @@ int main(int argc, char **argv) {
     int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
+    int run_first_applicable = env_get_int("IGEMM_RUN_FIRST_APPLICABLE_CONFIG", 0); 
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -548,7 +549,8 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+            if ( ! run_first_applicable ) 
+                 printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
 
             result_t result;
             if(driver_data_type == driverFloat)
@@ -566,7 +568,8 @@ int main(int argc, char **argv) {
             }
             
             if (result.return_code != 0){
-                printf("not applicatble\n");
+                if ( ! run_first_applicable ) 
+                     printf("not applicatble\n");
                 continue;
             }
 
@@ -606,6 +609,11 @@ int main(int argc, char **argv) {
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
+
+            if ( run_first_applicable ) {
+                 printf("\n"); 
+		 break; 
+            }; 
             if(result.duration_ms < fastest_result_fwd.duration_ms){
                 fastest_result_fwd = result;
                 fastest_result_fwd.gflops = (float)gflops;
@@ -613,7 +621,7 @@ int main(int argc, char **argv) {
                 fastest_id = i;
             }
         }
-        if(log_fastest_config){
+        if(log_fastest_config && !run_first_applicable){
             dump_arg(&conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
