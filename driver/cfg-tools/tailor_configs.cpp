@@ -58,7 +58,6 @@ struct sorterClass
   { 
      if ( cfg1.gemm_k_per_block > cfg2.gemm_k_per_block )
 	  return(true); 
-
      if ( cfg1.gemm_k_per_block < cfg2.gemm_k_per_block ) 
 	  return(false); 
 
@@ -67,21 +66,18 @@ struct sorterClass
 
      if ( blockSize_1 > blockSize_2 )
           return(true);
-
      if ( blockSize_1 < blockSize_2 )
           return(false);
 
      // ta_c1e is per-thread vector_load size, bigger is better for performance
      if ( cfg1.tensor_a_cluster_lengths[1] > cfg2.tensor_a_cluster_lengths[1] )
           return(true);
-
      if ( cfg1.tensor_a_cluster_lengths[1] < cfg2.tensor_a_cluster_lengths[1] )
           return(false);
 
      // simutaneously accessing by more threads (bigger cluster size) on faster dimension could benefit the performance
      if ( cfg1.tensor_b_cluster_lengths[3] > cfg2.tensor_b_cluster_lengths[3] )
           return(true);
-
      if ( cfg1.tensor_b_cluster_lengths[3] < cfg2.tensor_b_cluster_lengths[3] )
           return(false);
 
@@ -99,6 +95,14 @@ static bool equal_configs(const igemm_gtc_tunable_t &cfg1, const igemm_gtc_tunab
 
      if ( cfg1.gemm_k_per_block != cfg2.gemm_k_per_block )
           return(false); 
+
+     // different tensor_b, we need keep different tensor_b even other configuration parameters are same
+     if ( cfg1.tensor_b_cluster_lengths[1] != cfg2.tensor_b_cluster_lengths[2] )
+	  return(false); 
+
+     // different number of waves 
+     if ( cfg1.tensor_b_cluster_lengths[1]*cfg1.tensor_b_cluster_lengths[3] != cfg1.tensor_b_cluster_lengths[1]*cfg1.tensor_b_cluster_lengths[3] )
+	  return(false);  
 
      return(true);
 };

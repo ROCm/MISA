@@ -261,6 +261,22 @@ int main(int argc, char **argv)
 			cfg.tensor_b_thread_lengths[3] = 1; 
 
                         configs.push_back(cfg); 
+
+                        // we need a config which has tensor_b_thread_lengths[1] = 1 to support the cases where either x != 1 or y != 1
+                        if ( cfg.tensor_b_cluster_lengths[1] != cfg.gemm_k_per_block && blockSize / cfg.gemm_k_per_block <= cfg.gemm_n_per_block ) {
+                             cfg.tensor_b_thread_lengths[0] = 1; 
+			     cfg.tensor_b_thread_lengths[1] = 1; 
+			     cfg.tensor_b_cluster_lengths[0] = 1; 
+                             cfg.tensor_b_cluster_lengths[1] = cfg.gemm_k_per_block; 
+                             cfg.tensor_b_cluster_lengths[2] = 1; 
+                             cfg.tensor_b_cluster_lengths[3] = blockSize / cfg.tensor_b_cluster_lengths[1]; 
+			     cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3]; 
+			     cfg.tensor_b_thread_lengths[3] = 1; 
+
+                             // to satisfy unmerge_sub_n % nb_n0 == 0 
+                             if ( (cfg.gemm_n_per_block / cfg.nxb ) % cfg.tensor_b_thread_lengths[2] == 0 ) 
+			           configs.push_back(cfg); 
+			}; 
                    }; 
 	     }; 
          };	

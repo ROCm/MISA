@@ -56,7 +56,6 @@ struct sorterClass
   { 
      if ( cfg1.gemm_k_per_block > cfg2.gemm_k_per_block )
 	  return(true); 
-
      if ( cfg1.gemm_k_per_block < cfg2.gemm_k_per_block ) 
 	  return(false); 
 
@@ -65,33 +64,37 @@ struct sorterClass
 
      if ( blockSize_1 > blockSize_2 )
           return(true);
-
      if ( blockSize_1 < blockSize_2 )
           return(false);
 
      // ta_c1e is per-thread vector_load size, bigger is better for performance
      if ( cfg1.tensor_a_cluster_lengths[1] > cfg2.tensor_a_cluster_lengths[1] )
           return(true);
-
      if ( cfg1.tensor_a_cluster_lengths[1] < cfg2.tensor_a_cluster_lengths[1] )
           return(false);
 
      // simutaneously accessing by more threads (bigger cluster size) on faster dimension could benefit the performance
      if ( cfg1.tensor_b_cluster_lengths[3] > cfg2.tensor_b_cluster_lengths[3] )
           return(true);
-
      if ( cfg1.tensor_b_cluster_lengths[3] < cfg2.tensor_b_cluster_lengths[3] )
           return(false);
 
+     // This is needed to ensure tunable with nxe==0 is selected for x=y=1 dilation_x=dilation_y=1, stride_x=stride_y=1, pad_x=pad_y=0
+     // Check the tunable_is_valid() which is not touched by me 
+     if ( cfg1.nxe < cfg2.nxe )
+	  return(true); 
+     if ( cfg1.nxe > cfg2.nxe )
+	  return(false); 
+     
      if ( cfg1.nxb > cfg2.nxb ) 
 	  return(true); 
-
      if ( cfg1.nxb < cfg2.nxb ) 
 	  return(false); 
 
-     // This is needed to ensure tunable with nxe==0 is selected for x=y=1 dilation_x=dilation_y=1, stride_x=stride_y=1, pad_x=pad_y=0
-     // Check the tunable_is_valid() which is not touched by me 
-     if ( cfg1.nxe <= cfg2.nxe )
+     if ( cfg1.wave_tile_k < cfg2.wave_tile_k ) 
+	  return(true); 
+
+     if ( cfg1.wave_tile_k > cfg2.wave_tile_k ) 
 	  return(true); 
 
      return(false); 
