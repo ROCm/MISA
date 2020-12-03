@@ -137,7 +137,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                     num_v_c_clear = num_v_c_clear + 1
                 #else:
                 #    break
-            assert num_gmem != 0, f"no global mem in this instructino list, please check"
+            #assert num_gmem != 0, f"no global mem in this instructino list, please check"
             assert num_v_c_clear in (0, 1)
             num_gmem += num_v_c_clear
 
@@ -163,7 +163,10 @@ class simple_interleave_scheduler_t(mc_base_t):
                 STATE_OTHER     = 1
                 STATE_END       = 2
                 
-                state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
+                if num_gmem == 0:
+                    state = STATE_OTHER
+                else:
+                    state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
                 m1_idx = 0
                 for m0_idx in range(len(mbb_0)):
                     self._emit(self.call_mbb(mbb_0[m0_idx]))
