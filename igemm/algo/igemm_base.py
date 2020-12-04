@@ -306,6 +306,12 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_single                         = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2)
         #self.lds_buffer_num                     = IGEMM_GTC_FEAT_LDS_BUFFER_NUM
         self.lds_total                          = self.lds_buffer_num * self.lds_single
+
+        # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
+        # TODO: need to make some compromise in occupancy and lds double buffer
+        if self.lds_single <= 16*1024 and self.num_agpr_accumulate_c < 128:
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
