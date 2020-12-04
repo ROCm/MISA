@@ -219,7 +219,7 @@ int main(int argc, char **argv)
 
          for (int nxe=0; nxe < 2; nxe += 1)  {
               cfg.nxe = nxe; 	
-	      for (int nxb=1; nxb < 65; nxb *= 4) {
+	      for (int nxb=1; nxb < 17; nxb *= 4) {
                    if ( cfg.gemm_n_per_block % nxb != 0 ) 
 			continue;  
 
