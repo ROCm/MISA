@@ -31,3 +31,4 @@ from .amdgpu import *
 from .mc import *
 from .mbb import *
 from .scheduler import *
+from .instruction import *

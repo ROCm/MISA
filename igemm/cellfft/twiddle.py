@@ -79,19 +79,6 @@ brev_dict={
 BUTTERFLY_DIRECTION_FORWARD     = 0
 BUTTERFLY_DIRECTION_BACKWARD    = 1
 
-class inst_madmk_t(object):
-    '''
-    v_madmk_f32, v_fmamk_f32
-    '''
-    def __init__(self, arch_config):
-        self.arch_config = arch_config
-    def __call__(self, v_c, v_a, k, v_b):
-        if self.arch_config.arch in (AMDGPU_ARCH_GFX900, AMDGPU_ARCH_GFX906, AMDGPU_ARCH_GFX908):
-            return 'v_madmk_f32 v[{}], v[{}], {} v[{}]'.format(v_c, v_a, k, v_b)
-        else:
-            # assume gfx10+
-            return 'v_fmamk_f32 v[{}], v[{}], {} v[{}]'.format(v_c, v_a, k, v_b)
-
 
 class ctrl_btfl_t(object):
     def __init__(self, n, k, direction):
@@ -149,7 +136,7 @@ class btfl_t(macro_base_t):
         return ".btfl_{}_w{}_{}".format('fwd' if self.ctrl.direction == BUTTERFLY_DIRECTION_FORWARD else 'bwd', n, k)
 
     def expr(self):
-        madmk = inst_madmk_t(self.mc.arch_config)
+        madmk = inst_v_madmk_t(self.mc)
         def cal_theta(n, k):
             if CELLFFT_FEAT_BTFL_MINUS_THETA:
                 return -2*np.pi*(k*1.0/n)
@@ -526,7 +513,7 @@ class fft8_fwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_madmk_t(self.mc.arch_config)
+        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt( 8)}]") # 8
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt( 9)}]") # 9
@@ -599,7 +586,7 @@ class fft8_bwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_madmk_t(self.mc.arch_config)
+        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt( 8)}]") # 8
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt( 9)}]") # 9
@@ -670,7 +657,7 @@ class fft16_fwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_madmk_t(self.mc.arch_config)
+        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt(16)}]") # 16
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt(17)}]") # 17

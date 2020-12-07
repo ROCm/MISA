@@ -5,7 +5,7 @@ import subprocess
 
 OUT_DIR='out'
 CPP_DIR=os.path.join('test', 'twiddle')
-ARCH="gfx908"
+ARCH="gfx1030"
 
 def run_cmd(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
@@ -80,12 +80,15 @@ def test_fft():
             return kernel_info
         
         kernel_info_list.append(get_kernel_info())
+        v_add_nc_u32 = inst_v_add_nc_u32_t(mc)
+        v_cmpx_eq_u32 = inst_v_cmpx_eq_u32_t(mc)
         
         label_end = f"{kernel_func}_end"
         mc.emit(f".set s_ka,        0")
         mc.emit(f".set s_bx,        2")
         mc.emit(f".set s_in,        4")
         mc.emit(f".set s_out,       8")
+        mc.emit(f".set v_tid,       0")
         mc.emit(f".set v_pt,        0   ; for simplicity, give 64 vgpr for this twiddle")
         mc.emit(f".set v_tmp,       64   ; for simplicity, give 64 vgpr for this twiddle")
         mc.emit(f"")
@@ -99,11 +102,12 @@ def test_fft():
         mc.emit(f"")
         mc.emit(f"s_cmp_eq_u32      0,   s[s_bx]")
         mc.emit(f"s_cbranch_scc0    {label_end}")
-        mc.emit(f"v_cmpx_eq_u32     vcc,    0,  v0")
+        mc.emit(v_cmpx_eq_u32("vcc",    0,  "v_tid"))
         mc.emit(f"v_mov_b32         v[v_tmp],   0")
         for i in range(n * 2):
             mc.emit(f"buffer_load_dword v[v_pt + {i}], v[v_tmp], s[s_in:s_in+3], 0, offen offset:0")
-            mc.emit(f"v_add_u32  v[v_tmp],  v[v_tmp],   4")
+            #mc.emit(f"v_add_u32  v[v_tmp],  v[v_tmp],   4")
+            mc.emit(v_add_nc_u32("v_tmp",  "v_tmp",   4))
         mc.emit(f"s_waitcnt vmcnt(0)")
         mc.emit(f";----------------")
         mc.emit(fft("v_pt", "v_tmp"))
@@ -112,7 +116,7 @@ def test_fft():
         mc.emit(f"v_mov_b32         v[v_tmp],   0")
         for i in range(n * 2):
             mc.emit(f"buffer_store_dword v[v_pt + {i}], v[v_tmp], s[s_out:s_out+3], 0, offen offset:0")
-            mc.emit(f"v_add_u32  v[v_tmp],  v[v_tmp],   4")
+            mc.emit(v_add_nc_u32("v_tmp",  "v_tmp",   4))
         mc.emit(f"s_waitcnt vmcnt(0)")
         mc.emit(f"s_mov_b64         exec,   -1")
         mc.emit(f"{label_end}:")
