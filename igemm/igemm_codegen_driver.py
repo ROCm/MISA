@@ -53,11 +53,13 @@ class igemm_codegen_driver_t(mc_base_t):
                 assert tdd['direction'] == 'bwd'
             # gtc bwd
             kernel_list.extend([igemm_bwd_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+            # in bwd direction, need such upsampling clear kernel
+            kernel_list.extend([igemm_upsampling_clear_t(mc, igemm_gtc_tunable_parameter_t(tunable_dicts[0]))])
 
         elif tunable_dicts[0]['direction'] == 'wrw':
             for tdd in tunable_dicts:
                 assert tdd['direction'] == 'wrw'
-            # gtc bwd
+            # gtc wrw
             kernel_list.extend([igemm_wrw_gtc_t(mc, igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
         else:	
@@ -100,14 +102,17 @@ class igemm_codegen_driver_t(mc_base_t):
         # igemm algorithm related macros
         # emit_v4r1_dynamic_macros(self.mc, self.tunable_dicts)
         for kernel in self.kernel_list:
-            macro_list = kernel.get_kernel_macros()
-            # assert len(macro_list), ''
-            for macro in macro_list:
-                self.mc.insert_unique(macro.name(), macro)
+            if hasattr(kernel, "get_kernel_macros"):
+                macro_list = kernel.get_kernel_macros()
+                # assert len(macro_list), ''
+                for macro in macro_list:
+                    self.mc.insert_unique(macro.name(), macro)
         self.mc.emit_all_unique()
 
     def emit_igemm_kernel(self):
         def get_kernel_per_inc_file_name(ker, origin_file_name):
+            if type(ker) is igemm_upsampling_clear_t:
+                return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.inc")
             root_file_name = os.path.splitext(origin_file_name)[0]
             return root_file_name + f"_{ker.tunable.gemm_m_per_block:03}x{ker.tunable.gemm_n_per_block:03}" + ".inc"
 
@@ -143,9 +148,10 @@ class igemm_codegen_driver_t(mc_base_t):
                     if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                         kinfo_per_inc_dict[kpi_file_name].append(kernel.get_kernel_info())
 
-            self._emit(';----------------------------------------------------------')
-            self._emit('; starting of kernel {}'.format(kernel.name()))
-            self._emit(kernel.tunable.serialize())
+            if type(kernel) is not igemm_upsampling_clear_t:
+                self._emit(';----------------------------------------------------------')
+                self._emit('; starting of kernel {}'.format(kernel.name()))
+                self._emit(kernel.tunable.serialize())
 
             kernel.emit_kernel_symbol()
 

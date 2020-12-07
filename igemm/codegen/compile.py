@@ -30,7 +30,7 @@ from .amdgpu import *
 import os
 
 IGEMM_HOST_USE_XDNN = True
-IGEMM_HOST_USE_MAGIC_DIV = 0
+IGEMM_HOST_USE_MAGIC_DIV = 1
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')

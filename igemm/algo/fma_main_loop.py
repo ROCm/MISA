@@ -37,12 +37,6 @@ class inst_fma_t(object):
                 if self.arch_config.use_dlops:
                     return 'v_fmac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
             return 'v_mac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
-        if self.arch_config.data_type == AMDGPU_PRECISION_FP16:
-            # wrong code do not use this thing.
-            if self.arch_config.arch == AMDGPU_ARCH_GFX906:
-                if self.arch_config.use_dlops:
-                    return 'v_fmac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
-            return 'v_mac_f32 v[{}], v[{}], v[{}]'.format(reg_c, reg_a, reg_b)
         # xdlops
         assert False, 'unimplemented fma type'
 

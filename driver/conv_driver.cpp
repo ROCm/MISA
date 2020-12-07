@@ -272,7 +272,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
@@ -286,13 +286,11 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            if (pp_err < 100){
-                // printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
-            }
-            if (delta > 3e-5 || delta < 0) {
+            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
-                        printf("diff at %4d, ref:%lf(0x%08x), pred:%lf(0x%08x), d:%lf\n", i, ri, ((uint32_t *)ref)[i], 
+                        printf("diff at %4d, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
                             pi, ((uint32_t *)pred)[i], delta);
                 }
                 pp_err++;
@@ -368,6 +366,7 @@ int main(int argc, char **argv) {
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
     int run_first_applicable = env_get_int("IGEMM_RUN_FIRST_APPLICABLE_CONFIG", 0); 
+    int assert_when_invalid = env_get_int("IGEMM_ASSERT_WHEN_INVALID", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
@@ -647,24 +646,8 @@ int main(int argc, char **argv) {
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            // for(int i_n = 0; i_n < n; i_n++){
-            //     for(int i_k = 0; i_k < k; i_k++){
-            //         for(int i_ho = 0; i_ho < ho; i_ho++){
-            //             for(int i_wo = 0; i_wo < wo; i_wo++){
-            //                 int data = ((i_n  & 0xff) << 24) |
-            //                             ((i_k  & 0xff) << 16) |
-            //                             ((i_ho & 0xff) << 8) |
-            //                             (i_wo & 0xff);
-            //                 int index = i_n * k * ho * wo + i_k * ho * wo + i_ho * wo + i_wo;
-            //                 memcpy(&host_output[index],&data,4 );
-            //                 // host_output[index] = *(float*)(&data);
-            //             }
-            //         }
-            //     }
-            // }
-
-
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
             // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
             // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
@@ -681,6 +664,7 @@ int main(int argc, char **argv) {
         HIP_CALL(hipMemcpy(device_weight, host_weight,
                        k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
+
         igemm_bwd_gtc_t conv_bwd_driver;
         double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
@@ -689,8 +673,8 @@ int main(int argc, char **argv) {
             printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0,
-                                   n * c * hi * wi * sizeof(float)));
+                HIP_CALL(hipMemset(device_input, 0x7f,
+                                   n * c * hi * wi * sizeof(float)));   // 0x7f7f7f7f ~= 7.41e+28, a very large number
             result_t result =
                 conv_bwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
@@ -711,6 +695,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_input, device_input_to_host,
                                             n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
                 // if (!is_valid) {
                 //     printf("\n");
                 //     break;
@@ -835,6 +820,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
                                             k * c * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
                 // if (!is_valid) {
                 //     printf("\n");
                 //     break;
