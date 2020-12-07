@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
     if os.path.exists(args.dir):
         shutil.rmtree(args.dir)
-        os.mkdir(args.dir)
+    os.mkdir(args.dir)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         igemm_host_driver(args, config_content)
