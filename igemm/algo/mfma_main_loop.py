@@ -281,6 +281,7 @@ class mfma_main_loop_t(mc_base_t):
                 with self._deferred_context():
                     # self._emit(f's_waitcnt lgkmcnt(0)')
                     self._emit(mfma_step_mxn(0, 0, 0, 0))
+                    self._emit(mfma_step_mxn(0, 0, 1, 1))
 
                     self._emit_empty_line()
 
@@ -288,7 +289,7 @@ class mfma_main_loop_t(mc_base_t):
                     self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
                     self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
 
-                    self._emit(mfma_step_mxn(0, 0, 1, 1))
+                    #self._emit(mfma_step_mxn(0, 0, 1, 1))
                     self._emit(f"s_waitcnt lgkmcnt(0)")
                     self._emit(f"s_barrier")
                     self._emit(f"s_branch {label_mfma_body}")
@@ -347,7 +348,7 @@ class mfma_main_loop_t(mc_base_t):
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
-            self._emit(mfma_step_mxn(0, 0, 1, 1))
+            #self._emit(mfma_step_mxn(0, 0, 1, 1))
 
             
             self._emit_front(f"{label_mfma_end}:")
