@@ -262,7 +262,14 @@ public:
         int gemm_n = (c / group) * y * x;
         int gemm_k = n * b;
 
-        if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 ) || (gemm_k % gemm_k_per_block != 0)){
+        int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
+
+        if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
+        {
+            return false;
+        }
+
+        if ((gemm_m % gemm_m_per_block !=0 ) || (gemm_k % gemm_k_per_block != 0)){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
             return false;
         }
