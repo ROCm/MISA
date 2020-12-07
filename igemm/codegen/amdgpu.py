@@ -110,7 +110,7 @@ def amdgpu_string_to_precision(amdgpu_precision_string):
 
 def amdgpu_precision_data_byte(precision):
     if type(precision) is str:
-        precision = amdgpu_string_to_precision(precision)
+        p = amdgpu_string_to_precision(precision)
     else:
         p = precision
     if p == AMDGPU_PRECISION_FP32:

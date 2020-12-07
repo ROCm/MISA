@@ -54,7 +54,10 @@ class inst_mt_operand_t(object):
                 if self.operand[0] == 's':
                     return f's[{self.operand}]'
                 elif self.operand[0] == 'v':
-                    return f'v[{self.operand}]'
+                    if self.operand == 'vcc':
+                        return self.operand
+                    else:
+                        return f'v[{self.operand}]'
                 elif self.operand[0] == 'k':
                     return f'{self.operand}'
                 else:
