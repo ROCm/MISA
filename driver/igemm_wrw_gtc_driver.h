@@ -44,8 +44,8 @@ typedef struct {
     int hi;
     int wi;
     int n;
-    int k;
-    int c;
+    int k;                      // this is indeed k_per_group
+    int c;                      // this is indeed c_per_group
     int ho;
     int wo;
     int stride_h;
@@ -57,7 +57,8 @@ typedef struct {
     int y;
     int x;
     int gemm_k_global_split;
-    int __pack0;
+    int group;
+    int __pack_0;
 } __attribute__((packed)) igemm_wrw_gtc_karg_t;
 
 static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
@@ -79,7 +80,8 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
     std::cout<<"pad_w:"        <<karg->pad_w<<",";
     std::cout<<"y:"            <<karg->y<<",";
     std::cout<<"x:"            <<karg->x<<",";
-    std::cout<<"gemm_k_global_split:" <<karg->gemm_k_global_split;
+    std::cout<<"gemm_k_global_split:" <<karg->gemm_k_global_split<<",";
+    std::cout<<"group:"        <<karg->group;
     std::cout<<std::endl;
 }
 
@@ -193,6 +195,7 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -201,10 +204,10 @@ public:
 
         gemm_k_global_split = update_gemm_k_global_split(arg, tunable);
 
-        int gemm_m = k;
-        int gemm_n = c * y * x;
+        int gemm_m = k / group ;
+        int gemm_n = (c / group) * y * x;
 
-        int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = 1 << gemm_k_global_split;
         grid_size *= num_of_gemm;
@@ -238,6 +241,9 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;   // pad to nxb modulo when nxe != 0
+        assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -252,11 +258,11 @@ public:
 
         int n_per_block = n >> gemm_k_global_split;
 
-        int gemm_m = k;
-        int gemm_n = c * y * x;
-        int gemm_k = n * ho * wo;
+        int gemm_m = k / group;
+        int gemm_n = (c / group) * y * x;
+        int gemm_k = n * b;
 
-        if ((c % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 )){
+        if ((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block !=0 ) || (gemm_k % gemm_k_per_block != 0)){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
             return false;
         }
@@ -269,12 +275,7 @@ public:
         if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
             return false;
 
-        if ((tunable->nxb != 1) && (tunable->nxe != 0)){
-            //std::cout << __func__ << " false: tunable->nxb is " << tunable->nxb << ", tunable->nxe is " << tunable->nxe << std::endl;
-            return false;
-        }
-
-        if ((ho * wo) % tunable->nxb != 0){
+        if (b % tunable->nxb != 0){
             //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
             return false;
         }
@@ -287,7 +288,7 @@ public:
             }
         }
         else {
-            if (n_per_block * ho * wo % gemm_k_per_block !=0){
+            if (n_per_block * b % gemm_k_per_block !=0){
                 return false;
             }
         }
@@ -315,6 +316,10 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        assert(c % group == 0 && k % group == 0);
+
+        int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -322,12 +327,13 @@ public:
 
         int gemm_k_global_split      = tunable->gemm_k_global_split;
 
-        int gemm_m = k;
-        int gemm_n = c * y * x;
+        int gemm_m = k / group;
+        int gemm_n = (c / group) * y * x;
+        
 
         int max_grid_size = 1200;
 
-        int grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
         
@@ -348,7 +354,7 @@ public:
                     }
                 }
                 else {
-                    if (n_per_block * ho * wo % gemm_k_per_block !=0){
+                    if (n_per_block * b % gemm_k_per_block !=0){
                         break;
                     }
                 }
@@ -383,13 +389,16 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        assert(c % group == 0 && k % group == 0);
 
-        int gemm_m = k;
-        int gemm_n = c * y * x;
+        // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
+        int gemm_m = k / group;
+        int gemm_n = (c / group) * y * x;
         int gemm_k = n * ho * wo;
 
         int grid_size;
-        grid_size = utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         if ((n % 2 == 0) && (grid_size < 512) && ((n >> 1) * ho * wo % gemm_k_per_block == 0)){
             gemm_k_global_split = 1;
@@ -440,6 +449,8 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block = 0;
         int gemm_n_per_block = 0;
@@ -447,8 +458,8 @@ public:
 
         int gemm_k_global_split = 0;
 
-        int gemm_m = k;
-        int gemm_n = c * y * x;
+        int gemm_m = k / group;
+        int gemm_n = (c / group) * y * x;
         int gemm_k = n * ho * wo;
 
         int grid_size;
@@ -499,7 +510,7 @@ public:
                         gemm_n_per_block = 1 << r;
                     }
                     
-                    if (gemm_m % gemm_m_per_block != 0 || c % gemm_n_per_block != 0)
+                    if (gemm_m % gemm_m_per_block != 0 || gemm_n % gemm_n_per_block != 0)
                         continue;
                     for (j = 5; j > 1; j--){
                         gemm_k_per_block = 1 << j;
@@ -537,7 +548,7 @@ public:
                             continue;
 
                         int log2_gemm_k_splits = 0;
-                        int grid_size = gemm_m / gemm_m_per_block * gemm_n / gemm_n_per_block;
+                        int grid_size = group * gemm_m / gemm_m_per_block * gemm_n / gemm_n_per_block;
                         for (int gs = 0; gs < 8; gs++){
                             if ((grid_size << gs) > 1200)
                                 break;
@@ -626,6 +637,8 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -645,8 +658,8 @@ public:
         karg.hi            = hi;
         karg.wi            = wi;
         karg.n             = n;
-        karg.k             = k;
-        karg.c             = c;
+        karg.k             = k / group;
+        karg.c             = c / group;
         karg.ho            = ho;
         karg.wo            = wo;
 
@@ -659,6 +672,7 @@ public:
         karg.y             = y;
         karg.x             = x;
         karg.gemm_k_global_split  = gemm_k_global_split;
+        karg.group         = group;
 
         //printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
@@ -667,19 +681,52 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+        //dump_wrw_karg(&karg);
+        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
-        hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
+        // hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
 
         auto launch_wrw_driver = [&](){
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                               HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                               HIP_LAUNCH_PARAM_END};
+            float ms = .0;
+
+            if(gemm_k_global_split){
+                // TODO: current implementation of global split K need pre-clear the wei tensor
+                // This may not be true in the future!
+                hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
+            }
+
+#if USE_EXT_MODULE_LAUNCH
+            hipEvent_t start;
+            hipEvent_t stop;
+            hipEventCreate(&start);
+            hipEventCreate(&stop);
+
+            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, start, stop));
+
+            hipEventSynchronize(stop);
+            hipEventElapsedTime(&ms, start, stop);
+            hipEventDestroy(start);
+            hipEventDestroy(stop);
+#else
+            gpu_timer_t timer(NULL);
+            timer.start();
+
             HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                           block_size, 1, 1, 0, 0, NULL,
-                                           (void **)&config));
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config));
+
+            timer.stop();
+            ms = timer.duration();
+#endif
+            return ms;
         };
 
         for (int i = 0; i < warmup; i++) {
@@ -687,18 +734,14 @@ public:
         }
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
-            gpu_timer_t timer(NULL);
-            timer.start();
-            launch_wrw_driver();
-            timer.stop();
-            float d = timer.duration();
+            float d = launch_wrw_driver();
             duration_list.push_back(d);
         }
 
-        for (int i = 0; i < warmup; i++) {
-            hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
-            launch_wrw_driver();
-        }
+        // for (int i = 0; i < warmup; i++) {
+        //     hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
+        //     launch_wrw_driver();
+        // }
 
         // remove min and max from list, then do average
         auto imin = std::min_element(begin(duration_list), end(duration_list));
@@ -711,7 +754,7 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
-#if 1
+#if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
