@@ -99,7 +99,7 @@ struct sorterClass
 	  return(true); 
 
      if ( cfg1.wave_tile_k > cfg2.wave_tile_k ) 
-	  return(true); 
+	  return(false); 
 
      return(false); 
   };
