@@ -1466,8 +1466,8 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f"; n1b transform")
 
-        # self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in1(), v.v_gtc_in1b(), s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k() , v.v_tmp(), s.s_tmp()))
-        self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in1(), v.v_gtc_in1b(), s.s_out_stride_k(), v.v_tmp(), s.s_tmp()))
+        self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in1(), v.v_gtc_in1b(), s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k() , v.v_tmp(), s.s_tmp()))
+        # self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in1(), v.v_gtc_in1b(), s.s_out_stride_k(), v.v_tmp(), s.s_tmp()))
         self._emit(m_int_div_rem_vs(v.v_move_slice_n_idswo(), v.v_move_slice_n_idsho(), v.v_tmp(4), s.s_wo(), v.v_tmp(), s.s_tmp()))
         m_out_update_hw   = self.get_macro_out_update_hw()
         self._emit(m_out_update_hw(v.v_out_iho(), v.v_out_iwo(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo()))
@@ -1824,8 +1824,8 @@ class igemm_wrw_gtc_t(mc_base_t):
         #    self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
         if self.tunable.nxb != 0:
             self._emit(f"s_mov_b32 s[0], {n_n1b}")
-            #self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-            self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            # self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         else:
             pass
