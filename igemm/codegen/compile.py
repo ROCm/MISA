@@ -31,6 +31,7 @@ import os
 
 IGEMM_HOST_USE_XDNN = False
 IGEMM_HOST_USE_MAGIC_DIV = True
+IGEMM_HOST_USE_HIPCC = True # hipclang perfer use hipcc to compile host code
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')
@@ -135,9 +136,12 @@ class compile_host_t(object):
         use_hip_clang = _check_hip_clang()
         xdnnroot ='2f6f70742f696e74656c2f696e74656c6f6e656170692f6f6e65444e4e2f6c61746573742f6370755f676f6d702f'
         if use_hip_clang:
-            cmd = ['g++']
-            cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
-            cmd += ['-Wall','-O2', '-std=c++11']
+            if IGEMM_HOST_USE_HIPCC:
+                cmd = ['/opt/rocm/hip/bin/hipcc']
+            else:
+                cmd = ['g++']
+                cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
+                cmd += ['-Wall','-O2', '-std=c++11']
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-I{bytes.fromhex(xdnnroot).decode()}/include', '-DUSE_XDNN']
             if IGEMM_HOST_USE_MAGIC_DIV:
@@ -152,9 +156,10 @@ class compile_host_t(object):
                 cmd += self.host_cpp     # for multiple files
             else:
                 assert False
-            cmd += ['-L/opt/rocm/lib', '-L/opt/rocm/lib64', '-Wl,-rpath=/opt/rocm/lib',
-                    '-ldl', '-lm', '-lpthread',
-                    '-Wl,--whole-archive', '-lamdhip64', '-lhsa-runtime64', '-lhsakmt', '-Wl,--no-whole-archive']
+            if not IGEMM_HOST_USE_HIPCC:
+                cmd += ['-L/opt/rocm/lib', '-L/opt/rocm/lib64', '-Wl,-rpath=/opt/rocm/lib',
+                        '-ldl', '-lm', '-lpthread',
+                        '-Wl,--whole-archive', '-lamdhip64', '-lhsa-runtime64', '-lhsakmt', '-Wl,--no-whole-archive']
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-L{bytes.fromhex(xdnnroot).decode()}/lib', f"-l{bytes.fromhex('646e6e6c').decode()}", f'-Wl,-rpath={bytes.fromhex(xdnnroot).decode()}/lib']
             cmd += ['-o', self.target_exec]
