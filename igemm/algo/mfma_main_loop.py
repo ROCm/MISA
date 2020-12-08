@@ -36,7 +36,7 @@ class ctrl_mfma_main_loop_t(object):
         self.cxm                         = None
 
         self.unroll_k                    = 0
-        self.lds_gemm_k_pack             = 0
+        self.lds_gemm_k_pack             = 1
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
         self.data_type                   = AMDGPU_PRECISION_FP32 # c matrix data type
         self.precision                   = 'fp32'                # a/b matrix data type
