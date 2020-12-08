@@ -306,29 +306,35 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         ;
 }
 
-static inline double get_fwd_nrms()
-{
+static inline double get_nrms(int forw, driverDataType_t driver_data_type){
+    auto basic_tolerance = [=]() -> double{
+        if (driver_data_type == driverFloat){
 #ifdef USE_XDNN
-    return 5e-5;
+            return 5e-5;
 #else
-    return 1e-6;
+            return 1.5e-6;
 #endif
-}
-static inline double get_bwd_nrms()
-{
+        }
+        else if (driver_data_type == driverHalf){
 #ifdef USE_XDNN
-    return 5e-5;
+            return 5*8.2e-3;
 #else
-    return 1e-6;
+            return 8.2e-3;
 #endif
-}
-static inline double get_wrw_nrms()
-{
-#ifdef USE_XDNN
-    return 1e-4;
-#else
-    return 1e-6;
-#endif
+        }
+    };
+    double nrms = basic_tolerance();
+    // wrw has a high tolerance
+    if (forw == 4){
+        nrms *= 2;
+        if(driver_data_type == driverFloat){
+            nrms = 0.01;
+        }
+        else if(driver_data_type == driverHalf){
+            nrms *= 5;
+        }
+    }
+    return nrms;
 }
 
 void dump_arg(const args_t *arg) {
@@ -497,6 +503,8 @@ int main(int argc, char **argv) {
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
 
+    double nrms = get_nrms(forw, driver_data_type);
+
     if (need_fwd){
         result_t fastest_result_fwd;
         fastest_result_fwd.duration_ms = FLT_MAX;
@@ -505,10 +513,10 @@ int main(int argc, char **argv) {
         float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
             //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
@@ -544,7 +552,7 @@ int main(int argc, char **argv) {
                         k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
         }
         igemm_fwd_gtc_t conv_fwd_driver;
-        double nrms = get_fwd_nrms();
+        //double nrms = get_fwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -666,7 +674,7 @@ int main(int argc, char **argv) {
 
 
         igemm_bwd_gtc_t conv_bwd_driver;
-        double nrms = get_bwd_nrms();
+        //double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -772,7 +780,7 @@ int main(int argc, char **argv) {
         igemm_wrw_gtc_t conv_wrw_driver;
         float min_duration = 10000000.0f;
         float selected_duration = 10000000.0f;
-        double nrms = get_wrw_nrms();
+        //double nrms = get_wrw_nrms();
         std::string kernel_name;
 
         std::string selected_kernel;
