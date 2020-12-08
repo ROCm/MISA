@@ -91,11 +91,7 @@ int main(int argc, char ** argv)
     HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, NULL, NULL));
-
     HIP_CALL(hipMemcpy(sequence_host, sequence_out_dev, fft_length * 2 * sizeof(float), hipMemcpyDeviceToHost));
-
-
-
 
     {
         // the gpu fft operation result in brev order, we need to order back to do check
@@ -132,5 +128,7 @@ int main(int argc, char ** argv)
     delete [] sequence_origin;
     delete [] sequence;
     delete [] sequence_host;
+    hipFree(sequence_in_dev);
+    hipFree(sequence_out_dev);
     return rtn_cnt;
 }

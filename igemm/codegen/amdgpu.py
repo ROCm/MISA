@@ -446,6 +446,9 @@ class amd_kernel_code_t(mc_base_t):
 
                 self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
                 self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
+                if self.mc.arch_config.arch >= 1000:
+                    self._emit('.amdhsa_wavefront_size32 1')
+                    self._emit('.amdhsa_workgroup_processor_mode 1')
             self._emit('.end_amdhsa_kernel')
         else:
             assert False
