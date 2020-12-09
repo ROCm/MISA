@@ -1825,11 +1825,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         if self.tunable.nxb != 0:
             self._emit(f"s_mov_b32 s[0], {n_n1b}")
             self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-<<<<<<< HEAD
             # self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
-=======
-            #self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
->>>>>>> master
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         else:
             pass

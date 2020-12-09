@@ -266,10 +266,11 @@ public:
         }
         if(tunable->tensor_b_thread_lengths[1] > 1 && ( x !=1 || y != 1)){
             return false;
+        }
 
         // let's check the next configuration even though this configuration is applicable
         if ( mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
-             return(false); 
+             ;//return(false); 
 
         return true;
     }

@@ -261,10 +261,6 @@ public:
         int gemm_m = k / group;
         int gemm_n = (c / group) * y * x;
         int gemm_k = n * b;
-<<<<<<< HEAD
-=======
-
->>>>>>> master
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
 
         if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))

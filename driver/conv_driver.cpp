@@ -171,8 +171,6 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define REPEAT 8
 #define SCLK_MHZ 1283
 
-using namespace half_float::literal;
-
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
     int r = default_int;
