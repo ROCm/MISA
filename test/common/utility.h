@@ -4,6 +4,7 @@
 #include <iostream>
 #include <random>
 #include <assert.h>
+#include <cmath>
 
 #define RAND_MAX_FLOAT  1.0
 #define RAND_MIN_FLOAT  -1.0
@@ -23,6 +24,12 @@ bool is_power_of_2(int x)
 }
 
 template<typename T>
+bool valid_float(T p)
+{
+    return ! (std::isnan(p) || std::isinf(p));
+}
+
+template<typename T>
 void rand_vec(T *  seq, size_t len){
     static std::random_device rd;   // seed
     static std::mt19937 mt(rd());
@@ -37,6 +44,11 @@ int valid_vector(const T* lhs, const T* rhs, size_t len, T delta = (T)3e-6){
     for(size_t i = 0;i < len; i++){
         T d = lhs[i]- rhs[i];
         d = ABS(d);
+        if(!(valid_float(lhs[i]) && valid_float(rhs[i]))){
+            std::cout<<" invalid float at "<<i<<", lhs:"<<lhs[i]<<", rhs:"<<rhs[i]<<std::endl;
+            err_cnt++;
+            continue;
+        }
         if(d > delta){
             std::cout<<" diff at "<<i<<", lhs:"<<lhs[i]<<", rhs:"<<rhs[i]<<", delta:"<<d<<std::endl;
             err_cnt++;
@@ -51,6 +63,9 @@ int valid_vector_nrms(const T* pred, const T* ref, size_t len, double tolerance 
     v = 0;
     max = std::numeric_limits<double>::min();
     for(size_t i=0;i<len;i++){
+        if(!(valid_float(ref[i]) && valid_float(pred[i]))){
+            return -1;
+        }
         double d = ref[i]-pred[i];
         double m2 = MAX(ABS(ref[i]),ABS(pred[i]));
         v += d*d;
