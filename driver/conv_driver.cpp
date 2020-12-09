@@ -511,10 +511,10 @@ int main(int argc, char **argv) {
         float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
+            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
+            gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
             //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
