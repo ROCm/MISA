@@ -18,19 +18,19 @@
 #define RMS_THRESHOLD 1e-6
 
 
-bool is_power_of_2(int x)
+static bool is_power_of_2(int x)
 {
   return x > 0 && !(x & (x-1));
 }
 
 template<typename T>
-bool valid_float(T p)
+static bool valid_float(T p)
 {
     return ! (std::isnan(p) || std::isinf(p));
 }
 
 template<typename T>
-void rand_vec(T *  seq, size_t len){
+static void rand_vec(T *  seq, size_t len){
     static std::random_device rd;   // seed
     static std::mt19937 mt(rd());
     static std::uniform_real_distribution<T> dist(RAND_MIN_FLOAT, RAND_MAX_FLOAT);
@@ -39,7 +39,7 @@ void rand_vec(T *  seq, size_t len){
 }
 
 template<typename T>
-int valid_vector(const T* lhs, const T* rhs, size_t len, T delta = (T)3e-6){
+static int valid_vector(const T* lhs, const T* rhs, size_t len, T delta = (T)3e-6){
     int err_cnt = 0;
     for(size_t i = 0;i < len; i++){
         T d = lhs[i]- rhs[i];
@@ -57,7 +57,7 @@ int valid_vector(const T* lhs, const T* rhs, size_t len, T delta = (T)3e-6){
     return err_cnt;
 }
 template<typename T>
-int valid_vector_nrms(const T* pred, const T* ref, size_t len, double tolerance = (double)RMS_THRESHOLD)
+static int valid_vector_nrms(const T* pred, const T* ref, size_t len, double tolerance = (double)RMS_THRESHOLD)
 {
     double v, max, nrms;
     v = 0;
@@ -76,13 +76,13 @@ int valid_vector_nrms(const T* pred, const T* ref, size_t len, double tolerance 
 }
 
 template<typename T>
-void dump_vector(const T * vec, size_t len){
+static void dump_vector(const T * vec, size_t len){
     for(size_t i=0;i<len;i++) std::cout<<vec[i]<<(i==(len-1)?"":", ");
     std::cout<<std::endl;
 }
 
 template<typename T>
-void dump_vector_as_py_array(const T * vec, size_t len){
+static void dump_vector_as_py_array(const T * vec, size_t len){
     assert(is_power_of_2(len));
     std::cout<<"[";
     for(size_t i=0;i<len;i++)
