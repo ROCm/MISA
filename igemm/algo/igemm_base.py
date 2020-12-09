@@ -268,7 +268,7 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_c = 1                             # not used
         else:
             assert self.gemm_k_per_block % self.nxb == 0
-            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, 1)
+            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = self.gemm_n_per_block
 

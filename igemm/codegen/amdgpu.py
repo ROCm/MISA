@@ -31,11 +31,14 @@ from .mc import *
 AMDGPU_PRECISION_FP32   = (0 << 20)
 AMDGPU_PRECISION_FP16   = (1 << 20)
 AMDGPU_PRECISION_BF16   = (2 << 20)
-AMDGPU_ARCH_GFX900      = (0 << 24)
-AMDGPU_ARCH_GFX906      = (1 << 24)
-AMDGPU_ARCH_GFX908      = (2 << 24)
+
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
+
+AMDGPU_ARCH_GFX900      = 900
+AMDGPU_ARCH_GFX906      = 906
+AMDGPU_ARCH_GFX908      = 908
+AMDGPU_ARCH_GFX1030     = 1030
 
 AMDGPU_WAVE_SIZE        = 64
 AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M = 4
@@ -58,6 +61,8 @@ def amdgpu_string_to_arch(amdgpu_arch_string):
         return AMDGPU_ARCH_GFX906
     if amdgpu_arch_string == 'gfx908':
         return AMDGPU_ARCH_GFX908
+    if amdgpu_arch_string == 'gfx1030':
+        return AMDGPU_ARCH_GFX1030
     assert False
 
 def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
@@ -67,6 +72,8 @@ def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
         return 'gfx906'
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX908:
         return 'gfx908'
+    if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX1030:
+        return 'gfx1030'
     assert False
 
 def amdgpu_string_to_codeobj(amdgpu_codeobj_string):
@@ -103,14 +110,26 @@ def amdgpu_string_to_precision(amdgpu_precision_string):
 
 def amdgpu_precision_data_byte(precision):
     if type(precision) is str:
-        precision = amdgpu_string_to_precision(precision)
-    if precision == AMDGPU_PRECISION_FP32:
+        p = amdgpu_string_to_precision(precision)
+    else:
+        p = precision
+    if p == AMDGPU_PRECISION_FP32:
         return 4
-    if precision == AMDGPU_PRECISION_FP16:
+    if p == AMDGPU_PRECISION_FP16:
         return 2
-    if precision == AMDGPU_PRECISION_BF16:
+    if p == AMDGPU_PRECISION_BF16:
         return 2
     assert False
+
+def amdgpu_wave_size(arch):
+    if type(arch) is str:
+        a = amdgpu_string_to_arch(arch)
+    else:
+        a = arch
+    if a < 1000:
+        return 64
+    else:
+        return 32
 
 class amdgpu_arch_detail_t(object):
     '''
@@ -427,6 +446,9 @@ class amd_kernel_code_t(mc_base_t):
 
                 self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
                 self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
+                if self.mc.arch_config.arch >= 1000:
+                    self._emit('.amdhsa_wavefront_size32 1')
+                    self._emit('.amdhsa_workgroup_processor_mode 1')
             self._emit('.end_amdhsa_kernel')
         else:
             assert False
@@ -448,7 +470,7 @@ class amdgpu_metadata_t(mc_base_t):
         self._emit('    .kernarg_segment_size: {}'.format(          ki_.kernel_code.kernarg_segment_byte_size))
         self._emit('    .group_segment_fixed_size: {}'.format(      ki_.kernel_code.workgroup_group_segment_byte_size))
         self._emit('    .private_segment_fixed_size: {}'.format(    0))     # hard code to 0
-        self._emit('    .wavefront_size: {}'.format(                64))
+        self._emit('    .wavefront_size: {}'.format(                amdgpu_wave_size(self.mc.arch_config.arch)))
         self._emit('    .reqd_workgroup_size : [{}]'.format(        '{}, 1, 1'.format( ki_.kernel_block_size) \
                                                                                 if type(ki_.kernel_block_size) is int else \
                                                                     '{}, {}, {}'.format(ki_.kernel_block_size[0],

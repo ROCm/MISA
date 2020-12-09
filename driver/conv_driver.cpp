@@ -298,7 +298,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 
         }
     }
-     printf("nrms:%lf, s0:%lf, s1:%lf\n",sqrt(s0/s1),s0,s1);
+    //printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -614,6 +614,7 @@ int main(int argc, char **argv) {
                 bool is_valid = valid_vector(host_output, device_output_to_host,
                                             n * k * ho * wo, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
+                if(assert_when_invalid) assert(is_valid);
             }
             printf("\n");
 

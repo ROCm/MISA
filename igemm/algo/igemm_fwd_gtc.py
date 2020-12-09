@@ -517,6 +517,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             s_in_stride_d0, s_in_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load weight")
+                # self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
@@ -854,9 +855,9 @@ class igemm_fwd_gtc_t(mc_base_t):
             assert ta_c0 == 1
             assert tb_c0 == 1
         else:
-            assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
-            assert tb_c0 == 1
-
+            # assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
+            # assert tb_c0 == 1
+            pass
             # there should be a case that tb_c1e not be 1 and nxe != 0. this should only be allowed in 1x1 and with stride or dilation or pad
             # assert tb_c0 == 1 and tb_c1e == 1, "input no need to use c0/c1e per thread"
 
@@ -909,9 +910,10 @@ class igemm_fwd_gtc_t(mc_base_t):
         '''
         inline = True if self.tunable.fma_interleave else False
         ta_c0, ta_c1e, ta_k0, ta_k1, tb_c0, tb_c1e, tb_n0, tb_n1b = self.get_thread_lengths()
+        na_c0, na_c1e, na_k0, na_k1, nb_c0, nb_c1e, nb_n0, nb_n1b = self.get_dims_lengths()
+
         wei_thread_copy_dims, in_thread_copy_dims = self.get_thread_copy_dims()
         wei_thread_copy_index, in_thread_copy_index = self.get_thread_copy_index()
-
         ctrl_wei_gld = ctrl_2d_global_load_t()
         ctrl_in_gld = ctrl_2d_global_load_t()
 
@@ -1009,6 +1011,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
                 wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
+                wei_sst_ctrl.need_transpose = 0
             if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
                 wei_sst_ctrl.vector_d1 = math.gcd(ta_k1 * sst_gemm_k_pack, 4)
             else:
@@ -2215,7 +2218,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             pass
         else:
             a = self.agpr
-
+            
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
                     None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None, s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
 
