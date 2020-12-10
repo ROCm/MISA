@@ -921,13 +921,20 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     
                     # pack 2 fp16 into one vgpr when length_d0 % 4 == 0
                     if ctrl.length_d0 % lds_gemm_k_pack == 0 and ctrl.length_d1 == 1:
-                        ds_write = inst_ds_write_t(ctrl.vector_d1 * lds_gemm_k_pack * data_byte)
-                        for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
-                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                            self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}]")
-                            self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+2}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+3}]")
-                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
-                            issue_cnt += ds_write.get_issues()
+                        if IGEMM_GTC_FEAT_PACK_INPUT_GLOBAL:
+                            ds_write = inst_ds_write_t(ctrl.vector_d1 * lds_gemm_k_pack * data_byte)
+                            for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
+                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}]")
+                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+2}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+3}]")
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
+                                issue_cnt += ds_write.get_issues()
+                        else:
+                            ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                            for i_d0 in range(0, ctrl.length_d0, 1):
+                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
+                                issue_cnt += ds_write.get_issues()
                     else:
                         ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                         for i_d0 in range(ctrl.length_d0):
