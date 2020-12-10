@@ -14,5 +14,5 @@ script/gtc_conv_model_fp16_fail.sh
 sqtt_out/
 *.csv
 .gitignore
-config/fp16-configs
-driver/cfg-tools
+config/fp16-configs/
+driver/cfg-tools/
