@@ -37,6 +37,7 @@
 #include <time.h>
 #include <vector>
 #include <float.h>
+#include <cmath>
 
 #ifndef USE_EXT_MODULE_LAUNCH
 #define USE_EXT_MODULE_LAUNCH 1
@@ -266,6 +267,11 @@ void tensor_movement(Dst_T *p_dst, Src_T *p_src, size_t tensor_size) {
         th.join();
 }
 
+static inline bool valid_float(float p)
+{
+    return !(std::isnan(p) || std::isinf(p));
+}
+
 static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
@@ -275,6 +281,10 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
     int pp_err = 0;
 
     for (int i = 0; i < n; ++i) {
+        if(!(valid_float(ref[i]) && valid_float(pred[i]))){
+            printf(" invalid float at %4d, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+            return -1;
+        }
         double ri = (double)ref[i];
         double pi = (double)pred[i];
         double d = ri - pi;
