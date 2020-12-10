@@ -312,7 +312,7 @@ static inline double get_wrw_nrms()
 #ifdef USE_XDNN
     return 1e-4;
 #else
-    return 1e-6;
+    return 1e-4;
 #endif
 }
 
