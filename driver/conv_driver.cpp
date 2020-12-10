@@ -51,17 +51,24 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
-#ifdef USE_XDNN
-#include "xdnn_conv.h"
-#define conv_fwd_nchw xdnn_conv_fwd_nchw
-#define conv_bwd_nchw xdnn_conv_bwd_nchw
-#define conv_wrw_nchw xdnn_conv_wrw_nchw
+#ifdef USE_GPU_NAIVE_CONV
+#   include "gpu_naive_conv.h"
+#   ifndef IGEMM_GPU_NAIVE_CONV_HSACO
+#       define  IGEMM_GPU_NAIVE_CONV_HSACO "naive_conv.hsaco"
+#   endif
 #else
-#define NAIVE_CONV_THREADED
-#include "naive_conv.h"
-#define conv_fwd_nchw naive_conv_fwd_nchw
-#define conv_bwd_nchw naive_conv_bwd_nchw
-#define conv_wrw_nchw naive_conv_wrw_nchw
+#   ifdef USE_XDNN
+#       include "xdnn_conv.h"
+#       define conv_fwd_nchw xdnn_conv_fwd_nchw
+#       define conv_bwd_nchw xdnn_conv_bwd_nchw
+#       define conv_wrw_nchw xdnn_conv_wrw_nchw
+#   else
+#       define NAIVE_CONV_THREADED
+#       include "naive_conv.h"
+#       define conv_fwd_nchw naive_conv_fwd_nchw
+#       define conv_bwd_nchw naive_conv_bwd_nchw
+#       define conv_wrw_nchw naive_conv_wrw_nchw
+#   endif
 #endif
 
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
@@ -341,19 +348,22 @@ void dump_arg(const args_t *arg) {
 }
 
 int main(int argc, char **argv) {
-    
     char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
     char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
-    int skip_cpu_conv = env_get_int("IGEMM_SKIP_CPU_CONV", 0);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
     int assert_when_invalid = env_get_int("IGEMM_ASSERT_WHEN_INVALID", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
+
+#ifdef USE_GPU_NAIVE_CONV
+    char *gpu_naive_conv_hsaco = env_get_str("IGEMM_GPU_NAIVE_CONV_HSACO", IGEMM_GPU_NAIVE_CONV_HSACO);
+    gpu_naive_conv_init(gpu_naive_conv_hsaco);
+#endif
 
     auto tunables = igemm_gtc_tunable_from_config(content);
     if(tunables.size() == 0){
@@ -450,11 +460,24 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
 
-
-            if(!skip_cpu_conv)
-                conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+#ifdef USE_GPU_NAIVE_CONV
+            HIP_CALL(hipMemcpy(device_input, host_input,
+                       n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight,
+                       k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+            
+            gpu_naive_conv_fwd_nchw_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipMemcpy(host_output, device_output,
+                                   n * k * ho * wo * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+#else
+            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+#endif
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
         }
 
@@ -531,11 +554,23 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
             // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
             // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
-
-            if(!skip_cpu_conv)
-                conv_bwd_nchw(host_input, host_weight, host_output, n,
+#ifdef USE_GPU_NAIVE_CONV
+            HIP_CALL(hipMemcpy(device_output, host_output,
+                       n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight,
+                       k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+            gpu_naive_conv_bwd_nchw_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipMemcpy(host_input, device_input,
+                                   n * c * hi * wi * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+#else
+            conv_bwd_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+#endif
             device_input_to_host = (float *)malloc(n * c * hi * wi * sizeof(float));
             // printf("len:%d\n", n * c * hi * wi * sizeof(float) );
         }
@@ -613,10 +648,23 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
             //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
-
+#ifdef USE_GPU_NAIVE_CONV
+            HIP_CALL(hipMemcpy(device_input, host_input,
+                       n * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_output, host_output,
+                       n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+            gpu_naive_conv_wrw_nchw_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipMemcpy(host_weight, device_weight,
+                                   k * c * y * x * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+#else
             conv_wrw_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+#endif
             device_weight_to_host = (float *)malloc(k * c * y * x * sizeof(float));
             // printf("len:%d\n", k * c * y * x * sizeof(float));
         }

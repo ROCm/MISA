@@ -9,6 +9,7 @@ else
     DIR=$1
 fi
 export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908.hsaco
+export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_ASSERT_WHEN_INVALID=1
 
@@ -32,7 +33,7 @@ EXE=./out/conv_driver.exe
 batch_size=( 2 )
 image_size=( 14 32 55 )
 channel_size=( 64 32 )
-group_size=( 1 2 4 )
+group_size=( 1 )
 stride_size=( 1 2 3 )
 dilation_size=( 1 2 3 )
 pad_size=( 0 1 2 3 )
