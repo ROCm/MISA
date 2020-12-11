@@ -964,9 +964,18 @@ class igemm_wrw_gtc_t(mc_base_t):
         ctrl_in_gld  = ctrl_2d_global_load_t()
         ctrl_out_gld = ctrl_2d_global_load_t()
 
+        if self.tunable.precision == "fp32":
+            ctrl_in_gld.data_bytes = 4
+            ctrl_out_gld.data_bytes  = 4
+        elif self.tunable.precision == "fp16" or self.tunable.precision == "bf16":
+            ctrl_in_gld.data_bytes = 2
+            ctrl_out_gld.data_bytes  = 2
+        else:
+            assert False, "not support data type"
+
         if self.tunable.nxb == 4:
-            ctrl_in_gld.vector_d1  = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
-            ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
+            ctrl_in_gld.vector_d1  = igemm_gcd(t_n1b, 4 * (4 // ctrl_in_gld.data_bytes)) if self.tunable.nxe == 0 else 1
+            ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * (4 // ctrl_out_gld.data_bytes)) if self.tunable.nxe == 0 else 1
         else:
             ctrl_in_gld.vector_d1  = 1
             ctrl_out_gld.vector_d1 = 1
@@ -1039,6 +1048,13 @@ class igemm_wrw_gtc_t(mc_base_t):
         in_sst_ctrl  = ctrl_2d_shared_store_t()
         out_sst_ctrl = ctrl_2d_shared_store_t()
 
+        in_sst_ctrl.data_bytes       = data_byte
+        out_sst_ctrl.data_bytes        = data_byte
+        in_sst_ctrl.precision        = self.tunable.precision
+        out_sst_ctrl.precision         = self.tunable.precision
+        in_sst_ctrl.lds_gemm_k_pack  = self.tunable.gemm_k_pack
+        out_sst_ctrl.lds_gemm_k_pack   = self.tunable.gemm_k_pack
+
         if self.tunable.nxb == 4:
             vector_in_d1  = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
             vector_out_d1 = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
@@ -1074,7 +1090,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 1
 
             in_sst_ctrl.stride_d0 = 1
-            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte
+            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
@@ -1109,7 +1125,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
             #out_sst_ctrl.vector_d1 = t_n1b
             out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte
-            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte
+            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
             #out_sst_ctrl.stride_d1 = 1
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
@@ -1120,7 +1136,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             else:
                 out_sst_ctrl.vector_d1 = 1
             out_sst_ctrl.stride_d0 = 1
-            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte
+            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
