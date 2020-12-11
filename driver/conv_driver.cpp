@@ -470,6 +470,7 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_output, device_output,
                                    n * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
@@ -563,6 +564,7 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_input, device_input,
                                    n * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
@@ -657,6 +659,7 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_weight, device_weight,
                                    k * c * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
