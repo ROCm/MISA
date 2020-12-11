@@ -29,6 +29,7 @@
 
 #include <hip/hip_ext.h>
 #include <hip/hip_runtime.h>
+#include <assert.h>
 
 #ifndef HIP_CALL
 #define HIP_CALL(call)                                                         \
@@ -145,6 +146,7 @@ static inline void gpu_naive_conv_fwd_nchw_fp32(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
@@ -189,6 +191,7 @@ static inline void gpu_naive_conv_bwd_nchw_fp32(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
@@ -233,6 +236,7 @@ static inline void gpu_naive_conv_wrw_nchw_fp32(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
@@ -277,6 +281,7 @@ static inline void gpu_naive_conv_fwd_nchw_fp16(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
@@ -321,6 +326,7 @@ static inline void gpu_naive_conv_bwd_nchw_fp16(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
@@ -365,6 +371,7 @@ static inline void gpu_naive_conv_wrw_nchw_fp16(void *src, void *filter,
                                        size_t px, size_t py, size_t sx,
                                        size_t sy, size_t dx, size_t dy, size_t group)
 {
+    assert(group != 0 && c % group == 0 && k % group == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
     size_t k_per_group  = k / group;
