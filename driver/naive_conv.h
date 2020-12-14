@@ -684,7 +684,7 @@ static inline void naive_conv_fwd_nhwc(const float *src, const float *filter,
                     for (ik = 0; ik < k_per_group; ik++) {
                         // sliding window for this filter
                         float value = .0f;
-                        o_idx = in * k * oh * ow + ig * k_per_group * oh * ow + ik * oh * ow + ioh * ow + iow;
+                        o_idx = in * oh * ow * k + + ioh * ow * k_per_group + iow * k_per_group + ig * k_per_group + ik;
                         for (ir = 0; ir < fy; ir++) {
                             cur_h = sy * ioh - py + dy * ir;
                             if (cur_h < 0 || cur_h >= h)
@@ -694,10 +694,9 @@ static inline void naive_conv_fwd_nhwc(const float *src, const float *filter,
                                 if (cur_w < 0 || cur_w >= w)
                                     continue;
                                 for (ic = 0; ic < c_per_group; ic++) {
-                                    i_idx = in * c * h * w + ig * c_per_group * h * w + ic * h * w +
-                                            cur_h * w + cur_w;
-                                    f_idx = ig * k_per_group * c_per_group * fy * fx + ik * c_per_group * fy * fx + ic * fy * fx +
-                                            ir * fx + is;
+                                    i_idx = in * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                                    f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group +
+                                                            ir * fx * c_per_group + is * c_per_group + ic;
                                     value += src[i_idx] * filter[f_idx];
                                 }
                             }
@@ -725,7 +724,7 @@ static inline void naive_conv_bwd_nhwc(float *src_grad, const float *filter,
 #ifdef NAIVE_CONV_THREADED
     auto conv_one_pixel = [&](size_t ig, size_t in, size_t ih, size_t iw, size_t ic){
         size_t ik, is, ir;
-        size_t cur_oh, cur_ow, o_idx, i_idx, f_idx;ih
+        size_t cur_oh, cur_ow, o_idx, i_idx, f_idx;
         float value = .0f;
         i_idx = in * h * w * c + ih * w * c + iw * c + ig * c_per_group + ic;
         for (ir = 0; ir < fy; ir++) {
