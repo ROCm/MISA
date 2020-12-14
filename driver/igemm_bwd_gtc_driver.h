@@ -304,11 +304,12 @@ public:
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = y_tilda * x_tilda;
         if(tunable->multihead)
             grid_size *= num_of_gemm;
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
@@ -487,6 +488,9 @@ public:
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
+        int gemm_m = c / group;
+        int gemm_n = n * b;
+
         igemm_bwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
@@ -531,7 +535,8 @@ public:
         uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
         uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
 
-        magic_div_u32_t mdiv_2  = magic_div_u32_gen(((c / group) * n * b) / (gemm_m_per_block * gemm_n_per_block));
+        magic_div_u32_t mdiv_2  = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
         magic_div_u32_t mdiv_3  = magic_div_u32_gen((n * b) / gemm_n_per_block);
         magic_div_u32_t mdiv_4  = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ?
                                                                 b * unmerge_sub_n1 / nb_n1b :
