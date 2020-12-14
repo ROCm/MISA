@@ -10,6 +10,7 @@ else
 fi
 export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908_fp16.hsaco
 #export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908_fp16_fail.hsaco
+export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 

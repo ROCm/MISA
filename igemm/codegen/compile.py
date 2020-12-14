@@ -29,12 +29,51 @@ import subprocess
 from .amdgpu import *
 import os
 
+IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 IGEMM_HOST_USE_XDNN = False
 IGEMM_HOST_USE_MAGIC_DIV = True
 IGEMM_HOST_USE_HIPCC = True # hipclang perfer use hipcc to compile host code
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')
+
+class compile_hip_t(object):
+    def __init__(self, arch_config, hip_file_name, target_hsaco = ''):
+        self.hip_file_name = hip_file_name
+        if target_hsaco == '':
+            self.target_hsaco = os.path.splitext(hip_file_name)[0] + '.hsaco'
+        else:
+            self.target_hsaco = target_hsaco
+        self.arch_config = arch_config
+    def compile(self, **kwargs):
+        # make sure mc output is closed
+        # self.mc.close()
+
+        arch_str = amdgpu_arch_to_string(self.arch_config.arch)
+        use_hip_clang = _check_hip_clang()
+        if use_hip_clang:
+            cmd = ['/opt/rocm/hip/bin/hipcc']
+        else:
+            cmd = ['/opt/rocm/hip/bin/hipcc']
+        cmd += ['-x', 'hip']
+        cmd += ['--cuda-gpu-arch={}'.format(arch_str)]
+        cmd += ['--cuda-device-only', '-c', '-O3']
+        cmd += ['{}'.format(self.hip_file_name)]
+        cmd += ['-o', '{}'.format(self.target_hsaco)]
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
+        # print("[hip] " + " ".join(cmd))
+        try:
+            (out, _) = p.communicate()
+            if p.returncode != 0:
+                print('build fail:{}'.format(" ".join(cmd)))
+                print('{}'.format(out.decode('utf-8')))
+                return False
+            return True
+        except Exception as e:
+            print('fail to run cmd:{}'.format(" ".join(cmd)))
+            print('err:{}'.format(e))
+            return False
+
 
 class compile_asm_t(object):
     def __init__(self, mc, asm_file_name, target_hsaco = ''):
