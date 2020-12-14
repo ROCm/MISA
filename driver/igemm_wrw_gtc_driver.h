@@ -38,9 +38,9 @@
 #include <numeric>
 
 typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -222,7 +222,8 @@ public:
     }
 
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable,
+                          driverDataType_t driver_data_type)
     {
         // TODO:
         int hi = arg->get_int("in_h");
@@ -244,6 +245,24 @@ public:
         int group = arg->get_int("group_count");
         int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;   // pad to nxb modulo when nxe != 0
         assert(c % group == 0 && k % group == 0);
+
+        std::string precision = tunable->precision;
+        if(precision == "fp16"){
+            if(driver_data_type != driverHalf)
+                return false;
+        }
+        else if(precision == "fp32"){
+            if(driver_data_type != driverFloat)
+                return false;
+        }
+        else if(precision == "bf16"){
+            return false;
+        }
+        else{
+            std::cout << std::endl;
+            std::cout << precision << std::endl;
+            return false;
+        }
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -618,9 +637,9 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
-        if (!tunable_is_valid(arg, tunable)) {
+                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
+                 int warmup, int repeat, driverDataType_t driver_data_type) {
+        if (!tunable_is_valid(arg, tunable, driver_data_type)) {
             result_t result;
             result.return_code = -1;
             std::cout << "not valid tunable config." << std::endl;
@@ -680,7 +699,7 @@ public:
         karg.gemm_k_global_split  = gemm_k_global_split;
         karg.group         = group;
 
-        //printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
+        printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
@@ -688,7 +707,7 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //dump_wrw_karg(&karg);
-        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -705,6 +724,8 @@ public:
                 // This may not be true in the future!
                 hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
             }
+
+            std::cout << __LINE__ << std::endl;
 
 #if USE_EXT_MODULE_LAUNCH
             hipEvent_t start;
@@ -737,6 +758,7 @@ public:
 
         for (int i = 0; i < warmup; i++) {
             launch_wrw_driver();
+            std::cout << __LINE__ << std::endl;
         }
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {
