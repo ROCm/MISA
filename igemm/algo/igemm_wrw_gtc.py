@@ -493,7 +493,9 @@ class igemm_wrw_gtc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
             ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
-            ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+
+            # for wrw, keep data byte to 4 to compare atomic add and reduction method
+            ctrl_coalescing_store_xdlops.data_byte = 4 #amdgpu_precision_data_byte(self.tunable.precision)
 
             ctrl_coalescing_store_xdlops.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
@@ -1673,28 +1675,38 @@ class igemm_wrw_gtc_t(mc_base_t):
             if c_c1e == 1:
                 # TODO: remove this path, not possible go here
                 assert c_c0 != 1
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c1e)},  v[{v.v_gtc_ic0()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c1e * self.tunable.gemm_k_pack)},  v[{v.v_gtc_ic0()}]")
             else:
                 if c_c0 == 1:
-                    self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic1e()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ic1e()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic0()}], {igemm_log2(n_c1e)}, v[{v.v_gtc_ic1e()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         else:
             assert t_c0 != 1
             if c_c1e == 1:
                 # this is not prefered
                 assert c_c0 != 1
-                self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic0()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c1e * self.tunable.gemm_k_pack)},  v[{v.v_gtc_ic0()}]")
             else:
                 if c_c0 == 1:
-                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c0)}, v[{v.v_gtc_ic1e()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c0 * self.tunable.gemm_k_pack)}, v[{v.v_gtc_ic1e()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic1e()}], {igemm_log2(n_c0)}, v[{v.v_gtc_ic0()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
 
         if c_n1b != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in1b()}], {igemm_log2(n_c0*n_c1e)}, v[{v.v_tmp()}]")
+            if self.tunable.gemm_k_pack == 1:
+                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_ic1e()}], {igemm_log2(nb_n0*nb_n1b)}, v[{v.v_tmp()}]")
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in1b()}], {igemm_log2(n_c0*n_c1e)}, v[{v.v_tmp()}]")
+            else:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_in1b()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(n_c0*n_c1e*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+                self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_in1b()}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
+            
         if c_n0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in0()}], {igemm_log2(n_n1b*n_c0*n_c1e)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in0()}], {igemm_log2(n_n1b*n_c0*n_c1e*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
         self._emit_empty_line()
@@ -1703,32 +1715,41 @@ class igemm_wrw_gtc_t(mc_base_t):
         if gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
             if c_k1 == 1:
                 assert c_k0 != 1
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k1)}, v[{v.v_gtc_ik0}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k1*self.tunable.gemm_k_pack)}, v[{v.v_gtc_ik0}]")
             else:
                 if c_k0 == 1:
-                    self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ik1()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1)}, v[{v.v_gtc_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         else:
             if c_k1 == 1:
                 assert c_k0 != 1
-                self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ik0}]")
             else:
                 if c_k0 == 1:
-                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k0)}, v[{v.v_gtc_ik1()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k0*self.tunable.gemm_k_pack)}, v[{v.v_gtc_ik1()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1()}], {igemm_log2(n_k0)}, v[{v.v_gtc_ik0()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
 
         if c_n1b != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in1b()}], {igemm_log2(n_k0*n_k1)}, v[{v.v_tmp()}]")
+            if self.tunable.gemm_k_pack == 1:
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in1b()}], {igemm_log2(n_k0*n_k1)}, v[{v.v_tmp()}]")
+            else:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_in1b()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(n_k0*n_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+                self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_in1b()}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
+
         if c_n0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in0()}], {igemm_log2(n_n1b*n_k0*n_k1)}, v[{v.v_tmp()}]")
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_in0()}], {igemm_log2(n_n1b*n_k0*n_k1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
         self._emit(f"; LDS load")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}]")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_in()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
 
@@ -1986,6 +2007,8 @@ class igemm_wrw_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
+            fctrl.lds_gemm_k_pack             = self.tunable.gemm_k_pack
+            fctrl.precision                   = self.tunable.precision
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
@@ -2005,16 +2028,16 @@ class igemm_wrw_gtc_t(mc_base_t):
             fctrl.shared_store_a_functor      = self.shared_store_out
             fctrl.shared_store_b_functor      = self.shared_store_in
             if ctrl_xdlops_mapping.wave_step_m == 1:
-                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * self.tunable.gemm_k_pack, ctrl_xdlops_mapping.wave_tile_m * data_byte * self.tunable.gemm_k_pack, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
-                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * self.tunable.gemm_k_pack)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
+                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * self.tunable.gemm_k_pack, ctrl_xdlops_mapping.wave_tile_n * data_byte * self.tunable.gemm_k_pack, sym_t(self.vgpr.v_tmp(5)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 
