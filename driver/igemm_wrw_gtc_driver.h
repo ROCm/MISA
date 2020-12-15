@@ -725,8 +725,6 @@ public:
                 hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
             }
 
-            std::cout << __LINE__ << std::endl;
-
 #if USE_EXT_MODULE_LAUNCH
             hipEvent_t start;
             hipEvent_t stop;
@@ -758,7 +756,6 @@ public:
 
         for (int i = 0; i < warmup; i++) {
             launch_wrw_driver();
-            std::cout << __LINE__ << std::endl;
         }
         std::vector<float> duration_list;
         for (int i = 0; i < repeat; i++) {

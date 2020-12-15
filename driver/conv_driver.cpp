@@ -876,11 +876,9 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemset(device_weight, 0,
                                    k * c * y * x * sizeof(float)));
 
-            std::cout << __LINE__ << std::endl;
             result_t result =
                 conv_wrw_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat, driver_data_type);
-            std::cout << __LINE__ << std::endl;
 
             if (result.return_code != 0)
                 continue;
