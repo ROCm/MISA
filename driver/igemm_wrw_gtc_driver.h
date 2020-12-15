@@ -779,7 +779,7 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
-#if 0
+#if 1
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
