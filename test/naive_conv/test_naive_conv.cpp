@@ -163,7 +163,7 @@ public:
 
     static std::vector<int> get_image_depth() { return {8, 10}; }
 
-    static std::vector<int> get_image_size() { return {9, 14}; }
+    static std::vector<int> get_image_size() { return {11, 17}; }
 
     static std::vector<int> get_channel_size() { return {3, 8}; }
 
@@ -327,7 +327,6 @@ public:
             if(precision == "fp16")
                 data_byte = 2;
 
-
             // init host side
             float *host_input = (float *)malloc(n * c * hi * wi * sizeof(float));
             float *host_weight = (float *)malloc(g * (k/g) * (c/g) * fy * fx * sizeof(float));
@@ -349,7 +348,7 @@ public:
 
             if(precision == "fp32"){
                 if(layout == "nchw"){
-
+                    // ok not to test now
                 }else if(layout == "nhwc") {
                     // fwd
                     float *device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
@@ -370,9 +369,10 @@ public:
                     HIP_CALL(hipMemcpy(device_output_to_host, device_output,
                                         n * k * ho * wo * sizeof(float),
                                         hipMemcpyDeviceToHost));
-                    
+
                     is_valid = valid_vector(host_output, device_output_to_host,
                                             n * k * ho * wo, 1e-6);
+                    assert(is_valid);
                     std::cout<<" fwd:"<<(is_valid?"y":"n");
                     free(device_output_to_host);
 
@@ -399,6 +399,7 @@ public:
                     
                     is_valid = valid_vector(host_input, device_input_to_host,
                                             n * c * hi * wi, 1e-6);
+                    assert(is_valid);
                     std::cout<<" bwd:"<<(is_valid?"y":"n");
                     free(device_input_to_host);
 
@@ -422,6 +423,7 @@ public:
                                         hipMemcpyDeviceToHost));
                     is_valid = valid_vector(host_weight, device_weight_to_host,
                                             g * (k/g) * (c/g) * fy * fx, 1e-4);
+                    assert(is_valid);
                     std::cout<<" wrw:"<<(is_valid?"y":"n");
                     free(device_weight_to_host);
                     std::cout<<std::endl;
@@ -439,6 +441,152 @@ public:
 
         iterate_conv_2d(run_conv_2d);
     }
+
+    void run_3d(std::string layout, std::string precision){
+        auto run_conv_3d = [&](int n,
+                               int di,
+                               int wi,
+                               int hi,
+                               int c,
+                               int k,
+                               int fz,
+                               int fx,
+                               int fy,
+                               int pz,
+                               int px,
+                               int py,
+                               int sz,
+                               int sx,
+                               int sy,
+                               int dz,
+                               int dx,
+                               int dy,
+                               int g)
+        {
+            int do_ = conv_out_size(di, pz, dz, fz, sz);
+            int ho  = conv_out_size(hi, py, dy, fy, sy);
+            int wo  = conv_out_size(wi, px, dx, fx, sx);
+
+            int data_byte = 4;
+            if(precision == "fp16")
+                data_byte = 2;
+
+            // init host side
+            float *host_input = (float *)malloc(n * c * di * hi * wi * sizeof(float));
+            float *host_weight = (float *)malloc(g * (k/g) * (c/g) * fz * fy * fx * sizeof(float));
+            float *host_output = (float *)malloc(n * k * do_ * ho * wo * sizeof(float));
+
+            void *device_input;
+            void *device_weight;
+            void *device_output;
+
+            HIP_CALL(hipMalloc(&device_input, n * c * di * hi * wi * data_byte));
+            HIP_CALL(hipMalloc(&device_weight, g * (k/g) * (c/g) * fz * fy * fx * data_byte));
+            HIP_CALL(hipMalloc(&device_output, n * k * do_ * ho * wo * data_byte));
+            bool is_valid;
+
+            std::cout << "n:" << n << ", c:" << c << ", di:" << di << ", hi:" << hi << ", wi:" << wi
+                      << ", k:" << k << ", do:" << do_ << ", ho:" << ho << ", wo:" << wo
+                      << ", fz:" << fz << ", fy:" << fy << ",fx:" << fx << ", pz:" << pz
+                      << ", py:" << py << ", px:" << px << ", sz:" << sz << ", sy:" << sy
+                      << ", sx:" << sx << ", dz:" << dz << ", dy:" << dy << ", dx:" << dx
+                      << ", g:" << g << ", "<<layout << ", "<< precision;
+
+            if(precision == "fp32"){
+                if(layout == "ncdhw"){
+                    // ok not to test now
+                }else if(layout == "ndhwc") {
+                    // fwd
+                    float *device_output_to_host = (float *)malloc(n * k * do_ * ho * wo * sizeof(float));
+                    gen_rand_vector<float, float>(host_input, n * c * di * hi * wi, 0.0, 1.0);
+                    gen_rand_vector<float, float>(host_weight, g * (k/g) * (c/g) * fz * fy * fx, -0.5, 0.5);
+
+                    naive_conv_fwd_ndhwc(host_input, host_weight, host_output, n, wi, hi, di, c, k, fx, fy, fz,
+                                       px, py, pz, sx, sy, sz, dx, dy, dz, g);
+
+                    HIP_CALL(hipMemcpy(device_input, host_input,
+                       n * c * di * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+                    HIP_CALL(hipMemcpy(device_weight, host_weight,
+                            g * (k/g) * (c/g) * fz * fy * fx * sizeof(float), hipMemcpyHostToDevice));
+                    
+                    gpu_naive_conv_fwd_ndhwc_fp32(device_input, device_weight, device_output,
+                                        n, wi, hi, di, c, k, fx, fy, fz, px, py, pz, sx, sy, sz, dx, dy, dz, g);
+                    HIP_CALL(hipDeviceSynchronize());
+                    HIP_CALL(hipMemcpy(device_output_to_host, device_output,
+                                        n * k * do_ * ho * wo * sizeof(float),
+                                        hipMemcpyDeviceToHost));
+                    
+                    is_valid = valid_vector(host_output, device_output_to_host,
+                                            n * k * do_ * ho * wo, 1e-6);
+                    std::cout<<" fwd:"<<(is_valid?"y":"n");
+                    assert(is_valid);
+                    free(device_output_to_host);
+
+                    // bwd
+                    float *device_input_to_host = (float *)malloc(n * c * di * hi * wi * sizeof(float));
+                    gen_rand_vector<float, float>(host_output, n * k * do_ * ho * wo, 0.0, 1.0);
+                    gen_rand_vector<float, float>(host_weight, g * (k/g) * (c/g) * fz * fy * fx, -0.5, 0.5);
+                    gen_rand_vector<float, float>(host_input, n * c * di * hi * wi, 999999., 9999999.);
+
+                    naive_conv_bwd_ndhwc(host_input, host_weight, host_output,
+                            n, wi, hi, di, c, k, fx, fy, fz, px, py, pz, sx, sy, sz, dx, dy, dz, g);
+
+
+                    HIP_CALL(hipMemcpy(device_output, host_output,
+                            n * k * do_ * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+                    HIP_CALL(hipMemcpy(device_weight, host_weight,
+                            g * (k/g) * (c/g) * fz * fy * fx * sizeof(float), hipMemcpyHostToDevice));
+                    gpu_naive_conv_bwd_ndhwc_fp32(device_input, device_weight, device_output,
+                                        n, wi, hi, di, c, k, fx, fy, fz, px, py, pz, sx, sy, sz, dx, dy, dz, g);
+                    HIP_CALL(hipDeviceSynchronize());
+                    HIP_CALL(hipMemcpy(device_input_to_host, device_input,
+                                        n * c * di * hi * wi * sizeof(float),
+                                        hipMemcpyDeviceToHost));
+                    
+                    is_valid = valid_vector(host_input, device_input_to_host,
+                                            n * c * di * hi * wi, 1e-6);
+                    std::cout<<" bwd:"<<(is_valid?"y":"n");
+                    assert(is_valid);
+                    free(device_input_to_host);
+
+                    // wrw
+                    float *device_weight_to_host = (float *)malloc(g * (k/g) * (c/g) * fz * fy * fx * sizeof(float));
+                    gen_rand_vector<float, float>(host_input, n * c * di * hi * wi, 0.0, 1.0);
+                    gen_rand_vector<float, float>(host_output, n * k * do_ * ho * wo, -0.5, 0.5);
+
+                    naive_conv_wrw_ndhwc(host_input, host_weight, host_output,
+                                        n, wi, hi, di, c, k, fx, fy, fz, px, py, pz, sx, sy, sz, dx, dy, dz, g);
+
+                    HIP_CALL(hipMemcpy(device_input, host_input,
+                            n * c * di * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+                    HIP_CALL(hipMemcpy(device_output, host_output,
+                            n * k * do_ * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+                    gpu_naive_conv_wrw_ndhwc_fp32(device_input, device_weight, device_output,
+                                        n, wi, hi, di, c, k, fx, fy, fz, px, py, pz, sx, sy, sz, dx, dy, dz, g);
+                    HIP_CALL(hipDeviceSynchronize());
+                    HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
+                                        g * (k/g) * (c/g) * fz * fy * fx * sizeof(float),
+                                        hipMemcpyDeviceToHost));
+                    is_valid = valid_vector(host_weight, device_weight_to_host,
+                                            g * (k/g) * (c/g) * fz * fy * fx, 1e-4);
+                    std::cout<<" wrw:"<<(is_valid?"y":"n");
+                    assert(is_valid);
+                    free(device_weight_to_host);
+                    std::cout<<std::endl;
+                }
+            }
+
+            free(host_input);
+            free(host_weight);
+            free(host_output);
+
+            hipFree(device_input);
+            hipFree(device_weight);
+            hipFree(device_output);
+        };
+
+        iterate_conv_3d(run_conv_3d);
+    }
 };
 
 #define     GPU_NAIVE_CONV_HSACO    "naive_conv.hsaco"
@@ -447,4 +595,5 @@ int main(){
     gpu_naive_conv_init(gpu_naive_conv_hsaco);
     test_conv_t test_conv;
     test_conv.run_2d("nhwc", "fp32");
+    test_conv.run_3d("ndhwc", "fp32");
 }
