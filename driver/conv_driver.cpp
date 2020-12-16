@@ -681,6 +681,7 @@ int main(int argc, char **argv) {
 
     if (need_bwd){
         float *device_input_to_host = NULL;
+        float16 *device_input_to_host_f16 = NULL; 
         result_t fastest_result_bwd;
         fastest_result_bwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
@@ -689,8 +690,16 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
             gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
-            // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
-            // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+
+            if(driver_data_type == driverHalf){
+                // move to different data type
+                tensor_movement<float16, float>(host_output_f16, host_output, n * k * ho * wo);
+                tensor_movement<float16, float>(host_weight_f16, host_weight, k * c * y * x);
+                tensor_movement<float, float16>(host_output, host_output_f16, n * k * ho * wo);
+                tensor_movement<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+            }
+
+
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_output, host_output,
                        n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
@@ -710,14 +719,18 @@ int main(int argc, char **argv) {
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
 #endif
             device_input_to_host = (float *)malloc(n * c * hi * wi * sizeof(float));
+            device_input_to_host_f16 = (float16 *)malloc(n * c * hi * wi * sizeof(float16));
             // printf("len:%d\n", n * c * hi * wi * sizeof(float) );
         }
 
-        HIP_CALL(hipMemcpy(device_output, host_output,
-                       n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
-        HIP_CALL(hipMemcpy(device_weight, host_weight,
-                       k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-
+        if (driver_data_type == driverFloat) {
+            HIP_CALL(hipMemcpy(device_output, host_output, n * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight, k * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+        }
+        else if (driver_data_type == driverHalf) {
+            HIP_CALL(hipMemcpy(device_output_f16, host_output_f16, n * k * ho * wo * sizeof(float16), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_f16, host_weight_f16, k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
+	}; 
 
         igemm_bwd_gtc_t conv_bwd_driver;
         //double nrms = get_bwd_nrms();
@@ -726,12 +739,24 @@ int main(int argc, char **argv) {
 
             printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
-            if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0x7f,
-                                   n * c * hi * wi * sizeof(float)));   // 0x7f7f7f7f ~= 7.41e+28, a very large number
-            result_t result =
-                conv_bwd_driver.run(&conv_args, tunable, module, device_input,
-                                device_weight, device_output, warmup, repeat);
+            if (need_verify) {
+                if (driver_data_type == driverFloat)
+                    HIP_CALL(hipMemset(device_input, 0x7f, n * c * hi * wi * sizeof(float)));   // 0x7f7f7f7f ~= 7.41e+28, a very large number
+                else 
+                    HIP_CALL(hipMemset(device_input_f16, 0x7f, n * c * hi * wi * sizeof(float16)));   // 0x7f7f7f7f ~= 7.41e+28, a very large number
+            }; 
+
+            result_t result;
+            if ( driver_data_type == driverFloat ) 
+                 result = conv_bwd_driver.run<float>(&conv_args, tunable, module, device_input, device_weight, device_output, warmup, repeat);
+            else if(driver_data_type == driverHalf)
+                 result = conv_bwd_driver.run<float16>(&conv_args, tunable, module, device_input_f16, device_weight_f16, device_output_f16, warmup, repeat);
+            else
+            {
+                std::cout << "no other conv data type now." << std::endl;
+                exit(0);
+            }
+
             if (result.return_code != 0){
                 printf("not applicatble\n");
                 continue;
@@ -743,9 +768,14 @@ int main(int argc, char **argv) {
             printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
             if (need_verify) {
-                HIP_CALL(hipMemcpy(device_input_to_host, device_input,
-                                   n * c * hi * wi * sizeof(float),
-                                   hipMemcpyDeviceToHost));
+                if (driver_data_type == driverFloat) {
+                    HIP_CALL(hipMemcpy(device_input_to_host, device_input, n * c * hi * wi * sizeof(float), hipMemcpyDeviceToHost));
+                }
+                else if (driver_data_type == driverHalf) {
+                    HIP_CALL(hipMemcpy(device_input_to_host_f16, device_input_f16, n * c * hi * wi * sizeof(float16), hipMemcpyDeviceToHost));
+                    tensor_movement<float, float16>(device_input_to_host, device_input_to_host_f16, n * c * hi * wi);
+		}; 
+
                 bool is_valid = valid_vector(host_input, device_input_to_host,
                                             n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");

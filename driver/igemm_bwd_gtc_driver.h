@@ -37,10 +37,11 @@
 #include <algorithm>
 #include <numeric>
 
-typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+template <typename Tgpu>
+struct igemm_bwd_gtc_karg_t {
+    Tgpu *p_in;
+    Tgpu *p_wei;
+    Tgpu *p_out;
     int hi;
     int wi;
     int n;
@@ -83,10 +84,10 @@ typedef struct {
     uint32_t shift_pack_1;
     uint32_t __pack_0;
 #endif
-} __attribute__((packed)) igemm_bwd_gtc_karg_t;
+} __attribute__((packed));
 
-typedef struct {
-    float *p_in;
+struct igemm_upsampling_clear_karg_t {
+    void *p_in;
     int hi;
     int wi;
     int n;
@@ -109,9 +110,10 @@ typedef struct {
     uint32_t magic_2;            // denom of stride_w
     uint32_t shift_pack_0;
 #endif
-} __attribute__((packed)) igemm_upsampling_clear_karg_t;
+} __attribute__((packed));
 
-static void dump_bwd_karg(igemm_bwd_gtc_karg_t * karg){
+template <typename Tgpu> 
+static void dump_bwd_karg(igemm_bwd_gtc_karg_t<Tgpu> * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -319,6 +321,7 @@ public:
         return 2 * utility_next_pow2(utility_next_pow2(lds_a) + utility_next_pow2(lds_b));
     }
 
+    template <typename Tgpu> 
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
@@ -341,6 +344,27 @@ public:
         int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
+
+        std::string precision = tunable->precision;
+        if(precision == "fp16"){
+            if(!std::is_same<Tgpu, float16>::value){
+                return false;
+            }
+        }
+        else if(precision == "fp32"){
+            if(!std::is_same<Tgpu, float>::value){
+                return false;
+            }
+        }
+        else if(precision == "bf16"){
+            return false;
+        }
+        else
+        {
+            std::cout << std::endl;
+            std::cout << precision << std::endl;
+            return false;
+        }	
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -422,10 +446,11 @@ public:
         return true;
     }
 
+    template <typename Tgpu> 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
+                 hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
                  int warmup, int repeat) {
-        if (!tunable_is_valid(arg, tunable)) {
+        if (!tunable_is_valid<Tgpu>(arg, tunable)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
@@ -487,7 +512,7 @@ public:
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        igemm_bwd_gtc_karg_t karg;
+        igemm_bwd_gtc_karg_t<Tgpu> karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;
@@ -557,7 +582,7 @@ public:
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
-        igemm_upsampling_clear_karg_t ukarg;
+        struct igemm_upsampling_clear_karg_t ukarg;
         ukarg.p_in          = p_in;
         ukarg.hi            = hi;
         ukarg.wi            = wi;
