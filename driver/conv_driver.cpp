@@ -661,7 +661,7 @@ int main(int argc, char **argv) {
                                 dilation_w, dilation_h, ngroups);
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_weight, device_weight,
-                                   static_cast<size_t>(k) * c * y * x * sizeof(float),
+                                   static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
             conv_wrw_nchw(host_input, host_weight, host_output, n,
@@ -747,10 +747,10 @@ int main(int argc, char **argv) {
             }
             if (need_verify) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
-                                   static_cast<size_t>(k) * c * y * x * sizeof(float),
+                                   static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
-                                            static_cast<size_t>(k) * c * y * x, nrms);
+                                            static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
                 // if (!is_valid) {
