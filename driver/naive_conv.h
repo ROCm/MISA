@@ -639,4 +639,487 @@ static inline void naive_conv_wrw_ncdhw(const float *src, float *filter_grad, co
 #endif
 }
 
+/************************** nhwc ****************************/
+static inline void naive_conv_fwd_nhwc(const float *src, const float *filter,
+                                       float *dst, size_t n, size_t w, size_t h,
+                                       size_t c, size_t k, size_t fx, size_t fy,
+                                       size_t px, size_t py, size_t sx,
+                                       size_t sy, size_t dx, size_t dy, size_t group) {
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t in, size_t ioh, size_t iow, size_t ik){
+        size_t ic, is, ir, cur_h, cur_w, o_idx, i_idx, f_idx;
+        float value = .0f;
+        o_idx = in * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+        for (ir = 0; ir < fy; ir++) {
+            cur_h = sy * ioh - py + dy * ir;
+            if (cur_h < 0 || cur_h >= h)
+                continue;
+            for (is = 0; is < fx; is++) {
+                cur_w = sx * iow - px + dx * is;
+                if (cur_w < 0 || cur_w >= w)
+                    continue;
+                for (ic = 0; ic < c_per_group; ic++) {
+                    i_idx = in * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                    f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group +
+                            ir * fx * c_per_group + is * c_per_group + ic;
+                    value += src[i_idx] * filter[f_idx];
+                }
+            }
+        }
+        dst[o_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_5d(conv_one_pixel, group, n, oh, ow, k_per_group);
+#else
+    size_t ig, in, ik, ioh, iow, ic, is, ir;
+    size_t cur_h, cur_w, o_idx, i_idx, f_idx;
+    for (ig = 0; ig < group; ig++) {
+        for (in = 0; in < n; in++) {
+            for (ioh = 0; ioh < oh; ioh++) {
+                for (iow = 0; iow < ow; iow++) {
+                    for (ik = 0; ik < k_per_group; ik++) {
+                        // sliding window for this filter
+                        float value = .0f;
+                        o_idx = in * oh * ow * k + + ioh * ow * k_per_group + iow * k_per_group + ig * k_per_group + ik;
+                        for (ir = 0; ir < fy; ir++) {
+                            cur_h = sy * ioh - py + dy * ir;
+                            if (cur_h < 0 || cur_h >= h)
+                                continue;
+                            for (is = 0; is < fx; is++) {
+                                cur_w = sx * iow - px + dx * is;
+                                if (cur_w < 0 || cur_w >= w)
+                                    continue;
+                                for (ic = 0; ic < c_per_group; ic++) {
+                                    i_idx = in * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                                    f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group +
+                                                            ir * fx * c_per_group + is * c_per_group + ic;
+                                    value += src[i_idx] * filter[f_idx];
+                                }
+                            }
+                        }
+                        dst[o_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
+static inline void naive_conv_bwd_nhwc(float *src_grad, const float *filter,
+                                         const float *dst_grad, size_t n,
+                                         size_t w, size_t h, size_t c, size_t k,
+                                         size_t fx, size_t fy, size_t px,
+                                         size_t py, size_t sx, size_t sy,
+                                         size_t dx, size_t dy, size_t group) {
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t in, size_t ih, size_t iw, size_t ic){
+        size_t ik, is, ir;
+        size_t cur_oh, cur_ow, o_idx, i_idx, f_idx;
+        float value = .0f;
+        i_idx = in * h * w * c + ih * w * c + iw * c + ig * c_per_group + ic;
+        for (ir = 0; ir < fy; ir++) {
+            cur_oh = ih + py - dy * ir; // cur_h = sy*ioh-py+dy*ir;
+            if (cur_oh < 0 || cur_oh % sy)
+                continue;
+            cur_oh /= sy;
+            if (cur_oh >= oh)
+                continue;
+            for (is = 0; is < fx; is++) {
+                cur_ow = iw + px - dx * is; // cur_w = sx*iow-px+dx*is;
+                if (cur_ow < 0 || cur_ow % sx)
+                    continue;
+                cur_ow /= sx;
+                if (cur_ow >= ow)
+                    continue;
+                for (ik = 0; ik < k_per_group; ik++) {
+                    o_idx = in * oh * ow * k + cur_oh * ow * k + cur_ow * k + ig * k_per_group + ik;
+                    f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                    value += dst_grad[o_idx] * filter[f_idx];
+                }
+            }
+        }
+        src_grad[i_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_5d(conv_one_pixel, group, n, h, w, c_per_group);
+#else
+    size_t ig, in, ik, ih, iw, ic, is, ir;
+    size_t cur_oh, cur_ow, o_idx, i_idx, f_idx;
+
+    for (ig = 0; ig < group; ig++) {
+        for (in = 0; in < n; in++) {
+            for (ih = 0; ih < h; ih++) {
+                for (iw = 0; iw < w; iw++) {
+                    for (ic = 0; ic < c_per_group; ic++) {
+                        float value = .0f;
+                        i_idx = in * h * w * c + ih * w * c + iw * c + ig * c_per_group + ic;
+                        for (ir = 0; ir < fy; ir++) {
+                            cur_oh = ih + py - dy * ir; // cur_h = sy*ioh-py+dy*ir;
+                            if (cur_oh < 0 || cur_oh % sy)
+                                continue;
+                            cur_oh /= sy;
+                            if (cur_oh >= oh)
+                                continue;
+                            for (is = 0; is < fx; is++) {
+                                cur_ow = iw + px - dx * is; // cur_w = sx*iow-px+dx*is;
+                                if (cur_ow < 0 || cur_ow % sx)
+                                    continue;
+                                cur_ow /= sx;
+                                if (cur_ow >= ow)
+                                    continue;
+                                for (ik = 0; ik < k_per_group; ik++) {
+                                    o_idx = in * oh * ow * k + cur_oh * ow * k + cur_ow * k + ig * k_per_group + ik;
+                                    f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                                    value += dst_grad[o_idx] * filter[f_idx];
+                                }
+                            }
+                        }
+                        src_grad[i_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
+static inline void naive_conv_wrw_nhwc(const float *src, float *filter_grad,
+                                         const float *dst_grad, size_t n,
+                                         size_t w, size_t h, size_t c, size_t k,
+                                         size_t fx, size_t fy, size_t px,
+                                         size_t py, size_t sx, size_t sy,
+                                         size_t dx, size_t dy, size_t group) {
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t ik, size_t ir, size_t is, size_t ic){
+        size_t in, ioh, iow;
+        size_t cur_h, cur_w, o_idx, i_idx, f_idx;
+        float value = .0f;
+        f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+        for (in = 0; in < n; in++) {
+            for (ioh = 0; ioh < oh; ioh++) {
+                cur_h = sy * ioh - py + dy * ir;
+                if (cur_h < 0 || cur_h >= h)
+                    continue;
+                for (iow = 0; iow < ow; iow++) {
+                    cur_w = sx * iow - px + dx * is;
+                    if (cur_w < 0 || cur_w >= w)
+                        continue;
+                    i_idx = in * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                    o_idx = in * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+                    value += src[i_idx] * dst_grad[o_idx];
+                }
+            }
+        }
+        filter_grad[f_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_5d(conv_one_pixel, group, k_per_group, fy, fx, c_per_group);
+#else
+    size_t ig, in, ik, ioh, iow, ic, is, ir;
+    size_t cur_h, cur_w, o_idx, i_idx, f_idx;
+    for (ig = 0; ig < group; ig++) {
+        for (ik = 0; ik < k_per_group; ik++) {
+            for (ir = 0; ir < fy; ir++) {
+                for (is = 0; is < fx; is++) {
+                    for (ic = 0; ic < c_per_group; ic++) {
+                        float value = .0f;
+                        f_idx = ig * k_per_group * fy * fx * c_per_group + ik * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                        for (in = 0; in < n; in++) {
+                            for (ioh = 0; ioh < oh; ioh++) {
+                                cur_h = sy * ioh - py + dy * ir;
+                                if (cur_h < 0 || cur_h >= h)
+                                    continue;
+                                for (iow = 0; iow < ow; iow++) {
+                                    cur_w = sx * iow - px + dx * is;
+                                    if (cur_w < 0 || cur_w >= w)
+                                        continue;
+                                    i_idx = in * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                                    o_idx = in * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+                                    value += src[i_idx] * dst_grad[o_idx];
+                                }
+                            }
+                        }
+                        filter_grad[f_idx] = value;
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
+static inline void naive_conv_fwd_ndhwc(const float *src, const float *filter, float *dst,
+                                       size_t n, size_t w, size_t h, size_t d, size_t c, size_t k,
+                                       size_t fx, size_t fy, size_t fz, size_t px, size_t py, size_t pz,
+                                       size_t sx, size_t sy, size_t sz, size_t dx, size_t dy, size_t dz, size_t group) {
+    size_t od = naive_conv_out_size(d, pz, dz, fz, sz);
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t in, size_t iod, size_t ioh, size_t iow, size_t ik){
+        size_t ic, iz, is, ir, cur_d, cur_h, cur_w, o_idx, i_idx, f_idx;
+        float value = .0f;
+        o_idx = in * od * oh * ow * k + iod * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+        for (iz = 0; iz < fz; iz++) {
+            cur_d = sz * iod - pz + dz * iz;
+            if (cur_d < 0 || cur_d >= d)
+                continue;
+            for (ir = 0; ir < fy; ir++) {
+                cur_h = sy * ioh - py + dy * ir;
+                if (cur_h < 0 || cur_h >= h)
+                    continue;
+                for (is = 0; is < fx; is++) {
+                    cur_w = sx * iow - px + dx * is;
+                    if (cur_w < 0 || cur_w >= w)
+                        continue;
+                    for (ic = 0; ic < c_per_group; ic++) {
+                        i_idx = in * d * h * w * c + cur_d * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                        f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                        value += src[i_idx] * filter[f_idx];
+                    }
+                }
+            }
+        }
+        dst[o_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_6d(conv_one_pixel, group, n, od, oh, ow, k_per_group);
+#else
+    size_t ig, in, ik, iod, ioh, iow, ic, iz, is, ir;
+    size_t cur_d, cur_h, cur_w, o_idx, i_idx, f_idx;
+    for (ig = 0; ig < group; ig++) {
+        for (in = 0; in < n; in++) {
+            for (iod = 0; iod < od; iod++) {
+                for (ioh = 0; ioh < oh; ioh++) {
+                    for (iow = 0; iow < ow; iow++) {
+                        for (ik = 0; ik < k_per_group; ik++) {
+                            // sliding window for this filter
+                            float value = .0f;
+                            o_idx = in * od * oh * ow * k + iod * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+                            for (iz = 0; iz < fz; iz++) {
+                                cur_d = sz * iod - pz + dz * iz;
+                                if (cur_d < 0 || cur_d >= d)
+                                    continue;
+                                for (ir = 0; ir < fy; ir++) {
+                                    cur_h = sy * ioh - py + dy * ir;
+                                    if (cur_h < 0 || cur_h >= h)
+                                        continue;
+                                    for (is = 0; is < fx; is++) {
+                                        cur_w = sx * iow - px + dx * is;
+                                        if (cur_w < 0 || cur_w >= w)
+                                            continue;
+                                        for (ic = 0; ic < c_per_group; ic++) {
+                                            i_idx = in * d * h * w * c + cur_d * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                                            f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                                            value += src[i_idx] * filter[f_idx];
+                                        }
+                                    }
+                                }
+                            }
+                            dst[o_idx] = value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
+static inline void naive_conv_bwd_ndhwc(float *src_grad, const float *filter, const float *dst_grad,
+                                       size_t n, size_t w, size_t h, size_t d, size_t c, size_t k,
+                                       size_t fx, size_t fy, size_t fz, size_t px, size_t py, size_t pz,
+                                       size_t sx, size_t sy, size_t sz, size_t dx, size_t dy, size_t dz, size_t group) {
+    size_t od = naive_conv_out_size(d, pz, dz, fz, sz);
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t in, size_t id, size_t ih, size_t iw, size_t ic){
+        size_t ik, iz, is, ir;
+        size_t cur_od, cur_oh, cur_ow, o_idx, i_idx, f_idx;
+        float value = .0f;
+        i_idx = in * d * h * w * c + id * h * w * c + ih * w * c + iw * c + ig * c_per_group + ic;
+        for (iz = 0; iz < fz; iz++) {
+            cur_od = id + pz - dz * iz;
+            if (cur_od < 0 || cur_od % sz)
+                continue;
+            cur_od /= sz;
+            if (cur_od >= od)
+                continue;
+            for (ir = 0; ir < fy; ir++) {
+                cur_oh = ih + py - dy * ir; // cur_h = sy*ioh-py+dy*ir;
+                if (cur_oh < 0 || cur_oh % sy)
+                    continue;
+                cur_oh /= sy;
+                if (cur_oh >= oh)
+                    continue;
+                for (is = 0; is < fx; is++) {
+                    cur_ow = iw + px - dx * is; // cur_w = sx*iow-px+dx*is;
+                    if (cur_ow < 0 || cur_ow % sx)
+                        continue;
+                    cur_ow /= sx;
+                    if (cur_ow >= ow)
+                        continue;
+                    for (ik = 0; ik < k_per_group; ik++) {
+                        o_idx = in * od * oh * ow * k + cur_od * oh * ow * k + cur_oh * ow * k + cur_ow * k + ig * k_per_group + ik;
+                        f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+
+                        value += dst_grad[o_idx] * filter[f_idx];
+                    }
+                }
+            }
+        }
+        src_grad[i_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_6d(conv_one_pixel, group, n, d, h, w, c_per_group);
+#else
+    size_t ig, in, ik, id, ih, iw, ic, iz, is, ir;
+    size_t cur_od, cur_oh, cur_ow, o_idx, i_idx, f_idx;
+
+    for (ig = 0; ig < group; ig++) {
+        for (in = 0; in < n; in++) { 
+            for (id = 0; id < d; id++) {
+                for (ih = 0; ih < h; ih++) {
+                    for (iw = 0; iw < w; iw++) {
+                        for (ic = 0; ic < c_per_group; ic++) {
+                            float value = .0f;
+                            i_idx = in * d * h * w * c + id * h * w * c + ih * w * c + iw * c + ig * c_per_group + ic;
+                            for (iz = 0; iz < fz; iz++) {
+                                cur_od = id + pz - dz * iz;
+                                if (cur_od < 0 || cur_od % sz)
+                                    continue;
+                                cur_od /= sz;
+                                if (cur_od >= od)
+                                    continue;
+                                for (ir = 0; ir < fy; ir++) {
+                                    cur_oh = ih + py - dy * ir; // cur_h = sy*ioh-py+dy*ir;
+                                    if (cur_oh < 0 || cur_oh % sy)
+                                        continue;
+                                    cur_oh /= sy;
+                                    if (cur_oh >= oh)
+                                        continue;
+                                    for (is = 0; is < fx; is++) {
+                                        cur_ow = iw + px - dx * is; // cur_w = sx*iow-px+dx*is;
+                                        if (cur_ow < 0 || cur_ow % sx)
+                                            continue;
+                                        cur_ow /= sx;
+                                        if (cur_ow >= ow)
+                                            continue;
+                                        for (ik = 0; ik < k_per_group; ik++) {
+                                            o_idx = in * od * oh * ow * k + cur_od * oh * ow * k + cur_oh * ow * k + cur_ow * k + ig * k_per_group + ik;
+                                            f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                                            value += dst_grad[o_idx] * filter[f_idx];
+                                        }
+                                    }
+                                }
+                            }
+                            src_grad[i_idx] = value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
+static inline void naive_conv_wrw_ndhwc(const float *src, float *filter_grad, const float *dst_grad,
+                                       size_t n, size_t w, size_t h, size_t d, size_t c, size_t k,
+                                       size_t fx, size_t fy, size_t fz, size_t px, size_t py, size_t pz,
+                                       size_t sx, size_t sy, size_t sz, size_t dx, size_t dy, size_t dz, size_t group) {
+    size_t od = naive_conv_out_size(d, pz, dz, fz, sz);
+    size_t oh = naive_conv_out_size(h, py, dy, fy, sy);
+    size_t ow = naive_conv_out_size(w, px, dx, fx, sx);
+    assert((group >= 1) && (c % group == 0) && (k % group == 0));
+    size_t k_per_group = k / group;
+    size_t c_per_group = c / group;
+#ifdef NAIVE_CONV_THREADED
+    auto conv_one_pixel = [&](size_t ig, size_t ik, size_t iz, size_t ir, size_t is, size_t ic){
+        size_t in, iod, ioh, iow;
+        size_t cur_d, cur_h, cur_w, o_idx, i_idx, f_idx;
+        float value = .0f;
+        f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+        for (in = 0; in < n; in++) {
+            for (iod = 0; iod < od; iod++) {
+                cur_d = sz * iod - pz + dz * iz;
+                if (cur_d < 0 || cur_d >= d)
+                    continue;
+                for (ioh = 0; ioh < oh; ioh++) {
+                    cur_h = sy * ioh - py + dy * ir;
+                    if (cur_h < 0 || cur_h >= h)
+                        continue;
+                    for (iow = 0; iow < ow; iow++) {
+                        cur_w = sx * iow - px + dx * is;
+                        if (cur_w < 0 || cur_w >= w)
+                            continue;
+                        i_idx = in * d * h * w * c + cur_d * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                        o_idx = in * od * oh * ow * k + iod * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+                        value += src[i_idx] * dst_grad[o_idx];
+                    }
+                }
+            }
+        }
+        filter_grad[f_idx] = value;
+    };
+    naive_conv_blockwise_in_parallel_6d(conv_one_pixel, group, k_per_group, fz, fy, fx, c_per_group);
+#else
+    size_t ig, in, ik, iod, ioh, iow, ic, iz, is, ir;
+    size_t cur_d, cur_h, cur_w, o_idx, i_idx, f_idx;
+
+    for (ig = 0; ig < group; ig++) {
+        for (ik = 0; ik < k_per_group; ik++) {
+            for (iz = 0; iz < fz; iz++) {
+                for (ir = 0; ir < fy; ir++) {
+                    for (is = 0; is < fx; is++) {
+                        for (ic = 0; ic < c_per_group; ic++) {
+                            float value = .0f;
+                            f_idx = ig * k_per_group * fz * fy * fx * c_per_group + ik * fz * fy * fx * c_per_group + iz * fy * fx * c_per_group + ir * fx * c_per_group + is * c_per_group + ic;
+                            for (in = 0; in < n; in++) {
+                                for (iod = 0; iod < od; iod++) {
+                                    cur_d = sz * iod - pz + dz * iz;
+                                    if (cur_d < 0 || cur_d >= d)
+                                        continue;
+                                    for (ioh = 0; ioh < oh; ioh++) {
+                                        cur_h = sy * ioh - py + dy * ir;
+                                        if (cur_h < 0 || cur_h >= h)
+                                            continue;
+                                        for (iow = 0; iow < ow; iow++) {
+                                            cur_w = sx * iow - px + dx * is;
+                                            if (cur_w < 0 || cur_w >= w)
+                                                continue;
+                                            i_idx = in * d * h * w * c + cur_d * h * w * c + cur_h * w * c + cur_w * c + ig * c_per_group + ic;
+                                            o_idx = in * od * oh * ow * k + iod * oh * ow * k + ioh * ow * k + iow * k + ig * k_per_group + ik;
+                                            value += src[i_idx] * dst_grad[o_idx];
+                                        }
+                                    }
+                                }
+                            }
+                            filter_grad[f_idx] = value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+
 #endif

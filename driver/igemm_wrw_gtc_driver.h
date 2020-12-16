@@ -207,10 +207,12 @@ public:
         int gemm_m = k / group ;
         int gemm_n = (c / group) * y * x;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = 1 << gemm_k_global_split;
         grid_size *= num_of_gemm;
+
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
