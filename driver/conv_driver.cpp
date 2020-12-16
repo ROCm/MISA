@@ -283,7 +283,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
@@ -301,7 +301,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -783,9 +783,11 @@ int main(int argc, char **argv) {
         float16 *device_weight_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
+            gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
             if(driver_data_type == driverHalf){
                 // move to different data type
@@ -827,27 +829,27 @@ int main(int argc, char **argv) {
             HIP_CALL(hipMemcpy(device_input, host_input_f16,
                         n * c * hi * wi * sizeof(float16), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_output, host_output_f16,
-                        k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
+                        n * k * ho * wo * sizeof(float16), hipMemcpyHostToDevice));
         }
 
 #if 0
         printf("input\r\n");
-        for (int i_check = 0; i_check < (0+32); i_check++)
+        for (int i_check = 0; i_check < (0+16); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
         }
         printf("output\r\n");
-        for (int i_check = 0; i_check < (0+32); i_check++)
+        for (int i_check = 0; i_check < (0+16); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*ho*wo, host_output[i_check*ho*wo], ((int *)host_output)[i_check*ho*wo]);
         }
         printf("input\r\n");
-        for (int i_check = 0; i_check < (0+32); i_check++)
+        for (int i_check = 0; i_check < (0+16); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_input[i_check], ((int *)host_input)[i_check]);
         }
         printf("output\r\n");
-        for (int i_check = 0; i_check < (0+32); i_check++)
+        for (int i_check = 0; i_check < (0+16); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, host_output[i_check], ((int *)host_output)[i_check]);
         }
