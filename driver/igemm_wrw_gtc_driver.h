@@ -37,6 +37,8 @@
 #include <algorithm>
 #include <numeric>
 
+#define USE_HOST_REDUCTION_TO_CHECK 0
+
 typedef struct {
     void *p_in;
     void *p_wei;
@@ -60,6 +62,15 @@ typedef struct {
     int group;
     int __pack_0;
 } __attribute__((packed)) igemm_wrw_gtc_karg_t;
+
+typedef struct {
+    void* output;
+    void* input;
+    int out_length;
+    int in_stride;
+    int n_groups;
+    int __pack_0;
+} __attribute__((packed)) reduction_karg_t;
 
 static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
@@ -636,8 +647,21 @@ public:
         
     }
 
+    void host_wrw_reduction(float16* out, float16* input, int length, int n_groups){
+        int i_len, i_group;
+        float16 val_out; 
+        std::cout << "vec_length: " << length << std::endl;
+        for (i_len = 0; i_len < length; i_len++){
+            val_out = (float16)(0.f);
+            for (i_group = 0; i_group < n_groups; i_group++){
+                val_out += input[i_len + i_group * length];
+            }
+            out[i_len] = val_out;
+        }
+    }
+
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
+                 hipModule_t module, hipModule_t module_reduction, void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat, driverDataType_t driver_data_type) {
         if (!tunable_is_valid(arg, tunable, driver_data_type)) {
             result_t result;
@@ -674,11 +698,24 @@ public:
         gemm_k_global_split = update_gemm_k_global_split(arg, tunable);
         
         int num_of_gemm = 1 << gemm_k_global_split;
+        void *p_wei_workspace = nullptr;
+        HIP_CALL(hipMalloc(&p_wei_workspace, num_of_gemm * k * c * y * x * sizeof(float16)));
+
+#if USE_HOST_REDUCTION_TO_CHECK
+        float16 *p_wei_host_workspace = (float16 *)malloc(num_of_gemm * k * c * y * x * sizeof(float16));
+        float16 *p_wei_host = (float16 *)malloc(k * c * y * x * sizeof(float16));
+#endif
 
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
-        karg.p_wei         = p_wei;
+        if(driver_data_type == driverFloat){
+            karg.p_wei     = p_wei;
+        }
+        else{
+            karg.p_wei     = p_wei_workspace;
+        }
+        
         karg.p_out         = p_out;
         karg.hi            = hi;
         karg.wi            = wi;
@@ -701,6 +738,18 @@ public:
 
         printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
+        // reduction kernel args
+        size_t reduction_per_thread = 8;
+        reduction_karg_t karg_reduction;
+        karg_reduction.output = p_wei;
+        karg_reduction.input = p_wei_workspace; 
+        karg_reduction.in_stride = k * c * y * x;
+        karg_reduction.out_length = reduction_per_thread;
+        karg_reduction.n_groups = num_of_gemm;
+
+        size_t karg_reduction_size = sizeof(karg_reduction);
+
+
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
@@ -711,13 +760,23 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
+        hipFunction_t reduction_func;
+        HIP_CALL(
+                hipModuleGetFunction(&reduction_func, module_reduction, "wrw_reduction_fp16"));
+
         // hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
 
         auto launch_wrw_driver = [&](){
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                               HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                               HIP_LAUNCH_PARAM_END};
+
+            void *config_reduction[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg_reduction,
+                                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_reduction_size,
+                                        HIP_LAUNCH_PARAM_END};
+
             float ms = .0;
+            float ms_reduction = .0;
 
             if(gemm_k_global_split){
                 // TODO: current implementation of global split K need pre-clear the wei tensor
@@ -730,16 +789,29 @@ public:
             hipEvent_t stop;
             hipEventCreate(&start);
             hipEventCreate(&stop);
+            hipEvent_t start_reduction;
+            hipEvent_t stop_reduction;
+            hipEventCreate(&start_reduction);
+            hipEventCreate(&stop_reduction);
 
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
             HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
 
+            HIP_CALL(hipHccModuleLaunchKernel(reduction_func, k * c * y * x / reduction_per_thread, 1, 1,
+                                            256, 1, 1, 0, 0, NULL,
+                                            (void **)&config_reduction, start_reduction, stop_reduction));
+
             hipEventSynchronize(stop);
             hipEventElapsedTime(&ms, start, stop);
             hipEventDestroy(start);
             hipEventDestroy(stop);
+
+            hipEventSynchronize(stop_reduction);
+            hipEventElapsedTime(&ms_reduction, start_reduction, stop_reduction);
+            hipEventDestroy(start_reduction);
+            hipEventDestroy(stop_reduction);
 #else
             gpu_timer_t timer(NULL);
             timer.start();
@@ -751,7 +823,7 @@ public:
             timer.stop();
             ms = timer.duration();
 #endif
-            return ms;
+            return ms + ms_reduction;
         };
 
         for (int i = 0; i < warmup; i++) {
@@ -762,6 +834,18 @@ public:
             float d = launch_wrw_driver();
             duration_list.push_back(d);
         }
+
+        printf("host reduction now\n");
+
+#if USE_HOST_REDUCTION_TO_CHECK
+        HIP_CALL(hipMemcpy(p_wei_host_workspace, p_wei_workspace,
+                           num_of_gemm * k * c * y * x * sizeof(float16),
+                           hipMemcpyDeviceToHost));
+
+        host_wrw_reduction(p_wei_host, p_wei_host_workspace, k * c * y * x, num_of_gemm);
+        HIP_CALL(hipMemcpy(p_wei, p_wei_host,
+                           k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
+#endif
 
         // for (int i = 0; i < warmup; i++) {
         //     hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
@@ -789,6 +873,11 @@ public:
         }
         printf("workspace debug end \r\n");
         free(gemmc_host_check);
+#endif
+        hipFree(p_wei_workspace);
+#if USE_HOST_REDUCTION_TO_CHECK
+        free(p_wei_host_workspace);
+        free(p_wei_host);
 #endif
         result_t result;
         result.return_code = 0;

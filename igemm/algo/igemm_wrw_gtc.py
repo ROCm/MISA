@@ -40,7 +40,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
 IGEMM_WRW_GTC_DEBUG = 1
-
+IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD = 0
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -491,11 +491,17 @@ class igemm_wrw_gtc_t(mc_base_t):
 
             ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t()
             ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
-            ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
+            if self.tunable.precision == 'fp32':
+                ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
+            else:
+                ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 else 0
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
 
             # for wrw, keep data byte to 4 to compare atomic add and reduction method
-            ctrl_coalescing_store_xdlops.data_byte = 4 #amdgpu_precision_data_byte(self.tunable.precision)
+            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+                ctrl_coalescing_store_xdlops.data_byte = 4 #amdgpu_precision_data_byte(self.tunable.precision)
+            else:
+                ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
             ctrl_coalescing_store_xdlops.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
@@ -1506,6 +1512,18 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_lshl_b32 s[3], s[1], s[{s.s_gemmk_split()}]")
         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), '3', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         self._emit(m_int_div_rem_ss(s.s_bx(), s.s_block_gtc_in(), s.s_tmp(4), '1', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+        # config weight workspace base offset
+        if data_byte == 2 and IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 0:
+            self._emit("; config weight workspace offset")
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(2)}], s[{s.s_wei_stride_k()}], 1") # in case where data_byte is 2 
+            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_tmp(2)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_block_gtc_in()}], s[{s.s_tmp(2)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_tmp(2)}], s[{s.s_group()}]")
+            self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_tmp(2)}], s[{s.s_group()}]")
+            self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
+            self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
+
+        self._emit("; config input and output n offset")
         self._emit(f"s_lshr_b32 s[{s.s_sub_n()}], s[{s.s_n()}], s[{s.s_gemmk_split()}]")
         self._emit(f"s_mul_i32 s[{s.s_block_gtc_in()}], s[{s.s_block_gtc_in()}], s[{s.s_sub_n()}]")
 
@@ -1770,7 +1788,10 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
-            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte *2)}")
+            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+                self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * 4)}")
+            else:
+                self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_wei_stride_c()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_wei_stride_c()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
@@ -1778,7 +1799,10 @@ class igemm_wrw_gtc_t(mc_base_t):
         else:
             pass
         self._emit_empty_line()
-        self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte*2)}")
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(4)}")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_wei_stride_k()}], s[{s.s_tmp()}+3]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp()}+1], s[{s.s_wei_stride_k()}], s[{s.s_tmp()}+3]")
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
@@ -1854,10 +1878,10 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; add y, x")
         #self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_x()}], v[{v.v_wei_iy()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp(4)}]")
-        #self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
-
-        self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(4)}, v[{v.v_wei_os()}]")
-
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+            self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(4)}, v[{v.v_wei_os()}]")
+        else:
+            self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
 
         self._emit(f"; move slice stride")
         assert n_n0 * n_n1b == self.tunable.gemm_k_per_block
@@ -1901,7 +1925,10 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
         self._emit(self.try_shift_stride(s.s_out_stride_n, igemm_log2(data_byte)))
-        self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte*2)))
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+            self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(4)))
+        else:
+            self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
         if gemm_m_unmerge_cluster == 1:
             self._emit(self.try_shift_stride(s.s_wei_stride_k0, igemm_log2(data_byte)))
 

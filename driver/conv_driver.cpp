@@ -171,6 +171,10 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define IGEMM_HSACO "igemm_gtc.hsaco"
 #endif
 
+#ifndef IGEMM_REDUCTION_HSACO
+#define IGEMM_REDUCTION_HSACO "out/igemm_gtc_reduction.hsaco"
+#endif
+
 #ifndef IGEMM_CONFIG_FILE
 #define IGEMM_CONFIG_FILE "igemm_gtc.config"
 #endif
@@ -404,6 +408,10 @@ int main(int argc, char **argv) {
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
+
+    hipModule_t module_reduction;
+    char *hsaco_reduction = env_get_str("IGEMM_REDUCTION_HSACO", IGEMM_REDUCTION_HSACO);
+    HIP_CALL(hipModuleLoad(&module_reduction, hsaco_reduction));
 
     // base arg might be "conv" or "convfp16" now;
     std::string base_arg = ParseBaseArg(argc, argv);
@@ -879,7 +887,7 @@ int main(int argc, char **argv) {
                                    k * c * y * x * sizeof(float)));
 
             result_t result =
-                conv_wrw_driver.run(&conv_args, tunable, module, device_input,
+                conv_wrw_driver.run(&conv_args, tunable, module, module_reduction, device_input,
                                 device_weight, device_output, warmup, repeat, driver_data_type);
 
             if (result.return_code != 0)
@@ -902,9 +910,17 @@ int main(int argc, char **argv) {
                 sel_grid = grid_size;
             }
             if (need_verify) {
-                HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
-                                   k * c * y * x * sizeof(float),
+                if(driver_data_type == driverFloat){
+                    HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
+                                   ngroups * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
+                }
+                if(driver_data_type == driverHalf){
+                    HIP_CALL(hipMemcpy(device_weight_to_host_f16, device_weight,
+                                   ngroups * (k / ngroups) * (c / ngroups) * y * x * sizeof(float16),
+                                   hipMemcpyDeviceToHost));
+                    tensor_movement<float, float16>(device_weight_to_host, device_weight_to_host_f16, ngroups * (k / ngroups) * (c / ngroups) * y * x);
+                }
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
                                              ngroups * (k / ngroups) * (c / ngroups) * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
@@ -940,8 +956,10 @@ int main(int argc, char **argv) {
             }
             fclose(debug_log);
         }
-        if (need_verify) 
+        if (need_verify){
             free(device_weight_to_host);
+            free(device_weight_to_host_f16);
+        }
     }
 
     free(host_input);
