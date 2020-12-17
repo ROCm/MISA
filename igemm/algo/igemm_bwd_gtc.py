@@ -1034,10 +1034,10 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         if self.tunable.precision == "fp32":
             ctrl_wei_gld.data_bytes = 4
-            ctrl_in_gld.data_bytes  = 4
+            ctrl_out_gld.data_bytes  = 4
         elif self.tunable.precision == "fp16" or self.tunable.precision == "bf16":
             ctrl_wei_gld.data_bytes = 2
-            ctrl_in_gld.data_bytes  = 2
+            ctrl_out_gld.data_bytes  = 2
         else:
             assert False, "not support data type"
 
@@ -1101,11 +1101,11 @@ class igemm_bwd_gtc_t(mc_base_t):
         wei_sst_ctrl = ctrl_2d_shared_store_t()
 
         wei_sst_ctrl.data_bytes       = data_byte
-        in_sst_ctrl.data_bytes        = data_byte
+        out_sst_ctrl.data_bytes        = data_byte
         wei_sst_ctrl.precision        = self.tunable.precision
-        in_sst_ctrl.precision         = self.tunable.precision
+        out_sst_ctrl.precision         = self.tunable.precision
         wei_sst_ctrl.lds_gemm_k_pack  = self.tunable.gemm_k_pack
-        in_sst_ctrl.lds_gemm_k_pack   = self.tunable.gemm_k_pack
+        out_sst_ctrl.lds_gemm_k_pack   = self.tunable.gemm_k_pack
 
         if self.out_thread_copy_ndim == 2:
             out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
