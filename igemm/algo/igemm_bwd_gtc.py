@@ -1927,8 +1927,16 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ik1e()}]")
                 self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
 
+        ## ToDo: assuming n_k1e == 1 when n_k0 != 1 
         if c_k0 != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_c0*n_c1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+            if self.tunable.gemm_k_pack == 1:
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_c0*n_c1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+            else:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ik0()}]")
+                self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(n_c0*n_c1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
+                self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ik0()}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
+
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
