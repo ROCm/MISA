@@ -588,6 +588,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load weight")
+                self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
@@ -1902,7 +1903,6 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_c1*self.tunable.gemm_k_pack)}, v[{v.v_gtc_ic0}]")
             else:
                 if c_c0 == 1:
-                    self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic1()}]")
                     self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_k_pack)}, v[{v.v_gtc_ic1()}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic0()}], {igemm_log2(n_c1)}, v[{v.v_gtc_ic1()}]")
@@ -2224,6 +2224,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
             fctrl.lds_gemm_k_pack             = self.tunable.gemm_k_pack
+            fctrl.precision                   = self.tunable.precision
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
