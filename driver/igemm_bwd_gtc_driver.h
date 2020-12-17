@@ -37,11 +37,10 @@
 #include <algorithm>
 #include <numeric>
 
-template <typename Tgpu>
 struct igemm_bwd_gtc_karg_t {
-    Tgpu *p_in;
-    Tgpu *p_wei;
-    Tgpu *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -112,8 +111,7 @@ struct igemm_upsampling_clear_karg_t {
 #endif
 } __attribute__((packed));
 
-template <typename Tgpu> 
-static void dump_bwd_karg(igemm_bwd_gtc_karg_t<Tgpu> * karg){
+static void dump_bwd_karg(igemm_bwd_gtc_karg_t *karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -512,7 +510,7 @@ public:
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        igemm_bwd_gtc_karg_t<Tgpu> karg;
+        igemm_bwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;

@@ -290,7 +290,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
     for (int i = 0; i < n; ++i) {
         if(!(valid_float(ref[i]) && valid_float(pred[i]))){
             printf(" invalid float at %4d, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-            return -1;
+            return false;
         }
         double ri = (double)ref[i];
         double pi = (double)pred[i];
@@ -747,6 +747,8 @@ int main(int argc, char **argv) {
             }; 
 
             result_t result;
+
+            result.return_code = 0; 
             if ( driver_data_type == driverFloat ) 
                  result = conv_bwd_driver.run<float>(&conv_args, tunable, module, device_input, device_weight, device_output, warmup, repeat);
             else if(driver_data_type == driverHalf)
