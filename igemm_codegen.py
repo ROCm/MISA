@@ -90,10 +90,6 @@ def igemm_out_tunable_param(output_file, config_content):
         list_emitter.emit(td_item.output())
     list_emitter.close()
 
-#def igemm_sequence(args, config_content):
-#    kseq = v4r1_dynamic_kernel_sequencer_t(amdgpu_get_gfx906_60cu(),
-#            config_content.get_section('v4r1_dynamic_kernel')[0].to_dict())
-#    kseq()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -120,4 +116,9 @@ if __name__ == '__main__':
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
         # config_content.dump()
         # igemm_sequence(args, config_content)
-        pass
+        if os.path.exists(args.dir):
+            shutil.rmtree(args.dir)
+        os.mkdir(args.dir)
+        igemm_sequence(args, config_content)
+
+

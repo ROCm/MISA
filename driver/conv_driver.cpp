@@ -267,7 +267,7 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
     for (size_t i = 0; i < n; ++i) {
         if(!(valid_float(ref[i]) && valid_float(pred[i]))){
             printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-            return -1;
+            return false;
         }
         double ri = (double)ref[i];
         double pi = (double)pred[i];
