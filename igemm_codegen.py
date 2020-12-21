@@ -66,6 +66,14 @@ def igemm_host_driver(args, config_content):
     if not rtn:
         assert False
 
+    # compile tensor cast code
+    hip_src = os.path.join(CPP_DIR, "device_reduction", "gpu_tensor_cast.cpp")
+    target_hsaco = os.path.join(args.dir, "igemm_gtc_tensor_cast.hsaco")
+    hip_builder = compile_hip_t(arch, hip_src, target_hsaco)
+    rtn = hip_builder.compile()
+    if not rtn:
+        assert False
+
 def igemm_flatten(args, config_content):
     asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
     emitter = mc_emit_to_file_t(asm_target)

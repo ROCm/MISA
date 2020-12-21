@@ -175,6 +175,10 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define IGEMM_REDUCTION_HSACO "out/igemm_gtc_reduction.hsaco"
 #endif
 
+#ifndef IGEMM_TENSOR_CAST_HSACO
+#define IGEMM_TENSOR_CAST_HSACO "out/igemm_gtc_tensor_cast.hsaco"
+#endif
+
 #ifndef IGEMM_CONFIG_FILE
 #define IGEMM_CONFIG_FILE "igemm_gtc.config"
 #endif
@@ -412,6 +416,10 @@ int main(int argc, char **argv) {
     hipModule_t module_reduction;
     char *hsaco_reduction = env_get_str("IGEMM_REDUCTION_HSACO", IGEMM_REDUCTION_HSACO);
     HIP_CALL(hipModuleLoad(&module_reduction, hsaco_reduction));
+
+    hipModule_t module_tensor_cast;
+    char *hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
+    HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast));
 
     // base arg might be "conv" or "convfp16" now;
     std::string base_arg = ParseBaseArg(argc, argv);
@@ -887,7 +895,7 @@ int main(int argc, char **argv) {
                                    k * c * y * x * sizeof(float)));
 
             result_t result =
-                conv_wrw_driver.run(&conv_args, tunable, module, module_reduction, device_input,
+                conv_wrw_driver.run(&conv_args, tunable, module, module_reduction, module_tensor_cast, device_input,
                                 device_weight, device_output, warmup, repeat, driver_data_type);
 
             if (result.return_code != 0)
@@ -916,10 +924,11 @@ int main(int argc, char **argv) {
                                    hipMemcpyDeviceToHost));
                 }
                 if(driver_data_type == driverHalf){
+
                     HIP_CALL(hipMemcpy(device_weight_to_host_f16, device_weight,
                                    ngroups * (k / ngroups) * (c / ngroups) * y * x * sizeof(float16),
                                    hipMemcpyDeviceToHost));
-                    tensor_movement<float, float16>(device_weight_to_host, device_weight_to_host_f16, ngroups * (k / ngroups) * (c / ngroups) * y * x);
+                    tensor_movement<float, float16>(device_weight_to_host, device_weight_to_host_f16, ngroups * (k / ngroups) * (c / ngroups) * y * x);        
                 }
                 bool is_valid = valid_vector(host_weight, device_weight_to_host,
                                              ngroups * (k / ngroups) * (c / ngroups) * y * x, nrms);

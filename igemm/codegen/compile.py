@@ -23,6 +23,7 @@
 #  SOFTWARE.
 # 
 ################################################################################
+from math import trunc
 import os
 import subprocess
 
@@ -33,6 +34,7 @@ IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 IGEMM_HOST_USE_XDNN = False
 IGEMM_HOST_USE_MAGIC_DIV = True
 IGEMM_HOST_USE_HIPCC = True # hipclang perfer use hipcc to compile host code
+IGEMM_HOST_WRW_USE_ATOMIC_ADD = True
 
 def _check_hip_clang():
     return os.path.exists('/opt/rocm/llvm/bin/clang++')
@@ -189,6 +191,8 @@ class compile_host_t(object):
                 cmd += kwargs['cflags']
             if 'cxxflags' in kwargs:
                 cmd += kwargs['cxxflags']
+            if IGEMM_HOST_WRW_USE_ATOMIC_ADD:
+                cmd += ['-DIGEMM_WRW_USE_ATOMIC_ADD=1']
             if type(self.host_cpp) is str:
                 cmd += [self.host_cpp]
             elif type(self.host_cpp) is list:

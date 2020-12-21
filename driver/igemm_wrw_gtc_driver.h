@@ -72,6 +72,13 @@ typedef struct {
     int __pack_0;
 } __attribute__((packed)) reduction_karg_t;
 
+typedef struct {
+    void* output;
+    void* input;
+    int length;
+    int __pack_0;
+} __attribute__((packed)) tensor_cast_karg_t;
+
 static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
@@ -101,76 +108,7 @@ public:
     igemm_wrw_gtc_t(){}
     ~igemm_wrw_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-#if 0
-        auto gemm_m_per_block         = tunable->gemm_m_per_block;
-        auto gemm_n_per_block         = tunable->gemm_n_per_block;
-        auto gemm_k_per_block         = tunable->gemm_k_per_block;
-        auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
-        auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
-        auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
-        auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
-        auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
-        auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
-        auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
-        auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
-        auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
-        auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
-        auto direction                = tunable->direction;
-        auto precision                = tunable->precision;
-        auto nxb                      = tunable->nxb;
-        auto nxe                      = tunable->nxe;
-        auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
-        auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
-        auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
-        auto multihead                = tunable->multihead;
-
-        assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
-        assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
-        int gemm_m_repeat = gemm_m_per_block / (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster);
-        int gemm_n_repeat = gemm_n_per_block / (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster);
-
-        int thread_tile_m = gemm_m_repeat * gemm_m_per_thread;
-        int thread_tile_n = gemm_n_repeat * gemm_n_per_thread;
-
-        assert(direction == "wrw");
-
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + precision +
-                std::string("_bx") + std::to_string(nxb) + 
-                std::string("_ex") + std::to_string(nxe) + "_";
-        std::string kernel_name =
-            kernel_prefix +
-               "bt" +
-               std::to_string(gemm_m_per_block) + "x" +
-               std::to_string(gemm_n_per_block) + "x" +
-               std::to_string(gemm_k_per_block) + "_" +
-               "tt" +
-               std::to_string(thread_tile_m) + "x" +
-               std::to_string(thread_tile_n) + "_" +
-               "gm" + 
-               std::to_string(gemm_m_repeat) + "x" +
-               std::to_string(gemm_m_level0_cluster) + "x" +
-               std::to_string(gemm_m_level1_cluster) + "_" +
-               "gn" + 
-               std::to_string(gemm_n_repeat) + "x" +
-               std::to_string(gemm_n_level0_cluster) + "x" +
-               std::to_string(gemm_n_level1_cluster) + "_" +
-               "ta" + utility_int_list_to_string(tensor_a_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_a_cluster_lengths)+ "_" + 
-               "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_b_cluster_lengths);
-        // printf("[%s]\n",kernel_name.c_str());
-        if(gemm_m_unmerge_cluster)
-            kernel_name += std::string("_mc");
-        if(gemm_n_unmerge_cluster)
-            kernel_name += std::string("_nc");
-        if(gemm_k_unmerge_cluster)
-            kernel_name += std::string("_kc");
-        if(multihead)
-            kernel_name += std::string("_mh");
-        return kernel_name;
-#else
         return igemm_gtc_encode_kernel_name(tunable);
-#endif
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
         if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
@@ -661,7 +599,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, hipModule_t module_reduction, void *p_in, void *p_wei, void *p_out,
+                 hipModule_t module, hipModule_t module_reduction, hipModule_t module_tensor_cast, void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat, driverDataType_t driver_data_type) {
         if (!tunable_is_valid(arg, tunable, driver_data_type)) {
             result_t result;
@@ -699,7 +637,7 @@ public:
         
         int num_of_gemm = 1 << gemm_k_global_split;
         void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, num_of_gemm * k * c * y * x * sizeof(float16)));
+        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * num_of_gemm * k * c * y * x * sizeof(float16)));
 
 #if USE_HOST_REDUCTION_TO_CHECK
         float16 *p_wei_host_workspace = (float16 *)malloc(num_of_gemm * k * c * y * x * sizeof(float16));
@@ -709,11 +647,15 @@ public:
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
+
         if(driver_data_type == driverFloat){
             karg.p_wei     = p_wei;
         }
         else{
-            karg.p_wei     = p_wei_workspace;
+            if(gemm_k_global_split > 0)
+                karg.p_wei = p_wei_workspace;
+            else
+                karg.p_wei = p_wei;
         }
         
         karg.p_out         = p_out;
@@ -743,11 +685,20 @@ public:
         reduction_karg_t karg_reduction;
         karg_reduction.output = p_wei;
         karg_reduction.input = p_wei_workspace; 
-        karg_reduction.in_stride = k * c * y * x;
+        karg_reduction.in_stride = group * (k / group) * (c / group) * y * x;
         karg_reduction.out_length = reduction_per_thread;
         karg_reduction.n_groups = num_of_gemm;
 
         size_t karg_reduction_size = sizeof(karg_reduction);
+
+        // tensor cast kernel args
+        size_t cast_per_thread = 8;
+        tensor_cast_karg_t karg_tensor_cast;
+        karg_tensor_cast.output = p_wei;
+        karg_tensor_cast.input = p_wei_workspace; 
+        karg_tensor_cast.length = cast_per_thread;
+
+        size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
 
 
         int block_size = get_block_size(tunable);
@@ -764,6 +715,10 @@ public:
         HIP_CALL(
                 hipModuleGetFunction(&reduction_func, module_reduction, "wrw_reduction_fp16"));
 
+        hipFunction_t tensor_cast_func;
+        HIP_CALL(
+                hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
+
         // hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
 
         auto launch_wrw_driver = [&](){
@@ -775,6 +730,10 @@ public:
                                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_reduction_size,
                                         HIP_LAUNCH_PARAM_END};
 
+            void *config_tensor_cast[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg_tensor_cast,
+                                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_tensor_cast_size,
+                                        HIP_LAUNCH_PARAM_END};
+
             float ms = .0;
             float ms_reduction = .0;
 
@@ -782,6 +741,7 @@ public:
                 // TODO: current implementation of global split K need pre-clear the wei tensor
                 // This may not be true in the future!
                 hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
+                hipMemset(p_wei_workspace, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
             }
 
 #if USE_EXT_MODULE_LAUNCH
@@ -799,19 +759,34 @@ public:
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
 
-            HIP_CALL(hipHccModuleLaunchKernel(reduction_func, k * c * y * x / reduction_per_thread, 1, 1,
-                                            256, 1, 1, 0, 0, NULL,
-                                            (void **)&config_reduction, start_reduction, stop_reduction));
-
             hipEventSynchronize(stop);
             hipEventElapsedTime(&ms, start, stop);
             hipEventDestroy(start);
             hipEventDestroy(stop);
 
-            hipEventSynchronize(stop_reduction);
-            hipEventElapsedTime(&ms_reduction, start_reduction, stop_reduction);
-            hipEventDestroy(start_reduction);
-            hipEventDestroy(stop_reduction);
+#if IGEMM_WRW_USE_ATOMIC_ADD
+            // fp16 reduction
+            if(driver_data_type == driverHalf && gemm_k_global_split > 0){
+                HIP_CALL(hipHccModuleLaunchKernel(tensor_cast_func, group * (k / group) * (c / group) * y * x / cast_per_thread, 1, 1,
+                                            256, 1, 1, 0, 0, NULL,
+                                            (void **)&config_tensor_cast, start_reduction, stop_reduction));
+                hipEventSynchronize(stop_reduction);
+                hipEventElapsedTime(&ms_reduction, start_reduction, stop_reduction);
+                hipEventDestroy(start_reduction);
+                hipEventDestroy(stop_reduction);
+            }
+#else
+            // fp16 reduction
+            if(driver_data_type == driverHalf){
+                HIP_CALL(hipHccModuleLaunchKernel(reduction_func, group * (k / group) * (c / group) * y * x / cast_per_thread, 1, 1,
+                                            256, 1, 1, 0, 0, NULL,
+                                            (void **)&config_reduction, start_reduction, stop_reduction));
+                hipEventSynchronize(stop_reduction);
+                hipEventElapsedTime(&ms_reduction, start_reduction, stop_reduction);
+                hipEventDestroy(start_reduction);
+                hipEventDestroy(stop_reduction);
+            }
+#endif
 #else
             gpu_timer_t timer(NULL);
             timer.start();

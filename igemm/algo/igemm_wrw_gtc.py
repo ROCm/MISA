@@ -40,7 +40,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
 IGEMM_WRW_GTC_DEBUG = 1
-IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD = 0
+IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD = 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -498,7 +498,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
 
             # for wrw, keep data byte to 4 to compare atomic add and reduction method
-            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
                 ctrl_coalescing_store_xdlops.data_byte = 4 #amdgpu_precision_data_byte(self.tunable.precision)
             else:
                 ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
@@ -1788,7 +1788,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
-            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
                 self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * 4)}")
             else:
                 self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
@@ -1799,7 +1799,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         else:
             pass
         self._emit_empty_line()
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(4)}")
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
@@ -1878,7 +1878,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; add y, x")
         #self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_x()}], v[{v.v_wei_iy()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp(4)}]")
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(4)}, v[{v.v_wei_os()}]")
         else:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
@@ -1925,7 +1925,7 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
         self._emit(self.try_shift_stride(s.s_out_stride_n, igemm_log2(data_byte)))
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1:
+        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(4)))
         else:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
