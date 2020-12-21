@@ -439,7 +439,7 @@ public:
         hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
-            printf("[%d]th var to monitor:[%f, %d]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
+            printf("[%d]th var to monitor:[%f, %d, 0x%x]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check]);
         }
         printf("workspace debug end \n");
         free(gemmc_host_check);

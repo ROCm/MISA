@@ -40,6 +40,7 @@ class inst_buffer_load_dword_t(object):
 
         if self.data_bytes == 2:
             return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            #return f"buffer_load_format_d16_x v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         if self.data_bytes == 4:
             return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         if self.data_bytes == 8:
