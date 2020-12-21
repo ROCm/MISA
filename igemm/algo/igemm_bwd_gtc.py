@@ -1042,8 +1042,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             assert False, "not support data type"
 
-        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4) if t_n1b != 1 else 1
-        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4) if self.tunable.nxe == 0 else 1
+        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_n1b != 1 else 1
+        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_c1 != 1 else 1
 
         if self.out_thread_copy_ndim == 2:
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
