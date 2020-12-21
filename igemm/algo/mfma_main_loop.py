@@ -30,6 +30,7 @@ from .utility import *
 from .mfma import *
 from .xdlops_mapping import *
 from .nop import *
+from .igemm_base import *
 
 class ctrl_mfma_main_loop_t(object):
     def __init__(self):
@@ -1213,7 +1214,10 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_gload_and_move_slice_window():
                 with self._deferred_context():
-                    self._emit(f_gld_b())
+                    if IGEMM_GTC_FEAT_BUFFER_LOAD_WITHOUT_INTERLEAVE == 1:
+                        pass
+                    else:
+                        self._emit(f_gld_b())
                     self._emit(f_gld_a())
                     self._emit(f_move_slice_window_b())
                     self._emit(f_move_slice_window_a())
@@ -1334,6 +1338,8 @@ class mfma_main_loop_t(mc_base_t):
             #    for y in x:
             #        y.dump()
             se_last = create_scheduler(self.mc, mbb_list_last)
+            if IGEMM_GTC_FEAT_BUFFER_LOAD_WITHOUT_INTERLEAVE == 1:
+                self._emit(f_gld_b())
             self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
             mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
             self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
