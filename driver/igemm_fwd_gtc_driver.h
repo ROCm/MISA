@@ -37,11 +37,10 @@
 #include <algorithm>
 #include <numeric>
 
-template <class Tgpu>
 struct igemm_fwd_gtc_karg_t{
-    Tgpu *p_in;
-    Tgpu *p_wei;
-    Tgpu *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -72,7 +71,7 @@ struct igemm_fwd_gtc_karg_t{
 #endif
 } __attribute__((packed));
 
-static void dump_fwd_karg(igemm_fwd_gtc_karg_t<float> * karg){
+static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -313,7 +312,7 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         
-        igemm_fwd_gtc_karg_t<Tgpu> karg;
+        igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;
