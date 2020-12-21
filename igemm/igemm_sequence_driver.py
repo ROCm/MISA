@@ -203,12 +203,31 @@ class igemm_sequence_xdlops_t(mc_base_t):
 
             return tunable_dicts
 
+        def serialize_all_configs(tunable_dicts):
+            assert len(tunable_dicts) != 0
+            # first, get config file name.
+            arch_str = amdgpu_arch_to_string(self.mc.arch_config.arch)
+            direction = tunable_dicts[0]['direction']
+            config_file_base_name = f'igemm_{direction}_gtc_{arch_str}.config'
+            config_file = os.path.join(os.path.dirname(self.mc.emitter.file_name), config_file_base_name)
+            with open(config_file, "w") as fp:
+                fp.write('[codegen]\n')
+                fp.write('arch = {}\n'.format('\'' + arch_str + '\''))
+                fp.write('code_object = {}\n'.format('\'' + amdgpu_codeobj_to_string(self.mc.arch_config.code_object) + '\''))
+                fp.write('mode = \'flat\'\n')
+                for td in tunable_dicts:
+                    fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
+                    fp.write('\n')
+
         tunable_dicts = gen_all_configs()
-        assert len(tunable_dicts) != 0
+        if len(tunable_dicts) == 0:
+            print(f"no config generated")
+            return
         print(f"total configs:{len(tunable_dicts)}")
         #for td in tunable_dicts:
         #    print(igemm_gtc_tunable_parameter_t(td).serialize())
         igemm_codegen_driver_t(self.mc, tunable_dicts)()
+        serialize_all_configs(tunable_dicts)
 
 class igemm_sequence_driver_t(mc_base_t):
     def __init__(self, mc, config):
