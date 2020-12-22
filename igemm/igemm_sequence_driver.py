@@ -215,6 +215,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                 fp.write('arch = {}\n'.format('\'' + arch_str + '\''))
                 fp.write('code_object = {}\n'.format('\'' + amdgpu_codeobj_to_string(self.mc.arch_config.code_object) + '\''))
                 fp.write('mode = \'flat\'\n')
+                fp.write('\n')
                 for td in tunable_dicts:
                     fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
                     fp.write('\n')
@@ -226,7 +227,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
         print(f"total configs:{len(tunable_dicts)}")
         #for td in tunable_dicts:
         #    print(igemm_gtc_tunable_parameter_t(td).serialize())
-        igemm_codegen_driver_t(self.mc, tunable_dicts)()
+        igemm_codegen_driver_t(self.mc, tunable_dicts)(multiprocess=True)
         serialize_all_configs(tunable_dicts)
 
 class igemm_sequence_driver_t(mc_base_t):
