@@ -384,7 +384,7 @@ class igemm_gtc_tunable_parameter_t(object):
             sstr += \
                 line_start + f'[igemm_{self.direction}_gtc]' + new_line
 
-        sstr += line_start + 'tensor_layout              {} {}'.format(equal, self.tensor_layout) + new_line + \
+        sstr += line_start + 'tensor_layout              {} {}'.format(equal, '\'' + self.tensor_layout + '\'') + new_line + \
                 line_start + 'gemm_m_per_block           {} {}'.format(equal, self.gemm_m_per_block) + new_line + \
                 line_start + 'gemm_n_per_block           {} {}'.format(equal, self.gemm_n_per_block) + new_line + \
                 line_start + 'gemm_k_per_block           {} {}'.format(equal, self.gemm_k_per_block) + new_line
@@ -410,8 +410,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_start + 'tensor_a_cluster_lengths   {} {}'.format(equal, self.tensor_a_cluster_lengths) + new_line + \
                 line_start + 'tensor_b_thread_lengths    {} {}'.format(equal, self.tensor_b_thread_lengths) + new_line + \
                 line_start + 'tensor_b_cluster_lengths   {} {}'.format(equal, self.tensor_b_cluster_lengths) + new_line + \
-                line_start + 'direction                  {} {}'.format(equal, self.direction) + new_line + \
-                line_start + 'precision                  {} {}'.format(equal, self.precision) + new_line + \
+                line_start + 'direction                  {} {}'.format(equal, '\'' + self.direction + '\'') + new_line + \
+                line_start + 'precision                  {} {}'.format(equal, '\'' + self.precision + '\'') + new_line + \
                 line_start + 'nxb                        {} {}'.format(equal, self.nxb) + new_line + \
                 line_start + 'nxe                        {} {}'.format(equal, self.nxe) + new_line
         if extra_info:

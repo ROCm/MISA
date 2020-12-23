@@ -28,10 +28,33 @@
 from .algo import *
 from .codegen import *
 from .igemm_codegen_driver import igemm_codegen_driver_t
+from .igemm_host_driver import igemm_host_driver
 
 import os
 import copy
 import math
+
+
+def igemm_sequence_get_config_file_name(direction, arch_str, out_dir):
+    return os.path.join(out_dir, f'igemm_{direction}_gtc_{arch_str}.config')
+
+#def igemm_sequence_serialize_all_configs(mc, tunable_dicts):
+def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tunable_dicts):
+    assert len(tunable_dicts) != 0
+    # first, get config file name.
+    #arch_str = amdgpu_arch_to_string(mc.arch_config.arch)
+    #direction = tunable_dicts[0]['direction']
+    #config_file_base_name = f'igemm_{direction}_gtc_{arch_str}.config'
+    #config_file = os.path.join(os.path.dirname(mc.emitter.file_name), config_file_base_name)
+    with open(config_file, "w") as fp:
+        fp.write('[codegen]\n')
+        fp.write('arch = {}\n'.format('\'' + arch_str + '\''))
+        fp.write('code_object = {}\n'.format('\'' +code_object + '\''))
+        fp.write('mode = \'flat\'\n')
+        fp.write('\n')
+        for td in tunable_dicts:
+            fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
+            fp.write('\n')
 
 class igemm_sequence_xdlops_t(mc_base_t):
     def __init__(self, mc, config):
@@ -39,6 +62,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
         self.config = config
 
     def __call__(self):
+        '''
+        return all tunables
+        '''
         config = self.config
         gemm_m_per_block_list = config["gemm_m_per_block"] if type(config["gemm_m_per_block"]) is list else config["gemm_m_per_block"]
         gemm_n_per_block_list = config["gemm_n_per_block"] if type(config["gemm_n_per_block"]) is list else config["gemm_n_per_block"]
@@ -203,69 +229,84 @@ class igemm_sequence_xdlops_t(mc_base_t):
 
             return tunable_dicts
 
-        def serialize_all_configs(tunable_dicts):
-            assert len(tunable_dicts) != 0
-            # first, get config file name.
-            arch_str = amdgpu_arch_to_string(self.mc.arch_config.arch)
-            direction = tunable_dicts[0]['direction']
-            config_file_base_name = f'igemm_{direction}_gtc_{arch_str}.config'
-            config_file = os.path.join(os.path.dirname(self.mc.emitter.file_name), config_file_base_name)
-            with open(config_file, "w") as fp:
-                fp.write('[codegen]\n')
-                fp.write('arch = {}\n'.format('\'' + arch_str + '\''))
-                fp.write('code_object = {}\n'.format('\'' + amdgpu_codeobj_to_string(self.mc.arch_config.code_object) + '\''))
-                fp.write('mode = \'flat\'\n')
-                fp.write('\n')
-                for td in tunable_dicts:
-                    fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
-                    fp.write('\n')
-
         tunable_dicts = gen_all_configs()
         if len(tunable_dicts) == 0:
             print(f"no config generated")
-            return
+            return None
         print(f"total configs:{len(tunable_dicts)}")
         #for td in tunable_dicts:
         #    print(igemm_gtc_tunable_parameter_t(td).serialize())
         igemm_codegen_driver_t(self.mc, tunable_dicts)(emit_kernel_mp=True, compile_skip_disass=True)
-        serialize_all_configs(tunable_dicts)
+        #serialize_all_configs(tunable_dicts)
+        return tunable_dicts
 
 class igemm_sequence_driver_t(mc_base_t):
     def __init__(self, mc, config):
         mc_base_t.__init__(self, mc)
         self.config = config
 
-    def __call__(self):
+    def __call__(self, **options):
+        def get_dict_with_default(some_dict, key, default_value):
+            if key in some_dict:
+                return some_dict[key]
+            return default_value
+        tunable_dicts = None
+        out_dir = get_dict_with_default(options, 'out_dir', 'out')
+        arch = get_dict_with_default(options, 'arch', 'gfx908')
+        code_object = get_dict_with_default(options, 'code_object', 'cov3')
+
         if self.mc.arch_config.arch == 908:
-            igemm_sequence_xdlops_t(self.mc, self.config)()
+            tunable_dicts = igemm_sequence_xdlops_t(self.mc, self.config)()
         else:
             assert False
+        
+        if tunable_dicts == None:
+            return
 
-def igemm_sequence(args, config_content):
-    sec_root = config_content.get_section('codegen')[0]
-    arch = amdgpu_arch_config_t({
-        'arch'          :   amdgpu_string_to_arch( sec_root['arch'] ),
+        igemm_sequence_serialize_all_configs(arch, code_object,
+                                igemm_sequence_get_config_file_name(tunable_dicts[0]['direction'],
+                                        arch,
+                                        out_dir),
+                                tunable_dicts)
+
+
+def igemm_sequence_driver(**options):
+    def get_dict_with_default(some_dict, key, default_value):
+        if key in some_dict:
+            return some_dict[key]
+        return default_value
+    arch = get_dict_with_default(options, 'arch', 'gfx908')
+    code_object = get_dict_with_default(options, 'code_object', 'cov3')
+    config_content = get_dict_with_default(options, 'config_content', None)
+    out_dir = get_dict_with_default(options, 'out_dir', 'out')
+
+    arch_config = amdgpu_arch_config_t({
+        'arch'          :   amdgpu_string_to_arch( arch ),
         'data_type'     :   AMDGPU_PRECISION_FP32,
-        'code_object'   :   amdgpu_string_to_codeobj( sec_root['code_object']) })
+        'code_object'   :   amdgpu_string_to_codeobj( code_object) })
 
     config_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
     for config in config_dicts:
-        config['arch'] = sec_root['arch']       # append arch to each section
+        config['arch'] = arch       # append arch to each section
 
-    def sequece_one_direction(direction, config):
-        arch_str = sec_root['arch']
-        asm_file = f'igemm_{direction}_gtc_{arch_str}.s'
-        asm_target = os.path.join(args.dir, asm_file)
+    def sequece_one_direction(direction, config, **options):
+        asm_file = f'igemm_{direction}_gtc_{arch}.s'
+        asm_target = os.path.join(out_dir, asm_file)
         emitter = mc_emit_to_file_t(asm_target)
-        mc = mc_asm_printer_t(emitter, arch)
-        igemm_sequence_driver_t(mc, config)()
+        mc = mc_asm_printer_t(emitter, arch_config)
+        igemm_sequence_driver_t(mc, config)(**options)
 
     for config in config_dicts:
         assert "direction" in config
         if type(config["direction"]) is list:
             for direction in config["direction"]:
                 config["current_direction"] = direction             # give a flag for current target direction
-                sequece_one_direction(direction, config)
+                sequece_one_direction(direction, config, **options)
         else:
             config["current_direction"] = config["direction"]       # give a flag for current target direction
-            sequece_one_direction(config["direction"], config)
+            sequece_one_direction(config["direction"], config, **options)
+
+    # build host
+    direction = config_dicts[0]["direction"][0] if type(config_dicts[0]["direction"]) is list else config_dicts[0]["direction"]
+    config_file = igemm_sequence_get_config_file_name(direction, arch, out_dir)
+    igemm_host_driver(arch=arch, config_file=config_file, out_dir=out_dir)
