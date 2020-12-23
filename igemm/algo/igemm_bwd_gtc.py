@@ -1045,6 +1045,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_n1b != 1 else 1
         ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_c1 != 1 else 1
 
+        print(f"out_gld.vector_d1 = {ctrl_out_gld.vector_d1}, wei_gld.vector_d1 = {ctrl_wei_gld.vector_d1}")
+
         if self.out_thread_copy_ndim == 2:
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
@@ -1115,10 +1117,13 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = t_n1b
             else:
                 out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-            #out_sst_ctrl.vector_d1 = t_n1b
-            out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            
+            assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
+            assert out_thread_copy_index[0] == 0, "Not supported"
+            ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
+            out_sst_ctrl.stride_d0 = (out_stride_list[out_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
-            #out_sst_ctrl.stride_d1 = 1
+
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]] 
@@ -1127,8 +1132,14 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
             else:
                 out_sst_ctrl.vector_d1 = 1
+
+            assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             out_sst_ctrl.stride_d0 = 1
-            out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            if out_thread_copy_index[0] == 0:
+                ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
+                out_sst_ctrl.stride_d1 = (out_stride_list[out_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+            else: 
+                out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
@@ -1136,6 +1147,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.length_d1 = 4
                 out_sst_ctrl.vector_d1 = 4
                 out_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
+
         else:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[-1]
@@ -1161,9 +1173,13 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.vector_d1 = t_c1
             else:
                 wei_sst_ctrl.vector_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-            #wei_sst_ctrl.vector_d1 = t_c1
-            wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+
+            assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
+            assert out_thread_copy_index[0] == 0, "Not supported"
+            ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
+            wei_sst_ctrl.stride_d0 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
+
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -1174,8 +1190,13 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = 1
 
+            assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            if wei_thread_copy_index[0] == 0:
+                ## for fp16/bp16, considering every 4 data in k1e is packed into contigueous LDS locations 
+                wei_sst_ctrl.stride_d1 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+            else: 
+                wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             if wei_sst_ctrl.length_d1 == 8 and wei_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
@@ -1183,6 +1204,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.length_d1 = 4
                 wei_sst_ctrl.vector_d1 = 4
                 wei_sst_ctrl.stride_d0 = 4 * data_byte * self.tunable.gemm_k_pack
+
         else:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[-1]

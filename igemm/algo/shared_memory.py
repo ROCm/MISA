@@ -914,7 +914,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             issue_cnt = 0
             if ctrl.length_d1 == ctrl.vector_d1:
                 #print(self.v_src())
-                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                print(f"length_d0={ctrl.length_d0}, vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 if ctrl.src_order == 0:
                     #print(self.v_src())
                     #print(f"length_d0={ctrl.length_d0}")
@@ -939,6 +939,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                         for i_d0 in range(ctrl.length_d0):
                             i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                            print(f"i_offset = {i_offset}")
                             self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
                             issue_cnt += ds_write.get_issues()
                 else:
@@ -952,15 +953,16 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
                 #print(self.v_src())
-                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
                 #print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
+                    print(f"Call to here ....")
                     for i_d0 in range(ctrl.length_d0):
                         for i_d1 in range(num_vector_d1 // 2):
                             i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1 
                             self._emit(ds_write2(f'{self.v_sst_os()}',
-                                    f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
+                                    f'{self.v_src()}+{i_d0 * ctrl.length_d1 + 2*i_d1*ctrl.vector_d1}',
                                     i_offset))
                             issue_cnt += ds_write2.get_issues(i_offset)
                 else:
