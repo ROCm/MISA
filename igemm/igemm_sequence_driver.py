@@ -227,7 +227,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
         print(f"total configs:{len(tunable_dicts)}")
         #for td in tunable_dicts:
         #    print(igemm_gtc_tunable_parameter_t(td).serialize())
-        igemm_codegen_driver_t(self.mc, tunable_dicts)(multiprocess=True)
+        igemm_codegen_driver_t(self.mc, tunable_dicts)(emit_kernel_mp=True, compile_skip_disass=True)
         serialize_all_configs(tunable_dicts)
 
 class igemm_sequence_driver_t(mc_base_t):

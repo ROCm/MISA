@@ -114,7 +114,7 @@ class igemm_codegen_driver_t(mc_base_t):
         self.mc.emit_all_unique()
 
     def emit_igemm_kernel(self, **options):
-        is_multiprocess = True if "multiprocess" in options and options["multiprocess"] == True else False
+        is_multiprocess = True if "emit_kernel_mp" in options and options["emit_kernel_mp"] == True else False
         def get_kernel_per_inc_file_name(ker, origin_file_name):
             if type(ker) is igemm_upsampling_clear_t:
                 return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.inc")
@@ -259,10 +259,12 @@ class igemm_codegen_driver_t(mc_base_t):
         if not rtn:
             assert False
 
-        disass = compile_disass_t(self.mc, ass.target_hsaco)
-        rtn = disass.compile()
-        if not rtn:
-            assert False
+        is_skip_disass = True if "compile_skip_disass" in options and options["compile_skip_disass"] == True else False
+        if not is_skip_disass:
+            disass = compile_disass_t(self.mc, ass.target_hsaco)
+            rtn = disass.compile()
+            if not rtn:
+                assert False
 
     def __call__(self, **options):
         self.do_emit(**options)
