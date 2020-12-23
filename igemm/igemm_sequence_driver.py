@@ -52,7 +52,8 @@ def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tun
         fp.write('code_object = {}\n'.format('\'' +code_object + '\''))
         fp.write('mode = \'flat\'\n')
         fp.write('\n')
-        for td in tunable_dicts:
+        for cnt, td in enumerate(tunable_dicts):
+            fp.write('# kernel:{}\n'.format(cnt))
             fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
             fp.write('\n')
 
