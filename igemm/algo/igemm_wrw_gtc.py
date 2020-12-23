@@ -39,8 +39,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 = 0
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
-IGEMM_WRW_GTC_DEBUG = 1
-IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD = 1
+IGEMM_WRW_GTC_DEBUG = 0
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -494,11 +493,11 @@ class igemm_wrw_gtc_t(mc_base_t):
             if self.tunable.precision == 'fp32':
                 ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             else:
-                ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 else 0
+                ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 else 0
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
 
             # for wrw, keep data byte to 4 to compare atomic add and reduction method
-            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+            if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
                 ctrl_coalescing_store_xdlops.data_byte = 4 #amdgpu_precision_data_byte(self.tunable.precision)
             else:
                 ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
@@ -805,10 +804,20 @@ class igemm_wrw_gtc_t(mc_base_t):
 
                 v_c_needed           = v_c_needed if v_c_needed > 2 else 2  # let at least 2
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
+            out_data_per_vgpr        = 1 
+            if outer.tunable.precision == "fp32":
+                out_data_per_vgpr    = 1
+            elif outer.tunable.tensor_a_thread_lengths[1] > 1:
+                out_data_per_vgpr    = 2
+            in_data_per_vgpr        = 1 
+            if outer.tunable.precision == "fp32":
+                in_data_per_vgpr    = 1
+            elif outer.tunable.tensor_a_thread_lengths[1] > 1:
+                in_data_per_vgpr    = 2
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
-            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
-            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_vgpr_global_load_b))
+            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a // out_data_per_vgpr))
+            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_vgpr_global_load_b // in_data_per_vgpr))
             self.v_sst_a_os          = sym_t("v_sst_a_os"     ,vseq(1))
             self.v_sst_b_os          = sym_t("v_sst_b_os"     ,vseq(1))
             self.v_sld_a_os          = sym_t("v_sld_a_os"     ,vseq(1))
@@ -1076,17 +1085,21 @@ class igemm_wrw_gtc_t(mc_base_t):
         out_sst_ctrl.src_order = 1 if vector_out_d1 > 1 else 0
 
         #print(f"in_sst_ctrl.src_order={in_sst_ctrl.src_order}, out_sst_ctrl.src_order={out_sst_ctrl.src_order}")
+        #print(f"gemm_n_order={gemm_n_order}, gemm_m_order={gemm_m_order}")
+        #print(f"in_thread_copy_dims={in_thread_copy_dims}")
+        #print(f"in_thread_copy_index={in_thread_copy_index}")
 
         if self.in_thread_copy_ndim == 2:
-            in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
-            in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
+            sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, in_thread_copy_dims[in_thread_copy_index[0]])
+            in_sst_ctrl.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]] // sst_gemm_k_pack
+            in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]] * sst_gemm_k_pack
             if gemm_n_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E:
-                in_sst_ctrl.vector_d1 = t_c1e
+                in_sst_ctrl.vector_d1 = math.gcd(t_c1e * sst_gemm_k_pack, 4)
             else:
                 in_sst_ctrl.vector_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
             #in_sst_ctrl.vector_d1 = t_c1
-            in_sst_ctrl.stride_d0 = in_stride_list[in_thread_copy_index[0]] * data_byte
-            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[1]] * data_byte
+            in_sst_ctrl.stride_d0 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+            in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
         elif self.in_thread_copy_ndim == 1:
             in_sst_ctrl.length_d0 = 1
             in_sst_ctrl.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
@@ -1095,11 +1108,14 @@ class igemm_wrw_gtc_t(mc_base_t):
                 (gemm_n_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 and t_c0 != 1):
                 in_sst_ctrl.vector_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
             else:
-                in_sst_ctrl.vector_d1 = 1
+                if in_thread_copy_index[0] in (0, 1):
+                    in_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, in_sst_ctrl.length_d1)
+                else:
+                    in_sst_ctrl.vector_d1 = 1
 
             in_sst_ctrl.stride_d0 = 1
             in_sst_ctrl.stride_d1 = in_stride_list[in_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-            if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
+            if in_sst_ctrl.length_d1 == 8 and data_byte == 4 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 in_sst_ctrl.length_d0 = 2
@@ -1116,7 +1132,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 1
             in_sst_ctrl.stride_d0 = 1
             in_sst_ctrl.stride_d1 = in_stride_list[-1] * data_byte
-            if in_sst_ctrl.length_d1 == 8 and in_sst_ctrl.vector_d1 != 1:
+            if in_sst_ctrl.length_d1 == 8 and data_byte == 4 and in_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 in_sst_ctrl.length_d0 = 2
@@ -1124,15 +1140,20 @@ class igemm_wrw_gtc_t(mc_base_t):
                 in_sst_ctrl.vector_d1 = 4
                 in_sst_ctrl.stride_d0 = 4 * data_byte
 
+        #print(f"in_sst_ctrl.length_d0={in_sst_ctrl.length_d0}, in_sst_ctrl.length_d1={in_sst_ctrl.length_d1}")
+        #print(f"in_sst_ctrl.stride_d0={in_sst_ctrl.stride_d0}, in_sst_ctrl.stride_d1={in_sst_ctrl.stride_d1}")
+        #print(f"in_sst_ctrl.vector_d1={in_sst_ctrl.vector_d1}")
+
         if self.out_thread_copy_ndim == 2:
-            out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
-            out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
+            sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, out_thread_copy_dims[out_thread_copy_index[0]])
+            out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]] // sst_gemm_k_pack
+            out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]] * sst_gemm_k_pack
             if gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
-                out_sst_ctrl.vector_d1 = t_k1
+                out_sst_ctrl.vector_d1 = math.gcd(t_k1 * sst_gemm_k_pack, 4)
             else:
                 out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
             #out_sst_ctrl.vector_d1 = t_n1b
-            out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte
+            out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
             #out_sst_ctrl.stride_d1 = 1
         elif self.out_thread_copy_ndim == 1:
@@ -1142,10 +1163,13 @@ class igemm_wrw_gtc_t(mc_base_t):
                 (gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and t_k0 != 1):
                 out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
             else:
-                out_sst_ctrl.vector_d1 = 1
+                if out_thread_copy_index[0] in (0, 1):
+                    out_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, out_sst_ctrl.length_d1)
+                else:
+                    out_sst_ctrl.vector_d1 = 1
             out_sst_ctrl.stride_d0 = 1
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-            if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
+            if out_sst_ctrl.length_d1 == 8 and data_byte == 4 and out_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 out_sst_ctrl.length_d0 = 2
@@ -1164,7 +1188,7 @@ class igemm_wrw_gtc_t(mc_base_t):
 
             out_sst_ctrl.stride_d0 = 1
             out_sst_ctrl.stride_d1 = out_stride_list[-1] * data_byte
-            if out_sst_ctrl.length_d1 == 8 and out_sst_ctrl.vector_d1 != 1:
+            if out_sst_ctrl.length_d1 == 8 and data_byte == 4 and out_sst_ctrl.vector_d1 != 1:
                 # assert False
                 # TODO: this is indeed not optimal. may consider shuffle in the future.
                 out_sst_ctrl.length_d0 = 2
@@ -1513,7 +1537,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), '3', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         self._emit(m_int_div_rem_ss(s.s_bx(), s.s_block_gtc_in(), s.s_tmp(4), '1', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
         # config weight workspace base offset
-        if data_byte == 2 and IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 0:
+        if data_byte == 2 and IGEMM_GTC_FP16_USE_ATOMIC_ADD == 0:
             self._emit("; config weight workspace offset")
             self._emit(f"s_lshl_b32 s[{s.s_tmp(2)}], s[{s.s_wei_stride_k()}], 1") # in case where data_byte is 2 
             self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_tmp(2)}]")
@@ -1788,7 +1812,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
-            if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+            if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
                 self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * 4)}")
             else:
                 self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
@@ -1799,7 +1823,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         else:
             pass
         self._emit_empty_line()
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+        if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(4)}")
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}+3], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
@@ -1878,7 +1902,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; add y, x")
         #self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_x()}], v[{v.v_wei_iy()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp(4)}]")
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+        if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(4)}, v[{v.v_wei_os()}]")
         else:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
@@ -1925,7 +1949,7 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
         self._emit(self.try_shift_stride(s.s_out_stride_n, igemm_log2(data_byte)))
-        if IGEMM_WRW_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+        if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(4)))
         else:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))

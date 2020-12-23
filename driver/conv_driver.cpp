@@ -291,7 +291,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int pp_err = 0;
 
@@ -799,10 +799,10 @@ int main(int argc, char **argv) {
         float16 *device_weight_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
             //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
             if(driver_data_type == driverHalf){

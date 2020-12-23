@@ -254,6 +254,10 @@ public:
             return false;
         }
 
+        if(tunable->nxe == 0 && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
+        }
+
         int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
         
         if (n_n0 > 1){
@@ -810,9 +814,8 @@ public:
             duration_list.push_back(d);
         }
 
-        printf("host reduction now\n");
-
 #if USE_HOST_REDUCTION_TO_CHECK
+        printf("host reduction now\n");
         HIP_CALL(hipMemcpy(p_wei_host_workspace, p_wei_workspace,
                            num_of_gemm * k * c * y * x * sizeof(float16),
                            hipMemcpyDeviceToHost));
@@ -838,7 +841,7 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
-#if 1
+#if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);

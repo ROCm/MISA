@@ -42,6 +42,7 @@ IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
 IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB = 0
 IGEMM_GTC_FEAT_USE_DS_WRITE2_b64 = 0
 IGEMM_GTC_FEAT_PACK_INPUT_GLOBAL = 1
+IGEMM_GTC_FP16_USE_ATOMIC_ADD = 1
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -220,6 +221,8 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # gemm_k_pack static value
         # TODO: make gemm_k_pack to be tunable 
+        # TODO: tunable gemm_k_pack is invalid. Disable gemm_k_pack tuning.
+        self.gemm_k_pack = 0
         if self.gemm_k_pack == 0:
             if self.precision == 'fp32':
                 self.gemm_k_pack = 1
@@ -310,7 +313,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
         # TODO: need to make some compromise in occupancy and lds double buffer
-        if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024 and self.num_agpr_accumulate_c < 128:
+        if self.is_occupancy_decreased():
             self.lds_buffer_num                 = 1
             self.lds_total                      = self.lds_buffer_num * self.lds_single
         if self.lds_total > 32 * 1024:
@@ -327,7 +330,11 @@ class igemm_gtc_tunable_parameter_t(object):
             self.thread_sub_tile_n                  = self.gemm_n_per_thread
 
         # number of loops at least needed for final coalescing store, dicided by LDS size
-        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
+        # for wrw, if atomic add is implemented, output is 4 bytes length
+        output_length_coef = 1
+        if self.direction == 'wrw' and self.gemm_k_global_split == 1 and IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1:
+            output_length_coef = 2
+        self.coalescing_store_groups            = (output_length_coef * self.gemm_m_per_block * self.gemm_n_per_block) // \
                 (1 * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
@@ -346,6 +353,42 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_buffer_num = self.lds_buffer_num * shrink_in_co_group
                 self.lds_total = self.lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
+
+    def is_occupancy_decreased(self):
+        is_decreased = False
+        is_lds_decreased = False
+        is_agpr_decreased = False
+        is_vgpr_decreased = False
+        if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024:
+            is_lds_decreased = True
+
+        if self.num_agpr_accumulate_c < 128:
+            is_agpr_decreased = True
+
+        a_data_per_vgpr = 1 
+        if self.direction == 'fwd':
+            if self.precision == "fp32":
+                a_data_per_vgpr = 1
+            elif self.tensor_a_thread_lengths[1] > 1:
+                a_data_per_vgpr = 2
+            else:
+                a_data_per_vgpr = 1
+
+        elif self.direction == "wrw":
+            if self.precision == "fp32":
+                a_data_per_vgpr = 1
+            elif self.tensor_a_thread_lengths[1] > 1:
+                a_data_per_vgpr = 2
+            else:
+                a_data_per_vgpr = 1
+        else:
+            a_data_per_vgpr = 1
+
+        if self.num_vgpr_global_load_a // a_data_per_vgpr <= 8:
+            is_vgpr_decreased = True
+
+        is_decreased = is_lds_decreased and is_agpr_decreased and is_vgpr_decreased
+        return is_decreased
 
     def output(self):
         brace_left='   {'
