@@ -216,7 +216,7 @@ class config_parser_t(object):
                     key_value_pair = tok[i].split('=')
                     k, v = key_value_pair[0].strip(), key_value_pair[1].strip()
                     vv = parse_value(v)     # safe to recursively call here, to better create a value type
-                    some_dict[k] = vv
+                    some_dict[k[1:-1]] = vv
                 return some_dict
 
             # finaly return string

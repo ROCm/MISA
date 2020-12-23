@@ -71,6 +71,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
         gemm_k_per_block_list = config["gemm_k_per_block"] if type(config["gemm_k_per_block"]) is list else config["gemm_k_per_block"]
         options = config["options"] if "options" in config else dict()
         assert type(options) is dict, f"fail to get options:{options}, type:{type(options)}"
+        # print("options:{},{}, lmk:{}".format("options" in config, options, options["lmk"] if "lmk" in options else 0))
 
         def search_xdlops_mapping_from_m_n(macro_tile_m, macro_tile_n):
             valid_mapping_list = []
@@ -176,7 +177,6 @@ class igemm_sequence_xdlops_t(mc_base_t):
                             if gemm_k_per_block % xdlops_mapping.wave_tile_k != 0:
                                 continue
                             if "lmk" in options:
-                                print(f"options:{options}, {type(options)}")
                                 if gemm_k_per_block // xdlops_mapping.wave_tile_k < options["lmk"]:
                                     continue
                             block_size = xdlops_mapping.waves * amdgpu_wave_size(self.mc.arch_config.arch)
