@@ -34,7 +34,6 @@ import multiprocessing as mp
 
 IGEMM_EMIT_KERNEL_PER_INC_FILE = 1
 IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE = 0     # it seems fail to find symbol if seperate metadata of different kernel using multiple .amdgpu_metadata
-IGEMM_EMIT_KERNEL_CONCURRENT = 1
 
 class igemm_codegen_driver_t(mc_base_t):
     def __init__(self, mc, tunable_dicts):
