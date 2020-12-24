@@ -380,6 +380,8 @@ public:
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
             // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
@@ -414,10 +416,15 @@ public:
         if(!gemm_k_valid)
             return false;
 
-        if(tunable->nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if(tunable->nxe == 0 && !unit_conv){
+            return false;
+        }
+
+        // output vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
         }
 
         return true;
