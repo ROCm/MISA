@@ -192,6 +192,8 @@ public:
         int gemm_n                   = n * b;
         int gemm_k                   = (c / group) * y * x;
 
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
         // support pad to modulo, hence only check when nxe is 0
         if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0) ||
            (gemm_k % gemm_k_per_block != 0))
@@ -213,11 +215,23 @@ public:
             return false;
         }
 
-        if(nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if((nxe == 0) && !unit_conv){
+            return false;
         }
+
+        // input vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
+        }
+
+        // weight vector load limitation, c1e
+        if(tunable->tensor_a_thread_lengths[1] > 1 &&
+                gemm_k % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
+        }
+
         if(tunable->tensor_b_thread_lengths[1] > 1 && ( x !=1 || y != 1)){
             return false;
         }

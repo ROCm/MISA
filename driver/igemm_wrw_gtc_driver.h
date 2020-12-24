@@ -265,6 +265,7 @@ public:
         int gemm_k = n * b;
 
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
         if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
         {
@@ -300,6 +301,20 @@ public:
             if (n_per_block * b % gemm_k_per_block !=0){
                 return false;
             }
+        }
+
+        // input vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[1] > 1 && (
+            !unit_conv ||
+            unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[1] != 0)) {
+            return false;
+        }
+
+        // output vector load limitation, n1b
+        if(tunable->tensor_a_thread_lengths[1] > 1 && (
+            !unit_conv ||
+            unit_conv && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0)) {
+            return false;
         }
 
         return true;
