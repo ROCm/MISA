@@ -38,14 +38,8 @@ import math
 def igemm_sequence_get_config_file_name(direction, arch_str, out_dir):
     return os.path.join(out_dir, f'igemm_{direction}_gtc_{arch_str}.config')
 
-#def igemm_sequence_serialize_all_configs(mc, tunable_dicts):
 def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tunable_dicts):
     assert len(tunable_dicts) != 0
-    # first, get config file name.
-    #arch_str = amdgpu_arch_to_string(mc.arch_config.arch)
-    #direction = tunable_dicts[0]['direction']
-    #config_file_base_name = f'igemm_{direction}_gtc_{arch_str}.config'
-    #config_file = os.path.join(os.path.dirname(mc.emitter.file_name), config_file_base_name)
     with open(config_file, "w") as fp:
         fp.write('[codegen]\n')
         fp.write('arch = {}\n'.format('\'' + arch_str + '\''))
