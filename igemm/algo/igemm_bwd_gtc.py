@@ -1042,8 +1042,9 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             assert False, "not support data type"
 
-        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_n1b != 1 else 1
-        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * (4 // ctrl_wei_gld.data_bytes)) if t_c1 != 1 else 1
+        num_data_per_vgpr = 4 // ctrl_wei_gld.data_bytes
+        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * num_data_per_vgpr) if t_n1b != 1 else 1
+        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * num_data_per_vgpr) if self.tunable.nxe == 0 else 1
 
         print(f"out_gld.vector_d1 = {ctrl_out_gld.vector_d1}, wei_gld.vector_d1 = {ctrl_wei_gld.vector_d1}")
 
@@ -1120,6 +1121,9 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = math.gcd(t_n1b, 4 * (4 // data_byte))
             else:
                 out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[1]], 4 * (4 // data_byte)) 
+
+            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
+                out_sst_ctrl.vector_d1 = 1
             
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             assert out_thread_copy_index[0] == 0, "Not supported"
@@ -1129,9 +1133,14 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             out_sst_ctrl.d0_is_lower_dim = True if out_thread_copy_index[0] == 1 else False
             if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
-                out_sst_ctrl.d1_is_lower_dim = True if out_thread_copy_index[1] == 3 else False
+                out_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 3 else False
             else:
-                out_sst_ctrl.d1_is_lower_dim = True if out_thread_copy_index[1] == 2 else False
+                out_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 2 else False
+
+            if out_thread_copy_index[0] == 0:
+                out_sst_ctrl.pack_d0 = False
+            else:
+                out_sst_ctrl.pack_d0 = True
 
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
@@ -1142,23 +1151,26 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 out_sst_ctrl.vector_d1 = 1
 
+            ## in most situations, for fp16/bp16, vector store could not be used since gemm_k will be merged into gemm_m/gemm_n
+            if self.tunable.gemm_k_pack > 1: 
+                out_sst_ctrl.vector_d1 = 1
+
             out_sst_ctrl.stride_d0 = 1
             if out_thread_copy_index[0] in (0,1):       
                 if out_thread_copy_index[0] == 0:       ## The only copy dim is k0
                     ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
                     out_sst_ctrl.stride_d1 = (out_stride_list[out_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
-                    out_sst_ctrl.d1_is_lower_dim = False
                 else:                                   ## The only copy dim is k1e
-                    assert false, "k1e as thread slice copy dim not supported" 
-                out_sst_ctrl.d1_is_gemm_k = True 
+                    out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[0]], self.tunable.gemm_k_pack)
+                    out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]+1] * data_byte * self.tunable.gemm_k_pack * out_sst_ctrl.vector_d1
+                out_sst_ctrl.vgpr_packed = False 
             else:                                   
                 if out_thread_copy_index[0] == 2:       ## The only copy dim is n0
                     out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-                    out_sst_ctrl.d1_is_lower_dim = True if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 else False
+                    out_sst_ctrl.vgpr_packed = True if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 else False
                 else:                                   ## The only copy dim is n1b
                     out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-                    out_sst_ctrl.d1_is_lower_dim = True if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B else False 
-                out_sst_ctrl.d1_is_gemm_k = False
+                    out_sst_ctrl.vgpr_packed = True if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B else False 
         else:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[-1]
@@ -1166,8 +1178,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             out_sst_ctrl.vector_d1 = 1
             out_sst_ctrl.stride_d0 = 1
             out_sst_ctrl.stride_d1 = out_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
-            out_sst_ctrl.d1_is_lower_dim = True if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 else False
-            out_sst_ctrl.d1_is_gemm_k = False 
+            out_sst_ctrl.pack_d0 = False
+            out_sst_ctrl.vgpr_packed = False 
+
+        print(f"out: vgpr_packed = {out_sst_ctrl.vgpr_packed}, stride_d1 = {out_sst_ctrl.stride_d1}, vector_d1 = {out_sst_ctrl.vector_d1}, length_d1 = {out_sst_ctrl.length_d1}")
 
         if self.wei_thread_copy_ndim == 2:
             wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -1177,18 +1191,25 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[1]], 4 * (4 // data_byte))
 
+            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
+                wei_sst_ctrl.vector_d1 = 1
+
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             assert out_thread_copy_index[0] == 0, "Not supported"
             ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
             wei_sst_ctrl.stride_d0 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
-            wei_sst_ctrl.d0_is_lower_dim = True if wei_thread_copy_index[0] == 1 else False
             if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1:
-                wei_sst_ctrl.d1_is_lower_dim = True if out_thread_copy_index[1] == 3 else False
+                wei_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 3 else False
             else:
-                wei_sst_ctrl.d1_is_lower_dim = True if out_thread_copy_index[1] == 2 else False
+                wei_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 2 else False
             
+            if out_thread_copy_index[0] == 0:
+                wei_sst_ctrl.pack_d0 = False
+            else:
+                wei_sst_ctrl.pack_d0 = True
+
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -1199,25 +1220,27 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = 1
 
+            ## in most situations, for fp16/bp16, vector store could not be used since gemm_k will be merged into gemm_m/gemm_n
+            if self.tunable.gemm_k_pack > 1: 
+                wei_sst_ctrl.vector_d1 = 1
+
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             wei_sst_ctrl.stride_d0 = 1
             if wei_thread_copy_index[0] in (0,1):
                 if wei_thread_copy_index[0] == 0:      ## The only copy dim is k0
                     ## for fp16/bp16, considering every 4 data in k1e is packed into contigueous LDS locations 
                     wei_sst_ctrl.stride_d1 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
-                    wei_sst_ctrl.d1_is_lower_dim = False
-                    wei_sst_ctrl.d1_is_gemm_k = True 
                 else:                                  ## The only copy dim is k1e
-                    assert false, "k1e as thread slice copy dim not supported" 
+                    wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[0]], self.tunable.gemm_k_pack)
+                    wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]+1] * data_byte * self.tunable.gemm_k_pack * wei_sst_ctrl.vector_d1
+                wei_sst_ctrl.vgpr_packed = False 
             else: 
                 if wei_thread_copy_index[0] == 2:      ## The only copy dim is c0
                     wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-                    wei_sst_ctrl.d1_is_lower_dim = True if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 else False
-                    wei_sst_ctrl.d1_is_gemm_k = False
+                    wei_sst_ctrl.vgpr_packed = True if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 else False
                 else:                                  ## The only copy dim is c1
                     wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
-                    wei_sst_ctrl.d1_is_lower_dim = True if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 else False
-                    wei_sst_ctrl.d1_is_gemm_k = False
+                    wei_sst_ctrl.vgpr_packed = True if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 else False
         else:
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[-1]
@@ -1226,8 +1249,10 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             wei_sst_ctrl.stride_d0 = 1
             wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
-            wei_sst_ctrl.d1_is_lower_dim = True if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 else False
-            wei_sst_ctrl.d1_is_gemm_k = False
+            wei_sst_ctrl.pack_d0 = False
+            wei_sst_ctrl.vgpr_packed = False
+
+        print(f"wei: vgpr_packed = {wei_sst_ctrl.vgpr_packed}, stride_d1 = {wei_sst_ctrl.stride_d1}, vector_d1 = {wei_sst_ctrl.vector_d1}, length_d1 = {wei_sst_ctrl.length_d1}")
 
         # print(f"out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 

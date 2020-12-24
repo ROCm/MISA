@@ -715,8 +715,6 @@ class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):
     def name(self):
         return ''
 
-
-
 class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
@@ -780,9 +778,8 @@ class ctrl_2d_shared_store_t(object):
         self.data_bytes = 4
         self.lds_gemm_k_pack = 1
         self.use_ext_data = False
-        self.d0_is_lower_dim = True
-        self.d1_is_lower_dim = True
-        self.d1_is_gemm_k = True
+        self.pack_d0 = True
+        self.vgpr_packed = False
 
     def serialize(self):
         return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, vector_d1:{self.vector_d1}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
@@ -992,85 +989,36 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
             lds_gemm_k_pack = ctrl.lds_gemm_k_pack
 
             issue_cnt = 0
-            if ctrl.length_d1 == ctrl.vector_d1:
-                print(f"length_d0={ctrl.length_d0}, vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
-                if ctrl.src_order == 0:
-                    # pack 2 fp16 into one vgpr when length_d0 % 4 == 0
-                    if ctrl.length_d0 % lds_gemm_k_pack == 0 and ctrl.length_d1 == 1:
-                        if IGEMM_GTC_FEAT_PACK_INPUT_GLOBAL:
-                            ds_write = inst_ds_write_t(ctrl.vector_d1 * lds_gemm_k_pack * data_byte)
-                            for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
-                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}]")
-                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d0*ctrl.vector_d1+1}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+2}], v[{self.v_src()}+{i_d0*ctrl.vector_d1+3}]")
-                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
-                                issue_cnt += ds_write.get_issues()
-                        else:
-                            ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
-                            for i_d0 in range(0, ctrl.length_d0, 1):
-                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
-                                issue_cnt += ds_write.get_issues()
-                    else:
-                        ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
-                        for i_d0 in range(ctrl.length_d0):
-                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                            print(f"i_offset = {i_offset}")
-                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
-                            issue_cnt += ds_write.get_issues()
+            if ctrl.length_d0 > 1 and ctrl.length_d1 > 1:      ## two dimensions having slice to copy
+                if ctrl.d0_is_lower_dim:
+                    ## special case where contiguous d0 data is packed into d1
+                    pass
                 else:
-                    ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
-                    for i_d0 in range(ctrl.length_d0):
-                        i_offset = i_d0 * ctrl.stride_d0
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.vector_d1}', i_offset))
-                        issue_cnt += ds_write.get_issues()
-            else:
-                assert ctrl.length_d1 % ctrl.vector_d1 == 0
-                assert ctrl.stride_d1 != 1
+                    pass
+            else:                                              ## single dimension having slice to copy
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
-                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
-                if ctrl.src_order == 0:
-                    print(f"Call to here ....")
-                    for i_d0 in range(ctrl.length_d0):
-                        for i_d1 in range(num_vector_d1 // 2):
-                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1
-                            self._emit(ds_write2(f'{self.v_sst_os()}',
-                                    f'{self.v_src()}+{i_d0 * ctrl.length_d1 + 2*i_d1*ctrl.vector_d1}',
-                                    i_offset))
-                            issue_cnt += ds_write2.get_issues(i_offset)
-                else:
-                    # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
-                    # assert ctrl.v_tmp != None
-                    # assert False, "not support shared mem store, order==1"
-                    trans_seq = simple_transpose_sequencer_t(ctrl.length_d0, ctrl.length_d1 // ctrl.vector_d1)
-                    if ctrl.vector_d1 == 2:
-                        for i_d0 in range(ctrl.length_d0):
-                            s_id = trans_seq.get_start_id_per_row()[i_d0]
-                            #print(f"s_id={s_id}")
-                            for i_d1 in range(num_vector_d1 // 2):
-                                i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                                #print(f"i_offset={i_offset}")
-                                #print(f"s_id[{i_d1} * 2]={s_id[i_d1 * 2]}, s_id[{i_d1} * 2 + 1]={s_id[i_d1 * 2 + 1]}")
-                                self._emit(ds_write2(f'{self.v_sst_os()}',
-                                    (self.v_src(s_id[i_d1 * 2]), self.v_src(s_id[i_d1 * 2 + 1])),
-                                    i_offset))
-                                issue_cnt += ds_write2.get_issues(i_offset)
-                    elif ctrl.vector_d1 == 4:
-                        ds_write2.vec_count = 4
-                        for i_d0 in range(ctrl.length_d0):
-                            s_id = trans_seq.get_start_id_per_row()[i_d0]
-                            for i_d1 in range(num_vector_d1 // 2):
-                                i_offset = i_d0 * ctrl.stride_d0 + 2* i_d1 * ctrl.stride_d1
-                                #print(f"i_offset={i_offset}")
-                                self._emit(ds_write2(f'{self.v_sst_os()}',
-                                    (self.v_src(s_id[i_d1 * 2] * 2), self.v_src(s_id[i_d1 * 2] * 2 + 1), self.v_src(s_id[i_d1 * 2 + 1] * 2), self.v_src(s_id[i_d1 * 2 + 1] * 2 + 1)),
-                                    i_offset))
-                                issue_cnt += ds_write2.get_issues(i_offset)
-                    else:
-                        assert False, f"not support vector_d1={ctrl.vector_d1} in fp16 and bf16 cases"
-            
+                ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                for i_d1 in range(num_vector_d1):
+                    i_offset = i_d1 * ctrl.stride_d1
+                    if ctrl.vgpr_packed:
+                        if ctrl.vector_d1 == 1: 
+                            print(f"---- call to her ---")
+                            higher_half = True if i_d1 % 2 > 0 else False
+                            if higher_half:
+                                self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d1*ctrl.vector_d1//2}], 16, v[{self.v_src()}+{i_d1*ctrl.vector_d1//2}]')
 
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1*ctrl.vector_d1//2}', i_offset))
+                    else:
+                        if ctrl.vector_d1 == 1:
+                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1}', i_offset))
+                        else:
+                            ## pack the fp16 data first to reduce number of LDS stores
+                            vgpr_0 = i_d1*ctrl.vector_d1//2
+                            for vgpr_ind in range(ctrl.vector_d1//2):
+                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{vgpr_0}+{vgpr_ind}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2+1}]")
+                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{vgpr_0}', i_offset))
+                    issue_cnt += ds_write.get_issues()
+                                
         self.issue_cnt = issue_cnt
 
     def get_issues(self):
