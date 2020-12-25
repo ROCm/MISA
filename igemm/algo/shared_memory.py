@@ -821,7 +821,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         # assert ctrl.precision == 'fp32', "TO BE supported"
         # data_byte = amdgpu_precision_data_byte(ctrl.precision)
         data_byte = ctrl.data_bytes
-        if ctrl.precision == 'fp32':
+        if ctrl.precision == 'fp32' and not ctrl.use_ext_data:
             issue_cnt = 0
             #print(f"{self.v_src()}")
             #with self._emit_macro_indented('.macro {} v_src, v_sst_os'.format(self.name())):
@@ -985,7 +985,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     else:
                         assert False, f"not support vector_d1={ctrl.vector_d1} in fp16 and bf16 cases"
 
-        else:  ## for precision ==  fp16 and use_ext_data
+        else:  ## for bwd and use_ext_data
             lds_gemm_k_pack = ctrl.lds_gemm_k_pack
 
             issue_cnt = 0
@@ -997,27 +997,33 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     pass
             else:                                              ## single dimension having slice to copy
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
+                ds_write = inst_ds_write_t(ctrl.vector_d1 * ctrl.data_bytes)
                 for i_d1 in range(num_vector_d1):
                     i_offset = i_d1 * ctrl.stride_d1
-                    if ctrl.vgpr_packed:
+                    if ctrl.vgpr_packed: ## must be fp16/bp16
                         if ctrl.vector_d1 == 1: 
-                            print(f"---- call to her ---")
                             higher_half = True if i_d1 % 2 > 0 else False
                             if higher_half:
                                 self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d1*ctrl.vector_d1//2}], 16, v[{self.v_src()}+{i_d1*ctrl.vector_d1//2}]')
 
                         self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1*ctrl.vector_d1//2}', i_offset))
-                    else:
+                        issue_cnt += ds_write.get_issues()
+                    else:                ## could be fp16/bp16 or fp32
                         if ctrl.vector_d1 == 1:
                             self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1}', i_offset))
+                            issue_cnt += ds_write.get_issues()
                         else:
-                            ## pack the fp16 data first to reduce number of LDS stores
-                            vgpr_0 = i_d1*ctrl.vector_d1//2
-                            for vgpr_ind in range(ctrl.vector_d1//2):
-                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{vgpr_0}+{vgpr_ind}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2+1}]")
-                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{vgpr_0}', i_offset))
-                    issue_cnt += ds_write.get_issues()
+                            if ctrl.data_bytes == 2:
+                                ## pack the fp16 data first to reduce number of LDS stores
+                                vgpr_0 = i_d1*ctrl.vector_d1//2
+                                for vgpr_ind in range(ctrl.vector_d1//2):
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{vgpr_0}+{vgpr_ind}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2}], v[{self.v_src()}+{vgpr_0}+{vgpr_ind*2+1}]")
+                                    self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{vgpr_0}', i_offset))
+                                    issue_cnt += ds_write.get_issues()
+                            else:   ## for fp32 
+                                print(f"Call to here .....")
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1*ctrl.vector_d1}', i_offset))
+                                issue_cnt += ds_write.get_issues()
                                 
         self.issue_cnt = issue_cnt
 
