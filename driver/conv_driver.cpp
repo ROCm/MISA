@@ -257,7 +257,7 @@ static inline bool valid_float(float p)
 }
 
 static inline bool valid_vector(const float *ref, const float *pred, size_t n,
-                                double nrms = 1e-6) {
+                                double nrms = 1.5e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
@@ -303,7 +303,7 @@ static inline double get_fwd_nrms()
 #ifdef USE_XDNN
     return 5e-5;
 #else
-    return 1e-6;
+    return 1.5e-6;
 #endif
 }
 static inline double get_bwd_nrms()
@@ -311,7 +311,7 @@ static inline double get_bwd_nrms()
 #ifdef USE_XDNN
     return 5e-5;
 #else
-    return 1e-6;
+    return 1.5e-6;
 #endif
 }
 static inline double get_wrw_nrms()
