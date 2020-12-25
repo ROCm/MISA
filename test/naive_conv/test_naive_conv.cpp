@@ -112,7 +112,7 @@ static inline bool valid_float(float p)
 #define ABS(b) ((b) > 0 ? (b) : -1 * (b))
 #endif
 static inline bool valid_vector(const float *ref, const float *pred, int n,
-                                double nrms = 1e-6) {
+                                double nrms = 1.5e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
@@ -371,7 +371,7 @@ public:
                                         hipMemcpyDeviceToHost));
 
                     is_valid = valid_vector(host_output, device_output_to_host,
-                                            n * k * ho * wo, 1e-6);
+                                            n * k * ho * wo, 1.5e-6);
                     assert(is_valid);
                     std::cout<<" fwd:"<<(is_valid?"y":"n");
                     free(device_output_to_host);
@@ -398,7 +398,7 @@ public:
                                         hipMemcpyDeviceToHost));
                     
                     is_valid = valid_vector(host_input, device_input_to_host,
-                                            n * c * hi * wi, 1e-6);
+                                            n * c * hi * wi, 1.5e-6);
                     assert(is_valid);
                     std::cout<<" bwd:"<<(is_valid?"y":"n");
                     free(device_input_to_host);
@@ -517,7 +517,7 @@ public:
                                         hipMemcpyDeviceToHost));
                     
                     is_valid = valid_vector(host_output, device_output_to_host,
-                                            n * k * do_ * ho * wo, 1e-6);
+                                            n * k * do_ * ho * wo, 1.5e-6);
                     std::cout<<" fwd:"<<(is_valid?"y":"n");
                     assert(is_valid);
                     free(device_output_to_host);
@@ -544,7 +544,7 @@ public:
                                         hipMemcpyDeviceToHost));
                     
                     is_valid = valid_vector(host_input, device_input_to_host,
-                                            n * c * di * hi * wi, 1e-6);
+                                            n * c * di * hi * wi, 1.5e-6);
                     std::cout<<" bwd:"<<(is_valid?"y":"n");
                     assert(is_valid);
                     free(device_input_to_host);
