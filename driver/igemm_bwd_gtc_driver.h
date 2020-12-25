@@ -319,7 +319,6 @@ public:
         return 2 * utility_next_pow2(utility_next_pow2(lds_a) + utility_next_pow2(lds_b));
     }
 
-    template <typename Tgpu> 
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
@@ -342,27 +341,6 @@ public:
         int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
-
-        std::string precision = tunable->precision;
-        if(precision == "fp16"){
-            if(!std::is_same<Tgpu, float16>::value){
-                return false;
-            }
-        }
-        else if(precision == "fp32"){
-            if(!std::is_same<Tgpu, float>::value){
-                return false;
-            }
-        }
-        else if(precision == "bf16"){
-            return false;
-        }
-        else
-        {
-            std::cout << std::endl;
-            std::cout << precision << std::endl;
-            return false;
-        }	
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -401,6 +379,8 @@ public:
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
         if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
             // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
@@ -435,10 +415,15 @@ public:
         if(!gemm_k_valid)
             return false;
 
-        if(tunable->nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if(tunable->nxe == 0 && !unit_conv){
+            return false;
+        }
+
+        // output vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
         }
 
         return true;
@@ -448,7 +433,7 @@ public:
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
                  hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
                  int warmup, int repeat) {
-        if (!tunable_is_valid<Tgpu>(arg, tunable)) {
+        if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
