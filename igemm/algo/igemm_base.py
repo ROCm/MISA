@@ -335,7 +335,7 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.direction == 'wrw' and self.gemm_k_global_split == 1 and IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1:
             output_length_coef = 2
         self.coalescing_store_groups            = (output_length_coef * self.gemm_m_per_block * self.gemm_n_per_block) // \
-                (1 * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
+                (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
         #if self.coalescing_store_groups < 2:

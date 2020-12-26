@@ -39,7 +39,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 = 0
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
-IGEMM_WRW_GTC_DEBUG = 0
+IGEMM_WRW_GTC_DEBUG = 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -142,7 +142,6 @@ class macro_igemm_wrw_gtc_set_flag_hw(macro_base_t):
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, 1, vcc")
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_w()}], v[{self.v_iw()}]")
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
-
 
 class macro_igemm_wrw_gtc_move_slice_window_n_dsho_dswo(macro_base_t):
     '''
@@ -514,6 +513,10 @@ class igemm_wrw_gtc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
             self.coalescing_store = igemm_coalescing_store_xdlops_t(mc, ctrl_coalescing_store_xdlops)
 
+            # whether c/k padding
+            self.do_c_padding = self.tunable.nxe != 0 and self.tunable.tensor_b_thread_lengths[2] * self.tunable.tensor_b_thread_lengths[3] == 1
+            self.do_k_padding = self.tunable.nxe != 0 and self.tunable.tensor_a_thread_lengths[2] * self.tunable.tensor_a_thread_lengths[3] == 1
+
         self.label_out = f"L_{self.name()}_out"
         self.dict_shifted_stride = dict()
 
@@ -774,7 +777,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_sub_n                   = sym_t("s_sub_n"                  ,sseq(1))
             # self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
             if IGEMM_WRW_GTC_DEBUG == 1:
-                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
+                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(4, 2))
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             self.s_end                     = sym_t("s_end"                    ,sseq())
 
@@ -851,7 +854,11 @@ class igemm_wrw_gtc_t(mc_base_t):
             if outer.tunable.nxe != 0:
                 self.v_move_slice_n_in0  = sym_t("v_move_slice_n_in0" , vseq(1))  # only used in pad image size
                 self.v_flag_n            = sym_t("v_flag_n" , vseq(1))  # only used in pad image size
-            self.v_move_slice_n_in1  = sym_t("v_move_slice_n_in1" , self.v_wei_flag.value)
+                if outer.tunable.tensor_b_thread_lengths[2] * outer.tunable.tensor_b_thread_lengths[3] == 1:
+                    self.v_flag_c            = sym_t("v_flag_c" , vseq(1))  # only used in pad c
+                if outer.tunable.tensor_a_thread_lengths[2] * outer.tunable.tensor_a_thread_lengths[3] == 1:
+                    self.v_flag_k            = sym_t("v_flag_k" , vseq(1))  # only used in pad c
+            self.v_move_slice_n_in1  = sym_t("v_move_slice_n_in1" , vseq(1))
             #if outer.tunable.nxe != 0:
             self.v_move_slice_n_idsho = sym_t("v_move_slice_n_idsho", vseq(1))
             self.v_move_slice_n_idswo = sym_t("v_move_slice_n_idswo", vseq(1))
@@ -892,7 +899,10 @@ class igemm_wrw_gtc_t(mc_base_t):
                 self.v_co_sub_m_index     = sym_t("v_co_sub_m_index" ,vseq(1))
                 self.v_co_sub_n_index     = sym_t("v_co_sub_n_index" ,vseq(1))
 
-            self.v_tmp           = sym_t("v_tmp"          ,vseq(8, 2))
+            self.v_cur_k         = sym_t("v_cur_k" ,vseq(1))
+            self.v_tmp           = sym_t("v_tmp"          ,vseq(6, 2))
+            if IGEMM_WRW_GTC_DEBUG == 1:
+                self.v_dbg       = sym_t("v_dbg"          ,vseq(2, 2))
             total_vgpr           = vseq()
             if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
                 # if xdlops agpr is larger than vgpr usage, must change vgpr count to agpr
@@ -1450,9 +1460,11 @@ class igemm_wrw_gtc_t(mc_base_t):
         if IGEMM_WRW_GTC_DEBUG == 1:
             self._emit("; debug vgpr")
             self._emit("v_mov_b32 v1, 0")
-            self._emit("v_add_lshl_u32 v[v_tmp+6], v0, v1, 2")
-            self._emit(";v_lshlrev_b32 v[114], 2, v0 ; every thread write one float")
+            self._emit("s_waitcnt lgkmcnt(0)")
+            self._emit(f"v_add_lshl_u32 v[{v.v_dbg()}], v0, v1, 2")
             self._emit(f"s_mov_b32 s[{s.s_dbg()}], s[{s.s_bx()}]")
+            self._emit(f"s_mov_b32 s[{s.s_dbg(2)}], s[{s.s_p_wei()}]")
+            self._emit(f"s_mov_b32 s[{s.s_dbg(3)}], s[{s.s_p_wei(1)}]")
 
         self._emit(f"; input, thread(n0,n1b,c0,c1e): {t_n0}x{t_n1b}x{t_c0}x{t_c1e}, cluster(n0,n1b,c0,c1e): {c_n0}x{c_n1b}x{c_c0}x{c_c1e}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
@@ -1530,8 +1542,24 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"; add block i_n")
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         # calculate group index
-        self._emit(f"s_lshr_b32 s[0], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        if self.do_c_padding:
+            self._emit(f"; padding c")
+            if 0:
+                self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_c()}], {self.tunable.gemm_n_per_block - 1}")
+                self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+                self._emit(f"s_mul_i32 s[0], s[{s.s_tmp()}], s[{s.s_wei_stride_c()}]")
+            else:
+                self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_wei_stride_k()}], {self.tunable.gemm_n_per_block - 1}")
+                self._emit(f"s_lshr_b32 s[0], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        else:
+            self._emit(f"s_lshr_b32 s[0], s[{s.s_wei_stride_k()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+
+        if self.do_k_padding:
+            self._emit(f"; padding k")
+            self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_k()}], {self.tunable.gemm_m_per_block - 1}")
+            self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        else:
+            self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
         self._emit(f"s_mul_i32 s[1], s[0], s[{s.s_tmp()}]")
         self._emit(f"s_lshl_b32 s[3], s[1], s[{s.s_gemmk_split()}]")
         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_block_gtc_ig(), s.s_bx(), '3', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
@@ -1637,19 +1665,23 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_n()}], v[{v.v_tmp()}]")
         #else:
         #self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_stride_hw()}], v[{v.v_tmp()}]")
-        if gemm_n_unmerge_cluster == 0:
-            self._emit(tc_index_accumulator(v.v_tmp(1), v.v_gtc_ic0(), v.v_gtc_ic1(), c_c0, c_c1e, 0, unmerge_sub_c1))
-            self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_c()}], v[{v.v_tmp(1)}]")
-        else:
-            # no in0
-            self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_c()}], v[{v.v_gtc_ic1()}]")
+        
+        self._emit(tc_index_accumulator(v.v_tmp(1), v.v_gtc_ic0(), v.v_gtc_ic1(), c_c0, c_c1e, 0, unmerge_sub_c1))
+        if self.do_c_padding:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1)}")
+            self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_tmp(3)}], v[{v.v_tmp(1)}]")
+            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_tmp(5)}]")
+            self._emit(f"v_cndmask_b32 v[{v.v_flag_c()}], 0, 1, vcc")
+        self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_c()}], v[{v.v_tmp(1)}]")
         
         self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
         self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
         if self.tunable.nxe != 0:
             self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
             self._emit(f"v_and_b32 v[{v.v_in_flag()}], v[{v.v_in_flag()}], v[{v.v_flag_n()}]")
-        
+            if self.do_c_padding:
+                self._emit(f"v_and_b32 v[{v.v_in_flag()}], v[{v.v_in_flag()}], v[{v.v_flag_c()}]")
+
         self._emit_empty_line()
 
         if self.in_thread_copy_ndim != 1:
@@ -1666,7 +1698,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             #init_precache_soffset(s_stride_d0, s_stride_d1, s_offset, s_tmp):
             self._emit(m_in_2d_global_load.init_precache_soffset(s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset(), s.s_tmp()))
 
-        # load out
+        # load in
         self._emit(self.global_load_in())
         self._emit_empty_line()
 
@@ -1679,6 +1711,9 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(tc_index_accumulator(v.v_tmp(), v.v_gtc_ik0(), v.v_gtc_ik1(), c_k0, c_k1, n_k0, n_k1))
         self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ik()}], v[{v.v_tmp()}]")
+        if self.do_k_padding:
+            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_tmp(5)}]")
+            self._emit(f"v_cndmask_b32 v[{v.v_flag_k()}], 0, 1, vcc")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_out_stride_k()}], v[{v.v_tmp(5)}]")
         self._emit(tc_index_accumulator(v.v_tmp(1), v.v_gtc_in0(), v.v_gtc_in1(), c_n0, c_n1b, 0, unmerge_sub_n1))
         self._emit(f"v_add_u32 v[{v.v_tmp(1)}], v[{v.v_tmp(1)}], s[{s.s_block_gtc_in()}]")
@@ -1688,6 +1723,8 @@ class igemm_wrw_gtc_t(mc_base_t):
         if self.tunable.nxe != 0:
             self._emit(m_set_flag_hw(v.v_out_flag(), v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo()))
             self._emit(f"v_and_b32 v[{v.v_out_flag()}], v[{v.v_out_flag()}], v[{v.v_flag_n()}]")
+            if self.do_k_padding:
+                self._emit(f"v_and_b32 v[{v.v_out_flag()}], v[{v.v_out_flag()}], v[{v.v_flag_k()}]")
         self._emit_empty_line()
 
         if self.out_thread_copy_ndim != 1:
@@ -1860,22 +1897,40 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit_empty_line()
         self._emit(f"; add wei_ic0, wei_ic1")
+        #print(f"gemm_n_unmerge_cluster={gemm_n_unmerge_cluster}")
         if n_c0 != 1:
             if gemm_n_unmerge_cluster == 0:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp(1)}], v[{v.v_wei_ic0()}], {igemm_log2(unmerge_sub_c1)}, v[{v.v_wei_ic1()}]")
+                if self.do_c_padding:
+                    self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1)}")
+                    self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], s[{s.s_tmp(3)}]")
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_tmp()}]")
+                    self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, 1, vcc")
                 self._emit(f"v_mul_lo_u32 v[{v.v_wei_os()}], s[{s.s_wei_stride_c()}], v[{v.v_tmp(1)}]")
             else:
                 self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_c()}], v[{v.v_wei_ic1()}]")
                 self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_wei_stride_c0()}], v[{v.v_wei_ic0()}]")
                 self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
         else:
+            if self.do_c_padding:
+                self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1)}")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_wei_ic1()}], s[{s.s_tmp(3)}]")
+                self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_tmp()}]")
+                self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, 1, vcc")
             self._emit(f"v_mul_lo_u32 v[{v.v_wei_os()}], s[{s.s_wei_stride_c()}], v[{v.v_wei_ic1()}]")
 
         self._emit(f"; add i_k")
+        #print(f"gemm_m_unmerge_cluster={gemm_m_unmerge_cluster}")
         if gemm_m_unmerge_cluster == 0:
             if gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
+                # do not need to check k here
+                #if self.do_k_padding:
+                #    self._emit(f"v_add_u32 v[{v.v_tmp()}], s[{s.s_block_gtc_ik()}], v[{v.v_co_sub_m_index()}]")
+                #    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_tmp()}]")
+                #    self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, v[{v.v_wei_flag()}], vcc")
                 self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_co_sub_m_index()}]")
             else:
+                assert False, "code not tested"
                 if n_k0 == 1:
                     self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_co_sub_m_index()}]")
                 else:
@@ -1887,6 +1942,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                         self._emit(f"v_lshl_or_b32 v[{v.v_tmp(1)}], v[{v.v_tmp()}], {igemm_log2(n_k1)}, v[{v.v_tmp(1)}]")
                         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_tmp(1)}]")
         else:
+            assert False, "code not tested"
             if gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
                 self._emit(f"v_and_b32 v[{v.v_tmp()}], {n_k1 - 1}, v[{v.v_co_sub_m_index()}]    ; => k1")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(n_k1)}, v[{v.v_co_sub_m_index()}]   ; => k0")
@@ -1906,6 +1962,12 @@ class igemm_wrw_gtc_t(mc_base_t):
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(4)}, v[{v.v_wei_os()}]")
         else:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
+
+        # TODO: atomic range checking do not work
+        # if self.do_c_padding or self.do_k_padding:
+        #     self._emit(f"v_cmpx_ne_u32 vcc, 1, v[{v.v_wei_flag()}]")
+        #     self._emit(f"v_mov_b32 v[{v.v_wei_os()}], -1")
+        #     self._emit(f"s_mov_b64 exec, -1")
 
         self._emit(f"; move slice stride")
         assert n_n0 * n_n1b == self.tunable.gemm_k_per_block
@@ -1988,6 +2050,8 @@ class igemm_wrw_gtc_t(mc_base_t):
                         self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
                         self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
                         self._emit(f"v_and_b32 v[{v.v_in_flag()}], v[{v.v_in_flag()}], v[{v.v_flag_n()}]")
+                        if self.do_c_padding:
+                            self._emit(f"v_and_b32 v[{v.v_in_flag()}], v[{v.v_in_flag()}], v[{v.v_flag_c()}]")
                     else:
                         m_move_slice_window   = self.get_macro_move_slice_window()
                         self._emit(m_move_slice_window(v.v_move_slice_n_in1(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_gemm_k_num_n1(), s.s_ho(), s.s_wo(),
@@ -2012,6 +2076,8 @@ class igemm_wrw_gtc_t(mc_base_t):
                         self._emit(m_out_update_os(v.v_out_os(), v.v_out_os_base(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_wo(), v.v_tmp()))
                         self._emit(m_set_flag_hw(v.v_out_flag(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_ho(), s.s_wo()))
                         self._emit(f"v_and_b32 v[{v.v_out_flag()}], v[{v.v_out_flag()}], v[{v.v_flag_n()}]")
+                        if self.do_k_padding:
+                            self._emit(f"v_and_b32 v[{v.v_out_flag()}], v[{v.v_out_flag()}], v[{v.v_flag_k()}]")
                     else:
                         self._emit(m_out_update_os(v.v_out_os(), v.v_out_os_base(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_wo(), v.v_tmp()))
                 return self._get_deferred()
@@ -2125,11 +2191,21 @@ class igemm_wrw_gtc_t(mc_base_t):
                 assert False
         else:
             a = self.agpr
-            if self.tunable.nxb != 0:
+            if self.tunable.nxe != 0:
+                if self.do_c_padding:
+                    if self.do_k_padding:
+                        self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
+                            s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), v.v_wei_flag(),
+                            s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                    else:
+                        self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
+                            s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), v.v_wei_flag()))
+                else:
+                    self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
+                        s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
+            else:
                 self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
                     s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
-            else:
-                assert False
 
         if IGEMM_WRW_GTC_DEBUG == 1:
             self._emit_empty_line()
@@ -2139,6 +2215,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 self._emit(f"L_debug_{self.label_out}_0:")
             else: 
                 self._emit(f"L_debug_{self.label_out}_1:")
+            self._emit("s_mov_b64 exec, -1")
             self._emit(f"ds_read_u16 v[{v.v_a()}], v[{v.v_sld_a_os()}]")
             self._emit("s_waitcnt lgkmcnt(0)")
             self._emit("s_waitcnt vmcnt(0)")
@@ -2155,11 +2232,13 @@ class igemm_wrw_gtc_t(mc_base_t):
             self._emit(f"v_accvgpr_read_b32 v[{v.v_c()}], a[a_c]")
             self._emit(f"v_cvt_f16_f32_e32 v[{v.v_gld_a()}], v[{v.v_gld_a()}]")
             self._emit(f"s_nop 128")
-            self._emit("v_mov_b32 v[v_tmp], s[s_in_offset]")
+            self._emit(f"v_mov_b32 v[{v.v_dbg(1)}], s[s_in_offset]")
             self._emit(f"s_mov_b32 s[{s.s_tmp()}], 0")
+            self._emit(f"s_mov_b32 s[{s.s_p_wei()}], s[{s.s_dbg(2)}]")
+            self._emit(f"s_mov_b32 s[{s.s_p_wei(1)}], s[{s.s_dbg(3)}]")
             self._emit_empty_line()
 
-            self._emit(f"buffer_store_dword v[v_in_os], v[v_tmp+6], s[{s.s_p_wei((0,3))}], s[{s.s_tmp()}] offen")
+            self._emit(f"buffer_store_dword v[v_in_os], v[{v.v_dbg()}], s[{s.s_p_wei((0,3))}], s[{s.s_tmp()}] offen")
 
             self._emit("s_waitcnt vmcnt(0)")
             self._emit("s_barrier")

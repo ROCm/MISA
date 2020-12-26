@@ -76,7 +76,7 @@ class macro_igemm_fwd_gtc_set_flag_c(macro_base_t):
         self.declare_arg("s_c")
 
     def name(self):
-        return '.v_set_flag_hw'
+        return '.v_set_flag_c'
 
     def expr(self):
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")

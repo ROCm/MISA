@@ -75,8 +75,8 @@ typedef struct {
 typedef struct {
     void* output;
     void* input;
-    int length;
-    int __pack_0;
+    int thread_length;
+    int total_length;
 } __attribute__((packed)) tensor_cast_karg_t;
 
 static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
@@ -231,13 +231,21 @@ public:
         int gemm_k = n * b;
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
 
-        if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
-        {
-            return false;
+        if((tunable->tensor_b_thread_lengths[2] * tunable->tensor_b_thread_lengths[3] > 1) || (tunable->nxe == 0)){
+            if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
+            {
+                return false;
+            }
         }
 
-        if ((gemm_m % gemm_m_per_block !=0 ) || (gemm_k % gemm_k_per_block != 0)){
+        if((tunable->tensor_a_thread_lengths[2] * tunable->tensor_a_thread_lengths[3] > 1) || (tunable->nxe == 0)){
+            if (gemm_m % gemm_m_per_block !=0 ){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+                return false;
+            }
+        }
+
+        if(gemm_k % gemm_k_per_block != 0){
             return false;
         }
 
@@ -700,7 +708,8 @@ public:
         tensor_cast_karg_t karg_tensor_cast;
         karg_tensor_cast.output = p_wei;
         karg_tensor_cast.input = p_wei_workspace; 
-        karg_tensor_cast.length = cast_per_thread;
+        karg_tensor_cast.thread_length = cast_per_thread;
+        karg_tensor_cast.total_length = group * (k / group) * (c / group) * y * x;
 
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
 
@@ -771,7 +780,7 @@ public:
 #if IGEMM_WRW_USE_ATOMIC_ADD
             // fp16 reduction
             if(driver_data_type == driverHalf && gemm_k_global_split > 0){
-                HIP_CALL(hipHccModuleLaunchKernel(tensor_cast_func, group * (k / group) * (c / group) * y * x / cast_per_thread, 1, 1,
+                HIP_CALL(hipHccModuleLaunchKernel(tensor_cast_func, group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1,
                                             256, 1, 1, 0, 0, NULL,
                                             (void **)&config_tensor_cast, start_reduction, stop_reduction));
                 hipEventSynchronize(stop_reduction);
@@ -781,7 +790,7 @@ public:
             }
 #else
             // fp16 reduction
-            if(driver_data_type == driverHalf){
+            if(driver_data_type == driverHalf && gemm_k_global_split > 0){
                 HIP_CALL(hipHccModuleLaunchKernel(reduction_func, group * (k / group) * (c / group) * y * x / cast_per_thread, 1, 1,
                                             256, 1, 1, 0, 0, NULL,
                                             (void **)&config_reduction, start_reduction, stop_reduction));
@@ -844,7 +853,7 @@ public:
 #if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        hipMemcpy(gemmc_host_check, p_wei_workspace, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
