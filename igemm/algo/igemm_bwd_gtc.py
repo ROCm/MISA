@@ -820,12 +820,12 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_shift_pack_1        = sym_t("s_shift_pack_1"           ,self.s_p_in.value + 3)
 
             self.s_end                     = sym_t("s_end"                    ,sseq())
-            assert self.s_end.value <= amdgpu_sgpr_limit(self.mc.arch_config.arch)
 
         def get_count(self):
             return self.s_end.value
 
         def emit(self):
+            assert self.s_end.value <= amdgpu_sgpr_limit(self.mc.arch_config.arch), f"s_end:{self.s_end.value}, tunable:{self.outer.tunable.serialize()}"
             for k, v in self.__dict__.items():
                 if k.startswith('s_'):
                     self._emit(v.declare())

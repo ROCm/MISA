@@ -51,6 +51,26 @@ def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tun
             fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
             fp.write('\n')
 
+def igemm_sequence_is_cgt(t0, t1, t2, t3, c0, c1, c2, c3):
+    '''
+    check if cluster length is >= thread length
+    '''
+    return (c0 * c1) >= (t0 * t1) and (c2 * c3) >= (t2 * t3)
+
+
+def igemm_sequence_is_tunable_resource_valid(direction, mc, tunable):
+    if direction == 'fwd':
+        igemm = igemm_fwd_gtc_t(mc, tunable)
+    elif direction == 'bwd':
+        igemm = igemm_bwd_gtc_t(mc, tunable)
+    elif direction == 'wrw':
+        igemm = igemm_wrw_gtc_t(mc, tunable)
+
+    if igemm.sgpr.s_end.value > amdgpu_sgpr_limit(mc.arch_config.arch):
+        return False
+
+    return True
+
 class igemm_sequence_xdlops_t(mc_base_t):
     def __init__(self, mc, config):
         mc_base_t.__init__(self, mc)
@@ -86,9 +106,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
             # cb_0, cb_1, cb_2, cb_3
             #
             thread_cluster_list = []
-            ta_0 = ca_0 = tb_0 = cb_0 = 1
-            ca_2 = cb_2 = 1
             if direction == 'fwd':
+                ta_0 = ca_0 = tb_0 = cb_0 = 1
+                ca_2 = cb_2 = 1
                 # a, weight, C0xC1ExK0xK1
                 # b, input,  C0xC1ExN0xN1B
                 # gemm_k iter
@@ -104,6 +124,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                     if ca_3 > macro_tile_m:
                         continue
 
+                    # tb_1 is input c1e, stride is in_stride_c. This is indeed not vector load
                     for tb_1 in vector_load_size:
                         if tb_1 > macro_tile_k or (macro_tile_k % tb_1 != 0):
                             continue
@@ -138,6 +159,12 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                     continue
                                 tb_2 = macro_tile_n // (cb_3 * tb_3)
 
+                                if "cgt" in options and options["cgt"] == 1:
+                                    if not igemm_sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
+                                        continue
+                                    if not igemm_sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
+                                        continue
+
                                 # nxb, nxe
                                 # for fwd, nxb is in gemm_n direction
                                 nxb_list = [2 ** i for i in range(int(math.log2(macro_tile_n) + 1))]
@@ -158,6 +185,96 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                                 [cb_0, cb_1, cb_2, cb_3],
                                                 nxb, nxe)
                                         thread_cluster_list.append(item)
+            elif direction == 'bwd':
+                    # bwd, for simplicity, have following rules:
+                    # 1) ta_0 = tb_0, ta_1 = tb_1, ca_0 = cb_0, ca_1 = cb_1
+                    #   in other words, gemm_k thread/cluster distribution is the same in a/b matrix
+                    # 2) only have >1 value in thread_lengths K0, cluster length K1E (no vector load)
+                    # 3) cluster length C0 always 1, cluster length N0 always 1
+                    # 4) for weight, thread_length c0, c1 can't >1 at the same time
+                    # 5) when nxe!=0, thread_length n1b can't >1  (fwd can, and can work. but maybe useless?)
+                    #
+                    # a, weight, K0xK1ExC0xC1
+                    # b, output, K0xK1ExN0xN1B
+
+                    ta_1 = tb_1 = ca_0 = cb_0 = 1
+                    ca_2 = cb_2 = 1
+                    vector_load_size = [1, 2, 4]
+
+                    # gemm_k iter
+                    #for ta_0 in [2 ** i for i in range(int(math.log2(macro_tile_k) + 1))]:
+                    for ta_0 in vector_load_size:
+                        if ta_0 > macro_tile_k or (macro_tile_k % ta_0 != 0):
+                            continue
+                        ca_1 = macro_tile_k // ta_0
+
+                        tb_0 = ta_0
+                        cb_1 = ca_1
+
+                        # try find ca_3, cb_3
+                        if ca_1 > block_size or (block_size % ca_1 != 0):
+                            continue
+                        ca_3 = block_size // ca_1
+                        cb_3 = ca_3
+
+                        # check remaning element of gemm_m, genn_n
+                        if ca_3 > macro_tile_m or (macro_tile_m % ca_3 != 0):
+                            continue
+                        rem_gemm_m = macro_tile_m // ca_3
+                        if cb_3 > macro_tile_n or (macro_tile_n % cb_3 != 0):
+                            continue
+                        rem_gemm_n = macro_tile_n // cb_3
+
+                        for ta_3 in [2 ** i for i in range(int(math.log2(rem_gemm_m) + 1))]:
+                            if ta_3 > vector_load_size[-1]:     # LDS share store need this as vector_d1
+                                continue
+                            ta_2 = rem_gemm_m // ta_3
+                            if ta_3 > 1 and ta_2 > 1 and ta_0 > 1:
+                                # only support 2 copy dimension
+                                continue 
+                            for tb_3 in [2 ** i for i in range(int(math.log2(rem_gemm_n) + 1))]:
+                                if tb_3 > vector_load_size[-1]:      # LDS share store need this as vector_d1
+                                    continue
+                                if tb_3 > 4:
+                                    continue    # out of vector copy size
+                                tb_2 = rem_gemm_n // tb_3
+                                if tb_3 > 1 and tb_2 > 1 and tb_0 > 1:
+                                    # only support 2 copy dimension
+                                    continue 
+
+                                if "cgt" in options and options["cgt"] == 1:
+                                    if not igemm_sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
+                                        continue
+                                    if not igemm_sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
+                                        continue
+
+                                # nxb, nxe
+                                # for bwd, nxb is in gemm_n direction
+                                nxb_list = [2 ** i for i in range(int(math.log2(macro_tile_n) + 1))]
+                                if 2 in nxb_list:
+                                    nxb_list.remove(2)      # remove item equal to 2
+                                for nxe in (0, 1):
+                                    if nxe == 1 and tb_3 > 1:
+                                        continue
+                                    for nxb in nxb_list:
+                                        # remove constrain due to unmerge_sub_n
+                                        unmerge_sub_n = macro_tile_n // nxb
+                                        # gemm_n_unmerge_cluster=0 case. TODO, support gemm_n_unmerge_cluster=1
+                                        if unmerge_sub_n % (tb_2 * cb_2) != 0:      # unmerge_sub_n % nb_n0 == 0
+                                            continue
+                                        unmerge_sub_n1 = unmerge_sub_n // (tb_2 * cb_2)
+                                        if (tb_3 * cb_3) % unmerge_sub_n1 != 0:
+                                            continue                                # nb_n1b % unmerge_sub_n1 == 0
+                                        item = ([ta_0, ta_1, ta_2, ta_3],
+                                                [ca_0, ca_1, ca_2, ca_3],
+                                                [tb_0, tb_1, tb_2, tb_3],
+                                                [cb_0, cb_1, cb_2, cb_3],
+                                                nxb, nxe)
+                                        thread_cluster_list.append(item)
+
+            else:
+                assert False, f'unsupported direction:{direction}'
+
             return thread_cluster_list
 
         def gen_all_configs():
@@ -218,6 +335,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                 tentative_ctrl_coalescing_store_xdlops.block_size = tentative_tunable.block_size
                                 if tentative_ctrl_coalescing_store_xdlops.get_length_m_max_groups() % \
                                         tentative_ctrl_coalescing_store_xdlops.coalescing_groups != 0:
+                                    continue
+
+                                if not igemm_sequence_is_tunable_resource_valid(config["current_direction"], self.mc, tentative_tunable):
                                     continue
 
                                 tunable_dicts.append(tunable_dict)
