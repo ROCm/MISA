@@ -347,8 +347,8 @@ class igemm_sequence_xdlops_t(mc_base_t):
 
                                 # nxb, nxe
                                 # for bwd, nxb is in gemm_n direction
-                                # nxb_list = [2 ** i for i in range(int(math.log2(macro_tile_n) + 1))]
-                                nxb_list = [1, 4]
+                                nxb_list = [2 ** i for i in range(int(math.log2(macro_tile_k) + 1))]
+                                #nxb_list = [1, 4]
                                 if 2 in nxb_list:
                                     nxb_list.remove(2)      # remove item equal to 2
                                 for nxe in (0, 1):
