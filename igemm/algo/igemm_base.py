@@ -414,6 +414,9 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_start + 'precision                  {} {}'.format(equal, '\'' + self.precision + '\'') + new_line + \
                 line_start + 'nxb                        {} {}'.format(equal, self.nxb) + new_line + \
                 line_start + 'nxe                        {} {}'.format(equal, self.nxe) + new_line
+        if self.gemm_k_global_split:
+            sstr += \
+                line_start + 'gemm_k_global_split        {} {}'.format(equal, self.gemm_k_global_split) + new_line
         if extra_info:
             sstr += \
                 line_start + new_line + \
