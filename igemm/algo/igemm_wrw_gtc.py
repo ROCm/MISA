@@ -1050,6 +1050,8 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         in_sst_ctrl.src_order = 1 if vector_in_d1 > 1 else 0
         out_sst_ctrl.src_order = 1 if vector_out_d1 > 1 else 0
+        in_sst_ctrl.v_tmp = self.vgpr.v_tmp
+        out_sst_ctrl.v_tmp = self.vgpr.v_tmp
 
         #print(f"in_sst_ctrl.src_order={in_sst_ctrl.src_order}, out_sst_ctrl.src_order={out_sst_ctrl.src_order}")
 
@@ -1824,7 +1826,14 @@ class igemm_wrw_gtc_t(mc_base_t):
         #    self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
         if self.tunable.nxb != 0:
             self._emit(f"s_mov_b32 s[0], {n_n1b}")
-            self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            if self.tunable.nxe != 0:
+                self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            else:
+                if s.s_out_stride_k.label in self.dict_shifted_stride:
+                    self._emit(f"s_lshr_b32 s[{s.s_tmp(5)}], s[{s.s_out_stride_k()}], {igemm_log2(data_byte)}")
+                    self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_tmp(5), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+                else:
+                    self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             #self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         else:
@@ -1866,7 +1875,14 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_n1()}], {unmerge_sub_n1}")
         #if self.tunable.nxe != 0:
-        self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k()}], s[{s.s_sub_n()}]")
+        if self.tunable.nxe != 0:
+            self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_dim_b()}], s[{s.s_sub_n()}]")
+        else:
+            if s.s_out_stride_k.label in self.dict_shifted_stride:
+                self._emit(f"s_lshr_b32 s[{s.s_tmp(5)}], s[{s.s_out_stride_k()}], {igemm_log2(data_byte)}")
+                self._emit(f"s_mul_i32 s[{s.s_knum()}],  s[{s.s_tmp(5)}], s[{s.s_sub_n()}]")
+            else:
+                self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_out_stride_k()}], s[{s.s_sub_n()}]")
         # self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_out_stride_k()}], s[{s.s_sub_n()}]")
         #else:
         #    self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_k()}]")
