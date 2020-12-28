@@ -493,6 +493,7 @@ int main(int argc, char **argv) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
             printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+            fflush(stdout);
 
             //if (need_verify)
             //    HIP_CALL(hipMemset(device_output, 0,
@@ -589,6 +590,7 @@ int main(int argc, char **argv) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
             printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
+            fflush(stdout);
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_input, 0x7f,
@@ -717,7 +719,8 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("  %s, ", conv_wrw_driver.get_kernel_name(tunable).c_str());
+            printf("[wrw:%2d] %s, ", i, conv_wrw_driver.get_kernel_name(tunable).c_str());
+            fflush(stdout);
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_weight, 0,
