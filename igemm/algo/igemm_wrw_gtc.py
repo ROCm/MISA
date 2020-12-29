@@ -964,7 +964,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         ctrl_in_gld  = ctrl_2d_global_load_t()
         ctrl_out_gld = ctrl_2d_global_load_t()
 
-        if self.tunable.nxb == 4:
+        if self.tunable.nxb != 1:
             ctrl_in_gld.vector_d1  = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
             ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
         else:
@@ -1039,7 +1039,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         in_sst_ctrl  = ctrl_2d_shared_store_t()
         out_sst_ctrl = ctrl_2d_shared_store_t()
 
-        if self.tunable.nxb == 4:
+        if self.tunable.nxb != 1:
             vector_in_d1  = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
             vector_out_d1 = igemm_gcd(t_n1b, 4) if self.tunable.nxe == 0 else 1
         else:
