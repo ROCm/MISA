@@ -191,7 +191,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                                 [ca_0, ca_1, ca_2, ca_3],
                                                 [tb_0, tb_1, tb_2, tb_3],
                                                 [cb_0, cb_1, cb_2, cb_3],
-                                                nxb, nxe, -1)
+                                                nxb, nxe, 0)
                                         sub_configs.append(item)
             elif direction == 'bwd':
                     # bwd, for simplicity, have following rules:
@@ -281,7 +281,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                                 [ca_0, ca_1, ca_2, ca_3],
                                                 [tb_0, tb_1, tb_2, tb_3],
                                                 [cb_0, cb_1, cb_2, cb_3],
-                                                nxb, nxe, -1)
+                                                nxb, nxe, 0)
                                         sub_configs.append(item)
             elif direction == 'wrw':
                     #
@@ -429,7 +429,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                 tunable_dict['precision']                   =   config["precision"]
                                 tunable_dict['nxb']                         =   nxb
                                 tunable_dict['nxe']                         =   nxe
-                                if config["current_direction"]:
+                                if config["current_direction"] == 'wrw':
                                     tunable_dict['gemm_k_global_split']     =   gemm_k_global_split
 
                                 # post constrain, coalescing constrain
