@@ -29,34 +29,7 @@ import sys, os, shutil
 
 from igemm import *
 
-IGEMM_HOST_USE_GPU_NAIVE_CONV = True
-
 OUT_DIR='out'
-CPP_DIR='driver'
-
-def igemm_host_driver(args, config_content):
-    cpp_src = os.path.join(CPP_DIR, "conv_driver.cpp")
-    target_exe = os.path.join(args.dir, "conv_driver.exe")
-    sec_root = config_content.get_section('codegen')[0]
-    arch = amdgpu_arch_config_t({
-        'arch'          :   amdgpu_string_to_arch(sec_root['arch'])})
-    builder = compile_host_t(arch, cpp_src, target_exe)
-    config_file_name = os.path.abspath(args.config_file)
-    hsaco_name = os.path.splitext(os.path.basename(args.config_file))[0] + '.hsaco'
-    host_cxxflags = ['-DIGEMM_CONFIG_FILE=\"{}\"'.format(config_file_name), '-DIGEMM_HSACO=\"{}\"'.format(hsaco_name)]
-    if IGEMM_HOST_USE_GPU_NAIVE_CONV:
-        host_cxxflags += ['-DUSE_GPU_NAIVE_CONV']
-    rtn = builder.compile(cxxflags=host_cxxflags)
-    if not rtn:
-        assert False
-
-    if IGEMM_HOST_USE_GPU_NAIVE_CONV:
-        hip_src = os.path.join(CPP_DIR, "gpu_naive_conv", "naive_conv.cpp")
-        target_hsaco = os.path.join(args.dir, "naive_conv.hsaco")
-        hip_builder = compile_hip_t(arch, hip_src, target_hsaco)
-        rtn = hip_builder.compile()
-        if not rtn:
-            assert False
 
 def igemm_flatten(args, config_content):
     asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
@@ -90,10 +63,6 @@ def igemm_out_tunable_param(output_file, config_content):
         list_emitter.emit(td_item.output())
     list_emitter.close()
 
-#def igemm_sequence(args, config_content):
-#    kseq = v4r1_dynamic_kernel_sequencer_t(amdgpu_get_gfx906_60cu(),
-#            config_content.get_section('v4r1_dynamic_kernel')[0].to_dict())
-#    kseq()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -110,14 +79,23 @@ if __name__ == '__main__':
     if args.output:
         igemm_out_tunable_param(args.output, config_content)
 
+    arch = config_content.get_section('codegen')[0]['arch']
+    code_object = config_content.get_section('codegen')[0]['code_object']
+
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         if os.path.exists(args.dir):
             shutil.rmtree(args.dir)
         os.mkdir(args.dir)
-        igemm_host_driver(args, config_content)
+        igemm_host_driver(arch=arch, config_file=args.config_file, out_dir=args.dir)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
         # config_content.dump()
         # igemm_sequence(args, config_content)
-        pass
+        if os.path.exists(args.dir):
+            shutil.rmtree(args.dir)
+        os.mkdir(args.dir)
+        igemm_sequence_driver(arch=arch, code_object=code_object,
+                            config_content=config_content, out_dir=args.dir )
+
+

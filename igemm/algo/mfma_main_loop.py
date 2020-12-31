@@ -308,17 +308,24 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + k_per_inst * lds_width_n))
 
 
-            mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
-            se_sub = create_scheduler(self.mc, mbb_list_sub)
-            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
+            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+                mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                se_sub = create_scheduler(self.mc, mbb_list_sub)
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
-            se_last = create_scheduler(self.mc, mbb_list_last)
+                se_last = create_scheduler(self.mc, mbb_list_last)
 
-            self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
+                self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
+            else:
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(do_interleave_gload_and_move_slice_window())
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
@@ -719,28 +726,26 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
 
+            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+                mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                se_sub = create_scheduler(self.mc, mbb_list_sub)
 
-            mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
-            
-            #for x in mbb_list_sub:
-            #    print(f'len x:{len(x)}')
-            #    for y in x:
-            #        y.dump()
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
-            se_sub = create_scheduler(self.mc, mbb_list_sub)
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+            else:
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
-            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
-
-            #for x in mbb_list_last:
-            #    print(f'len x:{len(x)}')
-            #    for y in x:
-            #        y.dump()
-            se_last = create_scheduler(self.mc, mbb_list_last)
-            self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-            mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
-            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(do_interleave_gload_and_move_slice_window())
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
@@ -1260,18 +1265,27 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
 
-            mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+                mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
 
-            se_sub = create_scheduler(self.mc, mbb_list_sub)
+                se_sub = create_scheduler(self.mc, mbb_list_sub)
 
-            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
-            se_last = create_scheduler(self.mc, mbb_list_last)
-            self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-            mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
-            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+            else:
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
+
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(do_interleave_gload_and_move_slice_window())
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
@@ -1314,6 +1328,7 @@ class mfma_main_loop_t(mc_base_t):
             repeat_n_thread_offset = cxm.wave_step_n * mfma.num_v_b
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m
             local_buffer_n = cxm.inst_mfma.num_v_b * cxm.wave_step_n * cxm.wave_repeat_n
+            # print(f"local_buffer_m:{local_buffer_m}, local_buffer_n:{local_buffer_n}, {cxm.inst_mfma.num_v_b}, {cxm.wave_step_n}, {cxm.wave_repeat_n}")
 
             # right after clear acc
             self._emit(f_move_slice_window_b())
@@ -1602,18 +1617,27 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
             self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
 
-            mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+                mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
 
-            se_sub = create_scheduler(self.mc, mbb_list_sub)
+                se_sub = create_scheduler(self.mc, mbb_list_sub)
 
-            mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
-            se_last = create_scheduler(self.mc, mbb_list_last)
-            self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-            mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
-            self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
+            else:
+                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
+                                create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
+
+                se_last = create_scheduler(self.mc, mbb_list_last)
+                self._emit(do_interleave_gload_and_move_slice_window())
+                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")

@@ -147,6 +147,30 @@ class config_parser_t(object):
                 return False
             return False
 
+        def is_value_dict(value):
+            if value[0] == '{' and value[-1] == '}':
+                tok = value[1:-1].split(',')
+                for i in range(len(tok)):
+                    tok[i] = tok[i].strip()
+                for i in range(len(tok)):
+                    if tok[i] == '':
+                        return False
+                    key_value_pair = tok[i].split('=')
+                    if len(key_value_pair) != 2:
+                        return False
+                    k, v = key_value_pair[0].strip(), key_value_pair[1].strip()
+                    if not is_value_string(k):
+                        return False
+                    if not (is_value_int(v) or \
+                            is_value_float(v) or \
+                            is_value_string(v) or \
+                            is_value_list(v) or \
+                            is_value_range(v)):
+                        # TODO: recursive dict not supported
+                        return False
+                return True
+            return False
+
         def parse_value(value):
             if is_value_int(value):
                 return int(value)
@@ -184,6 +208,17 @@ class config_parser_t(object):
                 if len(tok) == 3:
                     return range(int(tok[0]), int(tok[1]), int(tok[2]))
                 assert False, "should not happen"
+            if is_value_dict(value):
+                tok = value[1:-1].split(',')
+                some_dict = dict()
+                for i in range(len(tok)):
+                    tok[i] = tok[i].strip()
+                    key_value_pair = tok[i].split('=')
+                    k, v = key_value_pair[0].strip(), key_value_pair[1].strip()
+                    vv = parse_value(v)     # safe to recursively call here, to better create a value type
+                    some_dict[k[1:-1]] = vv
+                return some_dict
+
             # finaly return string
             return value
 
@@ -205,9 +240,9 @@ class config_parser_t(object):
                     current_section = config_section_t(section_name)
                 else:
                     assert current_section is not None
-                    tok = line.split('=')
+                    tok = line.split('=', 1)
                     if len(tok) != 2:
-                        print("fail to parse current line :\"{}\"".format(line))
+                        print("fail to parse current line :\"{}\", tok:{}".format(line, tok))
                         sys.exit(-1)
                     key = tok[0].strip()
                     value = tok[1].strip()

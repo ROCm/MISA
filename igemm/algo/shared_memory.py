@@ -775,7 +775,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     swap_per_row = swap_sequencer.get_swap_per_row()
                     start_id_per_row = swap_sequencer.get_start_id_per_row()
 
-                    assert ctrl.length_d0 == len(swap_per_row) and ctrl.length_d0 == start_id_per_row
+                    assert ctrl.length_d0 == len(swap_per_row) and ctrl.length_d0 == len(start_id_per_row), f"length_d0:{ctrl.length_d0}, len:{len(swap_per_row)}, s:{start_id_per_row}"
 
                     ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                     for i_d0 in range(ctrl.length_d0):

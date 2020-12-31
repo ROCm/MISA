@@ -29,6 +29,8 @@ import sys
 from .codegen import *
 from .algo import *
 from .igemm_codegen_driver import *
+from .igemm_sequence_driver import *
+from .igemm_host_driver import *
 
 if sys.hexversion < 0x30600f0:
     print("must use python 3.6+. current is {}".format(sys.version))
