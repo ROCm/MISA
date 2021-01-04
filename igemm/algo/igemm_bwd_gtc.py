@@ -1111,6 +1111,10 @@ class igemm_bwd_gtc_t(mc_base_t):
         wei_sst_ctrl.lds_gemm_k_pack  = self.tunable.gemm_k_pack
         out_sst_ctrl.lds_gemm_k_pack   = self.tunable.gemm_k_pack
 
+        ## temp vgprs needed for data unpacking/packing/shuffling
+        wei_sst_ctrl.v_tmp = self.vgpr.v_tmp
+        out_sst_ctrl.v_tmp = self.vgpr.v_tmp
+
         num_data_per_vgpr = 4 // data_byte
 
         out_sst_ctrl.use_ext_data = True
@@ -1128,17 +1132,22 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = 1
             
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
-            assert out_thread_copy_index[0] == 0, "Not supported"
             ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
-            out_sst_ctrl.stride_d0 = (out_stride_list[out_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+            if out_thread_copy_index[0] == 0:
+                ## here, stride_d0 is the distance of two continuous points on k0
+                out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]]* data_byte
+            else:
+                ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
+                out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack 
+
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
             out_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 3 and data_byte < 4 else False
 
-            if out_thread_copy_index[0] == 0:
-                out_sst_ctrl.pack_d0 = False
-            else:
+            if out_thread_copy_index[0] == 1 and data_byte < 4:
                 out_sst_ctrl.pack_d0 = True
+            else:
+                out_sst_ctrl.pack_d0 = False
 
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
@@ -1156,11 +1165,12 @@ class igemm_bwd_gtc_t(mc_base_t):
             out_sst_ctrl.stride_d0 = 1
             if out_thread_copy_index[0] in (0,1):       
                 if out_thread_copy_index[0] == 0:       ## The only copy dim is k0
-                    ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
-                    out_sst_ctrl.stride_d1 = (out_stride_list[out_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+                    ## here, stride_d1 is the distance of two continuous points on k0
+                    out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte 
                 else:                                   ## The only copy dim is k1e
                     out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[0]], self.tunable.gemm_k_pack)
-                    out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]+1] * data_byte * self.tunable.gemm_k_pack * out_sst_ctrl.vector_d1
+                    ## here, stride_d1 is the distance crossing "gemm_k_pack" continuous points on k1e
+                    out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 out_sst_ctrl.vgpr_packed = False 
             else:                                   
                 if out_thread_copy_index[0] == 2:       ## The only copy dim is n0
@@ -1193,17 +1203,20 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.vector_d1 = 1
 
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
-            assert out_thread_copy_index[0] == 0, "Not supported"
-            ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
-            wei_sst_ctrl.stride_d0 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+            if wei_thread_copy_index[0] == 0:
+                ## here, stride_d0 is the distance of two continuous points on k0
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte 
+            else:
+                ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
             wei_sst_ctrl.vgpr_packed = True if wei_thread_copy_index[1] == 3 and data_byte < 4 else False
             
-            if out_thread_copy_index[0] == 0:
-                wei_sst_ctrl.pack_d0 = False
-            else:
+            if out_thread_copy_index[0] == 1 and data_byte < 4:
                 wei_sst_ctrl.pack_d0 = True
+            else:
+                wei_sst_ctrl.pack_d0 = False
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
@@ -1223,11 +1236,12 @@ class igemm_bwd_gtc_t(mc_base_t):
             wei_sst_ctrl.stride_d0 = 1
             if wei_thread_copy_index[0] in (0,1):
                 if wei_thread_copy_index[0] == 0:      ## The only copy dim is k0
-                    ## for fp16/bp16, considering every 4 data in k1e is packed into contigueous LDS locations 
-                    wei_sst_ctrl.stride_d1 = (wei_stride_list[wei_thread_copy_index[0]] // self.tunable.gemm_k_pack) * data_byte * self.tunable.gemm_k_pack
+                    ## here, stride_d0 is the distance of two continuous points on k0
+                    wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte 
                 else:                                  ## The only copy dim is k1e
+                    ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
                     wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[0]], self.tunable.gemm_k_pack)
-                    wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]+1] * data_byte * self.tunable.gemm_k_pack * wei_sst_ctrl.vector_d1
+                    wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.vgpr_packed = False 
             else: 
                 if wei_thread_copy_index[0] == 2:      ## The only copy dim is c0
