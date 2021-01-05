@@ -65,9 +65,10 @@ static xdlops_mapping_t xdlops_mappings[] = {
         { 32 , 256,  4 ,  64,  4, 4,  2,  2,  2,  1,  },
         { 256, 16 ,  64,  4 ,  4, 4,  2,  2,  1,  1,  },
         { 16 , 256,  4 ,  64,  4, 4,  2,  2,  1,  1,  },
+/*
         { 128, 128,  32,  32,  4, 4,  2,  2,  1,  1,  },
         { 128, 128,  32,  32,  8, 4,  2,  2,  1,  1,  },
-        { 128, 128,  16,  16, 16, 4,  2,  2,  2,  2,  },
+        { 128, 128,  16,  16, 16, 4,  2,  2,  2,  2,  },	
         { 128,  64,  16,  16, 16, 4,  2,  2,  2,  1,  },
         { 128, 128,  32,  64,  4, 4,  1,  1,  2,  1,  },
         { 128, 64 ,  32,  8 ,  4, 4,  2,  2,  1,  2,  },
@@ -78,6 +79,7 @@ static xdlops_mapping_t xdlops_mappings[] = {
         { 128, 32 ,  32,  8 ,  4, 4,  2,  2,  1,  1,  },
         { 32 , 128,  8 ,  32,  4, 4,  2,  2,  1,  1,  },
         { 32 , 128,  16,  64,  4, 4,  1,  1,  1,  1,  },
+*/
         { 64 , 64 ,  16,  16,  4, 4,  2,  2,  1,  1,  },
         { 64 , 64 ,  16,  16, 16, 4,  2,  2,  1,  1,  },
         { 64 , 64 ,  16,  16, 16, 4,  1,  1,  2,  2,  },
@@ -382,11 +384,18 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
                                 configs.push_back(cfg);
 
+                                if ( cfg.tensor_a_thread_lengths[2] == 1 && cfg.tensor_b_thread_lengths[2] == 1 )
+				     continue; 
+
                                 // use c1/n1b for thread slice for gemm_m/gemm_n
                                 cfg.tensor_a_thread_lengths[3] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
                                 cfg.tensor_b_thread_lengths[3] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];
                                 cfg.tensor_a_thread_lengths[2] = 1;
                                 cfg.tensor_b_thread_lengths[2] = 1;
+
+                                if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
+			             (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
+				     continue; 
 
                                 configs.push_back(cfg);
                             };
@@ -420,23 +429,32 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
                                 configs.push_back(cfg);
 
+                                if ( cfg.tensor_a_thread_lengths[2] == 1 && cfg.tensor_b_thread_lengths[2] == 1 )
+                                     continue;				
+
                                 // use c1/n1b for thread slice for gemm_m/gemm_n
                                 cfg.tensor_a_thread_lengths[3] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
                                 cfg.tensor_b_thread_lengths[3] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];
                                 cfg.tensor_a_thread_lengths[2] = 1;
                                 cfg.tensor_b_thread_lengths[2] = 1;
 
+                                if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
+                                     (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
+                                     continue;
+				
                                 configs.push_back(cfg);
                             };
 		        }
 			else { 
-			    // with nxe == 1, vector load/store could not be used with n1b and c1. 
-			    // So, tensor_a_thread_length[3], tensor_b_thread_length[3] are forced to be 1
+			    // with nxe == 1, vector load/store could not be used with n1b and c1 and k1e
+			    // So, tensor_a_thread_length[1], tensor_b_thread_length[1], tensor_a_thread_length[3], tensor_b_thread_length[3] 
+			    // are forced to be 1
 			   
                             cfg.tensor_a_thread_lengths[3] = 1; 
 			    cfg.tensor_b_thread_lengths[3] = 1;
 
                             // use dimension k0 for thread slice for gemm_k
+			    // use dimension c0/n0 for thread slice for gemm_m/gemm_n
                             for(int sliceSize=1; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = sliceSize; 
 				cfg.tensor_a_thread_lengths[1] = 1; 
@@ -462,33 +480,6 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 			        	
                                 configs.push_back(cfg); 
 			    }; 
-
-                            // use dimension k1e for thread slice for gemm_k
-                            for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
-                                cfg.tensor_a_thread_lengths[1] = sliceSize;
-                                cfg.tensor_a_thread_lengths[0] = 1; 
-                                cfg.tensor_a_cluster_lengths[1] = cfg.gemm_k_per_block / sliceSize;
-
-                                int n_k1e = cfg.tensor_a_thread_lengths[1] * cfg.tensor_a_cluster_lengths[1];
-
-                                if ( std::string(precision) == "fp16" && n_k1e < 4 )
-                                     continue;
-
-                                cfg.tensor_a_cluster_lengths[3] = blockSize / cfg.tensor_a_cluster_lengths[1];
-
-                                cfg.tensor_b_cluster_lengths[1] = cfg.tensor_a_cluster_lengths[1];
-                                cfg.tensor_b_cluster_lengths[3] = cfg.tensor_a_cluster_lengths[3];
-                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0];
-                                cfg.tensor_b_thread_lengths[1] = cfg.tensor_a_thread_lengths[1];
-
-                                if ( cfg.tensor_a_cluster_lengths[3] > cfg.gemm_m_per_block  || cfg.tensor_b_cluster_lengths[3] > cfg.gemm_n_per_block )
-                                     continue;
-
-                                cfg.tensor_a_thread_lengths[2] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
-                                cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_a_cluster_lengths[3];
-                                        
-                                configs.push_back(cfg);
-                            };			    
 		        }; 
                    };
              };
