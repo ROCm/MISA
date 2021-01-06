@@ -720,8 +720,8 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_dtile_dx            = sym_t("s_dtile_dx"               ,34)
                 self.s_dtile_y             = sym_t("s_dtile_y"                ,35)
                 self.s_dtile_x             = sym_t("s_dtile_x"                ,36)
-                self.s_dtile_h             = sym_t("s_dtile_h"                ,37)
-                self.s_dtile_w             = sym_t("s_dtile_w"                ,38)
+                self.s_dtile_h             = sym_t("s_dtile_h"                ,37)       # not used
+                self.s_dtile_w             = sym_t("s_dtile_w"                ,38)       # not used
                 self.s_dslice_y            = sym_t("s_dslice_y"               ,39)
                 self.s_dslice_x            = sym_t("s_dslice_x"               ,40)
                 self.s_dslice_h            = sym_t("s_dslice_h"               ,41)
@@ -734,11 +734,14 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_group               = sym_t("s_group"                  ,21)
                 sseq                       = gpr_sequencer_t(22)
 
-            self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
+            ##self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
+            self.s_out_stride_k            = sym_t("s_out_stride_k"           ,self.s_dtile_h.value if outer.tunable.nxe != 0 else sseq(1))
+
             if outer.tunable.nxe == 0:
                 self.s_stride_hw           = sym_t("s_stride_hw"              ,sseq(1))
             self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
-            self.s_out_stride_n            = sym_t("s_out_stride_n"           ,sseq(1))
+            ##self.s_out_stride_n            = sym_t("s_out_stride_n"           ,sseq(1))
+            self.s_out_stride_n            = sym_t("s_out_stride_n"           ,self.s_dtile_w.value if outer.tunable.nxe != 0 else sseq(1))
             self.s_out_stride_n0           = sym_t("s_out_stride_n0"          ,sseq(1))
 
             if outer.tunable.gemm_m_unmerge_cluster == 1:
@@ -746,7 +749,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_in_stride_c             = sym_t("s_in_stride_c"            ,sseq(1))
             if outer.tunable.gemm_n_unmerge_cluster == 1:
                 self.s_in_stride_n0        = sym_t("s_in_stride_n0"           ,sseq(1))
-            self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
+            ##self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
+            self.s_in_stride_n             = sym_t("s_in_stride_n"            ,self.s_group.value if outer.tunable.nxe != 0 else sseq(1))
 
             if outer.tunable.nxe != 0:
                 self.s_wei_stride_c        = sym_t("s_wei_stride_c"           ,sseq(1))
@@ -755,8 +759,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_wei_stride_k0           = sym_t("s_wei_stride_k0"          ,sseq(1))
 
             if outer.tunable.nxe != 0:
-                self.s_stride_dslice_hw    = sym_t("s_stride_dslice_hw"       ,sseq(1))
-                self.s_stride_dslice_yx    = sym_t("s_stride_dslice_yx"       ,sseq(1))
+                ##self.s_stride_dslice_hw    = sym_t("s_stride_dslice_hw"       ,sseq(1))
+                ##self.s_stride_dslice_yx    = sym_t("s_stride_dslice_yx"       ,sseq(1))
+                self.s_stride_dslice_hw    = sym_t("s_stride_dslice_hw"       ,self.s_dslice_h.value)
+                self.s_stride_dslice_yx    = sym_t("s_stride_dslice_yx"       ,self.s_y.value)                
 
             if outer.tunable.nxe != 0:
                 self.s_dslice_dim_b     = sym_t("s_dslice_dim_b", self.s_stride_dslice_hw.value)
@@ -772,13 +778,14 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_wei_stride_k_k1         = sym_t("s_wei_stride_k_k1"        ,sseq(1))
                 self.s_wei_stride_k_k0_k1_diff = sym_t("s_wei_stride_k_k0_k1_diff",sseq(1))
 
-            self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,sseq(1))
+            ##self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,sseq(1))
+            self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,self.s_pad_h.value if outer.tunable.nxe != 0 else sseq(1))
             if outer.tunable.nxe != 0:
                 self.s_move_slice_k_dsy    = sym_t("s_move_slice_k_dsy"       ,self.s_dslice_h_left.value)
                 self.s_move_slice_k_dsx    = sym_t("s_move_slice_k_dsx"       ,self.s_dslice_w_left.value)
 
             self.s_block_gtc_ig            = sym_t("s_block_gtc_ig"           ,sseq(1))
-            self.s_block_gtc_ib            = sym_t("s_block_gtc_ib"           ,sseq(1))
+            ##self.s_block_gtc_ib            = sym_t("s_block_gtc_ib"           ,sseq(1))
             #if outer.tunable.gemm_m_unmerge_cluster == 0:
             self.s_block_gtc_ic            = sym_t("s_block_gtc_ic"           ,sseq(1))
             #else:
@@ -1334,6 +1341,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         else:
             s_wei_stride_d0 = s_dummy
             s_wei_stride_d1 = wei_stride_gprs[-1]
+
+        print(f" out_thread_copy_ndim = {self.out_thread_copy_ndim}, wei_thread_copy_ndim = {self.wei_thread_copy_ndim}")
 
         return s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1
 
