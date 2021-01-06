@@ -65,7 +65,6 @@ static xdlops_mapping_t xdlops_mappings[] = {
         { 32 , 256,  4 ,  64,  4, 4,  2,  2,  2,  1,  },
         { 256, 16 ,  64,  4 ,  4, 4,  2,  2,  1,  1,  },
         { 16 , 256,  4 ,  64,  4, 4,  2,  2,  1,  1,  },
-/*
         { 128, 128,  32,  32,  4, 4,  2,  2,  1,  1,  },
         { 128, 128,  32,  32,  8, 4,  2,  2,  1,  1,  },
         { 128, 128,  16,  16, 16, 4,  2,  2,  2,  2,  },	
@@ -79,7 +78,6 @@ static xdlops_mapping_t xdlops_mappings[] = {
         { 128, 32 ,  32,  8 ,  4, 4,  2,  2,  1,  1,  },
         { 32 , 128,  8 ,  32,  4, 4,  2,  2,  1,  1,  },
         { 32 , 128,  16,  64,  4, 4,  1,  1,  1,  1,  },
-*/
         { 64 , 64 ,  16,  16,  4, 4,  2,  2,  1,  1,  },
         { 64 , 64 ,  16,  16, 16, 4,  2,  2,  1,  1,  },
         { 64 , 64 ,  16,  16, 16, 4,  1,  1,  2,  2,  },
@@ -294,6 +292,8 @@ void generate_fwd_configs(const char *precision, const char *config_file)
              output_configurations(configs, "\'fwd\'", "\'fp32\'", ofs);
 };
 
+// try to adjust this if the generator codes improved the usage of sgprs
+#define MAX_SOFFSET_SGPRS 32 
 
 void generate_bwd_configs(const char *precision, const char *config_file)
 {
@@ -320,6 +320,10 @@ void generate_bwd_configs(const char *precision, const char *config_file)
          cfg.tensor_b_cluster_lengths.resize(4);
 
          int blockSize = waveSize * xm.waves;
+         int tensor_a_soffset_sgprs; 
+         int tensor_b_soffset_sgprs; 
+
+         int max_vector_size = std::string(precision) == "fp16" ? 8 : 4; 
 
          for (int nxe=0; nxe < 2; nxe += 1)  {
               cfg.nxe = nxe;
@@ -382,6 +386,13 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 cfg.tensor_a_thread_lengths[3] = 1;
                                 cfg.tensor_b_thread_lengths[3] = 1;
 
+                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[0] * cfg.tensor_a_thread_lengths[2];
+                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[0] * cfg.tensor_b_thread_lengths[2];
+
+                                // Limitation due to large sgpr consumption in precache soffset
+                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                     continue;
+
                                 configs.push_back(cfg);
 
                                 if ( cfg.tensor_a_thread_lengths[2] == 1 && cfg.tensor_b_thread_lengths[2] == 1 )
@@ -396,6 +407,17 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
 			             (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
 				     continue; 
+
+                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[3] == 1 ? 
+					                 cfg.tensor_a_thread_lengths[0] : 
+					                 cfg.tensor_a_thread_lengths[0] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size)); 
+                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[3] == 1 ?
+			                                 cfg.tensor_b_thread_lengths[0] :
+						         cfg.tensor_b_thread_lengths[0] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size)); 
+
+                                // Limitation due to large sgpr consumption in precache soffset
+                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                     continue;
 
                                 configs.push_back(cfg);
                             };
@@ -427,6 +449,13 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 cfg.tensor_a_thread_lengths[3] = 1;
                                 cfg.tensor_b_thread_lengths[3] = 1;
 
+                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[1] * cfg.tensor_a_thread_lengths[2];
+                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[1] * cfg.tensor_b_thread_lengths[2];
+
+                                // Limitation due to large sgpr consumption in precache soffset
+                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                     continue; 
+
                                 configs.push_back(cfg);
 
                                 if ( cfg.tensor_a_thread_lengths[2] == 1 && cfg.tensor_b_thread_lengths[2] == 1 )
@@ -438,10 +467,22 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 cfg.tensor_a_thread_lengths[2] = 1;
                                 cfg.tensor_b_thread_lengths[2] = 1;
 
+                                // global vector load puts limitations on the sizes of the thread slices (at most dwordx4 can be used) 
                                 if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
                                      (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
                                      continue;
-				
+
+                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[3] == 1 ?
+                                                         cfg.tensor_a_thread_lengths[1] :
+                                                         cfg.tensor_a_thread_lengths[0] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size));
+                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[3] == 1 ?
+                                                         cfg.tensor_b_thread_lengths[1] :
+                                                         cfg.tensor_b_thread_lengths[0] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size));
+
+                                // Limitation due to large sgpr consumption in precache soffset
+                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                     continue;
+
                                 configs.push_back(cfg);
                             };
 		        }
@@ -477,6 +518,13 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
                                 cfg.tensor_a_thread_lengths[2] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3]; 
                                 cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_a_cluster_lengths[3]; 
+
+                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[0] * cfg.tensor_a_thread_lengths[2];
+                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[0] * cfg.tensor_b_thread_lengths[2];
+                         
+                                // This is needed since some configurations consume too many scale registers
+                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+				     continue; 
 			        	
                                 configs.push_back(cfg); 
 			    }; 
