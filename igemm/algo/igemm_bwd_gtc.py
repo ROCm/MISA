@@ -1220,7 +1220,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             wei_sst_ctrl.vgpr_packed = True if wei_thread_copy_index[1] == 3 and data_byte < 4 else False
             
-            if out_thread_copy_index[0] == 1 and data_byte < 4:
+            if wei_thread_copy_index[0] == 1 and data_byte < 4:
                 wei_sst_ctrl.pack_d0 = True
             else:
                 wei_sst_ctrl.pack_d0 = False
