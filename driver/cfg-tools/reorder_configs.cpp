@@ -291,8 +291,7 @@ int main(int argc, char **argv)
 
 #ifdef USE_PRECISION_FP16
     const char *strPrecision = "\'fp16\'";
-#endif
-#ifdef USE_PRECISION_FP32
+#else
     const char *strPrecision = "\'fp32\'";
 #endif
     
