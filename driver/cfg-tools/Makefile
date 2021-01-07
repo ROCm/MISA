@@ -1,6 +1,10 @@
 CC=g++
 
+ifdef BUILD_FP16_CONFIGS
 CFLAGS := -std=c++11 -I../ -g -DUSE_PRECISION_FP16
+else
+CFLAGS := -std=c++11 -I../ -g 
+endif 
 
 PROGRAMS := tailor_configs  reorder_configs  generate_configs
 
