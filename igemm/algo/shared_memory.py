@@ -1027,18 +1027,21 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         else:
                             pass
                     else:
-                        num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                        ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
+                        if ctrl.src_order == 0: 
+                            num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
+                            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
 
-                        for i_d0 in range(ctrl.length_d0):
-                            i_offset0 = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                            for i_d1 in range(num_vector_d1 // 2):
-                                i_offset1 = 2 * i_d1 * ctrl.stride_d1
-                                if ctrl.src_order == 0:
-                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.length_d1+2*i_d1}', i_offset0+i_offset1))
-                                else:
-                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1*ctrl.length_d0+i_d0}', f'{self.v_src()}+{(2*i_d1+1)*ctrl.length_d0+i_d0}', i_offset0+i_offset1))
-                                issue_cnt += ds_write2.get_issues()
+                            for i_d0 in range(ctrl.length_d0):
+                                i_offset0 = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                                for i_d1 in range(num_vector_d1 // 2):
+                                    i_offset1 = 2 * i_d1 * ctrl.stride_d1
+                                    if ctrl.src_order == 0:
+                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.length_d1+2*i_d1}', i_offset0+i_offset1))
+                                    else:
+                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1*ctrl.length_d0+i_d0}', f'{self.v_src()}+{(2*i_d1+1)*ctrl.length_d0+i_d0}', i_offset0+i_offset1))
+                                    issue_cnt += ds_write2.get_issues()
+                        else:
+                            pass
                 else:
                     if ctrl.src_order == 0:
                         if ctrl.vgpr_packed and ctrl.vector_d1 == 1:       ## This is the case where the packed data is not written to LDS continuously
