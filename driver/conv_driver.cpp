@@ -737,7 +737,8 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
+            if ( ! run_first_applicable )
+                 printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
 
             if (need_verify) {
                 if (driver_data_type == driverFloat)
@@ -760,7 +761,8 @@ int main(int argc, char **argv) {
             }
 
             if (result.return_code != 0){
-                printf("not applicatble\n");
+                if ( ! run_first_applicable )
+                     printf("not applicatble\n");
                 continue;
             }
 
@@ -788,6 +790,11 @@ int main(int argc, char **argv) {
                 // }
             }
             printf("\n");
+
+            if ( run_first_applicable ) {
+                 printf("\n");
+                 break;
+            };
             if(result.duration_ms < fastest_result_bwd.duration_ms){
                 fastest_result_bwd = result;
                 fastest_result_bwd.gflops = (float)gflops;
@@ -795,7 +802,7 @@ int main(int argc, char **argv) {
                 fastest_id = i;
             }
         }
-        if(log_fastest_config){
+        if(log_fastest_config && !run_first_applicable){
             dump_arg(&conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
