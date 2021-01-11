@@ -105,7 +105,6 @@ struct bwdSorterClass
 {
   bool operator()(igemm_gtc_tunable_t &cfg1, igemm_gtc_tunable_t &cfg2)
   {
-     // it seems larger size of gemm_k_per_block is not very helpful ?
      if ( cfg1.gemm_k_per_block > cfg2.gemm_k_per_block )
           return(true);
      if ( cfg1.gemm_k_per_block < cfg2.gemm_k_per_block )
@@ -149,6 +148,7 @@ struct bwdSorterClass
      if ( cfg1.tensor_b_thread_lengths[3] < cfg2.tensor_b_thread_lengths[3] ) 
 	  return(false); 
 
+     // for bwd-fp16, having thread slice on k0 or k1e has differrent meaning (pack_d0 or not)
      if ( cfg1.tensor_b_thread_lengths[1] > cfg2.tensor_b_thread_lengths[1] ) 
 	  return(true); 
      if ( cfg1.tensor_b_thread_lengths[1] < cfg2.tensor_b_thread_lengths[1] ) 
@@ -171,7 +171,7 @@ static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const c
          myout << "wave_tile_n              = " << cfg.wave_tile_n << std::endl;
          myout << "wave_step_n              = " << cfg.wave_step_n << std::endl;
          myout << "wave_repeat_n            = " << cfg.wave_repeat_n << std::endl;
-#ifdef _USE_PRECISION_FP16_
+#ifdef USE_PRECISION_FP16
          myout << "wave_tile_k              = " << cfg.wave_tile_k << std::endl;
 #endif
 
@@ -187,8 +187,8 @@ static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const c
          myout << "tensor_b_cluster_lengths = [" << cfg.tensor_b_cluster_lengths[0] << ", " << cfg.tensor_b_cluster_lengths[1] << ", ";
          myout << cfg.tensor_b_cluster_lengths[2] << ", " << cfg.tensor_b_cluster_lengths[3] << "]" << "       # C0xC1ExN0xN1B" << std::endl;
 
-         myout << "direction                = " << strDirection << std::endl;
-         myout << "precision                = " << strPrecision << std::endl;
+         myout << "direction                = " << '\'' << strDirection << '\'' << std::endl;
+         myout << "precision                = " << '\'' << strPrecision << '\'' << std::endl;
 
          myout << "nxb                      = " << cfg.nxb << std::endl;
          myout << "nxe                      = " << cfg.nxe << std::endl;
@@ -215,6 +215,12 @@ static void output_configurations(std::vector<igemm_gtc_tunable_t> &configs, con
     };
 }; 
 
+#ifdef USE_PRECISION_FP16
+static const char *precision = "fp16";
+#else
+static const char *precision = "fp32";
+#endif
+
 int main(int argc, char **argv) 
 {
     if ( argc < 3 ) {
@@ -225,7 +231,7 @@ int main(int argc, char **argv)
     std::string direction( argc > 3 ? argv[3] : "fwd");  
 
     if ( direction != "fwd" && direction != "bwd" ) {
-         fprintf(stderr, "Invalid convolution direction to asigned\n");
+         fprintf(stderr, "Invalid convolution direction specified\n");
          return(-2);
     };
 
@@ -249,6 +255,8 @@ int main(int argc, char **argv)
 
     int count=0; 
     for (const auto& tunable : tunables)  {
+         assert(direction == tunable.direction && std::string(precision) == tunable.precision); 
+
          auto mt = std::make_pair((int)tunable.gemm_m_per_block, (int)tunable.gemm_n_per_block); 
 
 	 it = indexed_configs.find(mt); 
@@ -289,13 +297,6 @@ int main(int argc, char **argv)
 
     fprintf(stdout, "\nSize of the orderred configs array %d\n", (int)ordered_configs.size()); 
 
-#ifdef USE_PRECISION_FP16
-    const char *strPrecision = "\'fp16\'";
-#else
-    const char *strPrecision = "\'fp32\'";
-#endif
-    
-    output_configurations(ordered_configs, direction.c_str(), strPrecision, ofs); 
+    output_configurations(ordered_configs, direction.c_str(), precision, ofs); 
 };
-
 

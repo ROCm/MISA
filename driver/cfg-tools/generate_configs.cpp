@@ -126,7 +126,7 @@ static xdlops_mapping_t xdlops_mappings[] = {
         { 64 , 128,  8 ,  32,  1, 4,  2,  2,  2,  1,  },
         { 64 , 128,  32,  64,  1, 4,  1,  1,  1,  1,  },
         { 64 , 128,  64,  32,  1, 4,  1,  1,  1,  1,  },
-        // { 64 , 128,  32,  32,  2, 4,  1,  1,  1,  1,  },    // this one has blockSize == 512 ?
+        { 64 , 128,  32,  32,  2, 4,  1,  2,  1,  1,  },   
         { 128, 32 ,  32,  8 ,  1, 4,  2,  2,  1,  1,  },
         { 128, 32 ,  16,  16,  4, 4,  2,  2,  1,  1,  },
         { 32 , 128,  8 ,  32,  1, 4,  2,  2,  1,  1,  },
@@ -397,7 +397,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
          for (int nxe=0; nxe < 2; nxe += 1)  {
               cfg.nxe = nxe;
-              for (int nxb=1; nxb < 5; nxb *= 4) {
+              for (int nxb=1; nxb < 3; nxb *= 4) {
                    if ( cfg.gemm_n_per_block % nxb != 0 )
                         continue;
 

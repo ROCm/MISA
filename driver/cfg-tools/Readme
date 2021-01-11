@@ -1,12 +1,13 @@
 
  
-    1. To generate configurations for fwd-fp16 
+    1. To generate configurations for fwd-fp16 or bwd-fp16
 
-       #> generate_configs  ./tmp.config      
+       #> BUILD_FP16_CONFIGS=1 generate_configs fwd ./tmp.config      
+       #> BUILD_FP16_CONFIGS=1 generate_configs bwd ./tmp.config      
 
     2. To re-order the configurations into the sequence that could be used by simple applicability validation
 
-       #> reorder_configs ./input.config  ./output.config
+       #> reorder_configs ./input.config  ./output.config [fwd/bwd]
        #> cp output.config ../../config/igemm_fwd_gtc_gfx908_fp16.config
 
     3. To tailor configurations in one file with specific nxe and nxb (not used by generated configs)
