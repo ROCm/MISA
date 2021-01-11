@@ -39,7 +39,7 @@ IGEMM_GTC_FEAT_LDS_BUFFER_NUM = 2
 IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1 
 IGEMM_GTC_FEAT_MAGIC_DIVISION = 1
 IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
-IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB = 0
+IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB = 1
 IGEMM_GTC_FEAT_USE_DS_WRITE2_b64 = 0
 IGEMM_GTC_FEAT_PACK_INPUT_GLOBAL = 1
 IGEMM_GTC_FP16_USE_ATOMIC_ADD = 1
@@ -217,7 +217,10 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.direction in ('fwd', 'bwd', 'wrw')
         assert self.precision in ('fp32', 'fp16', 'bf16')
         assert self.nxb in (1,4,8,16,32,64,128,256)
-        assert self.nxe in (0,1)
+        if self.direction in ('fwd', 'bwd'):
+            assert self.nxe in (0,1)
+        else:
+            assert self.tensor_b_thread_lengths[3] == (self.nxe if self.nxe != 0 else 1)
 
         # gemm_k_pack static value
         # TODO: make gemm_k_pack to be tunable 
@@ -274,7 +277,7 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.gemm_k_per_block % self.nxb == 0
             self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
             self.unmerge_sub_k = 1
-            self.unmerge_sub_c = self.gemm_n_per_block
+            self.unmerge_sub_c = self.gemm_n_per_block // (self.nxe if self.nxe != 0 else 1)
 
         self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1
@@ -332,7 +335,7 @@ class igemm_gtc_tunable_parameter_t(object):
         # number of loops at least needed for final coalescing store, dicided by LDS size
         # for wrw, if atomic add is implemented, output is 4 bytes length
         output_length_coef = 1
-        if self.direction == 'wrw' and self.gemm_k_global_split == 1 and IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1:
+        if self.direction == 'wrw' and self.gemm_k_global_split == 1 and IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.precision != 'fp32':
             output_length_coef = 2
         self.coalescing_store_groups            = (output_length_coef * self.gemm_m_per_block * self.gemm_n_per_block) // \
                 (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))

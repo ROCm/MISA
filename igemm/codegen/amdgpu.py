@@ -442,7 +442,7 @@ class amd_kernel_code_t(mc_base_t):
 
                 self._emit('.amdhsa_system_vgpr_workitem_id {}'.format(             self.ki.kernel_code.enable_vgpr_workitem_id))
                 self._emit('.amdhsa_next_free_vgpr {}'.format(                      self.ki.kernel_code.workitem_vgpr_count))
-                self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count))
+                self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count - 2 * 3))
 
                 self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
                 self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?

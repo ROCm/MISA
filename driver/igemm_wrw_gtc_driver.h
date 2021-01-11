@@ -150,11 +150,12 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
         int gemm_k_global_split      = tunable->gemm_k_global_split;
+        int e_x                      = tunable->nxe == 0 ? 1 : tunable->nxe;
 
         gemm_k_global_split = update_gemm_k_global_split(arg, tunable);
 
         int gemm_m = k / group ;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (c / group) * y * (((x + e_x - 1) / e_x) * e_x);
 
         int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
@@ -231,7 +232,8 @@ public:
         int gemm_k = n * b;
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
 
-        if((tunable->tensor_b_thread_lengths[2] * tunable->tensor_b_thread_lengths[3] > 1) || (tunable->nxe == 0)){
+        // do not need to check gemm_n when n_c0 == 1; n_c0 = t_c0 * c_c0
+        if((tunable->tensor_b_thread_lengths[2] * tunable->tensor_b_cluster_lengths[2] > 1) || (tunable->nxe == 0)){
             if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
             {
                 return false;
@@ -306,6 +308,7 @@ public:
         assert(c % group == 0 && k % group == 0);
 
         int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
+        int e_x = tunable->nxe == 0 ? 1 : tunable->nxe;
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -314,7 +317,7 @@ public:
         int gemm_k_global_split      = tunable->gemm_k_global_split;
 
         int gemm_m = k / group;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (c / group) * y * (((x + e_x - 1) / e_x) * e_x);
         
 
         int max_grid_size = 1200;
@@ -325,7 +328,7 @@ public:
         
         if (gemm_k_global_split > 0){
             int update_gemm_k_global_split = 1;
-            for (int i = 1; i < 8; i++){
+            for (int i = 1; i < 9; i++){
                 if ((grid_size << i) > max_grid_size){
                     break;
                 }
@@ -379,8 +382,9 @@ public:
         assert(c % group == 0 && k % group == 0);
 
         // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
+        // int e_x = tunable->nxe == 0 ? 1 : tunable->nxe;
         int gemm_m = k / group;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (c / group) * y * x;//(((x + e_x - 1) / e_x) * e_x);
         int gemm_k = n * ho * wo;
 
         int grid_size;
@@ -690,7 +694,7 @@ public:
         karg.gemm_k_global_split  = gemm_k_global_split;
         karg.group         = group;
 
-        printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
+        // printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
         // reduction kernel args
         size_t reduction_per_thread = 8;
@@ -853,10 +857,22 @@ public:
 #if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei_workspace, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        if(gemm_k_global_split > 0){
+            printf("copy workspace\n");
+            hipMemcpy(gemmc_host_check, p_wei_workspace, group * (k / group) * (c / group) * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        }
+        else{
+            printf("copy weight\n");
+            hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float), hipMemcpyDeviceToHost);
+        }
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
-            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
+            float16 *gemmc_host_check_fp16 = (float16 *)gemmc_host_check;
+            float16 check_num0 = gemmc_host_check_fp16[i_check*2];
+            float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
+            float check_num0_fp32 = (float)check_num0;
+            float check_num1_fp32 = (float)check_num1;
+            printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
         }
         printf("workspace debug end \r\n");
         free(gemmc_host_check);

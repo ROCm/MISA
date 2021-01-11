@@ -100,6 +100,7 @@ class ctrl_2d_global_load_t(object):
         self.src_order  = 0           # 0-d0xd1, 1-d1xd0
         self.dst_order  = 0           # 0-d0xd1, 1-d1xd0
         self.data_bytes = 4           # 0-d0xd1, 1-d1xd0
+        self.input_thread_copy_multi_x = 0  # 0-copy 1 x(x in kcyx) dimension, 1-copy more than 1 x(x in kcyx) dimension in one thread
 
 class macro_igemm_2d_global_load_t(macro_base_t):
     # TODO: if need vectorize further LDS write, need shuffle dst gpr while load
@@ -220,6 +221,15 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         self.declare_arg("s_stride_d0")
         self.declare_arg("s_stride_d1")
         self.declare_arg("s_offset")
+        if ctrl.input_thread_copy_multi_x == 1:
+            self.declare_arg("v_tmp3")
+            self.declare_arg("v_in_flag")
+            self.declare_arg("v_in_flag_with_wi")
+            self.declare_arg("v_wei_ix")
+            self.declare_arg("v_in_iwi")
+            self.declare_arg("s_dilation_w")
+            self.declare_arg("s_x")
+            self.declare_arg("s_wi")
 
     def name(self):
         ctrl = self.ctrl
@@ -332,14 +342,38 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
                         if self.s_stride_d1() != "s_immed":
-                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                            if ctrl.input_thread_copy_multi_x == 1:
+                                self._emit(f"v_add_i32 v[{self.v_tmp3()}], v[{self.v_in_iwi()}], s[{self.s_dilation_w()}]")
+                                self._emit(f"v_add_i32 v[{self.v_tmp3()}+1], v[{self.v_tmp3()}+1], 1")
+                                self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_wi()}], v[{self.v_tmp3()}]")
+                                self._emit(f"v_cndmask_b32 v[{self.v_in_flag_with_wi()}], 0, v[{self.v_in_flag()}], vcc")
+                                self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_x()}], v[{self.v_tmp3()}+1]")
+                                self._emit(f"v_cndmask_b32 v[{self.v_in_flag_with_wi()}], 0, v[{self.v_in_flag_with_wi()}], vcc")
+                                self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{self.v_in_flag_with_wi()}]")
+                                self._emit(f"v_add_i32 v[{self.v_tmp3()}+2], v[{self.v_os()}], s[{self.s_stride_d1()}]")
+                                self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_tmp3()}+2", f"{self.s_ptr()}", 0, 0))
+                            else:
+                                self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                         else:
                             self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", 0, ctrl.vector_d1 * ctrl.data_bytes))
                     elif i_d0 == 1 and i_d1 == 0:
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        if ctrl.input_thread_copy_multi_x == 1:
+                            self._emit(f"v_add_i32 v[{self.v_tmp3()}], v[{self.v_tmp3()}], s[{self.s_dilation_w()}]")
+                            self._emit(f"v_add_i32 v[{self.v_tmp3()}+1], v[{self.v_tmp3()}+1], 1")
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_wi()}], v[{self.v_tmp3()}]")
+                            self._emit(f"v_cndmask_b32 v[{self.v_in_flag_with_wi()}], 0, v[{self.v_in_flag()}], vcc")
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_x()}], v[{self.v_tmp3()}+1]")
+                            self._emit(f"v_cndmask_b32 v[{self.v_in_flag_with_wi()}], 0, v[{self.v_in_flag_with_wi()}], vcc")
+                            self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{self.v_in_flag_with_wi()}]")
+                            self._emit(f"v_add_i32 v[{self.v_tmp3()}+2], v[{self.v_os()}], s[{self.s_offset()}+{i_soffset}]")
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_tmp3()}+2", f"{self.s_ptr()}", 0, 0))
+                        else:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*(1 if ctrl.vector_d1 == 1 else num_vgpr_per_vector)}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
+                    if ctrl.input_thread_copy_multi_x == 1:
+                        self._emit(f"s_mov_b64 exec, -1")
                     i_dst = i_dst + 1
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
