@@ -990,70 +990,66 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
 
             issue_cnt = 0
             if ctrl.length_d0 > 1 and ctrl.length_d1 > 1:      ## two dimensions having slice to copy
-                if ctrl.pack_d0:
+                if ctrl.pack_d0:   ## d0 is the lower gemm_k dim (k1e), which can be packed as vector into gemm_m/gemm_n
                     assert ctrl.vector_d1 == 1,  "vector_d1 != 1 should not occur!"
                     assert ctrl.data_bytes < 4, "fp32 does not using pack_d0"
                     
                     if ctrl.vgpr_packed: 
+                        print(f" -- call pack_d0 -- vgpr packed --")
                         if ctrl.src_order == 0:
                             if ctrl.length_d0 == 2:    ## length_d0 is less than lds_gemm_k_pack 
-                                ds_write = inst_ds_write_t(2*ctrl.data_bytes)
+                                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 2, data_byte, ctrl.stride_d1)
                                 for i_d1 in range(ctrl.length_d1 // 2):
                                     self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(0)}] v[{self.v_src()}+{i_d1}] v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
                                     self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d1}], 16, v[{self.v_src()}+{i_d1}]')
                                     self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}], 16, v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
                                     self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(1)}] v[{self.v_src()}+{i_d1}] v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
                                     i_offset = 2 * i_d1 * ctrl.stride_d1
-                                    self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp(0)}', i_offset))
-                                    i_offset += ctrl.stride_d1
-                                    self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp(1)}', i_offset))
+                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
+                                    issue_cnt += ds_write2.get_issues()
                             else:
                                 assert lds_gemm_k_pack == 4, "other gemm_k_pack not considered"
-                                ds_write = inst_ds_write_t(4*ctrl.data_bytes)
+                                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 4, data_byte, ctrl.stride_d1)
                                 for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
                                     for i_d1 in range(ctrl.length_d1 // 2):
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(0)}], v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2) + i_d1}]')
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(1)}], v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2) + i_d1}], v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2) + i_d1}]') 
                                         i_offset = (i_d0 // lds_gemm_k_pack) * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1
-                                        self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}]')
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2)+i_d1}]') 
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2)+i_d1}]')
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2)+i_d1}]')
-                                        self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(0)}], v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2) + i_d1}]')
-                                        self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(1)}], v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2) + i_d1}], v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2) + i_d1}]') 
-                                        i_offset += ctrl.stride_d1
-                                        self._emit(ds_write(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
+                                        self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(2)}], v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2) + i_d1}]')
+                                        self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(3)}], v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2) + i_d1}], v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2) + i_d1}]') 
+                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
+                                        issue_cnt += ds_write2.get_issues()
                         else:
                             pass
                     else:
-                        if ctrl.src_order == 0: 
-                            num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
+                        print(f" -- call pack_d0 -- vgpr not packed --")
+                        num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
+                        ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
 
-                            for i_d0 in range(ctrl.length_d0):
-                                i_offset0 = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
-                                for i_d1 in range(num_vector_d1 // 2):
-                                    i_offset1 = 2 * i_d1 * ctrl.stride_d1
-                                    if ctrl.src_order == 0:
-                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.length_d1+2*i_d1}', i_offset0+i_offset1))
-                                    else:
-                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1*ctrl.length_d0+i_d0}', f'{self.v_src()}+{(2*i_d1+1)*ctrl.length_d0+i_d0}', i_offset0+i_offset1))
-                                    issue_cnt += ds_write2.get_issues()
-                        else:
-                            pass
-                else:
+                        for i_d0 in range(ctrl.length_d0):
+                            i_offset0 = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                            for i_d1 in range(num_vector_d1 // 2):
+                                i_offset1 = 2 * i_d1 * ctrl.stride_d1
+                                if ctrl.src_order == 0:
+                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*ctrl.length_d1+2*i_d1}', i_offset0+i_offset1))
+                                else:
+                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1*ctrl.length_d0+i_d0}', f'{self.v_src()}+{(2*i_d1+1)*ctrl.length_d0+i_d0}', i_offset0+i_offset1))
+                                issue_cnt += ds_write2.get_issues()
+                else:              ## d0 is the higher gemm_k dim (k0), which can only be packed into gemm_m/gemm_n for each point
                     if ctrl.src_order == 0:
+                        print(f" -- call no pack_d0 ")
                         if ctrl.vgpr_packed and ctrl.vector_d1 == 1:       ## This is the case where the packed data is not written to LDS continuously
                             num_vector_d1 = ctrl.length_d1
-                            ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 1, data_byte, ctrl.stride_d1)
                             for i_d0 in range(ctrl.length_d0):
                                 for i_d1 in range(num_vector_d1 // 2):
                                     i_offset = i_d0 * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1
-                                    self._emit(f'v_and_b32 v[{ctrl.v_tmp(0)}], 0xffff, v[{self.v_src()}+{i_d0*num_vector_d1//2+i_d1}]')
-                                    self._emit(f'v_lshrrev_b32 v[{ctrl.v_tmp(1)}], 16, v[{self.v_src()}+{i_d0*num_vector_d1//2+i_d1}]')
-                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
-                                    issue_cnt += ds_write2.get_issues()
+                                    self._emit(f'ds_write_b16 v[{self.v_sst_os()}], v[{self.v_src()}+{i_d0*num_vector_d1//2+i_d1}], offset:{i_offset}')
+                                    self._emit(f'ds_write_b16_d16_hi v[{self.v_sst_os()}], v[{self.v_src()}+{i_d0*num_vector_d1//2+i_d1}], offset:{i_offset+ctrl.stride_d1}')
+                                    issue_cnt += 2
                         elif ctrl.length_d1 == ctrl.vector_d1:    
                             ds_write = inst_ds_write_t(ctrl.vector_d1 * ctrl.data_bytes)
                             for i_d0 in range(ctrl.length_d0):
