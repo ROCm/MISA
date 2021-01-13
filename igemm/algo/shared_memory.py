@@ -779,6 +779,7 @@ class ctrl_2d_shared_store_t(object):
         self.v_tmp = None   # used when order is 1 and consider shuffle
         self.data_bytes = 4
         self.lds_gemm_k_pack = 1
+        self.half_vgpr_pack = 0
 
     def serialize(self):
         return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, vector_d1:{self.vector_d1}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
@@ -951,18 +952,39 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                #print(self.v_src())
-                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                print(self.v_src())
+                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
-                #print(f"ctrl.src_order={ctrl.src_order}")
+                print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
                     for i_d0 in range(ctrl.length_d0):
-                        for i_d1 in range(num_vector_d1 // 2):
-                            i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1 
-                            self._emit(ds_write2(f'{self.v_sst_os()}',
+                        if ctrl.half_vgpr_pack == 1:
+                            for i_d1 in range(num_vector_d1 // 2):
+                                self._emit(f"v_pack_b32_f16 v[{self.v_src()}+{i_d1}], v[{self.v_src()}+{i_d1*2}], v[{self.v_src()}+{i_d1*2+1}]")
+
+                            packed_vector_d1 = math.gcd(num_vector_d1 // 2, 4)
+                            num_vector_d1 = ctrl.length_d1 // packed_vector_d1
+
+                            if num_vector_d1 > 1:
+                                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, packed_vector_d1, data_byte, ctrl.stride_d1)
+                                for i_d1 in range(num_vector_d1 // 2):
+                                    i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1 
+                                    self._emit(ds_write2(f'{self.v_sst_os()}',
+                                        f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + i_d1)*packed_vector_d1}',
+                                        i_offset))
+                                    issue_cnt += ds_write2.get_issues(i_offset)
+                            else:
+                                ds_write = inst_ds_write_t(packed_vector_d1 * data_byte)
+                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d0*packed_vector_d1}', i_offset))
+                                issue_cnt += ds_write.get_issues()
+                        else:
+                            for i_d1 in range(num_vector_d1 // 2):
+                                i_offset = i_d0 // lds_gemm_k_pack * ctrl.stride_d0 + (i_d0 % lds_gemm_k_pack) * data_byte + 2* i_d1 * ctrl.stride_d1 
+                                self._emit(ds_write2(f'{self.v_sst_os()}',
                                     f'{self.v_src()}+{(i_d0 * ctrl.length_d1 + 2*i_d1)*ctrl.vector_d1}',
                                     i_offset))
-                            issue_cnt += ds_write2.get_issues(i_offset)
+                                issue_cnt += ds_write2.get_issues(i_offset)
                 else:
                     # assert False, "this order, length_d1 and ctrl.vector_d1 has no means if not equal"
                     # assert ctrl.v_tmp != None
