@@ -398,9 +398,6 @@ void generate_bwd_configs(const char *precision, const char *config_file)
          for (int nxe=0; nxe < 2; nxe += 1)  {
               cfg.nxe = nxe;
               for (int nxb=1; nxb < 3; nxb *= 4) {
-                   if ( cfg.gemm_n_per_block % nxb != 0 )
-                        continue;
-
                    cfg.nxb = nxb;
 
                    int unmerge_sub_n = cfg.gemm_n_per_block / cfg.nxb;    // assuming gemm_n_unmerge_cluster == 0 is used for generated configs 
@@ -435,6 +432,9 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 			cfg.tensor_b_cluster_lengths[2] = 1; 
 
                         if ( cfg.nxe == 0 ) {
+                            if ( cfg.gemm_n_per_block % nxb != 0 )   // only check this for nxe == 0 since for nxe == 1,  nhw is padded according to nxb
+                                 continue;
+                            
                             // use dimension k0 for thread slice for gemm_k
                             for(int sliceSize=1; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = sliceSize;
@@ -572,10 +572,10 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
                                     tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[3] == 1 ?
                                                              cfg.tensor_a_thread_lengths[1] :
-                                                             cfg.tensor_a_thread_lengths[0] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size));
+                                                             cfg.tensor_a_thread_lengths[1] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size));
                                     tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[3] == 1 ?
                                                              cfg.tensor_b_thread_lengths[1] :
-                                                             cfg.tensor_b_thread_lengths[0] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size));
+                                                             cfg.tensor_b_thread_lengths[1] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size));
 
                                     // Limitation due to large sgpr consumption in precache soffset
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
