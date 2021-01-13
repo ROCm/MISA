@@ -1247,7 +1247,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             i_issues =  (i_gst // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) + 1
                             i_issue_list = issue_list[i_issues:]
                             i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
-                            self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
+                            if i_issue_cnt > 15:
+                                self._emit(f"s_waitcnt lgkmcnt(15)")
+                            else:
+                                self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
                     if s_k is not None:
                         self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")

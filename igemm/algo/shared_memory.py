@@ -995,7 +995,6 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     assert ctrl.data_bytes < 4, "fp32 does not using pack_d0"
                     
                     if ctrl.vgpr_packed: 
-                        print(f" -- call pack_d0 -- vgpr packed --")
                         if ctrl.src_order == 0:
                             if ctrl.length_d0 == 2:    ## length_d0 is less than lds_gemm_k_pack 
                                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 2, data_byte, ctrl.stride_d1)
@@ -1026,7 +1025,6 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         else:
                             pass
                     else:
-                        print(f" -- call pack_d0 -- vgpr not packed --")
                         num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
                         ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
 
@@ -1041,8 +1039,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                                 issue_cnt += ds_write2.get_issues()
                 else:              ## d0 is the higher gemm_k dim (k0), which can only be packed into gemm_m/gemm_n for each point
                     if ctrl.src_order == 0:
-                        print(f" -- call no pack_d0 ")
-                        if ctrl.vgpr_packed and ctrl.vector_d1 == 1:       ## This is the case where the packed data is not written to LDS continuously
+                        if ctrl.vgpr_packed and ctrl.vector_d1 == 1:       ## This is the case where the packed data is not written to LDS contiguously
                             num_vector_d1 = ctrl.length_d1
                             for i_d0 in range(ctrl.length_d0):
                                 for i_d1 in range(num_vector_d1 // 2):
