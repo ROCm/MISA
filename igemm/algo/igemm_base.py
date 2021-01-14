@@ -36,7 +36,7 @@ IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
 IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
-IGEMM_GTC_FEAT_MAGIC_DIVISION = 1
+IGEMM_GTC_FEAT_MAGIC_DIVISION = 0
 IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
@@ -185,7 +185,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
 
-        default_source_access_order             = IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M if self.direction == 'fwd' \
+        default_source_access_order             = IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M if (self.direction == 'fwd' and self.tensor_layout == 'nchw') \
                                                         else IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N
         self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', default_source_access_order)
 
@@ -227,9 +227,16 @@ class igemm_gtc_tunable_parameter_t(object):
 
         if self.direction == 'fwd':
             assert self.gemm_n_per_block % self.nxb == 0
-            self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
-            self.unmerge_sub_k = 1                             # not used
-            self.unmerge_sub_c = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
+            if self.tensor_layout == 'nchw':
+                self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
+                self.unmerge_sub_k = 1                          # not used
+                self.unmerge_sub_c = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
+            elif self.tensor_layout == 'nhwc':
+                self.unmerge_sub_n = self.gemm_m_per_block // self.nxb
+                self.unmerge_sub_k = 1                          # not used
+                self.unmerge_sub_c = 1                          # not used
+            else:
+                assert False
         elif self.direction == 'bwd':
             assert self.gemm_n_per_block % self.nxb == 0
             self.unmerge_sub_n = self.gemm_n_per_block // self.nxb

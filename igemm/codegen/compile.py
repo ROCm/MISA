@@ -31,7 +31,7 @@ import os
 
 IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 IGEMM_HOST_USE_XDNN = False
-IGEMM_HOST_USE_MAGIC_DIV = True
+IGEMM_HOST_USE_MAGIC_DIV = False
 IGEMM_HOST_USE_HIPCC = True # hipclang perfer use hipcc to compile host code
 
 def _check_hip_clang():
