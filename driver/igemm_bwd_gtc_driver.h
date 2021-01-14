@@ -426,6 +426,10 @@ public:
             return false;
         }
 
+        // configs with nxe == 1 and tensor_a_thread_lengths[3] > 1 can only be used with x=y=1
+        if ( tunable->nxe == 1 && tunable->tensor_a_thread_lengths[3] > 1 && (x > 1 || y > 1) ) 
+             return false; 
+
         return true;
     }
 
