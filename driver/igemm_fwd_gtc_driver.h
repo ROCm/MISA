@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -148,11 +148,12 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m = k / group;
+        int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
         int gemm_n = n * b;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
@@ -187,9 +188,11 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        int gemm_m                   = k / group;
+        int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
         int gemm_n                   = n * b;
         int gemm_k                   = (c / group) * y * x;
+
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
         // support pad to modulo, hence only check when nxe is 0
         if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
@@ -211,10 +214,21 @@ public:
             return false;
         }
 
-        if(nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if((nxe == 0) && !unit_conv){
+            return false;
+        }
+
+        // input vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
+        }
+
+        // weight vector load limitation, c1e
+        if(tunable->tensor_a_thread_lengths[1] > 1 &&
+                gemm_k % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
         }
 
         // if tb_c1e > 1, only 1x1 case is runable, it can not check gemm_k_padding either.
@@ -233,7 +247,7 @@ public:
             //printf("this kernel can not support this config\n");
             return result;
         }
-
+        
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -283,6 +297,10 @@ public:
         karg.y             = y;
         karg.x             = x;
         karg.group         = group;
+
+        int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
+        int gemm_n = n * b;
+
 #if USE_MAGIC_DIV
         {
             // init magic division parameters
@@ -291,7 +309,7 @@ public:
             uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
             uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
 
-            magic_div_u32_t mdiv_0 = magic_div_u32_gen(tunable->source_access_order == 0 ? ((n * b) / gemm_n_per_block) : ((k / group) / gemm_m_per_block));
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen(tunable->source_access_order == 0 ? ((n * b) / gemm_n_per_block) : ((gemm_m) / gemm_m_per_block));
             magic_div_u32_t mdiv_1 = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ? 
                                                                             b * unmerge_sub_n1 / nb_n1b :
                                                                             (n / nb_n0) * b / nb_n1b   );
@@ -299,7 +317,8 @@ public:
             magic_div_u32_t mdiv_3 = magic_div_u32_gen(x);
             magic_div_u32_t mdiv_4 = magic_div_u32_gen(b);
             magic_div_u32_t mdiv_5 = magic_div_u32_gen(wo);
-            magic_div_u32_t mdiv_6 = magic_div_u32_gen((n * b * (k / group)) / (gemm_m_per_block * gemm_n_per_block));
+            magic_div_u32_t mdiv_6 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
 
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;

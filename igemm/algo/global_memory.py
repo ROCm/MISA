@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,6 @@
 from __future__ import print_function
 import sys
 from ..codegen import *
-
 
 class inst_buffer_load_dword_t(object):
     ''' TODO: this implementation always offen '''

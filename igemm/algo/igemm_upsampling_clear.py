@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -124,7 +124,7 @@ class igemm_upsampling_clear_t(mc_base_t):
             self.k_pad_w         = sym_t("k_pad_w",         56)
             self.k_y             = sym_t("k_y",             60)
             self.k_x             = sym_t("k_x",             64)
-            self.k___pack_0      = sym_t("k___pack_0",      68)
+            self.k_group         = sym_t("k_group",         68)
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self.k_magic_0       = sym_t("k_magic_0",       72)
                 self.k_magic_1       = sym_t("k_magic_1",       76)
@@ -165,7 +165,7 @@ class igemm_upsampling_clear_t(mc_base_t):
             self.s_pad_w                   = sym_t("s_pad_w"                  ,20)
             self.s_y                       = sym_t("s_y"                      ,21)
             self.s_x                       = sym_t("s_x"                      ,22)
-            self.s__pack_0                 = sym_t("s___pack_0"               ,23)
+            self.s_group                   = sym_t("s_group"                  ,23)
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self.s_magic_0             = sym_t("s_magic_0"                ,24)
                 self.s_magic_1             = sym_t("s_magic_1"                ,25)
@@ -252,7 +252,7 @@ class igemm_upsampling_clear_t(mc_base_t):
             int pad_w;
             int y;
             int x;
-            int __pack_0;
+            int group;
             int magic_0;            // denom of wi
             int magic_1;            // denom of stride_h
             int magic_2;            // denom of stride_w
@@ -276,7 +276,7 @@ class igemm_upsampling_clear_t(mc_base_t):
         kas.append(amdgpu_kernel_arg_t('pad_w'         , 4,  56, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('y'             , 4,  60, 'by_value', 'i32'))
         kas.append(amdgpu_kernel_arg_t('x'             , 4,  64, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('__pack_0'      , 4,  68, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('group'         , 4,  68, 'by_value', 'i32'))
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
             kas.append(amdgpu_kernel_arg_t('magic_0'       , 4,  72, 'by_value', 'i32'))
             kas.append(amdgpu_kernel_arg_t('magic_1'       , 4,  76, 'by_value', 'i32'))

@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -1047,7 +1047,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
-    def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
+    def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
+
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
         def flatten(x):
@@ -1058,7 +1059,14 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
-        s_tmp4 = sym_t(s_tmp4)
+        s_tmp6 = sym_t(s_tmp6)
+
+        if s_k is not None:
+            s_k = sym_t(s_k)
+            v_cur_k = sym_t(v_cur_k)
+            s_block_gtc_ik = sym_t(s_block_gtc_ik)
+            v_co_sub_m_index = sym_t(v_co_sub_m_index)
+            v_tmp0 = sym_t(v_tmp0)
 
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
@@ -1085,7 +1093,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
        
 
-        s_out_offset_itr = sym_t(s_tmp4(0))
+        s_out_offset_itr = sym_t(s_tmp6(0))
         # s_thread_m_stride = sym_t(s_tmp4(1))
 
         if ctrl.gemm_m_order == IGEMM_COALESCING_GEMM_M_ORDER_M0_M1:
@@ -1189,9 +1197,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")
                     comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1})"
                     if s_gemm_m0_stride is not None:
-                        self._emit(f"s_mul_i32 s[{s_tmp4(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
-                        self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
-                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(2)}], s[{s_tmp4(3)}]" + comments)
+                        self._emit(f"s_mul_i32 s[{s_tmp6(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
+                        self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
+                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(2)}], s[{s_tmp6(3)}]" + comments)
                         if not no_s_out_offset:
                             self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_out_offset}], s[{s_out_offset_itr()}] ")
                     else:
@@ -1201,19 +1209,26 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         if i_m == 0:
                             if no_s_out_offset:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
+                                if s_k is not None:
+                                    self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                    self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
                             else:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
                         elif i_m == 1:
                             if no_s_out_offset:
                                 self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
+                                if s_k is not None:
+                                    self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
                             else:
                                 self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                         else:
                             if no_s_out_offset:
                                 self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
+                                if s_k is not None:
+                                    self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
                             else:
-                                self._emit(f"s_mul_i32 s[{s_tmp4(3)}], {i_m}, s[{s_gemm_m1_stride}]")
-                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp4(3)}], s[{s_out_offset}]" + comments)
+                                self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
+                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
 
                 emit_calculate_s_out_offset_itr(m_index_start_per_group, m0_index_start_per_group, m1_index_start_per_group)
                 i_m0_start, i_m1_start =  m0_index_start_per_group, m1_index_start_per_group
@@ -1225,7 +1240,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                             self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
+                    if s_k is not None:
+                        self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                        self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                     self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    if s_k is not None:
+                        self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                         i_m = m_index_per_group[i_group][0][i_gst+1]
                         # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")
