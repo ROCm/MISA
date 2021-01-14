@@ -91,10 +91,10 @@ struct fwdSorterClass
      if ( cfg1.nxb < cfg2.nxb ) 
 	  return(false); 
 
-     if ( cfg1.wave_tile_k < cfg2.wave_tile_k ) 
+     if ( cfg1.wave_tile_k > cfg2.wave_tile_k ) 
 	  return(true); 
 
-     if ( cfg1.wave_tile_k > cfg2.wave_tile_k ) 
+     if ( cfg1.wave_tile_k < cfg2.wave_tile_k ) 
 	  return(true); 
 
      return(false); 
@@ -146,6 +146,12 @@ struct bwdSorterClass
      if ( cfg1.tensor_b_thread_lengths[3] > cfg2.tensor_b_thread_lengths[3] ) 
 	  return(true); 
      if ( cfg1.tensor_b_thread_lengths[3] < cfg2.tensor_b_thread_lengths[3] ) 
+	  return(false); 
+
+     // The config which can use vector load/store is preferred 
+     if ( cfg1.tensor_a_thread_lengths[3] > cfg2.tensor_a_thread_lengths[3] ) 
+	  return(true); 
+     if ( cfg1.tensor_a_thread_lengths[3] < cfg2.tensor_a_thread_lengths[3] ) 
 	  return(false); 
 
      // for bwd-fp16, having thread slice on k0 or k1e has differrent meaning (pack_d0 or not)

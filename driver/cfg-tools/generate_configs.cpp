@@ -363,7 +363,23 @@ void generate_fwd_configs(const char *precision, const char *config_file)
 };
 
 // try to adjust this if the generator codes improved the usage of sgprs
-#define MAX_SOFFSET_SGPRS 32 
+#define MAX_SOFFSET_SGPRS 33 
+
+// d0_length is the length of d0-dimension 
+// d1_length is the length os d1-dimension
+static int get_num_soffset_sgprs(int d0_length, int d1_length, int d1_vector_size)
+{
+    assert(d0_length > 0 && d1_length > 0); 
+
+    int d1_num_vectors = d1_length / std::min<int>(d1_length, d1_vector_size); 
+
+    if ( d0_length == 1 )
+	 return( std::max<int>(d1_num_vectors-2, 0) ); 
+    if ( d1_num_vectors == 1 )
+	 return( std::max<int>(d0_length-2, 0) ); 
+
+    return( std::max<int>(d0_length*d1_num_vectors-3, 0) ); 
+}; 
 
 void generate_bwd_configs(const char *precision, const char *config_file)
 {
@@ -422,7 +438,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                              continue;
 
                         // We have the following assumption to generate configs:
-			// 1) tensor_a and tensor_b are completely same in gemm_k dimensions (k0, k1e)
+			// 1) tensor_a and tensor_b tries to be same in gemm_k dimensions (k0, k1e) 
 			// 2) cluster dimension is always the lower dimension of gemm_k/gemm_m/gemm_n (k1e/c1/n1b)
 			// 3) For fp16, since gemm_k_pack is used, the per-block size on k1e should not be less than gemm_k_pack size 4 
 		
@@ -432,6 +448,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 			cfg.tensor_b_cluster_lengths[2] = 1; 
 
                         if ( cfg.nxe == 0 ) {
+/*				
                             if ( cfg.gemm_n_per_block % nxb != 0 )   // only check this for nxe == 0 since for nxe == 1,  nhw is padded according to nxb
                                  continue;
                             
@@ -466,8 +483,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     cfg.tensor_a_thread_lengths[3] = 1;
                                     cfg.tensor_b_thread_lengths[3] = 1;
 
-                                    tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[0] * cfg.tensor_a_thread_lengths[2];
-                                    tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[0] * cfg.tensor_b_thread_lengths[2];
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[2], 1); 
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1); 
 
                                     // Limitation due to large sgpr consumption in precache soffset
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
@@ -494,12 +511,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 			                 (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
 				          break; 
 
-                                    tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[3] == 1 ? 
-				     	                     cfg.tensor_a_thread_lengths[0] : 
-					                     cfg.tensor_a_thread_lengths[0] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size)); 
-                                    tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[3] == 1 ?
-			                                     cfg.tensor_b_thread_lengths[0] :
-						             cfg.tensor_b_thread_lengths[0] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size)); 
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size); 
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size); 
 
                                     // Limitation due to large sgpr consumption in precache soffset
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
@@ -540,8 +553,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     cfg.tensor_a_thread_lengths[3] = 1;
                                     cfg.tensor_b_thread_lengths[3] = 1;
 
-                                    tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[1] * cfg.tensor_a_thread_lengths[2];
-                                    tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[1] * cfg.tensor_b_thread_lengths[2];
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[2], 1);
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[1], cfg.tensor_b_thread_lengths[2], 1);
 
                                     // Limitation due to large sgpr consumption in precache soffset
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
@@ -570,12 +583,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                          (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
                                          break;
 
-                                    tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[3] == 1 ?
-                                                             cfg.tensor_a_thread_lengths[1] :
-                                                             cfg.tensor_a_thread_lengths[1] * (cfg.tensor_a_thread_lengths[3] / std::min<int>(cfg.tensor_a_thread_lengths[3], max_vector_size));
-                                    tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[3] == 1 ?
-                                                             cfg.tensor_b_thread_lengths[1] :
-                                                             cfg.tensor_b_thread_lengths[1] * (cfg.tensor_b_thread_lengths[3] / std::min<int>(cfg.tensor_b_thread_lengths[3], max_vector_size));
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[3], max_vector_size); 
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[1], cfg.tensor_b_thread_lengths[3], max_vector_size);
 
                                     // Limitation due to large sgpr consumption in precache soffset
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
@@ -584,17 +593,13 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     configs.push_back(cfg);
                                 } while(0);
                             };   // end of for(...)
+*/			   
 		        }
 			else { 
-			    // with nxe == 1, vector load/store could not be used with n1b and c1 and k1e
-			    // So, tensor_a_thread_length[1], tensor_b_thread_length[1], tensor_a_thread_length[3], tensor_b_thread_length[3] 
-			    // are forced to be 1
+			    // with nxe == 1, vector load can be used with Wei on dim-c1 when x == y == 1, wo we still need to generate configs where tensor_a_thread_length[3] > 1.
+			    // for tensor_b, we only generate configs where tensor_b_thread_length[1], tensor_b_thread_length[3] are forced to be 1
 			   
-                            cfg.tensor_a_thread_lengths[3] = 1; 
-			    cfg.tensor_b_thread_lengths[3] = 1;
-
-                            // use dimension k0 for thread slice for gemm_k
-			    // use dimension c0/n0 for thread slice for gemm_m/gemm_n
+                            // use dimension k0 for thread slice for gemm_k of tensor_a
                             for(int sliceSize=1; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = sliceSize; 
 				cfg.tensor_a_thread_lengths[1] = 1; 
@@ -607,29 +612,107 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 				     continue; 
 
 				cfg.tensor_a_cluster_lengths[3] = blockSize / cfg.tensor_a_cluster_lengths[1]; 
-
                                 cfg.tensor_b_cluster_lengths[1] = cfg.tensor_a_cluster_lengths[1]; 
                                 cfg.tensor_b_cluster_lengths[3] = cfg.tensor_a_cluster_lengths[3]; 
-                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0]; 
-                                cfg.tensor_b_thread_lengths[1] = cfg.tensor_a_thread_lengths[1]; 
-                                
+
                                 if ( cfg.tensor_a_cluster_lengths[3] > cfg.gemm_m_per_block  || cfg.tensor_b_cluster_lengths[3] > cfg.gemm_n_per_block )
-				     continue; 
-
-                                cfg.tensor_a_thread_lengths[2] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3]; 
-                                cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3]; 
-
-                                tensor_a_soffset_sgprs = cfg.tensor_a_thread_lengths[0] * cfg.tensor_a_thread_lengths[2];
-                                tensor_b_soffset_sgprs = cfg.tensor_b_thread_lengths[0] * cfg.tensor_b_thread_lengths[2];
-                         
-                                // This is needed since some configurations consume too many scale registers
-                                if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
-				     continue; 
-			        	
-                                if ( unmerge_sub_n % cfg.tensor_b_thread_lengths[2] != 0) 
 			             continue; 
 
-                                configs.push_back(cfg); 
+			        // use dimension c0/n0 for thread slice for gemm_m/gemm_n
+                                do {
+                                    cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0]; 
+                                    cfg.tensor_b_thread_lengths[1] = 1; 
+                                
+                                    cfg.tensor_a_thread_lengths[2] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3]; 
+                                    cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3]; 
+                                    cfg.tensor_a_thread_lengths[3] = 1; 
+                                    cfg.tensor_b_thread_lengths[3] = 1; 
+
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[2], 1);
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1);
+                         
+                                    // This is needed since some configurations consume too many scale registers
+                                    if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+				         break; 
+			        	
+                                    if ( unmerge_sub_n % cfg.tensor_b_thread_lengths[2] != 0) 
+			                 break; 
+
+                                    configs.push_back(cfg); 
+                                } while(0); 
+
+                                // use dimension c1/n0 for thread slice for gemm_m/gemm_n
+                                do {
+                                    cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0];
+                                    cfg.tensor_b_thread_lengths[1] = 1;
+
+                                    cfg.tensor_a_thread_lengths[3] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
+                                    cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];
+                                    cfg.tensor_a_thread_lengths[2] = 1; 
+                                    cfg.tensor_b_thread_lengths[3] = 1; 
+
+                                    if ( cfg.tensor_a_thread_lengths[3] == 1) 
+					 break; 
+
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size);
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1);
+
+                                    // This is needed since some configurations consume too many scale registers
+                                    if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                         break;
+
+                                    if ( unmerge_sub_n % cfg.tensor_b_thread_lengths[2] != 0)
+                                         break;
+
+                                    configs.push_back(cfg);
+                                } while(0);
+			    }; 
+
+                            // use dimension k1e for thread slice for gemm_K of tensor_a 
+			    for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
+                                cfg.tensor_a_thread_lengths[0] = 1;
+                                cfg.tensor_a_thread_lengths[1] = sliceSize;
+                                cfg.tensor_a_cluster_lengths[1] = cfg.gemm_k_per_block / sliceSize;
+
+                                int n_k1e = cfg.tensor_a_thread_lengths[1] * cfg.tensor_a_cluster_lengths[1];
+
+                                // this is a situation difficult to handle, so just give it up
+                                if ( std::string(precision) == "fp16" && n_k1e < 4 )
+                                     continue;
+
+                                cfg.tensor_a_cluster_lengths[3] = blockSize / cfg.tensor_a_cluster_lengths[1];
+                                cfg.tensor_b_cluster_lengths[1] = cfg.tensor_a_cluster_lengths[1];
+                                cfg.tensor_b_cluster_lengths[3] = cfg.tensor_a_cluster_lengths[3];
+
+                                if ( cfg.tensor_a_cluster_lengths[3] > cfg.gemm_m_per_block  || cfg.tensor_b_cluster_lengths[3] > cfg.gemm_n_per_block )
+                                     continue;
+
+                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[1];
+                                cfg.tensor_b_thread_lengths[1] = 1;
+
+                                // use dimension c1/n0 for thread slice for gemm_m/gemm_n
+                                do {
+                                    cfg.tensor_a_thread_lengths[3] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
+                                    cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];
+                                    cfg.tensor_a_thread_lengths[2] = 1; 
+                                    cfg.tensor_b_thread_lengths[3] = 1; 
+
+                                    // we don't need this config 
+                                    if ( cfg.tensor_a_thread_lengths[3] == 1)
+                                         break;
+
+                                    tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[3], max_vector_size);
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1);
+
+                                    // This is needed since some configurations consume too many scale registers
+                                    if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
+                                         break;
+
+                                    if ( unmerge_sub_n % cfg.tensor_b_thread_lengths[2] != 0)
+                                         break;
+
+                                    configs.push_back(cfg);
+                                } while(0);
 			    }; 
 		        }; 
                    };
