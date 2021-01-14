@@ -209,7 +209,7 @@ class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(macro_base_t):
         self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c1()}], v[{self.v_in_os_base()}]")
         # self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k_c1()}], v[{self.v_wei_os_base()}]")
 
-class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_tb_c0_gt_1_t(macro_base_t):
+class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(macro_base_t):
     def __init__(self, mc, tunable, inline = False):
         macro_base_t.__init__(self, mc, inline)
         self.tunable = tunable
@@ -1163,7 +1163,7 @@ class igemm_fwd_gtc_t(mc_base_t):
         move_slice_window_ta = macro_igemm_fwd_gtc_move_slice_window_ta_t(self.mc, self.tunable, inline)
         if self.tunable.nxe != 0:
             if self.tunable.tensor_b_thread_lengths[0] > 1:
-                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_tb_c0_gt_1_t(self.mc, self.tunable, inline)
+                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(self.mc, self.tunable, inline)
             else:
                 return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(self.mc, self.tunable, inline)
         else:
