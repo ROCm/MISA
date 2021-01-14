@@ -1051,7 +1051,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         num_data_per_vgpr = 4 // ctrl_wei_gld.data_bytes
         ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * num_data_per_vgpr) if t_n1b != 1 else 1
-        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * num_data_per_vgpr) if self.tunable.nxe == 0 else 1
+        ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * num_data_per_vgpr)
 
         print(f"out_gld.vector_d1 = {ctrl_out_gld.vector_d1}, wei_gld.vector_d1 = {ctrl_wei_gld.vector_d1}")
 
