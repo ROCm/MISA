@@ -235,6 +235,11 @@ public:
         if(tunable->tensor_b_thread_lengths[1] > 1 && (( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
             return false;
         }
+
+        // if t_c0 > 1, need to check gemmk per block
+        if(tunable->tensor_b_thread_lengths[0] > 1 && (gemm_k % gemm_k_per_block != 0)){
+            return false;
+        }
         return true;
     }
 
