@@ -164,6 +164,7 @@ struct bwdSorterClass
   };
 } bwdSorterObj;
 
+
 static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const char *strDirection, const char *strPrecision, std::ostream &myout)
 {
          myout << "#--------------------------- " << cfg.gemm_m_per_block << "x" << cfg.gemm_n_per_block << std::endl;
@@ -181,25 +182,27 @@ static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const c
          myout << "wave_tile_k              = " << cfg.wave_tile_k << std::endl;
 #endif
 
+         const char *tensor_a_comment = std::string(strDirection) == "fwd" ? "       # C0xC1ExK0xK1": "       # k0xk1ExC0xC1";
+         const char *tensor_b_comment = std::string(strDirection) == "fwd" ? "       # C0xC1ExK0xK1": "       # k0xk1ExN0xN1b";
+
          myout << "tensor_a_thread_lengths  = [" << cfg.tensor_a_thread_lengths[0] <<  ", " << cfg.tensor_a_thread_lengths[1] << ", ";
-         myout << cfg.tensor_a_thread_lengths[2] << ", " << cfg.tensor_a_thread_lengths[3]   << "]" << "       # C0xC1ExK0xK1" << std::endl;
+         myout << cfg.tensor_a_thread_lengths[2] << ", " << cfg.tensor_a_thread_lengths[3]   << "]" << tensor_a_comment << std::endl;
 
          myout << "tensor_a_cluster_lengths = [" << cfg.tensor_a_cluster_lengths[0] << ", " << cfg.tensor_a_cluster_lengths[1] << ", ";
-         myout << cfg.tensor_a_cluster_lengths[2] << ", " << cfg.tensor_a_cluster_lengths[3] << "]" << "       # C0xC1ExK0xK1" << std::endl;
+         myout << cfg.tensor_a_cluster_lengths[2] << ", " << cfg.tensor_a_cluster_lengths[3] << "]" << tensor_a_comment << std::endl;
 
          myout << "tensor_b_thread_lengths  = [" << cfg.tensor_b_thread_lengths[0] <<  ", " << cfg.tensor_b_thread_lengths[1] << ", ";
-         myout << cfg.tensor_b_thread_lengths[2] << ", " << cfg.tensor_b_thread_lengths[3]   << "]" << "       # C0xC1ExN0xN1B" << std::endl;
+         myout << cfg.tensor_b_thread_lengths[2] << ", " << cfg.tensor_b_thread_lengths[3]   << "]" << tensor_b_comment << std::endl;
 
          myout << "tensor_b_cluster_lengths = [" << cfg.tensor_b_cluster_lengths[0] << ", " << cfg.tensor_b_cluster_lengths[1] << ", ";
-         myout << cfg.tensor_b_cluster_lengths[2] << ", " << cfg.tensor_b_cluster_lengths[3] << "]" << "       # C0xC1ExN0xN1B" << std::endl;
+         myout << cfg.tensor_b_cluster_lengths[2] << ", " << cfg.tensor_b_cluster_lengths[3] << "]" << tensor_b_comment << std::endl;
 
          myout << "direction                = " << '\'' << strDirection << '\'' << std::endl;
          myout << "precision                = " << '\'' << strPrecision << '\'' << std::endl;
 
          myout << "nxb                      = " << cfg.nxb << std::endl;
          myout << "nxe                      = " << cfg.nxe << std::endl;
-}; 
-
+};
 
 static void output_configurations(std::vector<igemm_gtc_tunable_t> &configs, const char *strDirection, const char *strPrecision, std::ostream &myout)
 {

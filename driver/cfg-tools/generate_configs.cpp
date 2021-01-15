@@ -185,49 +185,52 @@ static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const c
          myout << "wave_tile_n              = " << cfg.wave_tile_n << std::endl;
          myout << "wave_step_n              = " << cfg.wave_step_n << std::endl;
          myout << "wave_repeat_n            = " << cfg.wave_repeat_n << std::endl;
+#ifdef USE_PRECISION_FP16
          myout << "wave_tile_k              = " << cfg.wave_tile_k << std::endl;
+#endif
+
+         const char *tensor_a_comment = std::string(strDirection) == "fwd" ? "       # C0xC1ExK0xK1": "       # k0xk1ExC0xC1"; 
+         const char *tensor_b_comment = std::string(strDirection) == "fwd" ? "       # C0xC1ExK0xK1": "       # k0xk1ExN0xN1b"; 
 
          myout << "tensor_a_thread_lengths  = [" << cfg.tensor_a_thread_lengths[0] <<  ", " << cfg.tensor_a_thread_lengths[1] << ", ";
-         myout << cfg.tensor_a_thread_lengths[2] << ", " << cfg.tensor_a_thread_lengths[3]   << "]" << "       # C0xC1ExK0xK1" << std::endl;
+         myout << cfg.tensor_a_thread_lengths[2] << ", " << cfg.tensor_a_thread_lengths[3]   << "]" << tensor_a_comment << std::endl;
 
          myout << "tensor_a_cluster_lengths = [" << cfg.tensor_a_cluster_lengths[0] << ", " << cfg.tensor_a_cluster_lengths[1] << ", ";
-         myout << cfg.tensor_a_cluster_lengths[2] << ", " << cfg.tensor_a_cluster_lengths[3] << "]" << "       # C0xC1ExK0xK1" << std::endl;
+         myout << cfg.tensor_a_cluster_lengths[2] << ", " << cfg.tensor_a_cluster_lengths[3] << "]" << tensor_a_comment << std::endl;
 
          myout << "tensor_b_thread_lengths  = [" << cfg.tensor_b_thread_lengths[0] <<  ", " << cfg.tensor_b_thread_lengths[1] << ", ";
-         myout << cfg.tensor_b_thread_lengths[2] << ", " << cfg.tensor_b_thread_lengths[3]   << "]" << "       # C0xC1ExN0xN1B" << std::endl;
+         myout << cfg.tensor_b_thread_lengths[2] << ", " << cfg.tensor_b_thread_lengths[3]   << "]" << tensor_b_comment << std::endl;
 
          myout << "tensor_b_cluster_lengths = [" << cfg.tensor_b_cluster_lengths[0] << ", " << cfg.tensor_b_cluster_lengths[1] << ", ";
-         myout << cfg.tensor_b_cluster_lengths[2] << ", " << cfg.tensor_b_cluster_lengths[3] << "]" << "       # C0xC1ExN0xN1B" << std::endl;
+         myout << cfg.tensor_b_cluster_lengths[2] << ", " << cfg.tensor_b_cluster_lengths[3] << "]" << tensor_b_comment << std::endl;
 
-         myout << "direction                = " << strDirection << std::endl;
-         myout << "precision                = " << strPrecision << std::endl;
+         myout << "direction                = " << '\'' << strDirection << '\'' << std::endl;
+         myout << "precision                = " << '\'' << strPrecision << '\'' << std::endl;
 
          myout << "nxb                      = " << cfg.nxb << std::endl;
          myout << "nxe                      = " << cfg.nxe << std::endl;
-}; 
+};
+
 
 static void output_configurations(std::vector<igemm_gtc_tunable_t> &configs, const char *strDirection, const char *strPrecision, std::ostream &myout)
 {
-    static const char *arch="\'gfx908\'"; 
-    static const char *code_object="\'cov3\'"; 
-    static const char *mode = "\'flat\'"; 
-    
-    std::cout << configs.size() << " " << strDirection << " " << strPrecision << " configurations generated !" << std::endl; 
+    static const char *arch="\'gfx908\'";
+    static const char *code_object="\'cov3\'";
+    static const char *mode = "\'flat\'";
 
-    myout << "[codegen]" << std::endl; 
-    myout << "arch = " << arch << std::endl; 
-    myout << "code_object = " << code_object << std::endl; 
-    myout << "mode = " << mode << std::endl; 
+    myout << "[codegen]" << std::endl;
+    myout << "arch = " << arch << std::endl;
+    myout << "code_object = " << code_object << std::endl;
+    myout << "mode = " << mode << std::endl;
 
-    myout << std::endl; 
+    myout << std::endl;
 
     for (const auto& cfg : configs) {
-	 myout << std::dec; 
+         myout << std::dec;
          myout << std::endl;
-         output_single_config(cfg, strDirection, strPrecision, myout); 
+         output_single_config(cfg, strDirection, strPrecision, myout);
     };
-}; 
-
+};
 
 static int getMaximumSlice_a_c1e(int gemm_k_per_block, int blockSize, int macro_tile_m)
 {
@@ -356,10 +359,10 @@ void generate_fwd_configs(const char *precision, const char *config_file)
     };  
 
     if ( std::string(precision) == "fp16" ) 
-         output_configurations(configs, "\'fwd\'", "\'fp16\'", ofs);
+         output_configurations(configs, "fwd", "fp16", ofs);
     else
 	if ( std::string(precision) == "fp32" )
-             output_configurations(configs, "\'fwd\'", "\'fp32\'", ofs);
+             output_configurations(configs, "fwd", "fp32", ofs);
 };
 
 // try to adjust this if the generator codes improved the usage of sgprs
@@ -369,7 +372,7 @@ void generate_fwd_configs(const char *precision, const char *config_file)
 // d1_length is the length os d1-dimension
 static int get_num_soffset_sgprs(int d0_length, int d1_length, int d1_vector_size)
 {
-    assert(d0_length > 0 && d1_length > 0); 
+    assert(d0_length > 0 && d1_length > 0 && d1_vector_size > 0); 
 
     int d1_num_vectors = d1_length / std::min<int>(d1_length, d1_vector_size); 
 
@@ -448,11 +451,10 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 			cfg.tensor_b_cluster_lengths[2] = 1; 
 
                         if ( cfg.nxe == 0 ) {
-/*				
                             if ( cfg.gemm_n_per_block % nxb != 0 )   // only check this for nxe == 0 since for nxe == 1,  nhw is padded according to nxb
                                  continue;
                             
-                            // use dimension k0 for thread slice for gemm_k
+                            // use dimension k0 for thread slice for gemm_k of tensor_a/tensor_b
                             for(int sliceSize=1; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = sliceSize;
                                 cfg.tensor_a_thread_lengths[1] = 1;
@@ -522,7 +524,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 } while(0); 
                             };
                                
-                            // use dimension k1e for thread slice for gemm_k
+                            // use dimension k1e for thread slice for gemm_k of tensor_a/tensor_b
                             for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[1] = sliceSize;
                                 cfg.tensor_a_thread_lengths[0] = 1;
@@ -593,13 +595,12 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     configs.push_back(cfg);
                                 } while(0);
                             };   // end of for(...)
-*/			   
 		        }
 			else { 
 			    // with nxe == 1, vector load can be used with Wei on dim-c1 when x == y == 1, wo we still need to generate configs where tensor_a_thread_length[3] > 1.
 			    // for tensor_b, we only generate configs where tensor_b_thread_length[1], tensor_b_thread_length[3] are forced to be 1
 			   
-                            // use dimension k0 for thread slice for gemm_k of tensor_a
+                            // use dimension k0 for thread slice for gemm_k of tensor_a/tensor_b
                             for(int sliceSize=1; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = sliceSize; 
 				cfg.tensor_a_thread_lengths[1] = 1; 
@@ -618,11 +619,11 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 if ( cfg.tensor_a_cluster_lengths[3] > cfg.gemm_m_per_block  || cfg.tensor_b_cluster_lengths[3] > cfg.gemm_n_per_block )
 			             continue; 
 
+                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0]; 
+                                cfg.tensor_b_thread_lengths[1] = cfg.tensor_a_thread_lengths[1]; 
+
 			        // use dimension c0/n0 for thread slice for gemm_m/gemm_n
                                 do {
-                                    cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0]; 
-                                    cfg.tensor_b_thread_lengths[1] = 1; 
-                                
                                     cfg.tensor_a_thread_lengths[2] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3]; 
                                     cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3]; 
                                     cfg.tensor_a_thread_lengths[3] = 1; 
@@ -643,11 +644,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
                                 // use dimension c1/n0 for thread slice for gemm_m/gemm_n
                                 do {
-                                    cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0];
-                                    cfg.tensor_b_thread_lengths[1] = 1;
-
                                     cfg.tensor_a_thread_lengths[3] = cfg.gemm_m_per_block / cfg.tensor_a_cluster_lengths[3];
-                                    cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];
+                                    cfg.tensor_b_thread_lengths[2] = cfg.gemm_n_per_block / cfg.tensor_b_cluster_lengths[3];  // tensor_b keep using n0 since it could not use vector load/store
                                     cfg.tensor_a_thread_lengths[2] = 1; 
                                     cfg.tensor_b_thread_lengths[3] = 1; 
 
@@ -668,7 +666,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 } while(0);
 			    }; 
 
-                            // use dimension k1e for thread slice for gemm_K of tensor_a 
+                            // use dimension k1e for thread slice for gemm_K of tensor_a/tensor_b
 			    for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = 1;
                                 cfg.tensor_a_thread_lengths[1] = sliceSize;
@@ -687,8 +685,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 if ( cfg.tensor_a_cluster_lengths[3] > cfg.gemm_m_per_block  || cfg.tensor_b_cluster_lengths[3] > cfg.gemm_n_per_block )
                                      continue;
 
-                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[1];
-                                cfg.tensor_b_thread_lengths[1] = 1;
+                                cfg.tensor_b_thread_lengths[0] = cfg.tensor_a_thread_lengths[0]; 
+                                cfg.tensor_b_thread_lengths[1] = cfg.tensor_a_thread_lengths[1]; 
 
                                 // use dimension c1/n0 for thread slice for gemm_m/gemm_n
                                 do {
@@ -702,7 +700,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                          break;
 
                                     tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[3], max_vector_size);
-                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1);
+                                    tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[1], cfg.tensor_b_thread_lengths[2], 1);
 
                                     // This is needed since some configurations consume too many scale registers
                                     if ( tensor_a_soffset_sgprs + tensor_b_soffset_sgprs > MAX_SOFFSET_SGPRS )
@@ -714,17 +712,17 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     configs.push_back(cfg);
                                 } while(0);
 			    }; 
-		        }; 
+		        }; 			
                    };
              };
          };
     };
 
     if ( std::string(precision) == "fp16" )
-         output_configurations(configs, "\'bwd\'", "\'fp16\'", ofs);
+         output_configurations(configs, "bwd", "fp16", ofs);
     else
         if ( std::string(precision) == "fp32" )
-             output_configurations(configs, "\'bwd\'", "\'fp32\'", ofs);
+             output_configurations(configs, "bwd", "fp32", ofs);
 }; 
 
 int main(int argc, char **argv)
