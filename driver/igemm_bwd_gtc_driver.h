@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -373,7 +373,6 @@ public:
         int w_tilda_slice = w_tilda_right - w_tilda_left;
         int num_of_gemm = y_tilda * x_tilda;
 
-        int gemm_m = c / group;
         int nxe = tunable->nxe;
         int nxb = tunable->nxb;
         int b = h_tilda_slice * w_tilda_slice;
@@ -382,7 +381,7 @@ public:
 
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
-        if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
+        if(gemm_n%gemm_n_per_block!=0){
             // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
         }

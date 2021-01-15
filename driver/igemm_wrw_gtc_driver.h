@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -260,7 +260,6 @@ public:
 
         int n_per_block = n >> gemm_k_global_split;
 
-        int gemm_m = k / group;
         int gemm_n = (c / group) * y * x;
         int gemm_k = n * b;
 
@@ -271,8 +270,7 @@ public:
         {
             return false;
         }
-
-        if ((gemm_m % gemm_m_per_block !=0 ) || (gemm_k % gemm_k_per_block != 0)){
+        if (gemm_k % gemm_k_per_block != 0){
             //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
             return false;
         }
@@ -534,7 +532,7 @@ public:
                         gemm_n_per_block = 1 << r;
                     }
                     
-                    if (gemm_m % gemm_m_per_block != 0 || gemm_n % gemm_n_per_block != 0)
+                    if (gemm_n % gemm_n_per_block != 0)
                         continue;
                     for (j = 5; j > 1; j--){
                         gemm_k_per_block = 1 << j;
@@ -572,7 +570,7 @@ public:
                             continue;
 
                         int log2_gemm_k_splits = 0;
-                        int grid_size = group * gemm_m / gemm_m_per_block * gemm_n / gemm_n_per_block;
+                        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) * gemm_n / gemm_n_per_block;
                         for (int gs = 0; gs < 8; gs++){
                             if ((grid_size << gs) > 1200)
                                 break;
