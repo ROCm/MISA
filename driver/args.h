@@ -165,6 +165,9 @@ static inline args_t create_conv_args(int argc, char *argv[]) {
     }
 
     args_t args;
+    args.insert_arg("in_layout", 'I', "NCHW", "Input Layout (Default=NCHW)", "string");
+    args.insert_arg("out_layout", 'O', "NCHW", "Output Layout (Default=NCHW)", "string");
+    args.insert_arg("fil_layout", 'f', "NCHW", "Input Layout (Default=NCHW)", "string");
     args.insert_arg("spatial_dim", '_', "2",
                     "convolution spatial dimension (Default-2)", "int");
     args.insert_arg("forw", 'F', "0", "Flag enables fwd, bwd, wrw convolutions"

@@ -57,18 +57,8 @@
 #       define  IGEMM_GPU_NAIVE_CONV_HSACO "naive_conv.hsaco"
 #   endif
 #else
-#   ifdef USE_XDNN
-#       include "xdnn_conv.h"
-#       define conv_fwd_nchw xdnn_conv_fwd_nchw
-#       define conv_bwd_nchw xdnn_conv_bwd_nchw
-#       define conv_wrw_nchw xdnn_conv_wrw_nchw
-#   else
-#       define NAIVE_CONV_THREADED
-#       include "naive_conv.h"
-#       define conv_fwd_nchw naive_conv_fwd_nchw
-#       define conv_bwd_nchw naive_conv_bwd_nchw
-#       define conv_wrw_nchw naive_conv_wrw_nchw
-#   endif
+#   define NAIVE_CONV_THREADED
+#   include "naive_conv.h"
 #endif
 
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
@@ -396,10 +386,18 @@ int main(int argc, char **argv) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
     int forw = conv_args.get_int("forw");
+    std::string in_layout = conv_args.get_str("in_layout");
+    std::string out_layout = conv_args.get_str("out_layout");
+    std::string fil_layout = conv_args.get_str("fil_layout");
 
     int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
     int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
     int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
+
+    assert(in_layout == out_layout && in_layout == fil_layout); // currently only support all layout is the same
+    assert(in_layout == "NCHW" || in_layout == "NHWC"); // currently only support these layout
+    assert((in_layout == "NCHW" && tunables[0].tensor_layout == "nchw") || 
+            (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc"));  // check pairs
 
     // init host side
     float *host_input = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
@@ -465,19 +463,34 @@ int main(int argc, char **argv) {
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-            
-            gpu_naive_conv_fwd_nchw_fp32(device_input, device_weight, device_output,
+
+            if(in_layout == "NCHW")
+                gpu_naive_conv_fwd_nchw_fp32(device_input, device_weight, device_output,
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                gpu_naive_conv_fwd_nhwc_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_output, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+            if(in_layout == "NCHW")
+                naive_conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                naive_conv_fwd_nhwc(host_input, host_weight, host_output, n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
 #endif
             device_output_to_host = (float *)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
         }
@@ -495,9 +508,9 @@ int main(int argc, char **argv) {
             printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
             fflush(stdout);
 
-            //if (need_verify)
-            //    HIP_CALL(hipMemset(device_output, 0,
-            //                       n * c * ho * wo * sizeof(float)));
+            if (need_verify)
+                HIP_CALL(hipMemset(device_output, 0, n * c * ho * wo * sizeof(float)));
+
             result_t result =
                 conv_fwd_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
@@ -561,18 +574,33 @@ int main(int argc, char **argv) {
                        static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-            gpu_naive_conv_bwd_nchw_fp32(device_input, device_weight, device_output,
+            if(in_layout == "NCHW")
+                gpu_naive_conv_bwd_nchw_fp32(device_input, device_weight, device_output,
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                gpu_naive_conv_bwd_nhwc_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_input, device_input,
                                    static_cast<size_t>(n) * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_bwd_nchw(host_input, host_weight, host_output, n,
+            if(in_layout == "NCHW")
+                naive_conv_bwd_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                naive_conv_bwd_nhwc(host_input, host_weight, host_output, n,
+                                         wi, hi, c, k, x, y, pad_w,
+                                         pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
 #endif
             device_input_to_host = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
             // printf("len:%d\n", n * c * hi * wi * sizeof(float) );
@@ -657,18 +685,33 @@ int main(int argc, char **argv) {
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_output, host_output,
                        static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
-            gpu_naive_conv_wrw_nchw_fp32(device_input, device_weight, device_output,
+            if(in_layout == "NCHW")
+                gpu_naive_conv_wrw_nchw_fp32(device_input, device_weight, device_output,
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                gpu_naive_conv_wrw_nhwc_fp32(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_weight, device_weight,
                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_wrw_nchw(host_input, host_weight, host_output, n,
+            if(in_layout == "NCHW")
+                naive_conv_wrw_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NHWC")
+                naive_conv_wrw_nhwc(host_input, host_weight, host_output, n,
+                                         wi, hi, c, k, x, y, pad_w,
+                                         pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
+            else
+                assert(0);
 #endif
             device_weight_to_host = (float *)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
             // printf("len:%d\n", k * c * y * x * sizeof(float));
