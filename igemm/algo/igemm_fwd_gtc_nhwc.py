@@ -319,13 +319,13 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             with self._deferred_context():
                 self._emit(f"; load input")
                 if self.outer.tunable.nxe != 0:
-                    self._emit(f".v_clear_nc {v.v_gld_b()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
+                    self._emit(f".v_clear_nc {v.v_gld_a()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
                     self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                     self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                 if self.outer.tunable.precache_soffset:
-                    self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
+                    self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
                 else:
-                    self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
+                    self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_tmp()))
                 if self.outer.tunable.nxe != 0:
                     self._emit(f"s_or_b64 exec, exec, s[{s.s_tmp(4)}:{s.s_tmp(5)}]")
             return self._get_deferred()
@@ -360,9 +360,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"; load weight")
                 # self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
-                    self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
+                    self._emit(m_wei_2d_global_load(v.v_gld_b(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
-                    self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_tmp()))
+                    self._emit(m_wei_2d_global_load(v.v_gld_b(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_tmp()))
             return self._get_deferred() 
 
     class shared_store_in_t(mc_base_t):
@@ -484,8 +484,6 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             if outer.tunable.nxe != 0:
                 self.s_wei_stride_y         = sym_t('s_wei_stride_y'            , sseq(1))
             self.s_stride_c                 = sym_t('s_stride_c'                , sseq(1))
-            self.s_in_stride_c              = sym_t("s_in_stride_c"             , self.s_stride_c.value)
-            self.s_wei_stride_c             = sym_t("s_wei_stride_c"            , self.s_stride_c.value)
 
             # stride for out
             self.s_out_stride_wo            = sym_t('s_out_stride_wo'           , sseq(1))
@@ -930,12 +928,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         in_stride_gprs = [s.s_in_stride_n0 if ta_n0 != 1 else s_dummy,
                             s.s_in_stride_wi,
                             s_dummy,
-                            s.s_in_stride_c]
+                            s.s_stride_c]
 
         # [tb_k, ta_e, ta_c]
         wei_stride_gprs = [s.s_wei_stride_k,
                             s_dummy,
-                            s.s_wei_stride_c]
+                            s.s_stride_c]
 
         if self.in_thread_copy_ndim == 2:
             s_in_stride_d0 = in_stride_gprs[in_thread_copy_index[0]]
@@ -1145,7 +1143,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_load_dword s[{s.s_magic_6()}],  s[{s.s_ka((0, 1))}],  0+{k.k_magic_6()}")
             self._emit(f"s_load_dwordx2 s[{s.s_shift_pack_0((0, 1))}], s[{s.s_ka((0, 1))}],  0+{k.k_shift_pack_0()}")
 
-        self._emit(f"; in(e, c, n0, n1b) thread_lengths: {ta_e}x{ta_c}x{ta_n0}x{ta_n1b}, cluster_length: {ca_e}x{ca_c}x{ca_n0}x{ca_n1b}")
+        self._emit(f"; in(e, c, n0, n1b) thread_lengths: {ta_e}x{ta_c}x{ta_n0}x{ta_n1b}, cluster_length: {ca_e}x{ca_c}x{ca_n0}x{ca_n1b}, unmerge_sub_n:{unmerge_sub_n}, unmerge_sub_n1:{unmerge_sub_n1}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
         self._emit(tc_index_dispatcher(v.v_gtc_ta_ic(),   v.v_tmp(),  ca_c, ta_c))
         if ca_n0 != 1:
@@ -1197,8 +1195,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
         else:
             # input
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_c()}], s[{s.s_group()}]")
-            self._emit(f"s_mul_i32 s[{s.s_in_stride_hi()}], s[{s.s_wi()}], s[{s.s_tmp()}]")
+            self._emit(f"s_mul_i32 s[{s.s_in_stride_wi()}], s[{s.s_c()}], s[{s.s_group()}]")
+            self._emit(f"s_mul_i32 s[{s.s_in_stride_hi()}], s[{s.s_wi()}], s[{s.s_in_stride_wi()}]")
             self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_hi()}], s[{s.s_in_stride_hi()}]")
             if ta_n0 != 1:
                 self._emit(f"s_lshl_b32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], {utility_log2(unmerge_sub_n1)}")
@@ -1272,9 +1270,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
         self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ik()}], s[{s.s_tmp(4)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
 
+        # to compute ho*wo*sub_n1 // na_n1b
         if unmerge_sub_n1 == 1:
             self._emit(f"s_lshr_b32 s[0], s[{s.s_dim_b()}], {igemm_log2(na_n1b)} ; total number of n1b")
         else:
+            assert na_n1b >= unmerge_sub_n1
             if unmerge_sub_n1 == na_n1b:
                 self._emit(f"s_mov_b32 s[0], s[{s.s_dim_b()}] ; total number of n1b")
             else:
@@ -1282,9 +1282,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
             self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080008 ; offset:8, width:8")
-            self._emit(m_mdiv_u32_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_tmp(4), s.s_magic_1(), s.s_tmp(3), '0', s.s_tmp()))
+            self._emit(m_mdiv_u32_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_tmp(5), s.s_magic_1(), s.s_tmp(3), '0', s.s_tmp()))
         else:
-            self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_tmp(4), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
+            self._emit(m_int_div_rem_ss(s.s_block_gtc_in1b(), s.s_block_gtc_in0(), s.s_tmp(5), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
 
         if na_n1b != 1:
             self._emit(f"s_lshl_b32 s[{s.s_block_gtc_in1b()}], s[{s.s_block_gtc_in1b()}], {igemm_log2(na_n1b)}")
@@ -1349,6 +1349,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         #     self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_n()}], v[{v.v_gtc_ta_in1()}]")
 
         # s_in_stride_wi need shift before!
+        self._emit(self.try_shift_stride(s.s_in_stride_wi, igemm_log2(data_byte)))
         if self.tunable.nxe != 0:
             self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_gtc_ta_ic()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
             self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wi()}], v[{v.v_in_ihi()}]")
@@ -1378,9 +1379,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         # load in
         self._emit(self.global_load_in())
         self._emit_empty_line()
+
         self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
 	    # config weight range
-        self._emit("; config for weight range")
+        #self._emit("; config for weight range")
         #self._emit(f"s_mul_i32 s[{s.s_p_wei(2)}], s[{s.s_wei_stride_k() if self.tunable.nxe != 0 else s.s_c()}], s[{s.s_k()}]")
         #self._emit(f"s_lshl_b32 s[{s.s_p_wei(2)}], s[{s.s_p_wei(2)}], {igemm_log2(data_byte)}")
         self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
@@ -1512,6 +1514,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         #         else:
         #             assert False, "un implemented, should rarely be used"
 
+        # TODO: extend tensor size, here vgpr only have 32bit
         self._emit(f";   compute from n1b")
         self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_in1b()}], v[{v.v_out_in1b()}]")
         if self.tunable.nxe != 0:
@@ -1605,11 +1608,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         #     self._emit(f"s_mov_b32 s[{s.s_move_slice_k_c1e()}], {na_c0 * na_c1e}")
         #     if IGEMM_GTC_FEAT_MAGIC_DIVISION:
         #         self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080010 ; offset:16, width:8")
-        #         self._emit(m_mdiv_u32_ss(s.s_tmp(4), s.s_move_slice_k_c1(), s.s_move_slice_k_c1e(), s.s_magic_2(), s.s_tmp(3), s.s_wei_stride_c(), s.s_tmp()))
+        #         self._emit(m_mdiv_u32_ss(s.s_tmp(4), s.s_move_slice_k_c1(), s.s_move_slice_k_c1e(), s.s_magic_2(), s.s_tmp(3), s.s_stride_c(), s.s_tmp()))
         #         self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080018 ; offset:24, width:8")
         #         self._emit(m_mdiv_u32_ss(s.s_move_slice_k_x(), s.s_move_slice_k_y(), s.s_tmp(4), s.s_magic_3(), s.s_tmp(3), s.s_x(), s.s_tmp()))
         #     else:
-        #         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_c1(), s.s_move_slice_k_c1e(), s.s_wei_stride_c(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+        #         self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_k_c1(), s.s_move_slice_k_c1e(), s.s_stride_c(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         #         self._emit(m_int_div_rem_ss(s.s_move_slice_k_x(), s.s_move_slice_k_y(), s.s_tmp(4), s.s_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         # else:
         #     #assert na_c1e == nb_c1e
@@ -1621,11 +1624,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
         # if self.tunable.nxe != 0:
         #     # assert s.s_out_stride_k.label not in self.dict_shifted_stride and s.s_wei_stride_k.label not in self.dict_shifted_stride
-        #     if s.s_in_stride_c.label not in self.dict_shifted_stride:
-        #         self._emit(m_move_slice_window_tb.init_stride_c(s.s_in_stride_c(), s.s_in_stride_c_c1(),
+        #     if s.s_stride_c.label not in self.dict_shifted_stride:
+        #         self._emit(m_move_slice_window_tb.init_stride_c(s.s_stride_c(), s.s_in_stride_c_c1(),
         #                                                 s.s_in_stride_c_c0_c1_diff(), s.s_move_slice_k_c1()))
         #     else:
-        #         self._emit(f"s_lshr_b32 s[{s.s_tmp(3)}], s[{s.s_in_stride_c()}], {utility_log2(data_byte)}")
+        #         self._emit(f"s_lshr_b32 s[{s.s_tmp(3)}], s[{s.s_stride_c()}], {utility_log2(data_byte)}")
         #         self._emit(m_move_slice_window_tb.init_stride_c(s.s_tmp(3), s.s_in_stride_c_c1(),
         #                                                 s.s_in_stride_c_c0_c1_diff(), s.s_move_slice_k_c1()))
         # else:
@@ -1639,7 +1642,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         # if not self.is_1d_move_slice_k():
         #     self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_c1()}], {unmerge_sub_tb_c1}")
         #if self.tunable.nxe != 0:
-        #    self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_wei_stride_c()}], s[{s.s_c()}]")
+        #    self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_stride_c()}], s[{s.s_c()}]")
         #else:
         #    self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_c()}]")
         self._emit_empty_line()
@@ -1650,11 +1653,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         #self._emit(self.try_shift_stride(s.s_wei_stride_k_k0_k1_diff, igemm_log2(data_byte)))
 
         if self.tunable.nxe != 0:
-            self._emit(self.try_shift_stride(s.s_in_stride_c, igemm_log2(data_byte)))
+            # self._emit(self.try_shift_stride(s.s_stride_c, igemm_log2(data_byte)))
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
             # self._emit(self.try_shift_stride(s.s_out_stride_k, igemm_log2(data_byte)))
         else:
-            self._emit(self.try_shift_stride(s.s_in_stride_c, igemm_log2(data_byte)))
+            # self._emit(self.try_shift_stride(s.s_stride_c, igemm_log2(data_byte)))
             self._emit(self.try_shift_stride(s.s_c, igemm_log2(data_byte)))
             # self._emit(self.try_shift_stride(s.s_out_stride_k, igemm_log2(data_byte)))
 
@@ -1794,10 +1797,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # if self.tunable.nxe != 0:
             #     self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
-            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_in_stride_c(), s.s_tmp(), v.v_in_flag()))
+            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_stride_c(), s.s_tmp(), v.v_in_flag()))
             # else:
             #     self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
-            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_in_stride_c(), s.s_tmp()))
+            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_stride_c(), s.s_tmp()))
             assert False
         else:
             a = self.agpr

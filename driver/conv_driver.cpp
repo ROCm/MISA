@@ -252,13 +252,15 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
+    int igemm_valid_float = env_get_int("VALID_FLOAT", 1);
     size_t pp_err = 0;
 
     for (size_t i = 0; i < n; ++i) {
-        if(!(valid_float(ref[i]) && valid_float(pred[i]))){
-            printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-            return false;
-        }
+        if(igemm_valid_float)
+            if(!(valid_float(ref[i]) && valid_float(pred[i]))){
+                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+                return false;
+            }
         double ri = (double)ref[i];
         double pi = (double)pred[i];
         double d = ri - pi;
