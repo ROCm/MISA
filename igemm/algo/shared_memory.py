@@ -844,3 +844,86 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
         with self._deferred_context():
             self.emit()
         return self.issue_cnt
+
+class ctrl_3d_shared_store_t(object):
+    '''
+    d0 x d1 x dp (d pack)
+    '''
+    def __init__(self):
+        self.length_d0 = 1        # is d0 is 1, it is indeed 1d access
+        self.length_d1 = 1
+        self.length_dp = 1
+        self.stride_d0 = 1        # stride
+        self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
+        self.precision = 'fp32'      # 'fp32', 'fp16', ...
+        self.src_order = 0  # 0-d0,d1, 1-d1,d0
+        self.need_transpose = 1
+        self.v_tmp = None   # used when order is 1 and consider shuffle
+
+    def serialize(self):
+        return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, length_dp:{self.length_dp}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
+
+class macro_igemm_3d_shared_store_t(macro_base_t):
+    '''
+    this is indeed for
+        0: gemm_k * gemm_m/n * k_pack
+        1: gemm_m/n * gemm_k * k_pack
+    we always want to use k_pack as vector store
+    '''
+    def __init__(self, mc, ctrl, inline = False):
+        assert type(ctrl) is ctrl_3d_shared_store_t
+        macro_base_t.__init__(self, mc, inline)
+        self.ctrl = ctrl
+        self.issue_cnt = 0
+        self.declare_arg("v_src")
+        self.declare_arg("v_sst_os")
+    def name(self):
+        ctrl = self.ctrl
+        if ctrl.precision == "fp32":
+            bits_str = 'b32'
+        elif ctrl.precision in ("fp16", "bf16"):
+            bits_str = 'b16'
+        else:
+            assert False
+
+        return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}x{ctrl.length_dp}_{bits_str}" + \
+                f"_st{ctrl.stride_d0}x{ctrl.stride_d1}"
+
+    def expr(self):
+        ctrl = self.ctrl
+        assert ctrl.precision == 'fp32', "TO BE supported"
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
+        issue_cnt = 0
+
+        if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
+            # this is indeed a 2d case.
+
+            if ctrl.length_d0 == 1 and ctrl.length_d1 == 1:
+                # further, 1d case
+                ds_write = inst_ds_write_t(ctrl.length_dp * data_byte)
+                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}'))
+                issue_cnt += ds_write.get_issues()
+
+            else:
+                length_d = ctrl.length_d0 if ctrl.length_d0 != 1 else ctrl.length_d1
+                stride_d = ctrl.stride_d0 if ctrl.length_d0 != 1 else ctrl.stride_d1
+                if length_d % 2 == 0 and data_byte == 4 and ctrl.length_dp in (1, 2):
+                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.length_dp * data_byte, stride_d)
+                    for i_d in range(length_d // 2):
+                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d*ctrl.length_dp}', 2 * i_d * stride_d))
+                        issue_cnt += ds_write2.get_issues(2 * i_d * stride_d)
+                else:
+                    for i_d in range(length_d):
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{s_id}', i_d0 * ctrl.stride_d0))
+                        issue_cnt += ds_write.get_issues()
+        else:
+            assert False, "un implemented yet"
+
+        self.issue_cnt = issue_cnt
+
+    def get_issues(self):
+        #assert False, "tobe implemented"
+        #return self.ctrl.length_d0
+        with self._deferred_context():
+            self.emit()
+        return self.issue_cnt
