@@ -1438,19 +1438,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_in1b()}]")
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_in0()}], {igemm_log2(na_n1b)}, v[{v.v_gtc_ta_in1b()}]")
-
         self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic()}], {igemm_log2(na_n0*na_n1b)}, v[{v.v_tmp()}]")
-        #if cb_c0 != 1:
-        #    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_tb_ic0()}], {igemm_log2(nb_c1e*nb_n0*nb_n1b)}, v[{v.v_tmp()}]")
-
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
-        # self._emit(f"v_add_u32 v[{v.v_sst_a_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_a_os()}]")
         self._emit_empty_line()
 
         self._emit(f"; LDS store, wei: e,c,k: {ta_e}x{ta_c}x{tb_k}, {ca_e}x{ca_c}x{cb_k}")
-
         self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ta_ic()}], {igemm_log2(nb_k)}, v[{v.v_gtc_tb_ik()}]")
-
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
         self._emit_empty_line()
@@ -1502,17 +1495,6 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 assert False, "un implemented, should rarely be used"
         else:
             assert False
-        #     if na_n0 != 1:
-        #         self._emit(f"v_and_b32 v[{v.v_out_in0()}], {na_n0 - 1}, v[{v.v_co_sub_m_index()}]     ; => N0")
-        #         if na_n1b != 1:
-        #             self._emit(f"v_lshrrev_b32 v[{v.v_out_in1b()}], {igemm_log2(na_n0)}, v[{v.v_co_sub_m_index()}]   ; => N1B")
-        #         else:
-        #             assert False, "un implemented, should rarely be used"
-        #     else:
-        #         if na_n1b != 1:
-        #             self._emit(f"v_mov_b32 v[{v.v_out_in1b()}], v[{v.v_co_sub_m_index()}]   ; => N1B")
-        #         else:
-        #             assert False, "un implemented, should rarely be used"
 
         # TODO: extend tensor size, here vgpr only have 32bit
         self._emit(f";   compute from n1b")
