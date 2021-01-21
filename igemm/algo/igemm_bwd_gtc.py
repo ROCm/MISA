@@ -1162,7 +1162,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             out_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 3 and data_byte < 4 else False
 
-            if out_thread_copy_index[0] == 1 and data_byte < 4 and out_thread_copy_index[1] == lds_faster_dim:
+            if out_thread_copy_index[0] == 1 and data_byte < 4: 
                 out_sst_ctrl.pack_d0 = True
             else:
                 out_sst_ctrl.pack_d0 = False
@@ -1241,7 +1241,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             ## vgpr_packed indicates two fp16/bp16 data are packed into one vgpr when reading from global memory
             wei_sst_ctrl.vgpr_packed = True if wei_thread_copy_index[1] == 3 and data_byte < 4 else False
             
-            if wei_thread_copy_index[0] == 1 and data_byte < 4 and wei_thread_copy_index[1] == lds_faster_dim:
+            if wei_thread_copy_index[0] == 1 and data_byte < 4:
                 wei_sst_ctrl.pack_d0 = True
             else:
                 wei_sst_ctrl.pack_d0 = False
