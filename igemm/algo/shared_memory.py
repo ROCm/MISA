@@ -997,9 +997,12 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                     if ctrl.vgpr_packed: 
                         if ctrl.src_order == 0:
                             if ctrl.length_d0 == 2:    ## length_d0 is less than lds_gemm_k_pack 
+                                print(f"---- Calling here -----------")
                                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 2, data_byte, ctrl.stride_d1)
-                                for i_d1 in range(ctrl.length_d1 // 2):
+                                for i_d1 in range(ctrl.length_d1 // 2): 
+                                    ## pack the two elements in first column to one vgpr
                                     self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(0)}] v[{self.v_src()}+{i_d1}] v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
+                                    ## pack the two elements in second column to one vgpr
                                     self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d1}], 16, v[{self.v_src()}+{i_d1}]')
                                     self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}], 16, v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
                                     self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(1)}] v[{self.v_src()}+{i_d1}] v[{self.v_src()}+{ctrl.length_d1//2 + i_d1}]')
@@ -1011,15 +1014,17 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 4, data_byte, ctrl.stride_d1)
                                 for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
                                     for i_d1 in range(ctrl.length_d1 // 2):
+                                        ## pack the four elements in first column to two vgprs
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(0)}], v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2) + i_d1}]')
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(1)}], v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2) + i_d1}], v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2) + i_d1}]') 
-                                        i_offset = (i_d0 // lds_gemm_k_pack) * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1
+                                        ## pack the four elements in second column to two vgprs
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}]')
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2)+i_d1}]') 
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2)+i_d1}]')
                                         self._emit(f'v_lshrrev_b32 v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2)+i_d1}], 16, v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2)+i_d1}]')
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(2)}], v[{self.v_src()}+{i_d0*(ctrl.length_d1//2)+i_d1}], v[{self.v_src()}+{(i_d0+1)*(ctrl.length_d1//2) + i_d1}]')
                                         self._emit(f'v_pack_b32_f16 v[{ctrl.v_tmp(3)}], v[{self.v_src()}+{(i_d0+2)*(ctrl.length_d1//2) + i_d1}], v[{self.v_src()}+{(i_d0+3)*(ctrl.length_d1//2) + i_d1}]') 
+                                        i_offset = (i_d0 // lds_gemm_k_pack) * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1
                                         self._emit(ds_write2(f'{self.v_sst_os()}', f'{ctrl.v_tmp()}', i_offset))
                                         issue_cnt += ds_write2.get_issues()
                         else:

@@ -1055,10 +1055,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             assert False, "not support data type"
 
         num_data_per_vgpr = 4 // ctrl_wei_gld.data_bytes
-        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * num_data_per_vgpr) if t_n1b != 1 else 1
+        ctrl_out_gld.vector_d1 = igemm_gcd(t_n1b, 4 * num_data_per_vgpr)
         ctrl_wei_gld.vector_d1 = igemm_gcd(t_c1, 4 * num_data_per_vgpr)
 
-        print(f"out_gld.vector_d1 = {ctrl_out_gld.vector_d1}, wei_gld.vector_d1 = {ctrl_wei_gld.vector_d1}")
+        ##print(f"out_gld.vector_d1 = {ctrl_out_gld.vector_d1}, wei_gld.vector_d1 = {ctrl_wei_gld.vector_d1}")
 
         if self.out_thread_copy_ndim == 2:
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
@@ -1135,10 +1135,14 @@ class igemm_bwd_gtc_t(mc_base_t):
         if self.out_thread_copy_ndim == 2:
             out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
-            if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
-                out_sst_ctrl.vector_d1 = math.gcd(t_n1b, 4 * num_data_per_vgpr)
+
+            lds_faster_dim = 3 if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B else 2 
+
+            if out_thread_copy_dims[lds_faster_dim] != 1:  
+                ## assert faster_dim == out_thread_copy_index[1]
+                out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[1]], 4 * num_data_per_vgpr)
             else:
-                out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[1]], 4 * num_data_per_vgpr) 
+                out_sst_ctrl.vector_d1 = 1
 
             if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
                 out_sst_ctrl.vector_d1 = 1
@@ -1149,23 +1153,29 @@ class igemm_bwd_gtc_t(mc_base_t):
                 ## here, stride_d0 is the distance of two continuous points on k0
                 out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]]* data_byte
             else:
-                ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
+                ## here, stride_d0 has different meaning depending on whether d1 is faster_dim 
+                ## 1) d1 is the faster_dim, then stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
+                ## 2) d1 is not faster_dim, then stride_d0 indicates the LDS distance between two contiguous points on k1e 
                 out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack 
 
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
             out_sst_ctrl.vgpr_packed = True if out_thread_copy_index[1] == 3 and data_byte < 4 else False
 
-            if out_thread_copy_index[0] == 1 and data_byte < 4:
+            if out_thread_copy_index[0] == 1 and data_byte < 4 and out_thread_copy_index[1] == lds_faster_dim:
                 out_sst_ctrl.pack_d0 = True
             else:
                 out_sst_ctrl.pack_d0 = False
 
+            print(f"out: vgpr_packed = {out_sst_ctrl.vgpr_packed}, stride_d0 = {out_sst_ctrl.stride_d0}, stride_d1 = {out_sst_ctrl.stride_d1}, vector_d1 = {out_sst_ctrl.vector_d1}, length_d1 = {out_sst_ctrl.length_d1}")
         elif self.out_thread_copy_ndim == 1:
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]] 
-            if (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B and t_n1b != 1) or \
-                (gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N1B_N0 and t_n0 != 1):
+
+            lds_faster_dim = 3 if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B else 2 
+
+            if out_thread_copy_dims[lds_faster_dim] != 1:
+                ## assert faster_dim == out_thread_copy_index[0]
                 out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[0]], 4 * num_data_per_vgpr)
             else:
                 out_sst_ctrl.vector_d1 = 1
@@ -1201,15 +1211,17 @@ class igemm_bwd_gtc_t(mc_base_t):
             out_sst_ctrl.pack_d0 = False
             out_sst_ctrl.vgpr_packed = False 
 
-        print(f"out: vgpr_packed = {out_sst_ctrl.vgpr_packed}, stride_d1 = {out_sst_ctrl.stride_d1}, vector_d1 = {out_sst_ctrl.vector_d1}, length_d1 = {out_sst_ctrl.length_d1}")
-
         if self.wei_thread_copy_ndim == 2:
             wei_sst_ctrl.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-            if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1:
-                wei_sst_ctrl.vector_d1 = math.gcd(t_c1, 4 * num_data_per_vgpr)
-            else:
+
+            lds_faster_dim = 3 if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 else 2
+
+            if wei_thread_copy_dims[lds_faster_dim] != 1:
+                ## assert faster_dim == wei_thread_copy_index[1]
                 wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[1]], 4 * num_data_per_vgpr)
+            else:
+                wei_sst_ctrl.vector_d1 = 1
 
             if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
                 wei_sst_ctrl.vector_d1 = 1
@@ -1219,13 +1231,17 @@ class igemm_bwd_gtc_t(mc_base_t):
                 ## here, stride_d0 is the distance of two continuous points on k0
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte 
             else:
-                ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
-                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
+                ## here, stride_d0 has different meaning depending on whether d1 is faster_dim 
+                ## 1) d1 is the faster_dim, then stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
+                ## 2) d1 is not faster_dim, then stride_d0 indicates the LDS distance between two contiguous points on k1e 
+                wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack 
+
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
 
+            ## vgpr_packed indicates two fp16/bp16 data are packed into one vgpr when reading from global memory
             wei_sst_ctrl.vgpr_packed = True if wei_thread_copy_index[1] == 3 and data_byte < 4 else False
             
-            if wei_thread_copy_index[0] == 1 and data_byte < 4:
+            if wei_thread_copy_index[0] == 1 and data_byte < 4 and wei_thread_copy_index[1] == lds_faster_dim:
                 wei_sst_ctrl.pack_d0 = True
             else:
                 wei_sst_ctrl.pack_d0 = False
@@ -1234,8 +1250,10 @@ class igemm_bwd_gtc_t(mc_base_t):
             wei_sst_ctrl.length_d0 = 1
             wei_sst_ctrl.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
 
-            if (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 and t_c1 != 1) or \
-                (gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C1_C0 and t_c0 != 1):
+            lds_faster_dim = 3 if gemm_m_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 else 2
+
+            if wei_thread_copy_dims[lds_faster_dim] != 1:
+                ## assert faster_dim == wei_thread_copy_index[0]
                 wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[0]], 4 * num_data_per_vgpr)
             else:
                 wei_sst_ctrl.vector_d1 = 1
@@ -1272,8 +1290,6 @@ class igemm_bwd_gtc_t(mc_base_t):
             wei_sst_ctrl.stride_d1 = wei_stride_list[-1] * data_byte * self.tunable.gemm_k_pack
             wei_sst_ctrl.pack_d0 = False
             wei_sst_ctrl.vgpr_packed = False
-
-        print(f"wei: vgpr_packed = {wei_sst_ctrl.vgpr_packed}, stride_d1 = {wei_sst_ctrl.stride_d1}, vector_d1 = {wei_sst_ctrl.vector_d1}, length_d1 = {wei_sst_ctrl.length_d1}")
 
         # print(f"out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}, wei_sst_ctrl.vector_d1:{wei_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 
