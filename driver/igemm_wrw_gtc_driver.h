@@ -256,8 +256,17 @@ public:
             return false;
         }
 
-        if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
-            return false;
+        // 1x1 case pad and stride condition
+        if(tunable->nxe == 0){
+            if(x * y != 1)
+                return false;
+            if(pad_h + pad_w != 0)
+                return false;
+            if(stride_h * stride_w != 1 && tunable->tensor_a_thread_lengths[1] > 1)
+                return false;
+        }
+        //if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
+        //    return false;
 
         if (b % tunable->nxb != 0){
             //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", tunable->nxb is " << tunable->nxb << std::endl;
@@ -265,6 +274,14 @@ public:
         }
 
         if(tunable->nxe == 0 && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
+        }
+
+        if(tunable->nxe != 0 && wo % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
+        }
+
+        if(tunable->nxe != 0 && tunable->tensor_a_thread_lengths[1] != 1 && (pad_h + pad_w) != 0){
             return false;
         }
 
@@ -320,7 +337,7 @@ public:
         int gemm_n = (c / group) * y * (((x + e_x - 1) / e_x) * e_x);
         
 
-        int max_grid_size = 1200 * 2;
+        int max_grid_size = 1200;
 
         int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);

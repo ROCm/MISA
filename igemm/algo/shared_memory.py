@@ -952,10 +952,10 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                 assert ctrl.length_d1 % ctrl.vector_d1 == 0
                 assert ctrl.stride_d1 != 1
                 num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
-                print(self.v_src())
-                print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
+                #print(self.v_src())
+                #print(f"vector_d1={ctrl.vector_d1}, length_d1={ctrl.length_d1}")
                 ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
-                print(f"ctrl.src_order={ctrl.src_order}")
+                #print(f"ctrl.src_order={ctrl.src_order}")
                 if ctrl.src_order == 0:
                     for i_d0 in range(ctrl.length_d0):
                         if ctrl.half_vgpr_pack == 1:
