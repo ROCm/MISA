@@ -123,6 +123,7 @@ class macro_igemm_bwd_gtc_wei_update_yx_t(macro_base_t):
         return '.v_bwd_gtc_wei_update_yx'
 
     def expr(self):
+        self._emit(f"; calculate y, x in original wei from variance by slided windows of gemm-k")
         self._emit(f"v_mad_u32_u24 v[{self.v_wei_iy()}], s[{self.s_dtile_y()}], v[{self.v_wei_dslice_iy()}], v[{self.v_dtile_iy()}]")
         self._emit(f"v_mad_u32_u24 v[{self.v_wei_ix()}], s[{self.s_dtile_x()}], v[{self.v_wei_dslice_ix()}], v[{self.v_dtile_ix()}]")
 
@@ -242,6 +243,7 @@ class macro_igemm_bwd_gtc_move_slice_window_k_dsy_dsx(macro_base_t):
             pass        # the final dimension indeed can be ignored
     '''
     def expr(self):
+        self._emit(f"; move slide window by unroll-k along gemm-k")
         # k0, k1e is unmerge.  k1e is merged from k1, e
         self._emit(f"v_add_u32 v[{self.v_move_slice_k_idsx()}], s[{self.s_move_slice_k_dsx()}], v[{self.v_move_slice_k_idsx()}]")
         self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_dsx()}], v[{self.v_move_slice_k_idsx()}]")
@@ -324,6 +326,7 @@ class macro_igemm_bwd_gtc_move_slice_window_k(macro_base_t):
         return self._get_deferred()
 
     def expr(self):
+        self._emit(f"; move slide window by unroll-k along gemm-k")
         self._emit(f"v_add_u32 v[{self.v_move_slice_k_ik1()}], s[{self.s_move_slice_k_k1()}], v[{self.v_move_slice_k_ik1()}]")
         self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_k_k1()}], v[{self.v_out_os()}]")
         self._emit(f"v_add_u32 v[{self.v_wei_os()}], s[{self.s_wei_stride_k_k1()}], v[{self.v_wei_os()}]")
@@ -359,7 +362,6 @@ class macro_igemm_bwd_gtc_move_slice_window_k_1d(macro_base_t):
 
         n_k0, n_k1e = c_k0 * t_k0, c_k1e * t_k1e
 
-        # assert (n_k0 == 1 and n_k1e != 1) or (n_k0 != 1 and n_k1e == 1)
         assert (n_k0 == 1 and n_k1e != 1)  # indeed in this case will assume only k1 direction non-1. only k0 non-1 is meaningless
 
         self.declare_arg("v_out_os")
@@ -380,6 +382,7 @@ class macro_igemm_bwd_gtc_move_slice_window_k_1d(macro_base_t):
         return self._get_deferred()
 
     def expr(self):
+        self._emit(f"; move slide window by unroll-k along gemm-k")
         self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_k_k1()}], v[{self.v_out_os()}]")
         self._emit(f"v_add_u32 v[{self.v_wei_os()}], s[{self.s_wei_stride_k_k1()}], v[{self.v_wei_os()}]")
 
@@ -1151,18 +1154,16 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 out_sst_ctrl.vector_d1 = 1
 
-            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
+            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use LDS vector store, since gemm_k need be merged into gemm_m/gemm_n
                 out_sst_ctrl.vector_d1 = 1
             
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             ## for fp16/bp16, considering every 4 data in k1e is packed into contiguous LDS locations 
             if out_thread_copy_index[0] == 0:
-                ## here, stride_d0 is the distance of two continuous points on k0
+                ## here, stride_d0 is the distance of two contiguous points on k0
                 out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]]* data_byte
             else:
-                ## here, stride_d0 has different meaning depending on whether d1 is faster_dim 
-                ## 1) d1 is the faster_dim, then stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
-                ## 2) d1 is not faster_dim, then stride_d0 indicates the LDS distance between two contiguous points on k1e 
+                ## here stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
                 out_sst_ctrl.stride_d0 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack 
 
             out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
@@ -1173,6 +1174,9 @@ class igemm_bwd_gtc_t(mc_base_t):
                 out_sst_ctrl.pack_d0 = True
             else:
                 out_sst_ctrl.pack_d0 = False
+
+            ## when both pack_d0 and vgpr_packed are true, per-thread LDS store will pack "gemm_k_pack" contiguous elements on t_k1e to the location 
+            ## between two contiguous points of t_n1b
 
             print(f"out: vgpr_packed = {out_sst_ctrl.vgpr_packed}, stride_d0 = {out_sst_ctrl.stride_d0}, stride_d1 = {out_sst_ctrl.stride_d1}, vector_d1 = {out_sst_ctrl.vector_d1}, length_d1 = {out_sst_ctrl.length_d1}")
         elif self.out_thread_copy_ndim == 1:
@@ -1187,18 +1191,18 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 out_sst_ctrl.vector_d1 = 1
 
-            ## in most situations, for fp16/bp16, vector store could not be used since gemm_k will be merged into gemm_m/gemm_n
+            ## in most situations, for fp16/bp16, LDS vector store could not be used since gemm_k need be merged into gemm_m/gemm_n
             if self.tunable.gemm_k_pack > 1: 
                 out_sst_ctrl.vector_d1 = 1
 
             out_sst_ctrl.stride_d0 = 1
             if out_thread_copy_index[0] in (0,1):       
                 if out_thread_copy_index[0] == 0:       ## The only copy dim is k0
-                    ## here, stride_d1 is the distance of two continuous points on k0
+                    ## here, stride_d1 is the distance of two contiguous points on k0
                     out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte 
                 else:                                   ## The only copy dim is k1e
                     out_sst_ctrl.vector_d1 = math.gcd(out_thread_copy_dims[out_thread_copy_index[0]], self.tunable.gemm_k_pack)
-                    ## here, stride_d1 is the distance crossing "gemm_k_pack" continuous points on k1e
+                    ## here, stride_d1 is the distance crossing "gemm_k_pack" contiguous points on k1e
                     out_sst_ctrl.stride_d1 = out_stride_list[out_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 out_sst_ctrl.vgpr_packed = False 
             else:                                   
@@ -1230,17 +1234,15 @@ class igemm_bwd_gtc_t(mc_base_t):
             else:
                 wei_sst_ctrl.vector_d1 = 1
 
-            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use vector store, since d0 will be merged into d1
+            if self.tunable.gemm_k_pack > 1:      ## for fp16/bp16, we actually could not use LDS vector store, since gemm-k need be merged into gemm-m/gemm-n
                 wei_sst_ctrl.vector_d1 = 1
 
             assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             if wei_thread_copy_index[0] == 0:
-                ## here, stride_d0 is the distance of two continuous points on k0
+                ## here, stride_d0 is the distance of two contiguous points on k0
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte 
             else:
-                ## here, stride_d0 has different meaning depending on whether d1 is faster_dim 
-                ## 1) d1 is the faster_dim, then stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
-                ## 2) d1 is not faster_dim, then stride_d0 indicates the LDS distance between two contiguous points on k1e 
+                ## here stride_d0 indicates the LDS distance crossing "gemm_k_pack" contiguous points on k1e
                 wei_sst_ctrl.stride_d0 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack 
 
             wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[1]] * data_byte * self.tunable.gemm_k_pack
@@ -1252,6 +1254,9 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_sst_ctrl.pack_d0 = True
             else:
                 wei_sst_ctrl.pack_d0 = False
+
+            ## when both pack_d0 and vgpr_packed are true, per-thread LDS store will pack "gemm_k_pack" contiguous elements on t_k1e to the location 
+            ## between two contiguous points of t_c1
 
         elif self.wei_thread_copy_ndim == 1:
             wei_sst_ctrl.length_d0 = 1
@@ -1269,14 +1274,13 @@ class igemm_bwd_gtc_t(mc_base_t):
             if self.tunable.gemm_k_pack > 1: 
                 wei_sst_ctrl.vector_d1 = 1
 
-            assert n_k1e >= self.tunable.gemm_k_pack, "Could not support cluster size less than gemm_k_pack size in dim k1e"
             wei_sst_ctrl.stride_d0 = 1
             if wei_thread_copy_index[0] in (0,1):
                 if wei_thread_copy_index[0] == 0:      ## The only copy dim is k0
-                    ## here, stride_d0 is the distance of two continuous points on k0
+                    ## here, stride_d1 is the distance of two contiguous points on k0
                     wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte 
                 else:                                  ## The only copy dim is k1e
-                    ## here, stride_d0 is the distance crossing "gemm_k_pack" continuous points on k1e
+                    ## here, stride_d0 is the distance crossing "gemm_k_pack" contiguous points on k1e
                     wei_sst_ctrl.vector_d1 = math.gcd(wei_thread_copy_dims[wei_thread_copy_index[0]], self.tunable.gemm_k_pack)
                     wei_sst_ctrl.stride_d1 = wei_stride_list[wei_thread_copy_index[0]] * data_byte * self.tunable.gemm_k_pack
                 wei_sst_ctrl.vgpr_packed = False 
@@ -1587,6 +1591,8 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"s_load_dwordx2 s[{s.s_magic_5((0,1))}],   s[{s.s_ka((0, 1))}],    0+{k.k_magic_5()}")
             self._emit(f"s_load_dwordx2 s[{s.s_shift_pack_0((0,1))}],   s[{s.s_ka((0, 1))}],    0+{k.k_shift_pack_0()}")
 
+        self._emit_empty_line()
+
         self._emit(f"; output, thread(k0,k1e,n0,n1b): {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, cluster(k0,k1e,n0,n1b): {c_k0}x{c_k1e}x{c_n0}x{c_n1b}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
         self._emit(tc_index_dispatcher(v.v_gtc_in1b(),  v.v_tmp(), c_n1b, t_n1b))      # merged dimension no need to do shift per thread here, do shift later
@@ -1594,7 +1600,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(tc_index_dispatcher(v.v_gtc_ik1e(),  v.v_tmp(), c_k1e, t_k1e))      # merged dimension no need to do shift per thread here, do shift later
         self._emit(tc_index_dispatcher(v.v_gtc_ik0(),   v.v_tmp(), c_k0,  t_k0, True))
         self._emit_empty_line()
-        self._emit(f"; wei, thread(k0,k1e,c0,c1): {t_k0}x{t_k1e}x{t_c0}x{t_c1}, cluster(k0,k1e,c0,c1) {c_k0}x{c_k1e}x{c_c0}x{c_c1}")
+        self._emit(f"; wei, thread(k0,k1e,c0,c1): {t_k0}x{t_k1e}x{t_c0}x{t_c1}, cluster(k0,k1e,c0,c1): {c_k0}x{c_k1e}x{c_c0}x{c_c1}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
         self._emit(tc_index_dispatcher(v.v_gtc_ic1(), v.v_tmp(), c_c1, t_c1))
         self._emit(tc_index_dispatcher(v.v_gtc_ic0(), v.v_tmp(), c_c0, t_c0, True))
@@ -1639,11 +1645,13 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"; multihead dispatch code end")
             self._emit_empty_line()
 
-        self._emit(f"; calculate index")
+        self._emit(f"; calculate index ...")
 
+        self._emit_empty_line()
+
+        self._emit(f"; initialize the strides")
         if self.tunable.nxe != 0:
             self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}],      s[{s.s_ho()}],       s[{s.s_wo()}]")
-            self._emit(f"s_mov_b32 s[{s.s_out_stride_k_save()}], s[{s.s_out_stride_k()}]")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}],      s[{s.s_k()}],       s[{s.s_out_stride_k()}]")
             self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}],      s[{s.s_group()}],        s[{s.s_tmp()}]")
             self._emit(f"s_mul_i32 s[{s.s_in_stride_c()}],       s[{s.s_hi()}],       s[{s.s_wi()}]")
@@ -1657,9 +1665,11 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"s_mul_i32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], s[{s.s_tmp()}]")
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_c()}],      s[{s.s_y()}],        s[{s.s_x()}]")
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_k()}],      s[{s.s_c()}],        s[{s.s_wei_stride_c()}]")
-            self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_hw()}],  s[{s.s_dslice_h()}], s[{s.s_dslice_w()}]")
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
+
+            self._emit(f"s_mov_b32 s[{s.s_out_stride_k_save()}], s[{s.s_out_stride_k()}]")
+            self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
 
             self._emit(f"; pad b into multiplier of nxb")
             self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
@@ -1713,6 +1723,8 @@ class igemm_bwd_gtc_t(mc_base_t):
                 else:
                     self._emit(f"s_lshr_b32 s[{s.s_wei_stride_c0()}], s[{s.s_c()}], {igemm_log2(n_c0)}")
 
+        self._emit_empty_line()
+
         self._emit(f"; k1e transform")
         if self.tunable.nxe != 0:
             if c_k1e == 1:
@@ -1733,6 +1745,7 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_gtc_ik1()}], v[{v.v_gtc_ik1e()}]")
 
         self._emit_empty_line()
+
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}")
         # calculate group index
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dslice_dim_b() if self.tunable.nxe != 0 else s.s_stride_hw()}], s[{s.s_n()}]")
@@ -1981,7 +1994,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ik1e()}]")
                 self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
 
-        ## ToDo: assuming n_k1e == 1 when n_k0 != 1 
+        ## This should not occur as we always use k1e as cluster dimension
         if c_k0 != 1:
             if self.tunable.gemm_k_pack == 1: 
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_n0*n_n1b)}, v[{v.v_tmp()}]")
@@ -2026,7 +2039,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v.v_tmp(1)}], {self.tunable.gemm_k_pack - 1}, v[{v.v_gtc_ik1e()}]")
                 self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
 
-        ## ToDo: assuming n_k1e == 1 when n_k0 != 1 
+        ## This should not occur as we always use k1e as cluster dimension
         if c_k0 != 1:
             if self.tunable.gemm_k_pack == 1:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik0()}], {igemm_log2(n_k1e*n_c0*n_c1*self.tunable.gemm_k_pack)}, v[{v.v_tmp()}]")
@@ -2176,12 +2189,12 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_c() if self.tunable.nxe != 0 else s.s_stride_hw()}] ,v[{v.v_tmp()}]")
             self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}]")
 
-
         self._emit(f"v_add_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_tmp()}]")
         self._emit(f"; add hi, wi")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_wi()}], v[{v.v_in_ihi()}]")
         self._emit(f"v_add3_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_tmp(1)}], v[{v.v_in_iwi()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_in_os()}], {igemm_log2(data_byte)}, v[{v.v_in_os()}]")
+        self._emit_empty_line()
 
         self._emit(f"; move slice stride")
         assert n_k0 * n_k1e == self.tunable.gemm_k_per_block
