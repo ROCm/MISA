@@ -513,9 +513,16 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"s_lshl_b32 s[{gpr()}], s[{gpr()}], {shifter}")
         return self._get_deferred()
 
+    def is_unit_yx(self):
+        t_c0, t_c1, t_k0, t_k1e, t_n0, t_n1b = self.get_thread_lengths()
+
+        if self.tunable.nxe == 0 or t_c1 != 1:
+            return True
+        return False
+
     def is_1d_move_slice_k(self):
         n_c0, n_c1, n_k0, n_k1e, n_n0, n_n1b = self.get_dims_lengths()
-        if self.tunable.nxe != 0:
+        if self.tunable.nxe != 0 and not self.is_unit_yx():
             return False        # if not nxe 0, it is possible that we can do move slice, but that will lead to extra index calculation
         if n_k1e != 1 and n_k0 == 1:
             return True
@@ -2223,7 +2230,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         if not self.is_1d_move_slice_k():
             self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_k1()}], {unmerge_sub_k1}")
-        if self.tunable.nxe != 0:
+        if not self.is_unit_yx():
             self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_stride_dslice_yx()}], s[{s.s_k()}]")
         else:
             self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_k()}]")
