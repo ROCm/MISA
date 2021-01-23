@@ -205,7 +205,6 @@ public:
         }
 
         assert(splited_n * image_size < size_4g && n % splited_n == 0);
-        assert(n / splited_n < size_4g);
         return n / splited_n;
     }
 
