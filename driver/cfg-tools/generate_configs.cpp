@@ -509,9 +509,9 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     cfg.tensor_a_thread_lengths[2] = 1;
                                     cfg.tensor_b_thread_lengths[2] = 1;
 
-                                    if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
-			                 (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
-				          break; 
+                                    // global vector load puts limitations on the sizes of the thread slices (at most dwordx4 can be used) 
+                                    if ( cfg.tensor_a_thread_lengths[3] > max_vector_size || cfg.tensor_b_thread_lengths[3] > max_vector_size )
+				         break; 
 
                                     tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size); 
                                     tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size); 
@@ -581,9 +581,8 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     cfg.tensor_b_thread_lengths[2] = 1;
 
                                     // global vector load puts limitations on the sizes of the thread slices (at most dwordx4 can be used) 
-                                    if ( (std::string(precision) == "fp16" && (cfg.tensor_a_thread_lengths[3] > 8 || cfg.tensor_b_thread_lengths[3] > 8)) ||
-                                         (std::string(precision) == "fp32" && (cfg.tensor_a_thread_lengths[3] > 4 || cfg.tensor_b_thread_lengths[3] > 4)) )
-                                         break;
+                                    if ( cfg.tensor_a_thread_lengths[3] > max_vector_size || cfg.tensor_b_thread_lengths[3] > max_vector_size )
+				         break; 
 
                                     tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[3], max_vector_size); 
                                     tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[1], cfg.tensor_b_thread_lengths[3], max_vector_size);
@@ -652,6 +651,10 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     if ( cfg.tensor_a_thread_lengths[3] == 1) 
 					 break; 
 
+                                    // global vector load puts limitations on the sizes of the thread slices (at most dwordx4 can be used) 
+                                    if ( cfg.tensor_a_thread_lengths[3] > max_vector_size)
+                                         break;
+
                                     tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[0], cfg.tensor_a_thread_lengths[3], max_vector_size);
                                     tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[0], cfg.tensor_b_thread_lengths[2], 1);
 
@@ -666,6 +669,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 } while(0);
 			    }; 
 
+/*			    
                             // use dimension k1e for thread slice for gemm_K of tensor_a/tensor_b
 			    for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = 1;
@@ -699,6 +703,10 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     if ( cfg.tensor_a_thread_lengths[3] == 1)
                                          break;
 
+                                    // global vector load puts limitations on the sizes of the thread slices (at most dwordx4 can be used) 
+                                    if ( cfg.tensor_a_thread_lengths[3] > max_vector_size)
+                                         break; 
+
                                     tensor_a_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_a_thread_lengths[1], cfg.tensor_a_thread_lengths[3], max_vector_size);
                                     tensor_b_soffset_sgprs = get_num_soffset_sgprs(cfg.tensor_b_thread_lengths[1], cfg.tensor_b_thread_lengths[2], 1);
 
@@ -712,6 +720,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     configs.push_back(cfg);
                                 } while(0);
 			    }; 
+*/			
 		        }; 			
                    };
              };
