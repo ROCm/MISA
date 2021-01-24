@@ -866,8 +866,8 @@ class ctrl_3d_shared_store_t(object):
 class macro_igemm_3d_shared_store_t(macro_base_t):
     '''
     this is indeed for
-        0: gemm_k * gemm_m/n * k_pack
-        1: gemm_m/n * gemm_k * k_pack
+        0: gemm_k * gemm_m/n * k_pack, src_order = 0
+        1: gemm_m/n * gemm_k * k_pack, src_order = 1 (unsupported)
     we always want to use k_pack as vector store
     '''
     def __init__(self, mc, ctrl, inline = False):
@@ -913,8 +913,9 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                         self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d*ctrl.length_dp}', 2 * i_d * stride_d))
                         issue_cnt += ds_write2.get_issues(2 * i_d * stride_d)
                 else:
+                    # nhwc almost all case goes here
                     for i_d in range(length_d):
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{s_id}', i_d0 * ctrl.stride_d0))
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*ctrl.length_dp}', i_d * ctrl.stride_d))
                         issue_cnt += ds_write.get_issues()
         else:
             assert False, "un implemented yet"
