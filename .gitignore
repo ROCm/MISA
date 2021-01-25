@@ -1,3 +1,4 @@
+.gitignore
 out/
 *.py[cod]
 __pycache__
@@ -8,11 +9,8 @@ driver/xdnn_conv.h
 *.inc
 *_bak
 *.txt
-config/igemm_*_gtc_gfx908_fp16_fail.config
-script/gtc_conv_model_fp16_fail.sh
+*_fail.config
+*_fail.sh
 *.xml
 sqtt_out/
 *.csv
-.gitignore
-config/fp16-configs/
-driver/cfg-tools/
