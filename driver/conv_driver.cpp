@@ -279,7 +279,8 @@ static inline bool valid_float(float p)
     return !(std::isnan(p) || std::isinf(p));
 }
 
-static inline bool valid_vector(const float *ref, const float *pred, int n,
+template<typename T>
+static inline bool valid_vector(const float *ref, const T *pred, int n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
@@ -290,7 +291,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
     for (int i = 0; i < n; ++i) {
         if(!(valid_float(ref[i]) && valid_float(pred[i]))){
             printf(" invalid float at %4d, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-            return -1;
+            return false;
         }
         double ri = (double)ref[i];
         double pi = (double)pred[i];
@@ -515,7 +516,7 @@ int main(int argc, char **argv) {
             num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
         else if(driver_data_type == driverHalf)
             num_simd = 4 * 128; // 4x miSIMD, 128x mac unit for fp16
-        else if(driver_data_type == driverHalf)
+        else if(driver_data_type == driverBFloat16)
             num_simd = 4 * 64 ; // 4x miSIMD, 64x mac unit for bf16
     }
     double fp32_gflops =
@@ -528,7 +529,7 @@ int main(int argc, char **argv) {
         fastest_result_fwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
         float *device_output_to_host = NULL;
-        float16 *device_output_to_host_f16 = NULL;
+        //float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
             //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
@@ -564,12 +565,15 @@ int main(int argc, char **argv) {
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
 #endif
-            if(driver_data_type == driverHalf){
-                tensor_copy<float16, float>(host_output_f16, host_output, n * k * ho * wo);
-                tensor_copy<float, float16>(host_output, host_output_f16, n * k * ho * wo);
-            }
-            device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
-            device_output_to_host_f16 = (float16 *)malloc(n * k * ho * wo * sizeof(float16));
+            //if(driver_data_type == driverHalf){
+                //tensor_copy<float16, float>(host_output_f16, host_output, n * k * ho * wo);
+                //tensor_copy<float, float16>(host_output, host_output_f16, n * k * ho * wo);
+            //}
+            if(driver_data_type == driverHalf)
+                device_output_to_host = (float *)malloc((n * k * ho * wo * sizeof(float16) + 3) / 4 * 4);
+            else
+                device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
+            
         }
         if(driver_data_type == driverFloat){
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -631,20 +635,24 @@ int main(int argc, char **argv) {
             printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
             if (need_verify) {
+                bool is_valid;
                 if(driver_data_type == driverFloat) {
                     HIP_CALL(hipMemcpy(device_output_to_host, device_output,
                                    n * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
+                    is_valid = valid_vector<float>(host_output, device_output_to_host,
+                                            n * k * ho * wo, nrms);
                 }
                 else if(driver_data_type == driverHalf) {
-                    HIP_CALL(hipMemcpy(device_output_to_host_f16, device_output_f16,
+                    HIP_CALL(hipMemcpy(device_output_to_host, device_output_f16,
                                    n * k * ho * wo * sizeof(float16),
                                    hipMemcpyDeviceToHost));
-                    tensor_copy<float, float16>(device_output_to_host, device_output_to_host_f16, n * k * ho * wo);
+                    float16 *device_output_to_host_fp16 = (float16 *)device_output_to_host;
+                    is_valid = valid_vector<float16>(host_output, device_output_to_host_fp16,
+                                            n * k * ho * wo, nrms);
                 }
                 
-                bool is_valid = valid_vector(host_output, device_output_to_host,
-                                            n * k * ho * wo, nrms);
+                
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
             }
@@ -674,7 +682,6 @@ int main(int argc, char **argv) {
                     fastest_result_fwd.efficiency);
         }
         if (need_verify){
-            free(device_output_to_host_f16);
             free(device_output_to_host);
         }
     }
@@ -746,7 +753,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemcpy(device_input_to_host, device_input,
                                    n * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_input, device_input_to_host,
+                bool is_valid = valid_vector<float>(host_input, device_input_to_host,
                                             n * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -885,7 +892,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
                                    k * c * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_weight, device_weight_to_host,
+                bool is_valid = valid_vector<float>(host_weight, device_weight_to_host,
                                             k * c * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
