@@ -252,7 +252,7 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
 }
 
 template <typename Dst_T, typename Src_T>
-void block_wise_tensor_movement(Dst_T *p_dst, Src_T *p_src, int tid, int block_size, int total_size)
+void block_wise_tensor_copy(Dst_T *p_dst, Src_T *p_src, int tid, int block_size, int total_size)
 {
     for (int i = tid; i < total_size; i += block_size) {
         p_dst[i] = static_cast<Dst_T>(p_src[i]);
@@ -260,14 +260,14 @@ void block_wise_tensor_movement(Dst_T *p_dst, Src_T *p_src, int tid, int block_s
 }
 
 template <typename Dst_T, typename Src_T>
-void tensor_movement(Dst_T *p_dst, Src_T *p_src, size_t tensor_size) {
+void tensor_copy(Dst_T *p_dst, Src_T *p_src, size_t tensor_size) {
     int num_threads = std::thread::hardware_concurrency();
     if (num_threads < 4)
         num_threads = 4;
     // printf("total threads:%d\n",num_threads);
     std::vector<std::thread> threads;
     for (int t = 0; t < num_threads; t++) {
-        threads.push_back(std::thread(block_wise_tensor_movement<Dst_T, Src_T>,
+        threads.push_back(std::thread(block_wise_tensor_copy<Dst_T, Src_T>,
             p_dst, p_src, t, num_threads, tensor_size));
     }
     for (auto &th : threads)
@@ -539,10 +539,10 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
                 // move to different data type
-                tensor_movement<float16, float>(host_input_f16, host_input, n * c * hi * wi);
-                tensor_movement<float16, float>(host_weight_f16, host_weight, k * c * y * x);
-                tensor_movement<float, float16>(host_input, host_input_f16, n * c * hi * wi);
-                tensor_movement<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+                tensor_copy<float16, float>(host_input_f16, host_input, n * c * hi * wi);
+                tensor_copy<float16, float>(host_weight_f16, host_weight, k * c * y * x);
+                tensor_copy<float, float16>(host_input, host_input_f16, n * c * hi * wi);
+                tensor_copy<float, float16>(host_weight, host_weight_f16, k * c * y * x);
             }
 
 #ifdef USE_GPU_NAIVE_CONV
@@ -565,8 +565,8 @@ int main(int argc, char **argv) {
                                 dilation_w, dilation_h, ngroups);
 #endif
             if(driver_data_type == driverHalf){
-                tensor_movement<float16, float>(host_output_f16, host_output, n * k * ho * wo);
-                tensor_movement<float, float16>(host_output, host_output_f16, n * k * ho * wo);
+                tensor_copy<float16, float>(host_output_f16, host_output, n * k * ho * wo);
+                tensor_copy<float, float16>(host_output, host_output_f16, n * k * ho * wo);
             }
             device_output_to_host = (float *)malloc(n * k * ho * wo * sizeof(float));
             device_output_to_host_f16 = (float16 *)malloc(n * k * ho * wo * sizeof(float16));
@@ -640,7 +640,7 @@ int main(int argc, char **argv) {
                     HIP_CALL(hipMemcpy(device_output_to_host_f16, device_output_f16,
                                    n * k * ho * wo * sizeof(float16),
                                    hipMemcpyDeviceToHost));
-                    tensor_movement<float, float16>(device_output_to_host, device_output_to_host_f16, n * k * ho * wo);
+                    tensor_copy<float, float16>(device_output_to_host, device_output_to_host_f16, n * k * ho * wo);
                 }
                 
                 bool is_valid = valid_vector(host_output, device_output_to_host,

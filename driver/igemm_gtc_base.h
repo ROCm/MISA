@@ -212,7 +212,6 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.tensor_b_thread_lengths  = sec.at("tensor_b_thread_lengths").get_list_int();
             tunable.tensor_b_cluster_lengths = sec.at("tensor_b_cluster_lengths").get_list_int();
             tunable.direction                = sec.at("direction").get_string();
-            //tunable.precision                = sec.at("precision").get_string();
             tunable.nxb                      = sec.at("nxb").get_int();
             tunable.nxe                      = sec.at("nxe").get_int();
             tunable.gemm_m_unmerge_cluster   = sec.count("gemm_m_unmerge_cluster") > 0 ? sec.at("gemm_m_unmerge_cluster").get_int() : 0;
