@@ -319,6 +319,19 @@ public:
         return 2 * utility_next_pow2(utility_next_pow2(lds_a) + utility_next_pow2(lds_b));
     }
 
+    // This is a helper function for selecting better performing config
+    bool mayHaveBiggerGemmNPerBlock(int gemm_m, int gemm_n, bool is_unit_yx, const igemm_gtc_tunable_t *tunable)
+    {
+        float n_times_m = (float) gemm_n / float(gemm_m);
+
+        //std::cout << std::endl << "gemm_n = " << gemm_n << " gemm_m = " << gemm_m << std::endl;
+
+        if ( !is_unit_yx && n_times_m >= 16.0f && tunable->gemm_m_per_block >= tunable->gemm_n_per_block)
+             return(true); 
+
+        return(false);
+    };
+
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable)
     {
@@ -429,6 +442,11 @@ public:
         // configs with nxe == 1 and tensor_a_thread_lengths[3] > 1 can only be used with x=y=1
         if ( tunable->nxe == 1 && tunable->tensor_a_thread_lengths[3] > 1 && (x > 1 || y > 1) ) 
              return false; 
+
+        // let's check the next configuration even though this configuration is applicable
+        bool is_unit_yx = (y == 1 && x == 1) ? true : false; 	
+        if ( mayHaveBiggerGemmNPerBlock(gemm_m, gemm_n, is_unit_yx, tunable) )
+             return false;	
 
         return true;
     }
