@@ -44,6 +44,7 @@
 
 static std::pair<int,int> macro_tiles[] = { {256,128}, {128, 256}, {64,256}, {128,128}, {256,64}, {32,256}, {64,128}, {128,64}, {256,32}, {16,256}, {32,128}, {64,64}, {128,32},
                                             {256,16}, {16,128}, {32,64}, {64,32}, {128,16}, {16,64}, {32,32}, {64,16}, {8,64}, {16,32}, {32,16}, {64,8}, {4,64}, {16,16}, {64,4} };
+
                                             
 #define NUM_MACRO_TILES (sizeof(macro_tiles)/sizeof(macro_tiles[0]))
 
@@ -95,7 +96,7 @@ struct fwdSorterClass
 	  return(true); 
 
      if ( cfg1.wave_tile_k < cfg2.wave_tile_k ) 
-	  return(true); 
+	  return(false); 
 
      return(false); 
   };
@@ -105,11 +106,12 @@ struct bwdSorterClass
 {
   bool operator()(igemm_gtc_tunable_t &cfg1, igemm_gtc_tunable_t &cfg2)
   {
-     if ( cfg1.gemm_k_per_block > cfg2.gemm_k_per_block )
+     if ( cfg1.gemm_m_per_block > cfg2.gemm_m_per_block )
           return(true);
-     if ( cfg1.gemm_k_per_block < cfg2.gemm_k_per_block )
+     if ( cfg1.gemm_m_per_block < cfg2.gemm_m_per_block )
           return(false);
 
+     // larger work-group size is preferred
      int blockSize_1 = cfg1.tensor_b_cluster_lengths[1] * cfg1.tensor_b_cluster_lengths[3];
      int blockSize_2 = cfg2.tensor_b_cluster_lengths[1] * cfg2.tensor_b_cluster_lengths[3];
 
@@ -122,6 +124,11 @@ struct bwdSorterClass
      if ( cfg1.tensor_b_cluster_lengths[3] > cfg2.tensor_b_cluster_lengths[3] )
           return(true);
      if ( cfg1.tensor_b_cluster_lengths[3] < cfg2.tensor_b_cluster_lengths[3] )
+          return(false);
+
+     if ( cfg1.gemm_k_per_block > cfg2.gemm_k_per_block )
+          return(true);
+     if ( cfg1.gemm_k_per_block < cfg2.gemm_k_per_block )
           return(false);
 
      // This is needed to ensure tunable with nxe==0 is selected for x=y=1 dilation_x=dilation_y=1, stride_x=stride_y=1, pad_x=pad_y=0
@@ -140,15 +147,17 @@ struct bwdSorterClass
           return(true);
 
      if ( cfg1.wave_tile_k > cfg2.wave_tile_k )
-          return(true);
+          return(false);
 
-     // The config which can use vector load/store is preferred 
-     if ( cfg1.tensor_b_thread_lengths[3] > cfg2.tensor_b_thread_lengths[3] ) 
-	  return(true); 
-     if ( cfg1.tensor_b_thread_lengths[3] < cfg2.tensor_b_thread_lengths[3] ) 
-	  return(false); 
+     // The config which can use vector load/store on dim n1b is preferred 
+     if ( cfg1.nxe == 0 && cfg2.nxe == 0) {
+          if ( cfg1.tensor_b_thread_lengths[3] > cfg2.tensor_b_thread_lengths[3] ) 
+	       return(true); 
+          if ( cfg1.tensor_b_thread_lengths[3] < cfg2.tensor_b_thread_lengths[3] ) 
+	       return(false); 
+     }; 
 
-     // The config which can use vector load/store is preferred 
+     // The config which can use vector load/store on dim c is preferred 
      if ( cfg1.tensor_a_thread_lengths[3] > cfg2.tensor_a_thread_lengths[3] ) 
 	  return(true); 
      if ( cfg1.tensor_a_thread_lengths[3] < cfg2.tensor_a_thread_lengths[3] ) 
@@ -258,51 +267,96 @@ int main(int argc, char **argv)
     }
     fprintf(stdout, "tunables:%d\n", (int)tunables.size());
 
-    // "indexed_configs" is used to classify the configs according to the lengths of the macro-tile
-    std::map< std::pair<int,int>, std::vector<igemm_gtc_tunable_t> > indexed_configs; 
-    std::map< std::pair<int,int>, std::vector<igemm_gtc_tunable_t> >::iterator it;
+    if ( direction == "fwd" ) {
+        // "indexed_configs" is used to classify the configs according to the lengths of the macro-tile
+        std::map< std::pair<int,int>, std::vector<igemm_gtc_tunable_t> > indexed_configs; 
+        std::map< std::pair<int,int>, std::vector<igemm_gtc_tunable_t> >::iterator it;
 
-    int count=0; 
-    for (const auto& tunable : tunables)  {
-         assert(direction == tunable.direction && std::string(precision) == tunable.precision); 
+        int count=0; 
+        for (const auto& tunable : tunables)  {
+            assert(direction == tunable.direction && std::string(precision) == tunable.precision); 
 
-         auto mt = std::make_pair((int)tunable.gemm_m_per_block, (int)tunable.gemm_n_per_block); 
+            auto mt = std::make_pair((int)tunable.gemm_m_per_block, (int)tunable.gemm_n_per_block); 
 
-	 it = indexed_configs.find(mt); 
+            it = indexed_configs.find(mt); 
 
-         if ( it == indexed_configs.end() ) {
-              std::vector<igemm_gtc_tunable_t> tmpVector; 	
+            if ( it == indexed_configs.end() ) {
+                std::vector<igemm_gtc_tunable_t> tmpVector;       
 
-              indexed_configs.insert( std::make_pair(mt, tmpVector) ); 
-              it = indexed_configs.find(mt); 
-         }
+                indexed_configs.insert( std::make_pair(mt, tmpVector) ); 
+                it = indexed_configs.find(mt);
+            }
 
-         assert(it != indexed_configs.end());  
+            assert(it != indexed_configs.end());
 
-         count++; 
-         it->second.push_back(tunable); 
+            count++;
+            it->second.push_back(tunable);
+        }
+
+        fprintf(stdout, "%d configurations checked\n", count); 
+
+        for (int i=0; i < NUM_MACRO_TILES; i++) {
+             auto mt = macro_tiles[i];
+             it = indexed_configs.find(mt);
+
+             if ( it != indexed_configs.end() ) {
+                  fprintf(stdout, "Macro-tile [%d,%d], number of configurations %d\n", it->first.first, it->first.second, (int)it->second.size());
+
+                  if (direction == "fwd" )
+                      std::sort(it->second.begin(), it->second.end(), fwdSorterObj);
+                  else
+                      if (direction == "bwd" )
+                          std::sort(it->second.begin(), it->second.end(), bwdSorterObj);
+
+                  for (const auto&  tunable : it->second)
+                       ordered_configs.push_back(tunable);
+             };
+        };
     }
+    else {
+        // "indexed_configs" is used to classify the configs according to the size of the macro-tile
+        std::map< int, std::vector<igemm_gtc_tunable_t> > indexed_configs; 
+        std::map< int, std::vector<igemm_gtc_tunable_t> >::iterator it;
+        std::vector<int> mt_sizes; 
 
-    fprintf(stdout, "%d configurations checked\n", count); 
+        int count=0; 
+        for (const auto& tunable : tunables)  {
+             assert(direction == tunable.direction && std::string(precision) == tunable.precision); 
 
-    for (int i=0; i < NUM_MACRO_TILES; i++) {
-         auto mt = macro_tiles[i]; 
-        
-	 it = indexed_configs.find(mt); 
+             auto mt = tunable.gemm_m_per_block*tunable.gemm_n_per_block; 
 
-         if ( it != indexed_configs.end() ) {
-              fprintf(stdout, "Macro-tile [%d,%d], number of configurations %d\n", it->first.first, it->first.second, (int)it->second.size()); 	
+             it = indexed_configs.find(mt); 
 
-              if (direction == "fwd" )
-    	          std::sort(it->second.begin(), it->second.end(), fwdSorterObj); 	
-              else
-		  if (direction == "bwd" )
-    	              std::sort(it->second.begin(), it->second.end(), bwdSorterObj); 	
+             if ( it == indexed_configs.end() ) {
+                  std::vector<igemm_gtc_tunable_t> tmpVector;
 
-              for (const auto&  tunable : it->second) 
-                   ordered_configs.push_back(tunable); 
-         }; 
-    }; 
+                  indexed_configs.insert( std::make_pair(mt, tmpVector) );
+                  it = indexed_configs.find(mt);
+
+                  mt_sizes.push_back(mt);
+             }
+
+             assert(it != indexed_configs.end());
+
+             count++;
+             it->second.push_back(tunable);
+        }
+
+        fprintf(stdout, "%d configurations checked\n", count); 
+
+        for (auto mt : mt_sizes) {
+             it = indexed_configs.find(mt);
+
+             if ( it != indexed_configs.end() ) {
+		  fprintf(stdout, "Macro-tile %d, number of configurations %d\n", mt, (int)it->second.size());
+
+                  std::sort(it->second.begin(), it->second.end(), bwdSorterObj);
+
+                  for (const auto&  tunable : it->second)
+                       ordered_configs.push_back(tunable);
+             };
+        };
+    }
 
     fprintf(stdout, "\nSize of the orderred configs array %d\n", (int)ordered_configs.size()); 
 

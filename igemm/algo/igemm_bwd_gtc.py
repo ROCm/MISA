@@ -740,6 +740,11 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_dslice_w_left       = sym_t("s_dslice_w_left"          ,44)
                 self.s_group               = sym_t("s_group"                  ,45)
                 sseq                       = gpr_sequencer_t(46)
+
+                if outer.is_unit_yx():
+                    ## add two sgprs to store the strides and ensure correct shifting
+                    self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"      , self.s_ka.value)
+                    self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"      , self.s_ka.value+1)
             else:
                 self.s_group               = sym_t("s_group"                  ,21)
                 sseq                       = gpr_sequencer_t(22)
@@ -769,11 +774,6 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_wei_stride_k0           = sym_t("s_wei_stride_k0"          ,sseq(1))
 
             if outer.tunable.nxe != 0:
-                ## add two sgprs to store the strides and ensure correct shifting
-                self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"      , self.s_ka.value)
-                self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"      , self.s_ka.value+1)
-
-            if outer.tunable.nxe != 0:
                 ##self.s_stride_dslice_hw    = sym_t("s_stride_dslice_hw"       ,sseq(1))
                 ##self.s_stride_dslice_yx    = sym_t("s_stride_dslice_yx"       ,sseq(1))
                 self.s_stride_dslice_hw    = sym_t("s_stride_dslice_hw"       ,self.s_dslice_h.value)
@@ -795,7 +795,7 @@ class igemm_bwd_gtc_t(mc_base_t):
 
             ##self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,sseq(1))
             self.s_move_slice_k_k1         = sym_t("s_move_slice_k_k1"        ,self.s_pad_h.value if outer.tunable.nxe != 0 else sseq(1))
-            if outer.tunable.nxe != 0:
+            if not outer.is_unit_yx():
                 self.s_move_slice_k_dsy    = sym_t("s_move_slice_k_dsy"       ,self.s_dslice_h_left.value)
                 self.s_move_slice_k_dsx    = sym_t("s_move_slice_k_dsx"       ,self.s_dslice_w_left.value)
 
@@ -1350,11 +1350,11 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         ## use s_out_stride_k_save/s_wei_stride_k_save instead of s_dummy so that some configs where x=y=1 and nxe != 0 can be supported
         out_stride_gprs = [s.s_out_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_out_stride_k_save if self.tunable.nxe != 0 else s.s_out_stride_k,
+                    s.s_out_stride_k if self.tunable.nxe == 0 else s.s_out_stride_k_save if self.is_unit_yx() else s_dummy, 
                     s.s_out_stride_n0 if t_n0 != 1 else s_dummy,
                     s_dummy]
         wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_wei_stride_k_save if self.tunable.nxe != 0 else s.s_wei_stride_k,
+                    s.s_wei_stride_k if self.tunable.nxe == 0 else s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy, 
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy,
                     s.s_wei_stride_c if self.tunable.nxe != 0 else s_dummy]
 
@@ -1670,8 +1670,9 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_hw()}],  s[{s.s_dslice_h()}], s[{s.s_dslice_w()}]")
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
 
-            self._emit(f"s_mov_b32 s[{s.s_out_stride_k_save()}], s[{s.s_out_stride_k()}]")
-            self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
+            if self.is_unit_yx():
+                self._emit(f"s_mov_b32 s[{s.s_out_stride_k_save()}], s[{s.s_out_stride_k()}]")
+                self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
 
             self._emit(f"; pad b into multiplier of nxb")
             self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
@@ -2230,8 +2231,6 @@ class igemm_bwd_gtc_t(mc_base_t):
                     self._emit(m_int_div_rem_ss(s.s_move_slice_k_dsx(), s.s_move_slice_k_dsy(), s.s_tmp(4), s.s_dslice_x(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             else:
                 self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k1()}], s[{s.s_tmp(5)}]")
-                self._emit(f"s_mov_b32 s[{s.s_move_slice_k_dsy()}], 0")
-                self._emit(f"s_mov_b32 s[{s.s_move_slice_k_dsx()}], 0")
         else:
             self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k1()}], {n_k1e}")
         self._emit_empty_line()
