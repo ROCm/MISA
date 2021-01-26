@@ -416,7 +416,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
 
          for (int nxe=0; nxe < 2; nxe += 1)  {
               cfg.nxe = nxe;
-              for (int nxb=1; nxb < 3; nxb *= 4) {
+              for (int nxb=1; nxb < 3; nxb *= 4) { // no use for nxb bigger than 1
                    cfg.nxb = nxb;
 
                    int unmerge_sub_n = cfg.gemm_n_per_block / cfg.nxb;    // assuming gemm_n_unmerge_cluster == 0 is used for generated configs 
@@ -761,5 +761,7 @@ int main(int argc, char **argv)
     else 
     if (direction == "bwd")
 	generate_bwd_configs(precision, config_file); 
+
+    std::cout << std::endl << configs.size() << " configs produced !" << std::endl;
 }; 
 
