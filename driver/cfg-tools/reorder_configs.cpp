@@ -164,10 +164,38 @@ struct bwdSorterClass
 	  return(false); 
 
      // for bwd-fp16, having thread slice on k0 or k1e has differrent meaning (pack_d0 or not)
-     if ( cfg1.tensor_b_thread_lengths[1] > cfg2.tensor_b_thread_lengths[1] ) 
-	  return(true); 
-     if ( cfg1.tensor_b_thread_lengths[1] < cfg2.tensor_b_thread_lengths[1] ) 
-	  return(false); 
+     if ( cfg1.tensor_b_thread_lengths[3] > 1 && cfg2.tensor_b_thread_lengths[3] > 1 ) {
+          // if vector load is used on n1b, we prefer to pack k1 
+          if ( cfg1.tensor_b_thread_lengths[1] > cfg2.tensor_b_thread_lengths[1] ) 
+	       return(true); 
+          if ( cfg1.tensor_b_thread_lengths[1] < cfg2.tensor_b_thread_lengths[1] ) 
+	       return(false); 
+     }
+     else {
+          // if vector load is not used on n1b, we prefer to have slice on k0 instead of k1, so that
+	  // simulaneously access by multiple lanes cover smaller address space (better L2 hit)
+          if ( cfg1.tensor_b_thread_lengths[1] < cfg2.tensor_b_thread_lengths[1] ) 
+	       return(true); 
+          if ( cfg1.tensor_b_thread_lengths[1] > cfg2.tensor_b_thread_lengths[1] ) 
+	       return(false); 
+     }; 
+
+     // for bwd-fp16, having thread slice on k0 or k1e has differrent meaning (pack_d0 or not)
+     if ( cfg1.tensor_a_thread_lengths[3] > 1 && cfg2.tensor_a_thread_lengths[3] > 1 ) {
+          // if vector load is used on c1, we prefer to pack k1 
+          if ( cfg1.tensor_a_thread_lengths[1] > cfg2.tensor_a_thread_lengths[1] ) 
+               return(true);
+          if ( cfg1.tensor_a_thread_lengths[1] < cfg2.tensor_a_thread_lengths[1] )
+               return(false);
+     }
+     else {
+          // if vector load is not used on c1, we prefer to have slice on k0 instead of k1, so that
+          // simulaneously access by multiple lanes cover smaller address space (better L2 hit)
+          if ( cfg1.tensor_a_thread_lengths[1] < cfg2.tensor_a_thread_lengths[1] )
+               return(true); 
+          if ( cfg1.tensor_a_thread_lengths[1] > cfg2.tensor_a_thread_lengths[1] )
+               return(false);
+     };
 
      return(false);
   };
