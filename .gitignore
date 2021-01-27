@@ -9,8 +9,8 @@ driver/xdnn_conv.h
 *.inc
 *_bak
 *.txt
-*_fail.config
-*_fail.sh
-*.xml
 sqtt_out/
+*_fail.*
+*_out/
 *.csv
+*.xml

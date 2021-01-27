@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -81,6 +81,10 @@ class macro_igemm_fwd_gtc_set_flag_c(macro_base_t):
     def expr(self):
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
+<<<<<<< HEAD
+=======
+
+>>>>>>> master
 
 class macro_igemm_fwd_gtc_in_update_hw_t(macro_base_t):
     def __init__(self, mc, inline = False):
@@ -208,10 +212,83 @@ class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(macro_base_t):
         self._emit(f"v_add_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_move_slice_k_c1()}], v[{self.v_move_slice_k_ic1()}]")
         self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c1()}], v[{self.v_in_os_base()}]")
         # self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k_c1()}], v[{self.v_wei_os_base()}]")
-        #self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
-        #self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
-        #self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c0_c1_diff()}], v[{self.v_in_os_base()}]")
-        #self._emit(f"s_mov_b64 exec, -1")
+
+class macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(macro_base_t):
+    def __init__(self, mc, tunable, inline = False):
+        macro_base_t.__init__(self, mc, inline)
+        self.tunable = tunable
+        self.declare_arg("v_move_slice_k_ic1")
+        self.declare_arg("v_move_slice_k_iy")
+        self.declare_arg("v_move_slice_k_ix")
+        self.declare_arg("s_gemm_k_num_c1")
+        self.declare_arg("s_gemm_k_num_y")
+        self.declare_arg("s_gemm_k_num_x")
+        self.declare_arg("s_move_slice_k_c1")
+        self.declare_arg("s_move_slice_k_y")
+        self.declare_arg("s_move_slice_k_x")
+        self.declare_arg("v_in_os_base")
+        self.declare_arg("s_in_stride_c")
+        self.declare_arg("s_in_stride_c_c1")
+        self.declare_arg("s_in_stride_c_c0_c1_diff")
+    def name(self):
+        return '.v_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1'
+
+    def init_stride_c(self, s_in_stride_c, s_in_stride_c_c1, s_in_stride_c_c0_c1_diff, s_move_slice_k_c1):
+        '''
+        s_in_stride_c, s_move_slice_k_c1 is known value, want to compute other
+        '''
+        c_ta = self.tunable.tensor_a_cluster_lengths
+        c_tb = self.tunable.tensor_b_cluster_lengths
+
+        assert len(c_ta) == 4 and len(c_tb) == 4
+
+        ca_c0, ca_c1e, ca_k0, ca_k1  = c_ta[0], c_ta[1], c_ta[2], c_ta[3]
+        cb_c0, cb_c1e, cb_n0, cb_n1b = c_tb[0], c_tb[1], c_tb[2], c_tb[3]
+
+        t_ta = self.tunable.tensor_a_thread_lengths
+        t_tb = self.tunable.tensor_b_thread_lengths
+
+        assert len(t_ta) == 4 and len(t_tb) == 4
+
+        ta_c0, ta_c1e, ta_k0, ta_k1   = t_ta[0], t_ta[1], t_ta[2], t_ta[3]
+        tb_c0, tb_c1e, tb_n0, tb_n1b  = t_tb[0], t_tb[1], t_tb[2], t_tb[3]
+
+        nb_c0, nb_c1e = cb_c0 * tb_c0, cb_c1e * tb_c1e
+        unmerge_sub_c = self.tunable.unmerge_sub_c
+        assert unmerge_sub_c % nb_c0 == 0
+        unmerge_sub_tb_c1 = unmerge_sub_c // nb_c0
+        assert nb_c1e % unmerge_sub_tb_c1 == 0
+
+        diff_c0_c1 = self.tunable.gemm_k_per_block - unmerge_sub_tb_c1 # !!! the diff of 2 unmerged dimension (like K=K0*K1)
+
+        with self._deferred_context():
+            self._emit(f"s_mul_i32 s[{s_in_stride_c_c0_c1_diff}], {diff_c0_c1}, s[{s_in_stride_c}]")
+            self._emit(f"s_mul_i32 s[{s_in_stride_c_c1}], s[{s_move_slice_k_c1}], s[{s_in_stride_c}]  ; might be 0 or larger")
+        return self._get_deferred()
+
+    def expr(self):
+        # k0, k1e is unmerge.  k1e is merged from k1, e
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ix()}], s[{self.s_move_slice_k_x()}], v[{self.v_move_slice_k_ix()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_x()}], v[{self.v_move_slice_k_ix()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ix()}], s[{self.s_gemm_k_num_x()}], v[{self.v_move_slice_k_ix()}]")
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_iy()}], 1, v[{self.v_move_slice_k_iy()}]")
+        self._emit(f"s_mov_b64 exec, -1")
+        self._emit_empty_line()
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_iy()}], s[{self.s_move_slice_k_y()}], v[{self.v_move_slice_k_iy()}]")
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_y()}], v[{self.v_move_slice_k_iy()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_iy()}], s[{self.s_gemm_k_num_y()}], v[{self.v_move_slice_k_iy()}]")
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ic1()}], 1, v[{self.v_move_slice_k_ic1()}]")
+        self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c()}], v[{self.v_in_os_base()}]")
+        # self._emit(f"v_add_u32 v[{self.v_wei_os_base()}], s[{self.s_wei_stride_k()}], v[{self.v_wei_os_base()}]")
+        self._emit(f"s_mov_b64 exec, -1")
+        self._emit_empty_line()
+        self._emit(f"v_add_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_move_slice_k_c1()}], v[{self.v_move_slice_k_ic1()}]")
+        self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c1()}], v[{self.v_in_os_base()}]")
+        
+        self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
+        self._emit(f"v_subrev_u32 v[{self.v_move_slice_k_ic1()}], s[{self.s_gemm_k_num_c1()}], v[{self.v_move_slice_k_ic1()}]")
+        self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_c_c0_c1_diff()}], v[{self.v_in_os_base()}]")
+        self._emit(f"s_mov_b64 exec, -1")
         self._emit_empty_line()
 
 class macro_igemm_fwd_gtc_move_slice_window_k_tb_t(macro_base_t):
@@ -717,15 +794,14 @@ class igemm_fwd_gtc_t(mc_base_t):
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self.s_magic_0             = sym_t("s_magic_0"                ,self.s_p_wei.value + 2)
                 self.s_magic_1             = sym_t("s_magic_1"                ,self.s_p_wei.value + 3)
-                
 
             self.s_end                     = sym_t("s_end"                    ,sseq())
-
 
         def get_count(self):
             return self.s_end.value
 
         def emit(self):
+            assert self.s_end.value <= amdgpu_sgpr_limit(self.mc.arch_config.arch), f"s_end:{self.s_end.value}, tunable:{self.outer.tunable.serialize()}"
             for k, v in self.__dict__.items():
                 if k.startswith('s_'):
                     self._emit(v.declare())
@@ -867,8 +943,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             assert ta_c0 == 1
             assert tb_c0 == 1
         else:
-            # assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
-            # assert tb_c0 == 1
+            #assert ta_c0 == 1, "wei not using c0. for wei treat c1e as c*e, single dimension"
+            #assert tb_c0 == 1
             pass
             # there should be a case that tb_c1e not be 1 and nxe != 0. this should only be allowed in 1x1 and with stride or dilation or pad
             # assert tb_c0 == 1 and tb_c1e == 1, "input no need to use c0/c1e per thread"
@@ -1185,7 +1261,10 @@ class igemm_fwd_gtc_t(mc_base_t):
         inline = True if self.tunable.fma_interleave else False
         move_slice_window_ta = macro_igemm_fwd_gtc_move_slice_window_ta_t(self.mc, self.tunable, inline)
         if self.tunable.nxe != 0:
-            return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(self.mc, self.tunable, inline)
+            if self.tunable.tensor_b_thread_lengths[0] > 1:
+                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(self.mc, self.tunable, inline)
+            else:
+                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(self.mc, self.tunable, inline)
         else:
             if self.is_1d_move_slice_k():
                 return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_1d_tb_t(self.mc, self.tunable, inline)
@@ -1197,6 +1276,10 @@ class igemm_fwd_gtc_t(mc_base_t):
         inline = True if self.tunable.fma_interleave else False
         return macro_igemm_fwd_gtc_set_flag_hw(self.mc, inline)
         
+    def get_macro_set_flag_c(self):
+        inline = True if self.tunable.fma_interleave else False
+        return macro_igemm_fwd_gtc_set_flag_c(self.mc, inline)
+
     def get_macro_set_flag_c(self):
         inline = True if self.tunable.fma_interleave else False
         return macro_igemm_fwd_gtc_set_flag_c(self.mc, inline)
@@ -1740,7 +1823,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
             self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
             self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
-            self._emit(m_set_flag_c(v.v_in_flag(), v.v_gtc_tb_ic1(), s.s_c()))
+            if self.tunable.tensor_b_cluster_lengths[0] == 1:
+                self._emit(m_set_flag_c(v.v_in_flag(), v.v_gtc_tb_ic1(), s.s_c()))
         else:
             self._emit(f"v_add_lshl_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(data_byte)}")
             self._emit(m_in_update_os(v.v_in_os(), v.v_tmp(4), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
@@ -2083,8 +2167,8 @@ class igemm_fwd_gtc_t(mc_base_t):
         m_move_slice_window_ta, m_move_slice_window_tb = self.get_macro_move_slice_window()
         def move_slice_window_b():
             if self.tunable.nxe != 0:
-                m_in_update_os       = self.get_macro_in_update_os()
-                m_in_update_hw       = self.get_macro_in_update_hw()
+                m_in_update_os        = self.get_macro_in_update_os()
+                m_in_update_hw        = self.get_macro_in_update_hw()
                 m_set_flag_hw         = self.get_macro_set_flag_hw()
                 m_set_flag_c          = self.get_macro_set_flag_c()
                 with self._deferred_context():
@@ -2094,7 +2178,8 @@ class igemm_fwd_gtc_t(mc_base_t):
                     self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_in_iho(), v.v_in_iwo(), v.v_in_iy(), v.v_in_ix(), s.s_dilation_h(), s.s_dilation_w()))
                     self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
                     self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
-                    self._emit(m_set_flag_c(v.v_in_flag(), v.v_move_slice_k_ic1(), s.s_c()))
+                    if self.tunable.tensor_b_cluster_lengths[0] == 1:
+                        self._emit(m_set_flag_c(v.v_in_flag(), v.v_move_slice_k_ic1(), s.s_c()))
                 return self._get_deferred()
             else:
                 with self._deferred_context():

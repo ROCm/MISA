@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -304,11 +304,12 @@ public:
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = y_tilda * x_tilda;
         if(tunable->multihead)
             grid_size *= num_of_gemm;
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
@@ -372,14 +373,15 @@ public:
         int w_tilda_slice = w_tilda_right - w_tilda_left;
         int num_of_gemm = y_tilda * x_tilda;
 
-        int gemm_m = c / group;
         int nxe = tunable->nxe;
         int nxb = tunable->nxb;
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
-        if((gemm_n%gemm_n_per_block!=0)||(gemm_m%gemm_m_per_block!=0)){
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
+        if(gemm_n%gemm_n_per_block!=0){
             // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
             return false;
         }
@@ -413,10 +415,15 @@ public:
         if(!gemm_k_valid)
             return false;
 
-        if(tunable->nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if(tunable->nxe == 0 && !unit_conv){
+            return false;
+        }
+
+        // output vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
         }
 
         return true;
@@ -487,6 +494,9 @@ public:
         int b = h_tilda_slice * w_tilda_slice;
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
+        int gemm_m = c / group;
+        int gemm_n = n * b;
+
         igemm_bwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
@@ -531,7 +541,8 @@ public:
         uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
         uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
 
-        magic_div_u32_t mdiv_2  = magic_div_u32_gen(((c / group) * n * b) / (gemm_m_per_block * gemm_n_per_block));
+        magic_div_u32_t mdiv_2  = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
         magic_div_u32_t mdiv_3  = magic_div_u32_gen((n * b) / gemm_n_per_block);
         magic_div_u32_t mdiv_4  = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ?
                                                                 b * unmerge_sub_n1 / nb_n1b :
