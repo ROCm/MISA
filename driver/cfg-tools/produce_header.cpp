@@ -41,7 +41,7 @@
 static void output_h_file(std::vector<igemm_gtc_tunable_t> &configs, const char *strDirection, const char *strPrecision, std::ostream &myout)
 {
     static const char *dataItemName = "TunableImplicitGemmGTCDynamic_t"; 
-    static const char *comma = ", "; 
+    static const char *comma = ",  "; 
     static const char *ident = "    "; 
 
     myout << "static inline std::vector<" << dataItemName << ">& " << std::endl; 
@@ -51,7 +51,7 @@ static void output_h_file(std::vector<igemm_gtc_tunable_t> &configs, const char 
     else
          myout << "GetImplicitGemmGtcDynamicBwdXdlopsTunablesList()" << std::endl; 
 
-    myout << '{' << std::endl; 
+    myout << "{" << std::endl; 
 
     myout << ident << "// list all the dynamic igemm conv-fwd kernels" << std::endl; 
     myout << ident << "// clang-format off" << std::endl; 
@@ -59,10 +59,10 @@ static void output_h_file(std::vector<igemm_gtc_tunable_t> &configs, const char 
     myout << ident << "static std::vector<TunableImplicitGemmGTCDynamic_t> kernel_param_list {" << std::endl; 
 
     for (const auto& cfg : configs) {
-         myout << ident << ident << '{'; 
+         myout << ident << ident << "{ "; 
 
-         myout << strDirection << comma; 
-	 myout << strPrecision << comma;
+         myout << "\"" << strDirection << "\"" << comma; 
+	 myout << "\"" << strPrecision << "\"" << comma;
 
 	 myout << cfg.nxb << comma;
 	 myout << cfg.nxe << comma;
@@ -87,7 +87,7 @@ static void output_h_file(std::vector<igemm_gtc_tunable_t> &configs, const char 
 
          myout << "0"; 
 
-         myout << '}' << comma << std::endl; 	 
+         myout << " }" << comma << std::endl; 	 
     };  
 
     myout << ident << '}' << ';' << std::endl; 
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
     }
     fprintf(stdout, "tunables:%d\n", (int)tunables.size());
 
-    const char *strDirection = "fwd";
+    const char *strDirection = "bwd";
 
 #ifdef USE_PRECISION_FP16    
     const char *strPrecision = "fp16"; 

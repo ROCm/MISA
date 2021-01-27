@@ -326,7 +326,8 @@ public:
 
         //std::cout << std::endl << "gemm_n = " << gemm_n << " gemm_m = " << gemm_m << std::endl;
 
-        if ( !is_unit_yx && n_times_m >= 16.0f && tunable->gemm_m_per_block >= tunable->gemm_n_per_block)
+        // since gemm_n is much bigger than gemm_m, we want to use a config where gemm_n_per_block is bigger than gemm_m_per_block
+        if ( !is_unit_yx && n_times_m >= 16.0f && tunable->gemm_m_per_block >= tunable->gemm_n_per_block && tunable->gemm_n_per_block >= 32)
              return(true); 
 
         return(false);
@@ -433,18 +434,18 @@ public:
         }
 
         // output vector load limitation, n1b
-        if(tunable->tensor_b_thread_lengths[3] > 1 && (
-            !unit_conv ||
-            unit_conv && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0)) {
+        if( tunable->nxe == 0 && tunable->tensor_b_thread_lengths[3] > 1 && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0) {
             return false;
         }
 
+        bool is_unit_yx = (y == 1 && x == 1) ? true : false; 	
+
         // configs with nxe == 1 and tensor_a_thread_lengths[3] > 1 can only be used with x=y=1
-        if ( tunable->nxe == 1 && tunable->tensor_a_thread_lengths[3] > 1 && (x > 1 || y > 1) ) 
+        if ( tunable->nxe == 1 && tunable->tensor_a_thread_lengths[3] > 1 && !is_unit_yx ) 
              return false; 
 
-        // let's check the next configuration even though this configuration is applicable
-        bool is_unit_yx = (y == 1 && x == 1) ? true : false; 	
+        // Let's check the next configuration even though this configuration is applicable. 
+	// This should be the last check
         if ( mayHaveBiggerGemmNPerBlock(gemm_m, gemm_n, is_unit_yx, tunable) )
              return false;	
 
