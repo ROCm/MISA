@@ -736,24 +736,26 @@ class igemm_fwd_gtc_t(mc_base_t):
             self.outer = outer
             is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
+            wei_data_per_vgpr        = 1 
+            if outer.tunable.precision == "fp32":
+                wei_data_per_vgpr    = 1
+            elif outer.tunable.tensor_a_thread_lengths[1] > 1:
+                wei_data_per_vgpr    = 2
             if is_vgpr_acc_c:
                 self.v_c             = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
                 v_c_num              = vseq()
             else:
+                
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
-                                        outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
-                                        16       # from v_sst_a_os to v_co_sst
+                                        outer.tunable.num_vgpr_global_load_a // wei_data_per_vgpr + \
+                                        outer.tunable.num_vgpr_global_load_b + 18 # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
                 v_c_needed           = v_c_needed if v_c_needed > 0 else 0  # let at least 2
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
-            wei_data_per_vgpr        = 1 
-            if outer.tunable.precision == "fp32":
-                wei_data_per_vgpr    = 1
-            elif outer.tunable.tensor_a_thread_lengths[1] > 1:
-                wei_data_per_vgpr    = 2
+            
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
             self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a // wei_data_per_vgpr))
@@ -2234,7 +2236,7 @@ class igemm_fwd_gtc_t(mc_base_t):
             a = self.agpr
             
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
-                    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None, s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None, s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
 
         if IGEMM_FWD_GTC_DEBUG == 1:
             self._emit_empty_line()

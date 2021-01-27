@@ -159,19 +159,19 @@ public:
     // This is a helper function for selecting better performing config
     bool mayHaveBiggerN1bClusterSize(int gemm_m, int gemm_n, const igemm_gtc_tunable_t *tunable)
     {
-        float n_times_m = (float) gemm_n / float(gemm_m); 
+        float n_times_m = (float)gemm_n / float(gemm_m); 
 
-	if ( n_times_m > 100.0f ) {
-             if ( tunable->gemm_k_per_block <= 2 * tunable->wave_tile_k )
-		  return(false); 
+        if(n_times_m > 100.0f) {
+            if(tunable->gemm_k_per_block <= 2 * tunable->wave_tile_k)
+                return(false); 
 
-             // N1bClusterSize can be expanded by using half gemm_k_per_block
-	     if ( (tunable->tensor_a_thread_lengths[1] > 1 || tunable->tensor_a_cluster_lengths[3] * 2 <= tunable->gemm_m_per_block ) &&
-	          (tunable->tensor_b_cluster_lengths[3] * 2 <= tunable->gemm_n_per_block ) )
-		   return(true); 
-	}; 
+            // N1bClusterSize can be expanded by using half gemm_k_per_block
+            if((tunable->tensor_a_thread_lengths[1] > 1 || tunable->tensor_a_cluster_lengths[3] * 2 <= tunable->gemm_m_per_block) &&
+                (tunable->tensor_b_cluster_lengths[3] * 2 <= tunable->gemm_n_per_block))
+                return(true); 
+        }; 
 
-	return(false); 
+        return(false); 
     };  
 
     bool tunable_is_valid(const args_t *arg,

@@ -565,10 +565,6 @@ int main(int argc, char **argv) {
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
 #endif
-            //if(driver_data_type == driverHalf){
-                //tensor_copy<float16, float>(host_output_f16, host_output, n * k * ho * wo);
-                //tensor_copy<float, float16>(host_output, host_output_f16, n * k * ho * wo);
-            //}
             if(driver_data_type == driverHalf)
                 device_output_to_host = (float *)malloc((n * k * ho * wo * sizeof(float16) + 3) / 4 * 4);
             else
@@ -588,7 +584,6 @@ int main(int argc, char **argv) {
                         k * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
         }
         igemm_fwd_gtc_t conv_fwd_driver;
-        //double nrms = get_fwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
@@ -652,8 +647,8 @@ int main(int argc, char **argv) {
             printf("\n");
 
             if ( run_first_applicable ) {
-                 printf("\n"); 
-		 break; 
+                printf("\n"); 
+		        break; 
             }; 
             if(result.duration_ms < fastest_result_fwd.duration_ms){
                 fastest_result_fwd = result;
