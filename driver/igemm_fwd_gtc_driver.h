@@ -195,7 +195,7 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
-		int group = arg->get_int("group_count");
+        int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
 

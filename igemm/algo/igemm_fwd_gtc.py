@@ -81,10 +81,6 @@ class macro_igemm_fwd_gtc_set_flag_c(macro_base_t):
     def expr(self):
         self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_c()}], v[{self.v_move_slice_k_ic1()}]")
         self._emit(f"v_cndmask_b32 v[{self.v_flag()}], 0, v[{self.v_flag()}], vcc")
-<<<<<<< HEAD
-=======
-
->>>>>>> master
 
 class macro_igemm_fwd_gtc_in_update_hw_t(macro_base_t):
     def __init__(self, mc, inline = False):

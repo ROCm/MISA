@@ -574,7 +574,7 @@ int main(int argc, char **argv) {
             HIP_CALL(hipMemcpy(device_input, host_input,
                         static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
-                        static_cast<size_t>(k0 * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
         }
         else if(driver_data_type == driverHalf){
             HIP_CALL(hipMemcpy(device_input_f16, host_input_f16,
