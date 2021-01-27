@@ -37,11 +37,10 @@
 #include <algorithm>
 #include <numeric>
 
-template <class Tgpu>
-struct igemm_fwd_gtc_karg_t{
-    Tgpu *p_in;
-    Tgpu *p_wei;
-    Tgpu *p_out;
+typedef struct{
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -70,9 +69,9 @@ struct igemm_fwd_gtc_karg_t{
     uint32_t shift_pack_1;
     uint32_t __pack_0;
 #endif
-} __attribute__((packed));
+} __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
-static void dump_fwd_karg(igemm_fwd_gtc_karg_t<float> * karg){
+static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -175,9 +174,9 @@ public:
 	return(false); 
     };  
 
-    template <typename gpu_data_type>
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable,
+                          const driverDataType_t& data_type)
     {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
@@ -203,13 +202,13 @@ public:
         //std::cout << std::endl;
         if(precision == "fp16"){
             //std::cout << "is same type=" << std::is_same<gpu_data_type, float16>::value << std::endl;
-            if(!std::is_same<gpu_data_type, float16>::value){
+            if(data_type != driverHalf){
                 return false;
             }
         }
         else if(precision == "fp32"){
             //std::cout << "is same type=" << std::is_same<gpu_data_type, float>::value << std::endl;
-            if(!std::is_same<gpu_data_type, float>::value){
+            if(data_type != driverFloat){
                 return false;
             }
         }
@@ -269,17 +268,16 @@ public:
         }
 
         // let's check the next configuration even though this configuration is applicable
-        if ( mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
-             ;//return(false); 
+        // if (mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
+            // return(false); 
 
         return true;
     }
 
-    template <class Tgpu>
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
-                 int warmup, int repeat) {
-        if (!tunable_is_valid<Tgpu>(arg, tunable)) {
+                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
+                 int warmup, int repeat, const driverDataType_t& data_type) {
+        if (!tunable_is_valid(arg, tunable, data_type)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
@@ -313,7 +311,7 @@ public:
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         
-        igemm_fwd_gtc_karg_t<Tgpu> karg;
+        igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;

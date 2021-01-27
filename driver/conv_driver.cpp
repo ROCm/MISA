@@ -302,7 +302,7 @@ static inline bool valid_vector(const float *ref, const T *pred, int n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            //printf("[%d] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -532,10 +532,10 @@ int main(int argc, char **argv) {
         //float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
+            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
             //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
@@ -597,18 +597,11 @@ int main(int argc, char **argv) {
 
             result_t result;
             if(driver_data_type == driverFloat)
-                result =
-                    conv_fwd_driver.run<float>(&conv_args, tunable, module, device_input,
-                                    device_weight, device_output, warmup, repeat);
-            else if(driver_data_type == driverHalf)
-                result =
-                    conv_fwd_driver.run<float16>(&conv_args, tunable, module, device_input_f16,
-                                    device_weight_f16, device_output_f16, warmup, repeat);
+                result = conv_fwd_driver.run(&conv_args, tunable, module, device_input,
+                                              device_weight, device_output, warmup, repeat, driver_data_type);
             else
-            {
-                std::cout << "no other conv data type now." << std::endl;
-                exit(0);
-            }
+                result = conv_fwd_driver.run(&conv_args, tunable, module, device_input_f16,
+                                              device_weight_f16, device_output_f16, warmup, repeat, driver_data_type);
             
             if (result.return_code != 0){
                 if ( ! run_first_applicable ) 

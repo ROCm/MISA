@@ -595,18 +595,11 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             def do_interleave_move_slice_window():
                 with self._deferred_context():
-                    #self._emit(f_gld_b())                                           # global load
-                    #self._emit(f_gld_a())                                           # global load
+                    self._emit(f_gld_b())                                           # global load
+                    self._emit(f_gld_a())                                           # global load
                     #self._emit_empty_line()
                     self._emit(f_move_slice_window_b())
                     self._emit(f_move_slice_window_a())
-                    self._emit_empty_line()
-                return self._get_deferred()
-
-            def do_interleave_global_load():
-                with self._deferred_context():
-                    self._emit(f_gld_b())                                           # global load
-                    self._emit(f_gld_a())                                           # global load
                     self._emit_empty_line()
                 return self._get_deferred()
 
@@ -617,8 +610,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_move_slice_window_a())
 
             self._emit_front(f"{label_mfma_body}:")
-            self._emit(f_gld_b())                                           # global load
-            self._emit(f_gld_a()) 
+            #self._emit(f_gld_b())                                           # global load
+            #self._emit(f_gld_a()) 
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
