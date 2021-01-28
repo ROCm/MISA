@@ -511,7 +511,7 @@ int main(int argc, char **argv) {
             fflush(stdout);
 
             if (need_verify)
-                HIP_CALL(hipMemset(device_output, 0, n * c * ho * wo * sizeof(float)));
+                HIP_CALL(hipMemset(device_output, 0, n * k * ho * wo * sizeof(float)));
 
             result_t result =
                 conv_fwd_driver.run(&conv_args, tunable, module, device_input,

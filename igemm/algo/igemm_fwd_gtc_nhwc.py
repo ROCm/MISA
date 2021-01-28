@@ -468,33 +468,16 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self.s_block_gtc_ik             = sym_t("s_block_gtc_ik"            , sseq(1))
             self.s_block_gtc_inb            = sym_t("s_block_gtc_inb"           , sseq(1))
 
-            self.s_move_slice_k_c1e         = sym_t("s_move_slice_k_c1e"        , sseq(1))
-            if outer.tunable.nxe != 0:
-                self.s_move_slice_k_c       = sym_t("s_move_slice_k_c"          , sseq(1))
-                self.s_move_slice_k_y       = sym_t("s_move_slice_k_y"          , sseq(1))
-                self.s_move_slice_k_x       = sym_t("s_move_slice_k_x"          , self.s_block_gtc_ig.value)
-
             self.s_move_slice_k_stride_c    = sym_t("s_move_slice_k_stride_c"   , sseq(1))
 
             self.s_knum                     = sym_t("s_knum"                    , 3)
             self.s_gemm_k_num_c             = sym_t("s_gemm_k_num_c"            , sseq(1))
-            if outer.tunable.nxe != 0:
-                self.s_gemm_k_num_y         = sym_t("s_gemm_k_num_y"            , self.s_y.value)
-                self.s_gemm_k_num_x         = sym_t("s_gemm_k_num_x"            , self.s_x.value)
 
             #if outer.tunable.nxe != 0:
             self.s_dim_br                   = sym_t("s_dim_br"                  , sseq(1))
             self.s_dim_mp                   = sym_t("s_dim_mp"                  , sseq(1))
             self.s_dim_mr                   = sym_t("s_dim_mr"                  , sseq(1))
             self.s_dim_np                   = sym_t("s_dim_np"                  , sseq(1))
-
-            # self.s_len_h                    = sym_t("s_len_h"                   , sseq(1))
-            # self.s_len_w                    = sym_t("s_len_w"                   , sseq(1))
-            # self.s_lim_h                    = sym_t("s_lim_h"                   , sseq(1))
-            # self.s_lim_w                    = sym_t("s_lim_w"                   , sseq(1))
-            # self.s_thread_stride_w          = sym_t("s_thread_stride_w"         , sseq(1))
-            # self.s_thread_stride_h          = sym_t("s_thread_stride_h"         , sseq(1))
-            # self.s_thread_stride_n          = sym_t("s_thread_stride_n"         , sseq(1))
 
             self.s_in_diff_hi               = sym_t("s_in_diff_hi"              , sseq(1))
             self.s_in_diff_wi               = sym_t("s_in_diff_wi"              , sseq(1))
@@ -1420,16 +1403,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_co_sub_n_index()}]")
         self._emit(f"v_add_u32 v[{v.v_out_os()}], v[{v.v_out_os()}], v[{v.v_tmp()}]")
 
-
-        self._emit(f"; add i_k")
         self._emit(f"; move slice stride")
         self._emit(f"s_lshl_b32 s[{s.s_gemm_k_num_c()}], s[{s.s_c()}], {igemm_log2(data_byte)}")
 
-        if self.tunable.nxe != 0:
-            self._emit(f"s_mov_b32 s[{s.s_tmp()}], {na_c}")
-            self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
-        else:
-            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_c()}], {na_c * data_byte}")
+        # if self.tunable.nxe != 0:
+        #     self._emit(f"s_mov_b32 s[{s.s_tmp()}], {na_c}")
+        #     self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
+        # else:
+        self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_c()}], {na_c * data_byte}")
 
         if self.tunable.nxe != 0:
             # s_in_diff_wi   : s_dilation_w * s_in_stride_wi

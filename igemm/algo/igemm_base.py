@@ -201,7 +201,12 @@ class igemm_gtc_tunable_parameter_t(object):
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
         assert self.precision in ('fp32', 'fp16', 'bf16')
-        assert self.nxb in (1,4,8,16,32,64,128,256)
+        if self.tensor_layout == "nchw":
+            assert self.nxb in (1,4,8,16,32,64,128,256)
+        elif self.tensor_layout == "nhwc":
+            assert self.nxb == 0, 'nhwc now no need have different nxb value'
+        else:
+            assert False
         assert self.nxe in (0,1)
 
         # TODO: better specify
@@ -226,13 +231,13 @@ class igemm_gtc_tunable_parameter_t(object):
             return unroll_k     # not used
 
         if self.direction == 'fwd':
-            assert self.gemm_n_per_block % self.nxb == 0
             if self.tensor_layout == 'nchw':
+                assert self.gemm_n_per_block % self.nxb == 0
                 self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
             elif self.tensor_layout == 'nhwc':
-                self.unmerge_sub_n = self.gemm_m_per_block // self.nxb
+                self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
             else:

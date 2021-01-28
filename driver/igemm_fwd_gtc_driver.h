@@ -146,7 +146,9 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
-        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        int b                        = ho * wo;
+        if(tunable->tensor_layout == "nchw")
+            b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
         int gemm_m = 0;
         int gemm_n = 0;
@@ -196,7 +198,9 @@ public:
 
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
-        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        int b                        = ho * wo;
+        if(tunable->tensor_layout == "nchw")
+            b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
@@ -263,19 +267,19 @@ public:
                 return false;
             }
 
-            if(gemm_m_per_block % tunable->nxb != 0){
-                //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
-                return false;
-            }
+            // if(gemm_m_per_block % tunable->nxb != 0){
+            //     //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            //     return false;
+            // }
 
-            if(n % (gemm_m_per_block / tunable->nxb) != 0){
-                //printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
-                return false;
-            }
+            // if(n % (gemm_m_per_block / tunable->nxb) != 0){
+            //     //printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
+            //     return false;
+            // }
 
-            if((nxe == 0) && ((b % tunable->nxb != 0) || (gemm_k % gemm_k_per_block != 0))){
-                return false;
-            }
+            // if((nxe == 0) && ((b % tunable->nxb != 0) || (gemm_k % gemm_k_per_block != 0))){
+            //     return false;
+            // }
 
             if((nxe == 0) && !unit_conv){
                 return false;
@@ -344,8 +348,10 @@ public:
         int gemm_k_per_block         = tunable->gemm_k_per_block;
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
-        int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
-        
+        int b                        = ho * wo;
+        if(tunable->tensor_layout == "nchw")
+            b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+
         igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
