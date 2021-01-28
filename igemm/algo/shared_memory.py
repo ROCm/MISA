@@ -897,10 +897,9 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
 
         if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
             # this is indeed a 2d case.
-
+            ds_write = inst_ds_write_t(ctrl.length_dp * data_byte)
             if ctrl.length_d0 == 1 and ctrl.length_d1 == 1:
                 # further, 1d case
-                ds_write = inst_ds_write_t(ctrl.length_dp * data_byte)
                 self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}'))
                 issue_cnt += ds_write.get_issues()
 
@@ -915,7 +914,7 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                 else:
                     # nhwc almost all case goes here
                     for i_d in range(length_d):
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*ctrl.length_dp}', i_d * ctrl.stride_d))
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*ctrl.length_dp}', i_d * stride_d))
                         issue_cnt += ds_write.get_issues()
         else:
             assert False, "un implemented yet"

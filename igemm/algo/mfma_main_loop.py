@@ -53,6 +53,7 @@ class ctrl_mfma_main_loop_t(object):
         self.shared_load_b_functor       = None
         self.move_slice_window_a_functor = None
         self.move_slice_window_b_functor = None
+        self.move_slice_window_accumule_functor  = None
 
         # symbol type
         self.v_a                         = None
@@ -94,6 +95,7 @@ class mfma_main_loop_t(mc_base_t):
 
         f_move_slice_window_a = self.ctrl.move_slice_window_a_functor
         f_move_slice_window_b = self.ctrl.move_slice_window_b_functor
+        f_move_slice_window_acc  = self.ctrl.move_slice_window_accumule_functor
 
         v_a = self.ctrl.v_a
         v_b = self.ctrl.v_b
@@ -131,7 +133,7 @@ class mfma_main_loop_t(mc_base_t):
             k_pack = self.ctrl.lds_k_pack
             i_k0 = i_k // k_pack
             i_kp = i_k % k_pack
-            return i_k0 * (width_byte * k_pack + pad_pixel * data_byte) + i_kp * k_pack * data_byte + offset
+            return i_k0 * (width_byte * k_pack + pad_pixel * data_byte) + i_kp * data_byte + offset * k_pack
 
         # mi = mapped_ioffset
         def mi_m(i_k, offset = 0):
@@ -173,6 +175,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -199,8 +203,8 @@ class mfma_main_loop_t(mc_base_t):
 
                     self._emit(f's_waitcnt lgkmcnt(2)')
                     self._emit(mfma_step_mxn(0, 0, 1, 1))
-                    self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m  + mi_m((2*i_k+3) * k_per_inst)))    # (2*i_k+3) * lds_width_m * k_per_inst
-                    self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n  + mi_n((2*i_k+3) * k_per_inst)))    # (2*i_k+3) * lds_width_n * k_per_inst
+                    self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + mi_m((2*i_k+3) * k_per_inst)))    # (2*i_k+3) * lds_width_m * k_per_inst
+                    self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + mi_n((2*i_k+3) * k_per_inst)))    # (2*i_k+3) * lds_width_n * k_per_inst
 
             do_unroll_k_1x1_sub()
             self._emit(f_move_slice_window_b())
@@ -210,6 +214,8 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit_empty_line()
 
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
             self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(f"s_barrier")
             self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
@@ -312,6 +318,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -339,6 +347,8 @@ class mfma_main_loop_t(mc_base_t):
                 se_last = create_scheduler(self.mc, mbb_list_last)
 
                 self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
             else:
                 mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
@@ -346,6 +356,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(do_interleave_gload_and_move_slice_window())
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
 
             # Label: finishing of fma body
@@ -380,6 +392,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             #self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {hex(lds_single_size)}, v[{v_sst_b_os()}] ; switch double buffer b store")
             #self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {hex(lds_single_size)}, v[{v_sst_a_os()}] ; switch double buffer a store")
@@ -478,6 +492,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # 2nd fma
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
             self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(f"s_barrier")
             self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
@@ -657,14 +673,14 @@ class mfma_main_loop_t(mc_base_t):
                         # 3rd fma
                         self._emit(f's_waitcnt lgkmcnt(5)')
                         self._emit(mfma_step_mxn(1, 0, 1, 1))
-                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + (2*i_k+3) * lds_width_n * k_per_inst) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {0}")
+                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + mi_n((2*i_k+3) * k_per_inst)) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {0}")
                         self._emit_empty_line()
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 1, 1))
                         self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n((2*i_k+3) * k_per_inst, lds_width_n//2)) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {1}") # (2*i_k+3) * lds_width_n * k_per_inst + lds_width_n//2
                         if i_k == unroll_k_sub - 1:
-                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + (unroll_k // k_per_inst - 1) * lds_width_m * k_per_inst + lds_width_m // 2) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
+                            self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m((unroll_k // k_per_inst - 1) * k_per_inst, lds_width_m//2)) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
                         self._emit_empty_line()
                 return self._get_deferred()
 
@@ -735,6 +751,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -757,6 +775,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
             else:
@@ -765,6 +785,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(do_interleave_gload_and_move_slice_window())
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
@@ -837,6 +859,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {hex(lds_single_size)}, v[{v_sst_b_os()}] ; switch double buffer b store")
             self._emit(f"v_xor_b32 v[{v_sst_a_os()}], {hex(lds_single_size)}, v[{v_sst_a_os()}] ; switch double buffer a store")
@@ -901,6 +925,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(mfma_step_mxn(0, 1))
 
             #       wait global and store to LDS
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
             self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
             self._emit(f_sst_b())
             self._emit(f"s_waitcnt vmcnt(0)")
@@ -946,8 +972,8 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
-            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
+            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2 )))
+            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2 )))
 
             # self._emit(f".itr_k = 0")
             # self._emit(f".rept {unroll_k // k_per_inst - 1}")
@@ -1009,6 +1035,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -1096,6 +1124,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # 2nd fma
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
             self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(f"s_barrier")
             self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
@@ -1285,6 +1315,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -1307,6 +1339,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
             else:
@@ -1315,6 +1349,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(do_interleave_gload_and_move_slice_window())
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
@@ -1364,6 +1400,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -1451,6 +1489,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # 2nd fma
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
             self._emit(f's_waitcnt lgkmcnt(0)')
             self._emit(f"s_barrier")
             self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
@@ -1637,6 +1677,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             self._emit(f_move_slice_window_b())
             self._emit(f_move_slice_window_a())
+            if f_move_slice_window_acc != None:
+                self._emit(f_move_slice_window_acc())
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
@@ -1659,6 +1701,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
             else:
@@ -1667,6 +1711,8 @@ class mfma_main_loop_t(mc_base_t):
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(do_interleave_gload_and_move_slice_window())
+                if f_move_slice_window_acc != None:
+                    self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
 
@@ -1707,7 +1753,7 @@ class mfma_main_loop_t(mc_base_t):
 
 
         # start emit
-        self._emit(f"; start MFMA loop, {cxm.wave_tile_m}x{cxm.wave_tile_n} wave tile with {cxm.wave_repeat_m}x{cxm.wave_repeat_n} repeat, {cxm.wave_step_m}x{cxm.wave_step_n} step")
+        self._emit(f"; start MFMA loop, {cxm.wave_tile_m}x{cxm.wave_tile_n} wave tile with {cxm.wave_repeat_m}x{cxm.wave_repeat_n} repeat, {cxm.wave_step_m}x{cxm.wave_step_n} step, k_pack:{self.ctrl.lds_k_pack}")
         self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
 
         self._emit(f_sst_b())
