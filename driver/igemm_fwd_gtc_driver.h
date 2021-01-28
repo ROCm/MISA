@@ -71,6 +71,38 @@ typedef struct {
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
+typedef struct {
+    float *p_in;
+    float *p_wei;
+    float *p_out;
+    int hi;
+    int wi;
+    int n;
+    int k;                      // this is indeed k_per_group
+    int c;                      // this is indeed c_per_group
+    int ho;
+    int wo;
+    int stride_h;
+    int stride_w;
+    int dilation_h;
+    int dilation_w;
+    int pad_h;
+    int pad_w;
+    int y;
+    int x;
+    int group;
+#if USE_MAGIC_DIV
+    uint32_t magic_0;                       // denom: gemm_n / n_per_block
+    uint32_t magic_1;                       // denom: ho*wo
+    uint32_t magic_2;                       // denom: wo
+    uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
+    uint32_t shift_pack_0;
+    uint32_t __pack_0;
+#endif
+} __attribute__((packed)) igemm_fwd_gtc_nhwc_karg_t;
+
+#define IGEMM_FWD_GTC_MAX_KARG_SIZE     160
+
 static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
@@ -352,62 +384,105 @@ public:
         if(tunable->tensor_layout == "nchw")
             b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
-        igemm_fwd_gtc_karg_t karg;
-        size_t karg_size = sizeof(karg);
-        karg.p_in          = p_in;
-        karg.p_wei         = p_wei;
-        karg.p_out         = p_out;
-        karg.hi            = hi;
-        karg.wi            = wi;
-        karg.n             = n;
-        karg.k             = k / group;
-        karg.c             = c / group;
-        karg.ho            = ho;
-        karg.wo            = wo;
+        size_t karg_size = 0;
+        uint8_t karg_buffer[IGEMM_FWD_GTC_MAX_KARG_SIZE];
 
-        karg.stride_h      = stride_h;
-        karg.stride_w      = stride_w;
-        karg.dilation_h    = dilation_h;
-        karg.dilation_w    = dilation_w;
-        karg.pad_h         = pad_h;
-        karg.pad_w         = pad_w;
-        karg.y             = y;
-        karg.x             = x;
-        karg.group         = group;
-
+        if(tunable->tensor_layout == "nchw"){
+            igemm_fwd_gtc_karg_t karg;
+            karg.p_in          = p_in;
+            karg.p_wei         = p_wei;
+            karg.p_out         = p_out;
+            karg.hi            = hi;
+            karg.wi            = wi;
+            karg.n             = n;
+            karg.k             = k / group;
+            karg.c             = c / group;
+            karg.ho            = ho;
+            karg.wo            = wo;
+            karg.stride_h      = stride_h;
+            karg.stride_w      = stride_w;
+            karg.dilation_h    = dilation_h;
+            karg.dilation_w    = dilation_w;
+            karg.pad_h         = pad_h;
+            karg.pad_w         = pad_w;
+            karg.y             = y;
+            karg.x             = x;
+            karg.group         = group;
 
 #if USE_MAGIC_DIV
-        int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
-        int gemm_n = n * b;
-        {
-            // init magic division parameters
-            uint32_t nb_n0          = tunable->tensor_b_cluster_lengths[2] * tunable->tensor_b_thread_lengths[2];
-            uint32_t nb_n1b         = tunable->tensor_b_cluster_lengths[3] * tunable->tensor_b_thread_lengths[3];
-            uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
-            uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
+            int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
+            int gemm_n = n * b;
+            {
+                // init magic division parameters
+                uint32_t nb_n0          = tunable->tensor_b_cluster_lengths[2] * tunable->tensor_b_thread_lengths[2];
+                uint32_t nb_n1b         = tunable->tensor_b_cluster_lengths[3] * tunable->tensor_b_thread_lengths[3];
+                uint32_t unmerge_sub_n  = gemm_n_per_block / nxb;
+                uint32_t unmerge_sub_n1 = tunable->gemm_n_unmerge_cluster == 0 ? unmerge_sub_n / nb_n0 : unmerge_sub_n;
 
-            magic_div_u32_t mdiv_0 = magic_div_u32_gen(tunable->source_access_order == 0 ? ((n * b) / gemm_n_per_block) : ((gemm_m) / gemm_m_per_block));
-            magic_div_u32_t mdiv_1 = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ? 
-                                                                            b * unmerge_sub_n1 / nb_n1b :
-                                                                            (n / nb_n0) * b / nb_n1b   );
-            magic_div_u32_t mdiv_2 = magic_div_u32_gen(y * x);
-            magic_div_u32_t mdiv_3 = magic_div_u32_gen(x);
-            magic_div_u32_t mdiv_4 = magic_div_u32_gen(b);
-            magic_div_u32_t mdiv_5 = magic_div_u32_gen(wo);
-            magic_div_u32_t mdiv_6 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
-                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
+                magic_div_u32_t mdiv_0 = magic_div_u32_gen(tunable->source_access_order == 0 ? ((n * b) / gemm_n_per_block) : ((gemm_m) / gemm_m_per_block));
+                magic_div_u32_t mdiv_1 = magic_div_u32_gen(tunable->gemm_n_unmerge_cluster == 0 ? 
+                                                                                b * unmerge_sub_n1 / nb_n1b :
+                                                                                (n / nb_n0) * b / nb_n1b   );
+                magic_div_u32_t mdiv_2 = magic_div_u32_gen(y * x);
+                magic_div_u32_t mdiv_3 = magic_div_u32_gen(x);
+                magic_div_u32_t mdiv_4 = magic_div_u32_gen(b);
+                magic_div_u32_t mdiv_5 = magic_div_u32_gen(wo);
+                magic_div_u32_t mdiv_6 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                            utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
 
+                karg.magic_0        = mdiv_0.magic;
+                karg.magic_1        = mdiv_1.magic;
+                karg.magic_2        = mdiv_2.magic;
+                karg.magic_3        = mdiv_3.magic;
+                karg.magic_4        = mdiv_4.magic;
+                karg.magic_5        = mdiv_5.magic;
+                karg.magic_6        = mdiv_6.magic;
+                karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+                karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
+            }
+#endif
+            karg_size = sizeof(karg);
+            memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
+        }else if(tunable->tensor_layout == "nhwc"){
+            igemm_fwd_gtc_nhwc_karg_t karg;
+            karg.p_in          = p_in;
+            karg.p_wei         = p_wei;
+            karg.p_out         = p_out;
+            karg.hi            = hi;
+            karg.wi            = wi;
+            karg.n             = n;
+            karg.k             = k / group;
+            karg.c             = c / group;
+            karg.ho            = ho;
+            karg.wo            = wo;
+            karg.stride_h      = stride_h;
+            karg.stride_w      = stride_w;
+            karg.dilation_h    = dilation_h;
+            karg.dilation_w    = dilation_w;
+            karg.pad_h         = pad_h;
+            karg.pad_w         = pad_w;
+            karg.y             = y;
+            karg.x             = x;
+            karg.group         = group;
+#if USE_MAGIC_DIV
+            int gemm_m = n * ho * wo;
+            int gemm_n = k / group;
+
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen(gemm_n / gemm_n_per_block);
+            magic_div_u32_t mdiv_1 = magic_div_u32_gen(ho*wo);
+            magic_div_u32_t mdiv_2 = magic_div_u32_gen(wo);
+            magic_div_u32_t mdiv_3 = magic_div_u32_gen((gemm_m/gemm_m_per_block) * (gemm_n/gemm_n_per_block));
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
-            karg.magic_4        = mdiv_4.magic;
-            karg.magic_5        = mdiv_5.magic;
-            karg.magic_6        = mdiv_6.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
-        }
 #endif
+            karg_size = sizeof(karg);
+            memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
+        } else {
+            assert(0);
+        }
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
@@ -421,7 +496,7 @@ public:
         auto launch_fwd = [&]() -> float {
             // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
             // dump_fwd_karg(&karg);
-            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
+            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, static_cast<void*>(&karg_buffer[0]),
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
             float ms = .0;
