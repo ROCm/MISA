@@ -611,12 +611,15 @@ class igemm_fwd_gtc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             if IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB == 1 and self.outer.tunable.nxe != 0:
-                m_wei_2d_global_load, m_in_2d_global_load = self.outer.get_macro_global_load()
-                self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag_prev()}]")
-                #self._emit(f"v_mov_b32 v[{v.v_in_flag_prev()}], v[{v.v_in_flag()}]")
-                for i in range(m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1):
-                    self._emit(f"v_cndmask_b32 v[{v.v_gld_b(i)}], 0, v[{v.v_gld_b(i)}], vcc")
+                if self.outer.tunable.tensor_b_thread_lengths[1] > 1:
                     pass
+                else:
+                    m_wei_2d_global_load, m_in_2d_global_load = self.outer.get_macro_global_load()
+                    self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_in_flag_prev()}]")
+                    #self._emit(f"v_mov_b32 v[{v.v_in_flag_prev()}], v[{v.v_in_flag()}]")
+                    for i in range(m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1):
+                        self._emit(f"v_cndmask_b32 v[{v.v_gld_b(i)}], 0, v[{v.v_gld_b(i)}], vcc")
+                        pass
             with self._deferred_context():
                 self._emit(m_in_2d_shared_store(v.v_gld_b(), v.v_sst_b_os()))
             return self._get_deferred()
@@ -820,7 +823,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
                                         outer.tunable.num_vgpr_global_load_a // wei_data_per_vgpr + \
-                                        outer.tunable.num_vgpr_global_load_b + 18 # from v_sst_a_os to v_co_sst
+                                        outer.tunable.num_vgpr_global_load_b + 18 if outer.tunable.nxe != 0 else 16 # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
@@ -1257,10 +1260,16 @@ class igemm_fwd_gtc_t(mc_base_t):
         inline = True if self.tunable.fma_interleave else False
         move_slice_window_ta = macro_igemm_fwd_gtc_move_slice_window_ta_t(self.mc, self.tunable, inline)
         if self.tunable.nxe != 0:
-            if self.tunable.tensor_b_thread_lengths[0] > 1:
-                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(self.mc, self.tunable, inline)
+            if self.tunable.tensor_b_thread_lengths[1] > 1:
+                if self.is_1d_move_slice_k():
+                    return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_1d_tb_t(self.mc, self.tunable, inline)
+                else:
+                    return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_tb_t(self.mc, self.tunable, inline)
             else:
-                return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(self.mc, self.tunable, inline)
+                if self.tunable.tensor_b_thread_lengths[0] > 1:
+                    return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_c0_gt_1_t(self.mc, self.tunable, inline)
+                else:
+                    return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_y_x_tb_t(self.mc, self.tunable, inline)
         else:
             if self.is_1d_move_slice_k():
                 return move_slice_window_ta, macro_igemm_fwd_gtc_move_slice_window_k_1d_tb_t(self.mc, self.tunable, inline)
@@ -2168,14 +2177,21 @@ class igemm_fwd_gtc_t(mc_base_t):
                 m_set_flag_hw         = self.get_macro_set_flag_hw()
                 m_set_flag_c          = self.get_macro_set_flag_c()
                 with self._deferred_context():
-                    self._emit(m_move_slice_window_tb(v.v_move_slice_k_ic1(), v.v_move_slice_k_iy(), v.v_move_slice_k_ix(), s.s_gemm_k_num_c1(), s.s_gemm_k_num_y(), s.s_gemm_k_num_x(),
+                    if self.tunable.tensor_b_thread_lengths[1] > 1:
+                        if self.is_1d_move_slice_k():
+                            self._emit(m_move_slice_window_tb(v.v_in_os(), s.s_move_slice_k_c1e(), s.s_in_stride_c(), s.s_in_stride_c_c1()))
+                        else:
+                            self._emit(m_move_slice_window_tb(v.v_in_os(), v.v_move_slice_k_ic1(), s.s_gemm_k_num_c1(), 
+                                s.s_move_slice_k_c1e(), s.s_in_stride_c(), s.s_in_stride_c_c1(), s.s_in_stride_c_c0_c1_diff()))
+                    else:
+                        self._emit(m_move_slice_window_tb(v.v_move_slice_k_ic1(), v.v_move_slice_k_iy(), v.v_move_slice_k_ix(), s.s_gemm_k_num_c1(), s.s_gemm_k_num_y(), s.s_gemm_k_num_x(),
                             s.s_move_slice_k_c1(), s.s_move_slice_k_y(), s.s_move_slice_k_x(), v.v_in_os_base(),
                             s.s_in_stride_c(), s.s_in_stride_c_c1(), s.s_in_stride_c_c0_c1_diff()))
-                    self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_in_iho(), v.v_in_iwo(), v.v_in_iy(), v.v_in_ix(), s.s_dilation_h(), s.s_dilation_w()))
-                    self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
-                    self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
-                    if self.tunable.tensor_b_cluster_lengths[0] == 1:
-                        self._emit(m_set_flag_c(v.v_in_flag(), v.v_move_slice_k_ic1(), s.s_c()))
+                        self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_in_iho(), v.v_in_iwo(), v.v_in_iy(), v.v_in_ix(), s.s_dilation_h(), s.s_dilation_w()))
+                        self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), v.v_tmp()))
+                        self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
+                        if self.tunable.tensor_b_cluster_lengths[0] == 1:
+                            self._emit(m_set_flag_c(v.v_in_flag(), v.v_move_slice_k_ic1(), s.s_c()))
                 return self._get_deferred()
             else:
                 with self._deferred_context():

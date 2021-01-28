@@ -276,7 +276,7 @@ public:
         }
 
         // if tb_c1e > 1, only 1x1 case is runable, it can not check gemm_k_padding either.
-        if(tunable->tensor_b_thread_lengths[1] > 1 && (( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
+        if(tunable->tensor_b_thread_lengths[1] > 1 && ((pad_h !=0 || pad_w != 0)||( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
             return false;
         }
 
