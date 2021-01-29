@@ -571,7 +571,11 @@ class igemm_bwd_gtc_t(mc_base_t):
             with self._deferred_context():
                 self._emit(f"; load output")
                 if self.outer.tunable.nxe != 0:
-                    self._emit(f".v_clear_nc {v.v_gld_b()}, {m_out_2d_global_load.ctrl.length_d0 * m_out_2d_global_load.ctrl.length_d1}")
+                    ## for fp16/bp16 vector_load, two elements is packed into vgpr, so just half num of vgprs needed
+                    if m_out_2d_global_load.ctrl.vector_d1 > 1 and m_out_2d_global_load.ctrl.data_bytes < 4:
+                        self._emit(f".v_clear_nc {v.v_gld_b()}, {m_out_2d_global_load.ctrl.length_d0 * m_out_2d_global_load.ctrl.length_d1//2}")
+                    else:
+                        self._emit(f".v_clear_nc {v.v_gld_b()}, {m_out_2d_global_load.ctrl.length_d0 * m_out_2d_global_load.ctrl.length_d1}")
                     self._emit(f"v_cmp_eq_u32 vcc, 1, v[{v.v_out_flag()}]")
                     self._emit(f"s_and_saveexec_b64 s[{s.s_tmp(4)}:{s.s_tmp(5)}], vcc")
                 if self.outer.tunable.precache_soffset:
@@ -598,7 +602,11 @@ class igemm_bwd_gtc_t(mc_base_t):
             s_out_stride_d0, s_out_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load weight")
-                self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
+                ## for fp16/bp16 vector_load, two elements is packed into vgpr, so just half num of vgprs needed
+                if m_wei_2d_global_load.ctrl.vector_d1 > 1 and m_wei_2d_globa_load.ctrl.data_bytes < 4:
+                    self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1//2}")
+                else:
+                    self._emit(f".v_clear_nc {v.v_gld_a()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
                 else:
@@ -1747,8 +1755,8 @@ class igemm_bwd_gtc_t(mc_base_t):
                         self._emit(m_int_div_rem_vs(v.v_gtc_dslice_ix(), v.v_gtc_dslice_iy(), v.v_tmp(4), s.s_dslice_x(), v.v_tmp(), s.s_tmp()))
                 else:
                     self._emit(f"v_mov_b32 v[{v.v_gtc_ik1()}], v[{v.v_gtc_ik1e()}]")
-                    self._emit(f"v_mov_b32 v[{v.v_gtc_dslice_iy()}], 0")
-                    self._emit(f"v_mov_b32 v[{v.v_gtc_dslice_ix()}], 0")
+                    ##self._emit(f"v_mov_b32 v[{v.v_gtc_dslice_iy()}], 0")
+                    ##self._emit(f"v_mov_b32 v[{v.v_gtc_dslice_ix()}], 0")
         else:
             self._emit(f"v_mov_b32 v[{v.v_gtc_ik1()}], v[{v.v_gtc_ik1e()}]")
 
@@ -2260,8 +2268,9 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         self._emit(self.try_shift_stride(s.s_out_stride_k_k1, igemm_log2(data_byte)))
         self._emit(self.try_shift_stride(s.s_wei_stride_k_k1, igemm_log2(data_byte)))
-        self._emit(self.try_shift_stride(s.s_out_stride_k_k0_k1_diff, igemm_log2(data_byte)))
-        self._emit(self.try_shift_stride(s.s_wei_stride_k_k0_k1_diff, igemm_log2(data_byte)))
+        if not self.is_unit_yx() or not self.is_1d_move_slice_k():
+            self._emit(self.try_shift_stride(s.s_out_stride_k_k0_k1_diff, igemm_log2(data_byte)))
+            self._emit(self.try_shift_stride(s.s_wei_stride_k_k0_k1_diff, igemm_log2(data_byte)))
 
         self._emit(self.try_shift_stride(s.s_out_stride_k, igemm_log2(data_byte)))
         self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
