@@ -428,7 +428,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             sseq                            = gpr_sequencer_t()
             self.outer                      = outer
             self.s_ka                       = sym_t('s_ka'                      , sseq(2))
-            self.s_bx                       = sym_t('s_bx'                      , sseq(2))
+            self.s_bx                       = sym_t('s_bx'                      , sseq(1))
+            self.s_by                       = sym_t('s_by'                      , sseq(1))
             self.s_p_in                     = sym_t('s_p_in'                    , sseq(4))
             self.s_p_wei                    = sym_t('s_p_wei'                   , sseq(4))
             self.s_p_out                    = sym_t('s_p_out'                   , sseq(4))
@@ -812,6 +813,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         kernel_code = amdgpu_kernel_code_t({
                 'enable_sgpr_kernarg_segment_ptr'   :   1,
                 'enable_sgpr_workgroup_id_x'        :   1,
+                'enable_sgpr_workgroup_id_y'        :   1,
                 'enable_vgpr_workitem_id'           :   0,
                 'workgroup_group_segment_byte_size' :   self.tunable.lds_total,
                 'kernarg_segment_byte_size'         :   self.karg.get_count(),
@@ -1002,7 +1004,21 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}], s[{s.s_out_stride_wo()}]")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_ho() if self.tunable.nxe != 0 else s.s_hi()}], s[{s.s_tmp(1)}]")
 
-        # TODO: accumulate splited batch here
+        # calculate batch split and accumulate the base pointer for input/output
+        self._emit(f"s_mul_i32  s[{s.s_tmp(0)}], s[{s.s_n()}], s[{s.s_in_stride_n()}]")
+        self._emit(f"s_mul_i32  s[{s.s_tmp(1)}], s[{s.s_n()}], s[{s.s_out_stride_n()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_tmp(4)}], s[{s.s_tmp(0)}], {igemm_log2(data_byte)}")
+        self._emit(f"s_lshl_b32 s[{s.s_tmp(5)}], s[{s.s_tmp(1)}], {igemm_log2(data_byte)}")
+
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_by()}], s[{s.s_tmp(4)}]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_by()}], s[{s.s_tmp(4)}]")
+        self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
+
+        self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_by()}], s[{s.s_tmp(5)}]")
+        self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_by()}], s[{s.s_tmp(5)}]")
+        self._emit(f"s_add_u32 s[{s.s_p_out()}], s[{s.s_p_out()}], s[{s.s_tmp()}]")
+        self._emit(f"s_addc_u32 s[{s.s_p_out(1)}], s[{s.s_p_out(1)}], s[{s.s_tmp(1)}]")
 
         # early init s_knum in case shifted
         self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_wei_stride_k()}]")
