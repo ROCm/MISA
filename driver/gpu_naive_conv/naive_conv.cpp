@@ -110,7 +110,7 @@ extern "C" __global__ void naive_conv_fwd_nchw_fp32(
                                        static_cast<size_t>(iy) * fx +
                                        static_cast<size_t>(ix);
                         value += static_cast<double>(p_in[i_idx]) *
-                                 static_cast<double>(p_wei[w_idx]);
+                                 static_cast<double>(p_wei[f_idx]);
                     }
                 }
             }
@@ -319,7 +319,7 @@ extern "C" __global__ void naive_conv_fwd_ncdhw_fp32(
                                 static_cast<size_t>(iy) * fx +
                                 static_cast<size_t>(ix);
                             value += static_cast<double>(p_in[i_idx]) *
-                                     static_cast<double>(p_wei[w_idx]);
+                                     static_cast<double>(p_wei[f_idx]);
                         }
                     }
                 }
@@ -550,7 +550,7 @@ extern "C" __global__ void naive_conv_fwd_nchw_fp16(
                                        static_cast<size_t>(ix);
                         value +=
                             static_cast<double>(__half2float(p_in[i_idx])) *
-                            static_cast<double>(__half2float(p_wei[w_idx]));
+                            static_cast<double>(__half2float(p_wei[f_idx]));
                     }
                 }
             }
@@ -762,7 +762,7 @@ extern "C" __global__ void naive_conv_fwd_ncdhw_fp16(
                                 static_cast<size_t>(ix);
                             value +=
                                 static_cast<double>(__half2float(p_in[i_idx])) *
-                                static_cast<double>(__half2float(p_wei[w_idx]));
+                                static_cast<double>(__half2float(p_wei[f_idx]));
                         }
                     }
                 }
@@ -997,7 +997,7 @@ extern "C" __global__ void naive_conv_fwd_nchw_bf16(
                         value += static_cast<double>(
                                      __bfloat16_to_float(p_in[i_idx])) *
                                  static_cast<double>(
-                                     __bfloat16_to_float(p_wei[w_idx]));
+                                     __bfloat16_to_float(p_wei[f_idx]));
                     }
                 }
             }
@@ -1212,7 +1212,7 @@ extern "C" __global__ void naive_conv_fwd_ncdhw_bf16(
                             value += static_cast<double>(
                                          __bfloat16_to_float(p_in[i_idx])) *
                                      static_cast<double>(
-                                         __bfloat16_to_float(p_wei[w_idx]));
+                                         __bfloat16_to_float(p_wei[f_idx]));
                         }
                     }
                 }
@@ -1450,7 +1450,7 @@ extern "C" __global__ void naive_conv_fwd_nhwc_fp32(
                             static_cast<size_t>(ix) * c_per_group +
                             static_cast<size_t>(ic);
                         value += static_cast<double>(p_in[i_idx]) *
-                                 static_cast<double>(p_wei[w_idx]);
+                                 static_cast<double>(p_wei[f_idx]);
                     }
                 }
             }
@@ -1660,7 +1660,7 @@ extern "C" __global__ void naive_conv_fwd_ndhwc_fp32(
                                 static_cast<size_t>(ix) * c_per_group +
                                 static_cast<size_t>(ic);
                             value += static_cast<double>(p_in[i_idx]) *
-                                     static_cast<double>(p_wei[w_idx]);
+                                     static_cast<double>(p_wei[f_idx]);
                         }
                     }
                 }
@@ -1893,7 +1893,7 @@ extern "C" __global__ void naive_conv_fwd_nhwc_fp16(
                             static_cast<size_t>(ic);
                         value +=
                             static_cast<double>(__half2float(p_in[i_idx])) *
-                            static_cast<double>(__half2float(p_wei[w_idx]));
+                            static_cast<double>(__half2float(p_wei[f_idx]));
                     }
                 }
             }
@@ -2106,7 +2106,7 @@ extern "C" __global__ void naive_conv_fwd_ndhwc_fp16(
                                 static_cast<size_t>(ic);
                             value +=
                                 static_cast<double>(__half2float(p_in[i_idx])) *
-                                static_cast<double>(__half2float(p_wei[w_idx]));
+                                static_cast<double>(__half2float(p_wei[f_idx]));
                         }
                     }
                 }
@@ -2343,7 +2343,7 @@ extern "C" __global__ void naive_conv_fwd_nhwc_bf16(
                         value += static_cast<double>(
                                      __bfloat16_to_float(p_in[i_idx])) *
                                  static_cast<double>(
-                                     __bfloat16_to_float(p_wei[w_idx]));
+                                     __bfloat16_to_float(p_wei[f_idx]));
                     }
                 }
             }
@@ -2559,7 +2559,7 @@ extern "C" __global__ void naive_conv_fwd_ndhwc_bf16(
                             value += static_cast<double>(
                                          __bfloat16_to_float(p_in[i_idx])) *
                                      static_cast<double>(
-                                         __bfloat16_to_float(p_wei[w_idx]));
+                                         __bfloat16_to_float(p_wei[f_idx]));
                         }
                     }
                 }
