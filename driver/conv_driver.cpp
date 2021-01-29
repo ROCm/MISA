@@ -165,6 +165,8 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #define IGEMM_CONFIG_FILE "igemm_gtc.config"
 #endif
 
+#define IGEMM_RUN_ONLY_KERNEL_DEFAULT "off"
+
 #define WARMUP 3
 #define REPEAT 8
 #define SCLK_MHZ 1283
@@ -214,14 +216,14 @@ struct distribution_t<float>{
 };
 
 template <typename Dst_T, typename Src_T>
-void block_wise_rand_generator(Dst_T *p, int tid, int block_size, int total_size, Src_T min, Src_T max, Src_T scale)
+void block_wise_rand_generator(Dst_T *p, int tid, int block_size, size_t total_size, Src_T min, Src_T max, Src_T scale)
 {
     std::mt19937 rng(std::chrono::system_clock::now()
                         .time_since_epoch()
                         .count() +
                     std::hash<std::thread::id>()(std::this_thread::get_id()));
     distribution_t<Src_T> distribution(min,max);
-    for (int i = tid; i < total_size; i += block_size) {
+    for (size_t i = tid; i < total_size; i += block_size) {
         p[i] = static_cast<Dst_T>(scale * distribution(rng));
     }
 }
@@ -342,6 +344,7 @@ void dump_arg(const args_t *arg) {
 int main(int argc, char **argv) {
     char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
     char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
+    std::string run_only_kernel = env_get_str("IGEMM_RUN_ONLY_KERNEL", IGEMM_RUN_ONLY_KERNEL_DEFAULT);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
@@ -457,8 +460,8 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
 
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -506,6 +509,9 @@ int main(int argc, char **argv) {
         double nrms = get_fwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
+            if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT)
+                if(run_only_kernel != conv_fwd_driver.get_kernel_name(tunable))
+                    continue;
 
             printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
             fflush(stdout);
@@ -569,8 +575,8 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
-            // gen_rand_vector<float, int>(host_output, n * k * ho * wo,1, 1);
-            // gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            // gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo,1, 1);
+            // gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_output, host_output,
                        static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
@@ -618,6 +624,9 @@ int main(int argc, char **argv) {
         double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
+            if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT)
+                if(run_only_kernel != conv_bwd_driver.get_kernel_name(tunable))
+                    continue;
 
             printf("[bwd:%2d] %s, ", i, conv_bwd_driver.get_kernel_name(tunable).c_str());
             fflush(stdout);
@@ -680,8 +689,8 @@ int main(int argc, char **argv) {
             // gen rand
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * k * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
@@ -763,13 +772,16 @@ int main(int argc, char **argv) {
 
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
+            if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT)
+                if(run_only_kernel != conv_wrw_driver.get_kernel_name(tunable))
+                    continue;
 
             printf("[wrw:%2d] %s, ", i, conv_wrw_driver.get_kernel_name(tunable).c_str());
             fflush(stdout);
 
             if (need_verify)
                 HIP_CALL(hipMemset(device_weight, 0,
-                                   k * c * y * x * sizeof(float)));
+                                   static_cast<size_t>(k) * c * y * x * sizeof(float)));
             result_t result =
                 conv_wrw_driver.run(&conv_args, tunable, module, device_input,
                                 device_weight, device_output, warmup, repeat);
