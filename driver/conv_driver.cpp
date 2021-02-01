@@ -280,7 +280,7 @@ static inline bool valid_float(float p)
 }
 
 template<typename T>
-static inline bool valid_vector(const float *ref, const T *pred, int n,
+static inline bool valid_vector(const float *ref, const T *pred, size_t n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
@@ -531,18 +531,18 @@ int main(int argc, char **argv) {
         //float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, -2, 2);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
-            //gen_rand_vector<float, int>(host_weight, k * c * y * x, 1, 1);
+            gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
                 // move to different data type
-                tensor_copy<float16, float>(host_input_f16, host_input, n * c * hi * wi);
-                tensor_copy<float16, float>(host_weight_f16, host_weight, k * c * y * x);
-                tensor_copy<float, float16>(host_input, host_input_f16, n * c * hi * wi);
-                tensor_copy<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+                tensor_copy<float16, float>(host_input_f16, host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float16, float>(host_weight_f16, host_weight, static_cast<size_t>(k) * c * y * x);
+                tensor_copy<float, float16>(host_input, host_input_f16, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float, float16>(host_weight, host_weight_f16, static_cast<size_t>(k) * c * y * x);
             }
 
 #ifdef USE_GPU_NAIVE_CONV
@@ -586,8 +586,10 @@ int main(int argc, char **argv) {
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
 
-            if(!run_first_applicable) 
+            if(!run_first_applicable){
                  printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+                 fflush(stdout);
+            }
 
             result_t result;
             if(driver_data_type == driverFloat)

@@ -213,9 +213,6 @@ public:
                 return false;
             }
         }
-        else if(precision == "bf16"){
-            return false;
-        }
         else
         {
             std::cout << std::endl;
