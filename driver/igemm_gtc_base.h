@@ -310,4 +310,35 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     return kernel_name;
 }
 
+// this is to support big tensor > 4G. need to decide how many splits needed
+// return the number of splits, valid for nchw, nhwc, 2d/3d conv
+int igemm_split_batch_size(int n, int wi, int hi, int di, int c, int k, int wo, int ho, int do_, int data_byte)
+{
+    size_t image_size_input = static_cast<size_t>(c) * di * hi * wi * data_byte;
+    size_t image_size_output = static_cast<size_t>(k) * do_ * ho * wo * data_byte;
+    size_t size_4g = 0xffffffffUL;
+    if(image_size_input >= size_4g || image_size_output >= size_4g)
+        return 0;
+
+    size_t image_size = image_size_input >= image_size_output ? image_size_input : image_size_output;
+    size_t splited_n = size_4g / image_size;
+
+    // round up splits, we must match
+    // 1. splited_n * image_size < size_4g
+    // 2. n % splited_n == 0
+    assert(splited_n != 0);
+
+    if(splited_n >= n)
+        return 1;       // speed up following while loop
+
+    while(splited_n >= 1){
+        if(n % splited_n == 0)
+            break;
+        splited_n--;
+    }
+
+    assert(splited_n * image_size < size_4g && n % splited_n == 0);
+    return n / splited_n;
+}
+
 #endif
