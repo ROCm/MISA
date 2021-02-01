@@ -141,8 +141,10 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
-        int splits = split_batch_size(arg, tunable);
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
         n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
@@ -158,54 +160,6 @@ public:
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         assert(grid_size <= 0xffffffffUL);
         return grid_size;
-    }
-
-    // this is to support big tensor > 4G. need to decide how many splits needed
-    // return the number of splits
-    int split_batch_size(const args_t *arg, const igemm_gtc_tunable_t *tunable)
-    {
-        int hi = arg->get_int("in_h");
-        int wi = arg->get_int("in_w");
-        int n = arg->get_int("batchsize");
-        int k = arg->get_int("out_channels");
-        int c = arg->get_int("in_channels");
-
-        int stride_h = arg->get_int("conv_stride_h");
-        int stride_w = arg->get_int("conv_stride_w");
-        int dilation_h = arg->get_int("dilation_h");
-        int dilation_w = arg->get_int("dilation_w");
-        int pad_h = arg->get_int("pad_h");
-        int pad_w = arg->get_int("pad_w");
-        int y = arg->get_int("fil_h");
-        int x = arg->get_int("fil_w");
-        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
-        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
-
-        int data_byte = utility_string_to_data_byte(tunable->precision);
-        size_t image_size_input = static_cast<size_t>(c) * hi * wi * data_byte;
-        size_t image_size_output = static_cast<size_t>(k) * ho * wo * data_byte;
-        size_t size_4g = 0xffffffffUL;
-        if(image_size_input >= size_4g || image_size_output >= size_4g)
-            return 0;
-
-        size_t image_size = image_size_input >= image_size_output ? image_size_input : image_size_output;
-        size_t splited_n = size_4g / image_size;
-
-        // round up splits, we must match
-        // 1. splited_n * image_size < size_4g
-        // 2. n % splited_n == 0
-        // if(splited_n >= n)
-        //     return 1;
-        assert(splited_n != 0);
-        while(splited_n >= 1){
-            // printf("n:%d, splited_n:%d\n", n, splited_n);
-            if(n % splited_n == 0)
-                break;
-            splited_n--;
-        }
-
-        assert(splited_n * image_size < size_4g && n % splited_n == 0);
-        return n / splited_n;
     }
 
     bool tunable_is_valid(const args_t *arg,
@@ -228,15 +182,17 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
         assert(c % group == 0 && k % group == 0);
 
-        int splits = split_batch_size(arg, tunable);
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
         if(splits == 0){
-            printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
+            printf("image size (c*h*w or k*h*w) is bigger than 4g, which is not supported now\n");
             return false;
         }
         n = n/splits;   // split batch size here
+       
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -328,10 +284,12 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
         assert(c % group == 0 && k % group == 0);
 
-        int splits = split_batch_size(arg, tunable);
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
         n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;

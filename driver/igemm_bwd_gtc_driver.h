@@ -267,6 +267,13 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
+
+        assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -340,8 +347,16 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
         assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        if(splits == 0){
+            printf("image size (c*h*w or k*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -456,8 +471,13 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
         assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -622,7 +642,7 @@ public:
                 hipEvent_t stop;
                 hipEventCreate(&start);
                 hipEventCreate(&stop);
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
+                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, splits, 1,
                                             u_block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
                 hipEventSynchronize(stop);
@@ -670,7 +690,7 @@ public:
                     hipEventCreate(&start);
                     hipEventCreate(&stop);
                     // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-                    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+                    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
                     hipEventSynchronize(stop);
@@ -680,7 +700,7 @@ public:
 #else
                     gpu_timer_t timer(NULL);
                     timer.start();
-                    HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+                    HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
                                              block_size, 1, 1, 0, 0, NULL,
                                              (void **)&config));
                     timer.stop();
@@ -703,7 +723,7 @@ public:
                 hipEvent_t stop;
                 hipEventCreate(&start);
                 hipEventCreate(&stop);
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
+                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, splits, 1,
                                             u_block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
                 hipEventSynchronize(stop);
@@ -732,7 +752,7 @@ public:
             hipEventCreate(&start);
             hipEventCreate(&stop);
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
                                     block_size, 1, 1, 0, 0, NULL,
                                     (void **)&config, start, stop));
             hipEventSynchronize(stop);
@@ -742,7 +762,7 @@ public:
 #else
             gpu_timer_t timer(NULL);
             timer.start();
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
                                         block_size, 1, 1, 0, 0, NULL,
                                         (void **)&config));
             timer.stop();
