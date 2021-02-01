@@ -374,22 +374,23 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_unroll_k_sub():
                 with self._deferred_context():
-                    unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+                    unroll_k_sub = (unroll_k // k_per_inst) // 2
                     for i_k in range(unroll_k_sub):
-                        self._emit(f's_waitcnt lgkmcnt(2)')
-                        self._emit(mfma_step_mxn(0, 0, 0, 0))
-                        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m  + (2*i_k+2) * k_per_inst *  lds_width_m))
-                        self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n  + (2*i_k+2) * k_per_inst * lds_width_n))
+                        if i_k < unroll_k_sub - 1:
+                            self._emit(f's_waitcnt lgkmcnt(2)')
+                            self._emit(mfma_step_mxn(0, 0, 0, 0))
+                            self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m  + (2*i_k+2) * k_per_inst *  lds_width_m))
+                            self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n  + (2*i_k+2) * k_per_inst * lds_width_n))
 
-                        self._emit(f's_waitcnt lgkmcnt(2)')
-                        self._emit(mfma_step_mxn(0, 0, 1, 1))
-                        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m  + (2*i_k+3) * k_per_inst * lds_width_m))
-                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n  + (2*i_k+3) * k_per_inst * lds_width_n))
-                    #if unroll_k_sub == 0:
-                    #    self._emit(f's_waitcnt lgkmcnt(2)')
-                    #    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    #    self._emit(f's_waitcnt lgkmcnt(0)')
-                    #    self._emit(mfma_step_mxn(0, 0, 1, 1))
+                            self._emit(f's_waitcnt lgkmcnt(2)')
+                            self._emit(mfma_step_mxn(0, 0, 1, 1))
+                            self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m  + (2*i_k+3) * k_per_inst * lds_width_m))
+                            self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n  + (2*i_k+3) * k_per_inst * lds_width_n))
+                        else:
+                            self._emit(f's_waitcnt lgkmcnt(2)')
+                            self._emit(mfma_step_mxn(0, 0, 0, 0))
+                            self._emit(f's_waitcnt lgkmcnt(0)')
+                            self._emit(mfma_step_mxn(0, 0, 1, 1))
 
                 return self._get_deferred()
 
@@ -404,8 +405,8 @@ class mfma_main_loop_t(mc_base_t):
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
                     # self._emit(f's_waitcnt lgkmcnt(0)')
-                    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    self._emit(mfma_step_mxn(0, 0, 1, 1))
+                    # self._emit(mfma_step_mxn(0, 0, 0, 0))
+                    # self._emit(mfma_step_mxn(0, 0, 1, 1))
 
                     self._emit_empty_line()
 
@@ -455,6 +456,17 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + k_per_inst * lds_width_n))
 
 
+            mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
+                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+            se_sub = create_scheduler(self.mc, mbb_list_sub)
+
+            self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
+            self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
+            self._emit(f's_waitcnt lgkmcnt(0)')
+            self._emit(do_interleave_share_store())
+            self._emit(do_interleave_unroll_k_last())
+
+            '''
             if ((unroll_k // k_per_inst) // 2 - 1) != 0:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
                             create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
@@ -477,7 +489,7 @@ class mfma_main_loop_t(mc_base_t):
                 se_last = create_scheduler(self.mc, mbb_list_last)
                 self._emit(do_interleave_gload_and_move_slice_window())
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
-
+            '''
 
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
@@ -493,10 +505,10 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + k_per_inst * lds_width_m))
             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + k_per_inst * lds_width_n))
             self._emit(do_interleave_unroll_k_sub())
-            self._emit(f's_waitcnt lgkmcnt(2)')
-            self._emit(mfma_step_mxn(0, 0, 0, 0))
-            self._emit(f's_waitcnt lgkmcnt(0)')
-            self._emit(mfma_step_mxn(0, 0, 1, 1))
+            #self._emit(f's_waitcnt lgkmcnt(2)')
+            #self._emit(mfma_step_mxn(0, 0, 0, 0))
+            #self._emit(f's_waitcnt lgkmcnt(0)')
+            #self._emit(mfma_step_mxn(0, 0, 1, 1))
 
         def mfma_loop_repeat_2x2_lp2():
             mfma = cxm.inst_mfma
@@ -727,8 +739,8 @@ class mfma_main_loop_t(mc_base_t):
             # right after clear acc
             def do_interleave_move_slice_window():
                 with self._deferred_context():
-                    self._emit(f_gld_b())                                           # global load
-                    self._emit(f_gld_a())                                           # global load
+                    #self._emit(f_gld_b())                                           # global load
+                    #self._emit(f_gld_a())                                           # global load
                     #self._emit_empty_line()
                     self._emit(f_move_slice_window_b())
                     self._emit(f_move_slice_window_a())
@@ -742,8 +754,8 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_move_slice_window_a())
 
             self._emit_front(f"{label_mfma_body}:")
-            #self._emit(f_gld_b())                                           # global load
-            #self._emit(f_gld_a()) 
+            self._emit(f_gld_b())                                           # global load
+            self._emit(f_gld_a()) 
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
 
             self._emit(f"s_waitcnt lgkmcnt(0)")

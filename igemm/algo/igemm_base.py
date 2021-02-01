@@ -220,7 +220,8 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.direction in ('fwd', 'bwd'):
             assert self.nxe in (0,1)
         else:
-            assert self.tensor_b_thread_lengths[3] == (self.nxe if self.nxe != 0 else 1)
+            #assert self.tensor_b_thread_lengths[3] == (self.nxe if self.nxe != 0 else 1)
+            assert self.nxe in (0,1)
 
         # gemm_k_pack static value
         # TODO: make gemm_k_pack to be tunable 

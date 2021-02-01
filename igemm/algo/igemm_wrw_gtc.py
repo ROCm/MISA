@@ -518,7 +518,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             # whether c/k padding
             self.do_c_padding = self.tunable.nxe != 0 and n_c0 == 1
             self.do_k_padding = self.tunable.nxe != 0 and self.tunable.tensor_a_thread_lengths[2] * self.tunable.tensor_a_thread_lengths[3] == 1
-            self.do_x_padding = self.tunable.nxe != 0 and self.tunable.tensor_b_thread_lengths[3] > 1
+            self.do_x_padding = False # self.tunable.nxe != 0 and self.tunable.tensor_b_thread_lengths[3] > 1
 
         self.label_out = f"L_{self.name()}_out"
         self.dict_shifted_stride = dict()
@@ -736,7 +736,7 @@ class igemm_wrw_gtc_t(mc_base_t):
     class kernel_sgpr_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
-            _, _, _, _, n_c0, _ = outer.get_dims_lengths()
+            n_k0, _, n_n0, _, n_c0, _ = outer.get_dims_lengths()
             self.outer = outer
 
             self.s_ka                      = sym_t("s_ka"                     ,0)
@@ -764,16 +764,20 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_gemmk_split             = sym_t("s_gemmk_split"           ,sseq(1))
             self.s_group                   = sym_t("s_group"                 ,sseq(1))
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
-            self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
+            if n_k0 > 1:
+                self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
+
+            self.s_hoxwo               = sym_t("s_hoxwo",         self.s_gemmk_split.value)
             self.s_out_stride_n            = sym_t("s_out_stride_n"           ,sseq(1))
-            self.s_out_stride_n0           = sym_t("s_out_stride_n0"          ,sseq(1))
-            if n_c0 != 1:
+            if n_n0 > 1:
+                self.s_out_stride_n0           = sym_t("s_out_stride_n0"          ,sseq(1))
+            if n_c0 > 1:
                 self.s_in_stride_c0        = sym_t("s_in_stride_c0"           ,sseq(1))
             if outer.do_x_padding:
                 self.s_in_stride_x         = sym_t("s_in_stride_x"           ,sseq(1))
             self.s_in_stride_c             = sym_t("s_in_stride_c"            ,sseq(1))
-
-            self.s_in_stride_n0            = sym_t("s_in_stride_n0"           ,sseq(1))
+            if n_n0 > 1:
+                self.s_in_stride_n0            = sym_t("s_in_stride_n0"           ,sseq(1))
             self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
 
             self.s_wei_stride_c            = sym_t("s_wei_stride_c"           ,sseq(1))
@@ -804,7 +808,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                     self.s_dim_e_x         = sym_t("s_dim_e_x"                 ,sseq(1))
                     self.s_dim_e           = sym_t("s_dim_e"                   ,sseq(1))
 
-            self.s_block_gtc_ie            = sym_t("s_block_gtc_ie"           ,sseq(1))
+            #self.s_block_gtc_ie            = sym_t("s_block_gtc_ie"           ,sseq(1))
             self.s_block_gtc_ik            = sym_t("s_block_gtc_ik"           ,sseq(1))
             self.s_block_gtc_ic0           = sym_t("s_block_gtc_ic0"          ,sseq(1))
             self.s_block_gtc_ic1e          = sym_t("s_block_gtc_ic1e"         ,sseq(1))
@@ -814,8 +818,8 @@ class igemm_wrw_gtc_t(mc_base_t):
             self.s_knum                    = sym_t("s_knum"                   ,1)
             self.s_gemm_k_num_n1           = sym_t("s_gemm_k_num_n1"          ,0)
             #if outer.tunable.nxe != 0:
-            self.s_gemm_k_num_dsho     = sym_t("s_gemm_k_num_dsho"         ,sseq(1))
-            self.s_gemm_k_num_dswo     = sym_t("s_gemm_k_num_dswo"         ,sseq(1))
+            #self.s_gemm_k_num_dsho     = sym_t("s_gemm_k_num_dsho"         ,sseq(1))
+            #self.s_gemm_k_num_dswo     = sym_t("s_gemm_k_num_dswo"         ,sseq(1))
 
             self.s_kitr                    = sym_t("s_kitr"                   ,3)
             if outer.tunable.precache_soffset:
@@ -1157,7 +1161,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             vector_in_d1  = 1
             vector_out_d1 = 1
 
-        #print(f"vector_in_d1={vector_in_d1}, vector_out_d1={vector_in_d1}")
+        #print(f"vector_in_d1={vector_in_d1}, vector_out_d1={vector_out_d1}")
 
         in_sst_ctrl.src_order = 1 if vector_in_d1 > 1 else 0
         out_sst_ctrl.src_order = 1 if vector_out_d1 > 1 else 0
@@ -1231,6 +1235,8 @@ class igemm_wrw_gtc_t(mc_base_t):
         #print(f"in_sst_ctrl.stride_d0={in_sst_ctrl.stride_d0}, in_sst_ctrl.stride_d1={in_sst_ctrl.stride_d1}")
         #print(f"in_sst_ctrl.vector_d1={in_sst_ctrl.vector_d1}")
 
+        #print(f"out_thread_copy_ndim={self.out_thread_copy_ndim}")
+
         if self.out_thread_copy_ndim == 2:
             sst_gemm_k_pack = math.gcd(self.tunable.gemm_k_pack, out_thread_copy_dims[out_thread_copy_index[0]])
             out_sst_ctrl.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]] // sst_gemm_k_pack
@@ -1248,7 +1254,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             out_sst_ctrl.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
             if (gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1 and t_k1 != 1) or \
                 (gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 and t_k0 != 1):
-                out_sst_ctrl.vector_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+                out_sst_ctrl.vector_d1 = 1#out_thread_copy_dims[out_thread_copy_index[0]]
             else:
                 if out_thread_copy_index[0] in (0, 1):
                     out_sst_ctrl.vector_d1 = math.gcd(self.tunable.gemm_k_pack, out_sst_ctrl.length_d1)
@@ -1283,7 +1289,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 out_sst_ctrl.vector_d1 = 4
                 out_sst_ctrl.stride_d0 = 4 * data_byte
 
-        # print(f"in_sst_ctrl.vector_d1:{in_sst_ctrl.vector_d1}, out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}")
+        #print(f"in_sst_ctrl.vector_d1:{in_sst_ctrl.vector_d1}, out_sst_ctrl.vector_d1:{out_sst_ctrl.vector_d1}")
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_2d_shared_store_t(self.mc, in_sst_ctrl, inline), macro_igemm_2d_shared_store_t(self.mc, out_sst_ctrl, inline)
 
@@ -1333,7 +1339,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                     s.s_in_stride_wo if self.tunable.nxe != 0 and self.tunable.tensor_b_thread_lengths[1] > 1 else s.s_in_stride_n,
                     #s.s_in_stride_n,
                     s.s_in_stride_c0 if t_c0 != 1 else s_dummy,
-                    s.s_in_stride_x if self.do_x_padding else s_dummy]
+                    s.s_in_stride_x if self.do_x_padding else s.s_in_stride_c]
         out_stride_gprs = [s.s_out_stride_n0 if t_n0 != 1 else s_dummy,
                     s_dummy if self.tunable.nxe != 0 else s.s_out_stride_n,
                     #s.s_out_stride_n,
@@ -2101,8 +2107,9 @@ class igemm_wrw_gtc_t(mc_base_t):
         #if n_k0 != 1:
         #    self._emit(f"s_mov_b32 s[{s.s_move_slice_k_k0}], {n_k0}")
         if self.tunable.nxb != 0:
+            self._emit(f"s_mul_i32 s[{s.s_hoxwo()}], s[{s.s_ho()}], s[{s.s_wo()}]")
             self._emit(f"s_mov_b32 s[0], {n_n1b}")
-            self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_dim_b() if self.tunable.nxe != 0 else s.s_hoxwo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             # self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n1(), '0', s.s_out_stride_k(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
         else:
@@ -2147,7 +2154,7 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f"s_mov_b32 s[{s.s_gemm_k_num_n1()}], {unmerge_sub_n1}")
         #if self.tunable.nxe != 0:
-        self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_dim_b() if self.tunable.nxe != 0 else s.s_out_stride_k()}], s[{s.s_sub_n()}]")
+        self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_dim_b() if self.tunable.nxe != 0 else s.s_hoxwo()}], s[{s.s_sub_n()}]")
         # self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_out_stride_k()}], s[{s.s_sub_n()}]")
         #else:
         #    self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_k()}]")
