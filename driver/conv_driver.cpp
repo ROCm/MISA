@@ -470,6 +470,7 @@ int main(int argc, char **argv) {
     HIP_CALL(hipMalloc(&device_weight, static_cast<size_t>(k) * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, static_cast<size_t>(n) * k * ho * wo * sizeof(float)));
 
+#ifdef USE_HALF_HPP
     // fp16 type
     float16 *host_input_f16  = (float16 *)malloc(n * c * hi * wi * sizeof(float16));
     float16 *host_weight_f16 = (float16 *)malloc(k * c * y * x * sizeof(float16));
@@ -482,6 +483,7 @@ int main(int argc, char **argv) {
     HIP_CALL(hipMalloc(&device_input_f16, n * c * hi * wi * sizeof(float16)));
     HIP_CALL(hipMalloc(&device_weight_f16, k * c * y * x * sizeof(float16)));
     HIP_CALL(hipMalloc(&device_output_f16, n * k * ho * wo * sizeof(float16)));
+#endif
 
     int need_verify = conv_args.get_int("verify");
 
@@ -537,6 +539,8 @@ int main(int argc, char **argv) {
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
+
+#ifdef USE_HALF_HPP
             if(driver_data_type == driverHalf){
                 // move to different data type
                 tensor_copy<float16, float>(host_input_f16, host_input, static_cast<size_t>(n) * c * hi * wi);
@@ -544,6 +548,7 @@ int main(int argc, char **argv) {
                 tensor_copy<float, float16>(host_input, host_input_f16, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float, float16>(host_weight, host_weight_f16, static_cast<size_t>(k) * c * y * x);
             }
+#endif
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -564,10 +569,14 @@ int main(int argc, char **argv) {
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
 #endif
-            if(driver_data_type == driverHalf)
+            if(driver_data_type == driverHalf){
+#ifdef USE_HALF_HPP
                 device_output_to_host = (float *)malloc((static_cast<size_t>(n) * k * ho * wo * sizeof(float16) + 3) / 4 * 4);
-            else
+#endif
+            }
+            else{
                 device_output_to_host = (float *)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+            }
             
         }
         if(driver_data_type == driverFloat){
@@ -576,12 +585,14 @@ int main(int argc, char **argv) {
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                         static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
         }
+#ifdef USE_HALF_HPP
         else if(driver_data_type == driverHalf){
             HIP_CALL(hipMemcpy(device_input_f16, host_input_f16,
                         static_cast<size_t>(n) * c * hi * wi * sizeof(float16), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight_f16, host_weight_f16,
                         static_cast<size_t>(k) * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
         }
+#endif
         igemm_fwd_gtc_t conv_fwd_driver;
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
@@ -595,10 +606,12 @@ int main(int argc, char **argv) {
             if(driver_data_type == driverFloat)
                 result = conv_fwd_driver.run(&conv_args, tunable, module, device_input,
                                               device_weight, device_output, warmup, repeat, driver_data_type);
+#ifdef USE_HALF_HPP
             else
                 result = conv_fwd_driver.run(&conv_args, tunable, module, device_input_f16,
                                               device_weight_f16, device_output_f16, warmup, repeat, driver_data_type);
-            
+#endif
+
             if (result.return_code != 0){
                 if ( ! run_first_applicable ) 
                      printf("not applicatble\n");
@@ -632,6 +645,7 @@ int main(int argc, char **argv) {
                     is_valid = valid_vector<float>(host_output, device_output_to_host,
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
+#ifdef USE_HALF_HPP
                 else if(driver_data_type == driverHalf) {
                     HIP_CALL(hipMemcpy(device_output_to_host, device_output_f16,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float16),
@@ -640,7 +654,7 @@ int main(int argc, char **argv) {
                     is_valid = valid_vector<float16>(host_output, device_output_to_host_fp16,
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
-                
+#endif           
                 
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -930,6 +944,7 @@ int main(int argc, char **argv) {
     hipFree(device_weight);
     hipFree(device_output);
 
+#ifdef USE_HALF_HPP
     free(host_input_f16);
     free(host_weight_f16);
     free(host_output_f16);
@@ -937,4 +952,5 @@ int main(int argc, char **argv) {
     hipFree(device_input_f16);
     hipFree(device_weight_f16);
     hipFree(device_output_f16);
+#endif
 }

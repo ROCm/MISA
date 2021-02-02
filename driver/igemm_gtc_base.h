@@ -28,9 +28,10 @@
 #ifndef __IGEMM_GTC_BASE_H
 #define __IGEMM_GTC_BASE_H
 
+#ifdef USE_HALF_HPP
 #include "half.hpp"
-
 using float16 = half_float::half;
+#endif
 
 #include "config_parser.h"
 #include "utility.h"
