@@ -183,6 +183,25 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                         return True
                     return False
             return False
+        
+        def is_mbb_start_bfe_and_cmpx_block(self, current_index, istrs_list):
+            assert type(istrs_list) is list
+            current_istr = istrs_list[current_index]
+            # current_mc_inst = create_mc_inst(current_istr)
+            current_inst_op = get_mc_inst_op(current_istr)
+            if current_inst_op.startswith('v_bfe_u32'):
+                #print('asdadds XXXXX')
+                for next_index in range(current_index+1, len(istrs_list)):
+                    next_istr =  istrs_list[next_index]
+                    next_mc_inst = create_mc_inst(next_istr)
+                    next_inst_op = get_mc_inst_op(next_istr)
+                    #print(f'   next_inst_op:{next_inst_op} ')
+                    if not next_mc_inst:
+                        continue
+                    if next_inst_op.startswith('v_cmp'):
+                        return True
+                    return False
+            return False
 
         def is_mbb_start(self, istr):
             _istr = istr.strip()
@@ -265,7 +284,8 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                             mc_inst_buffer.append(mc_inst)
                 else:
                     if state == self.STATE_NORMAL:
-                        if self.is_mbb_start(istr) or self.is_mbb_start_cmp_and_exec_block(i, istrs):
+                        if self.is_mbb_start(istr) or self.is_mbb_start_cmp_and_exec_block(i, istrs) \
+                                or self.is_mbb_start_bfe_and_cmpx_block(i, istrs):
                             mc_inst_buffer.clear()
                             mc_inst_buffer.append(mc_inst)
                             state = self.STATE_PARSING_MBB
@@ -273,7 +293,12 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                             mbbs.append(machine_basic_block_t(copy.copy([mc_inst])))
                     else:
                         if self.is_mbb_start(istr):
-                            assert False, f'not support recursive start/end for now, with {i}:{istr}, {istrs}'
+                            assert i > 1
+                            if self.is_mbb_start_bfe_and_cmpx_block(i - 1, istrs):
+                                # TODO: this require bfe and cmpx have no other lines in between
+                                pass
+                            else:
+                                assert False, f'not support recursive start/end for now, with {i}:{istr}, {istrs}'
                         if self.is_mbb_end(istr):
                             mc_inst_buffer.append(mc_inst)
                             mbbs.append(machine_basic_block_t(copy.copy(mc_inst_buffer)))

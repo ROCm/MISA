@@ -36,6 +36,7 @@ class macro_base_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         self.arg_list = list()
         self.inline = inline
+        self.expr_cnt = 0
     def name(self):
         return 'n/a macro'
     def is_inline(self):
@@ -71,10 +72,13 @@ class macro_base_t(mc_base_t):
                     setattr(self, self.arg_list[i], sym_t(args[i]))
                 elif type(args[i]) is sym_t:
                     setattr(self, self.arg_list[i], args[i])
+                elif args[i] is None:
+                    setattr(self, self.arg_list[i], None)
 
             # 2nd, do the emit
             with self._deferred_context():
                 self.expr()
+            self.expr_cnt += 1
 
             # last, restore arg to default value.
             for a in self.arg_list:
@@ -90,3 +94,4 @@ class macro_base_t(mc_base_t):
         if not self.is_inline():
             with self._emit_macro_indented(".macro {} {}".format(self.name(), ' '.join(self.arg_list))):
                 self.expr()
+                self.expr_cnt += 1

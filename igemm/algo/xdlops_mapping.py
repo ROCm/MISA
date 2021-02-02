@@ -369,7 +369,7 @@ class igemm_xdlops_mapping_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_xdlops_mapping_t
         self.ctrl = ctrl
-    def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4):
+    def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4, k_pack = 1):
         '''
         notice! this is to calculate LDS offset for A/B matrix input, it is not the same as C matrix output layout, due to xdlops
         C matrix output describe is in coalescint_store
@@ -379,32 +379,44 @@ class igemm_xdlops_mapping_t(mc_base_t):
         #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
         assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
         with self._deferred_context():
-            self._emit(f"; xdlops mapping, get source matrix gemm index")
+            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
+            if k_pack != 1:
+                self._emit(f"v_lshlrev_b32 v[{v_gemm_in}], {utility_log2(k_pack)}, v[{v_gemm_in}]   ; shift left k_pack:{k_pack}")
+                self._emit(f"v_lshlrev_b32 v[{v_gemm_im}], {utility_log2(k_pack)}, v[{v_gemm_im}]   ; shift left k_pack:{k_pack}")
+
             self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n())}, v[{v_thread_id}]")
             if ctrl.block_k() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
+                if k_pack != 1:
+                    self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack - 1}, v[{v_tmp4} + 0]   ; and k_pack:{k_pack}")
+                    self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack)}, v[{v_tmp4} + 0] ; shift right k_pack:{k_pack}")
+                    self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack:{k_pack}")
+                    self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack:{k_pack}")
+                    self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
+                    self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
+                else:
+                    self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
+                    self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k())}, v[{v_thread_id}]")
                 pass
 
             if ctrl.block_n_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_n_per_wave() - 1}, v[{v_thread_id}]          ; block_n_per_wave index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.block_n())}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.block_n() * k_pack)}, v[{v_gemm_in}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n_per_wave())}, v[{v_thread_id}]")
             if ctrl.block_m_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 1], {ctrl.block_m_per_wave() - 1}, v[{v_thread_id}]          ; block_m_per_wave index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 1], {utility_log2(ctrl.block_m())}, v[{v_gemm_im}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 1], {utility_log2(ctrl.block_m() * k_pack)}, v[{v_gemm_im}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_m_per_wave())}, v[{v_thread_id}]")
             if ctrl.waves_per_n() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 2], {ctrl.waves_per_n() - 1}, v[{v_thread_id}]  ; waves_per_n index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 2], {utility_log2(ctrl.wave_tile_n * ctrl.wave_step_n)}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 2], {utility_log2(ctrl.wave_tile_n * ctrl.wave_step_n * k_pack)}, v[{v_gemm_in}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.waves_per_n())}, v[{v_thread_id}]")
             if ctrl.waves_per_m() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 3], {ctrl.waves_per_m() - 1}, v[{v_thread_id}]  ; waves_per_m index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 3], {utility_log2(ctrl.wave_tile_m * ctrl.wave_step_m)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 3], {utility_log2(ctrl.wave_tile_m * ctrl.wave_step_m * k_pack)}, v[{v_gemm_im}]")
                 # self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.waves_per_n())}, v[{v_thread_id}]")
             self._emit_empty_line()
         return self._get_deferred()

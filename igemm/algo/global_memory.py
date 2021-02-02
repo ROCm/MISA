@@ -27,6 +27,21 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
+class inst_global_load_dword_t(object):
+    def __init__(self, dwords):
+        self.dwords = dwords
+    
+    def __call__(self, vdst, vaddr, saddr, offset = 0):
+        if self.dwords == 1:
+            return f"global_load_dword v[{vdst}], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
+        if self.dwords == 2:
+            return f"global_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
+        if self.dwords == 3:
+            return f"global_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
+        if self.dwords == 4:
+            return f"global_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
+        assert False
+
 class inst_buffer_load_dword_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, dwords):
@@ -92,6 +107,7 @@ class ctrl_2d_global_load_t(object):
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0           # 0-d0xd1, 1-d1xd0
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
+        self.bfe_flag = 0
 
 class macro_igemm_2d_global_load_t(macro_base_t):
     # TODO: if need vectorize further LDS write, need shuffle dst gpr while load
@@ -347,6 +363,68 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             assert False, "un implemented, consider simple swap stride_d0/d1 order should be the same"
         else:
             assert False
+
+    def get_issues(self):
+        ctrl = self.ctrl
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        return  ctrl.length_d0 * n_d1
+
+class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
+    '''
+    not support src/dst order
+    '''
+    def __init__(self, mc, ctrl, inline = False):
+        assert type(ctrl) is ctrl_2d_global_load_t
+        macro_base_t.__init__(self, mc, inline)
+        self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("s_os")
+        self.declare_arg("v_os")
+        self.declare_arg("v_flag")
+        if self.ctrl.bfe_flag:
+            self.declare_arg("v_tmp")
+
+    def name(self):
+        ctrl = self.ctrl
+        if ctrl.precision == "fp32":
+            bits_str = 'b32'
+        elif ctrl.precision in ("fp16", "bf16"):
+            bits_str = 'b16'
+        else:
+            assert False
+
+        if ctrl.vector_d1 == 4:
+            vec_str = 'v4'
+        elif ctrl.vector_d1 == 2:
+            vec_str = 'v2'
+        elif ctrl.vector_d1 == 1:
+            vec_str = 'v1'
+        else:
+            assert False
+
+        return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_voffset"
+
+    def expr(self):
+        ctrl = self.ctrl
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+
+        i_cnt = 0
+        for i_d0 in range(ctrl.length_d0):
+            for i_d1 in range(n_d1):
+                if self.v_flag != None:
+                    if ctrl.bfe_flag:
+                        self._emit(f"v_bfe_u32 v[{self.v_tmp()}], v[{self.v_flag()}], {i_cnt}, 1")
+                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_tmp()}]")
+                    else:
+                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_cnt)}]")
+                self._emit(buffer_load_dword(f"{self.v_dst()}+{i_cnt*ctrl.vector_d1}", f"{self.v_os(i_cnt)}", f"{self.s_ptr()}", f"{self.s_os()}", 0))
+                if self.v_flag != None:
+                    self._emit(f"s_mov_b64 exec, -1")
+                i_cnt += 1
 
     def get_issues(self):
         ctrl = self.ctrl
