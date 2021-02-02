@@ -3,11 +3,20 @@
 
 if [ $# -ne 2 ]
 then 
-    echo "please give this script a direction(fwd, bwd or wrw) and a precision(fp32 or fp16)"
-    echo "now I use fwd and fp32 as default"
-    echo "use me as: sh script/gtc_conv_model.sh fwd/bwd/wrw fp32/fp16"
-    DIR=fwd
-    PRECISION=fp32
+    if [ $# -eq 1 ]
+    then 
+        echo "please give this script a precision(fp32 or fp16)"
+        echo "now I use fp32 as default"
+        echo "use me as: /bin/bash script/smoke_test.sh fwd/bwd/wrw fp32/fp16"
+        DIR=$1
+        PRECISION=fp32
+    else
+        echo "please give this script a direction(fwd, bwd or wrw) and a precision(fp32 or fp16)"
+        echo "now I use fwd and fp32 as default"
+        echo "use me as: /bin/bash script/smoke_test.sh fwd/bwd/wrw fp32/fp16"
+        DIR=fwd
+        PRECISION=fp32
+    fi
 else
     DIR=$1
     PRECISION=$2
