@@ -1570,12 +1570,14 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(5)}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(5)}]")
+        self._emit(f"s_sub_u32 s[{s.s_p_in(2)}], s[{s.s_p_in(2)}], s[{s.s_tmp()}]")
         self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
         if gemm_n_unmerge_cluster == 0:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic0()}], {igemm_log2(unmerge_sub_c1 * data_byte)}")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_in_stride_c()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_in_stride_c()}], s[{s.s_tmp(3)}]")
+            self._emit(f"s_sub_u32 s[{s.s_p_in(2)}], s[{s.s_p_in(2)}], s[{s.s_tmp()}]")
             self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
             self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
         else:
@@ -1628,6 +1630,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_out_stride_k()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
+        self._emit(f"s_sub_u32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], s[{s.s_tmp()}]")
         self._emit(f"s_add_u32 s[{s.s_p_out()}], s[{s.s_p_out()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_out(1)}], s[{s.s_p_out(1)}], s[{s.s_tmp(1)}]")
         self._emit_empty_line()
