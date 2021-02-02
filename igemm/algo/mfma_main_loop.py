@@ -262,11 +262,6 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit(mfma_step_mxn(0, 0, 1, 1))
                         self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m  + (2*i_k+3) * k_per_inst * lds_width_m))
                         self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n  + (2*i_k+3) * k_per_inst * lds_width_n))
-                    #if unroll_k_sub == 0:
-                    #    self._emit(f's_waitcnt lgkmcnt(2)')
-                    #    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    #    self._emit(f's_waitcnt lgkmcnt(0)')
-                    #    self._emit(mfma_step_mxn(0, 0, 1, 1))
 
                 return self._get_deferred()
 
