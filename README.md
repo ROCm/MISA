@@ -1,4 +1,3 @@
-[toc]
 *under rapid development*
 
 # iGEMMgen
