@@ -37,6 +37,8 @@
 #include <algorithm>
 #include <numeric>
 
+// #define IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL 1
+
 typedef struct {
     float *p_in;
     float *p_wei;
@@ -85,6 +87,7 @@ typedef struct {
 #endif
 } __attribute__((packed)) igemm_bwd_gtc_karg_t;
 
+#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
 typedef struct {
     float *p_in;
     int hi;
@@ -110,6 +113,7 @@ typedef struct {
     uint32_t shift_pack_0;
 #endif
 } __attribute__((packed)) igemm_upsampling_clear_karg_t;
+#endif
 
 static void dump_bwd_karg(igemm_bwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
@@ -164,77 +168,6 @@ public:
     igemm_bwd_gtc_t(){}
     ~igemm_bwd_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-#if 0
-        auto tensor_layout            = tunable->tensor_layout;
-        auto gemm_m_per_block         = tunable->gemm_m_per_block;
-        auto gemm_n_per_block         = tunable->gemm_n_per_block;
-        auto gemm_k_per_block         = tunable->gemm_k_per_block;
-        auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
-        auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
-        auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
-        auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
-        auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
-        auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
-        auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
-        auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
-        auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
-        auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
-        auto direction                = tunable->direction;
-        auto precision                = tunable->precision;
-        auto nxb                      = tunable->nxb;
-        auto nxe                      = tunable->nxe;
-        auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
-        auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
-        auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
-        auto multihead                = tunable->multihead;
-
-        assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
-        assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
-        int gemm_m_repeat = gemm_m_per_block / (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster);
-        int gemm_n_repeat = gemm_n_per_block / (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster);
-
-        int thread_tile_m = gemm_m_repeat * gemm_m_per_thread;
-        int thread_tile_n = gemm_n_repeat * gemm_n_per_thread;
-
-        assert(direction == "bwd");
-
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + 
-                tensor_layout + std::string("_") + precision +
-                std::string("_bx") + std::to_string(nxb) + 
-                std::string("_ex") + std::to_string(nxe) + "_";
-
-        std::string kernel_name =
-            kernel_prefix +
-               "bt" +
-               std::to_string(gemm_m_per_block) + "x" +
-               std::to_string(gemm_n_per_block) + "x" +
-               std::to_string(gemm_k_per_block) + "_" +
-               "tt" +
-               std::to_string(thread_tile_m) + "x" +
-               std::to_string(thread_tile_n) + "_" +
-               "gm" + 
-               std::to_string(gemm_m_repeat) + "x" +
-               std::to_string(gemm_m_level0_cluster) + "x" +
-               std::to_string(gemm_m_level1_cluster) + "_" +
-               "gn" + 
-               std::to_string(gemm_n_repeat) + "x" +
-               std::to_string(gemm_n_level0_cluster) + "x" +
-               std::to_string(gemm_n_level1_cluster) + "_" +
-               "ta" + utility_int_list_to_string(tensor_a_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_a_cluster_lengths)+ "_" + 
-               "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_b_cluster_lengths);
-        // printf("[%s]\n",kernel_name.c_str());
-        if(gemm_m_unmerge_cluster)
-            kernel_name += std::string("_mc");
-        if(gemm_n_unmerge_cluster)
-            kernel_name += std::string("_nc");
-        if(gemm_k_unmerge_cluster)
-            kernel_name += std::string("_kc");
-        if(multihead)
-            kernel_name += std::string("_mh");
-        return kernel_name;
-#endif
         return igemm_gtc_encode_kernel_name(tunable);
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
@@ -568,6 +501,7 @@ public:
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
+#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         igemm_upsampling_clear_karg_t ukarg;
         ukarg.p_in          = p_in;
         ukarg.hi            = hi;
@@ -599,32 +533,42 @@ public:
 
         int u_block_size = 256;
         int u_grid_size = n * (c / group) * group;
+#endif
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
-        
+
+#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         hipFunction_t upsampling_clear_kernel_func;
         std::string upsampling_clear_kernel_name = std::string("igemm_upsampling_clear_") + tunable->tensor_layout + "_" + tunable->precision;
         HIP_CALL(
             hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
+#endif
 
         auto launch_bwd = [&]() -> float{
             float ms_total = .0;
             if(need_set_zero){
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
                 float ms = .0;
                 hipEvent_t start;
                 hipEvent_t stop;
                 hipEventCreate(&start);
                 hipEventCreate(&stop);
+#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
+                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
+                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
+                          HIP_LAUNCH_PARAM_END};
                 HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
                                             u_block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
+#else
+                HIP_CALL(hipDeviceSynchronize());
+                HIP_CALL(hipEventRecord( start, NULL ));
+                hipMemset(p_in, 0, n*c*hi*wi*sizeof(float));
+                HIP_CALL(hipEventRecord( stop, NULL ));
+#endif
                 hipEventSynchronize(stop);
                 hipEventElapsedTime(&ms, start, stop);
                 hipEventDestroy(start);
@@ -695,17 +639,24 @@ public:
         auto launch_bwd_multihead = [&]() -> float{
             float ms_total = .0;
             if(need_set_zero){
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
                 float ms = .0;
                 hipEvent_t start;
                 hipEvent_t stop;
                 hipEventCreate(&start);
                 hipEventCreate(&stop);
+#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
+                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
+                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
+                          HIP_LAUNCH_PARAM_END};
                 HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
                                             u_block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
+#else
+                HIP_CALL(hipDeviceSynchronize());
+                HIP_CALL(hipEventRecord( start, NULL ));
+                hipMemset(p_in, 0, n*c*hi*wi*sizeof(float));
+                HIP_CALL(hipEventRecord( stop, NULL ));
+#endif
                 hipEventSynchronize(stop);
                 hipEventElapsedTime(&ms, start, stop);
                 hipEventDestroy(start);
