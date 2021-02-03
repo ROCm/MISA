@@ -37,7 +37,7 @@ def igemm_flatten(args, config_content):
     sec_root = config_content.get_section('codegen')[0]
     arch = amdgpu_arch_config_t({
         'arch'          :   amdgpu_string_to_arch( sec_root['arch'] ),
-        'data_type'     :   AMDGPU_PRECISION_FP32,
+        #'data_type'     :   amdgpu_string_to_precision( sec_root['data_type'] ),
         'code_object'   :   amdgpu_string_to_codeobj( sec_root['code_object']) })
 
     # create mc
@@ -63,6 +63,13 @@ def igemm_out_tunable_param(output_file, config_content):
         list_emitter.emit(td_item.output())
     list_emitter.close()
 
+def igemm_check_fp16_configs(config_content):
+    tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        if "fp16" in td['precision']:
+            return True
+    return False
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -81,20 +88,17 @@ if __name__ == '__main__':
 
     arch = config_content.get_section('codegen')[0]['arch']
     code_object = config_content.get_section('codegen')[0]['code_object']
+    has_fp16_config = igemm_check_fp16_configs(config_content)
+
+    if os.path.exists(args.dir):
+        shutil.rmtree(args.dir)
+    os.mkdir(args.dir)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
-        if os.path.exists(args.dir):
-            shutil.rmtree(args.dir)
-        os.mkdir(args.dir)
-        igemm_host_driver(arch=arch, config_file=args.config_file, out_dir=args.dir)
+        igemm_host_driver(arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
-        # config_content.dump()
-        # igemm_sequence(args, config_content)
-        if os.path.exists(args.dir):
-            shutil.rmtree(args.dir)
-        os.mkdir(args.dir)
         igemm_sequence_driver(arch=arch, code_object=code_object,
                             config_content=config_content, out_dir=args.dir )
 

@@ -29,15 +29,20 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
+from .xdlops_mapping import get_ctrl_xdlops_mapping
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
-IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
-IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
+IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1 
+IGEMM_GTC_FEAT_LDS_BUFFER_NUM = 2
+IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1 
 IGEMM_GTC_FEAT_MAGIC_DIVISION = 1
 IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
+IGEMM_GTC_FEAT_USE_BUFFER_LOAD_OOB = 1
+IGEMM_GTC_FEAT_USE_DS_WRITE2_b64 = 0
+IGEMM_GTC_FEAT_PACK_INPUT_GLOBAL = 1
+IGEMM_GTC_FEAT_BUFFER_LOAD_WITHOUT_INTERLEAVE = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
 # IGEMM_GTC_TENSOR_LAYOUT_NHWC = ((1 << 4) | 1)
@@ -153,6 +158,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_m_per_block                   = tunable_dict['gemm_m_per_block']
         self.gemm_n_per_block                   = tunable_dict['gemm_n_per_block']
         self.gemm_k_per_block                   = tunable_dict['gemm_k_per_block']
+        self.precision                          = tunable_dict['precision']
         self.fma_type                           = get_igemm_gtc_fma_type(tunable_dict)
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             self.gemm_m_per_thread              = tunable_dict['gemm_m_per_thread']
@@ -168,7 +174,14 @@ class igemm_gtc_tunable_parameter_t(object):
             self.wave_tile_n                    = tunable_dict['wave_tile_n']
             self.wave_step_n                    = tunable_dict['wave_step_n']
             self.wave_repeat_n                  = tunable_dict['wave_repeat_n']
-            self.wave_tile_k                    = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 1)
+            if self.precision == "fp32":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 1)
+            elif self.precision == "fp16":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 4)
+            elif self.precision == "bf16":
+                self.wave_tile_k                = utility_dict_with_default_t(tunable_dict)('wave_tile_k', 2)
+            else:
+                self.wave_tile_k                = 1
         else:
             assert False
 
@@ -177,7 +190,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.tensor_b_thread_lengths            = tunable_dict['tensor_b_thread_lengths']     # list!
         self.tensor_b_cluster_lengths           = tunable_dict['tensor_b_cluster_lengths']    # list!
         self.direction                          = tunable_dict['direction']
-        self.precision                          = tunable_dict['precision']
+        #self.precision                          = tunable_dict['precision']
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
         self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
@@ -193,6 +206,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
         self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
+        self.gemm_k_pack                        = utility_dict_with_default_t(tunable_dict)('gemm_k_pack', 0)
+        self.lds_buffer_num                     = utility_dict_with_default_t(tunable_dict)('lds_buffer_num', IGEMM_GTC_FEAT_LDS_BUFFER_NUM)
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
@@ -204,11 +219,29 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.nxb in (1,4,8,16,32,64,128,256)
         assert self.nxe in (0,1)
 
+        # gemm_k_pack static value
+        # TODO: make gemm_k_pack to be tunable 
+        if self.gemm_k_pack == 0:
+            if self.precision == 'fp32':
+                self.gemm_k_pack = 1
+            elif self.precision == 'fp16':
+                self.gemm_k_pack = 4
+            else:
+                self.gemm_k_pack = 2
+        else:
+            if self.precision == 'fp32':
+                assert self.gemm_k_pack >= 1 and self.gemm_k_pack <= 4, f"wrong gemm_k_pack"
+            elif self.precision == 'fp16':
+                assert self.gemm_k_pack >= 4 and self.gemm_k_pack <= 8 and self.gemm_k_pack % 4 == 0, f"wrong gemm_k_pack"
+            else:
+                assert self.gemm_k_pack >= 2 and self.gemm_k_pack <= 8 and self.gemm_k_pack % 2 == 0, f"wrong gemm_k_pack"
+
         # TODO: better specify
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             self.block_size                     = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
 
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            assert self.wave_tile_k % self.gemm_k_pack == 0
             assert self.gemm_m_per_block % (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m) == 0
             assert self.gemm_n_per_block % (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n) == 0
             waves_per_m = self.gemm_m_per_block // (self.wave_tile_m * self.wave_step_m * self.wave_repeat_m)
@@ -255,7 +288,7 @@ class igemm_gtc_tunable_parameter_t(object):
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.local_prefetch_num             = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1
             # register for a,b,c buffer
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping                      = get_ctrl_xdlops_mapping(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.precision, self.block_size // AMDGPU_WAVE_SIZE)
             self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
             assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
             self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
@@ -273,8 +306,17 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2                          = igemm_next_pow2( self.lds_a)
         self.lds_b_np2                          = igemm_next_pow2( self.lds_b)
         self.lds_single                         = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2)
-        self.lds_buffer_num                     = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        #self.lds_buffer_num                     = IGEMM_GTC_FEAT_LDS_BUFFER_NUM
         self.lds_total                          = self.lds_buffer_num * self.lds_single
+
+        # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
+        # TODO: need to make some compromise in occupancy and lds double buffer
+        if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024 and self.num_agpr_accumulate_c < 128:
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
+        if self.lds_total > 32 * 1024:
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
@@ -294,7 +336,7 @@ class igemm_gtc_tunable_parameter_t(object):
         #    self.coalescing_store_groups = 2
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # check on grouping
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping                      = get_ctrl_xdlops_mapping(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.precision, self.block_size // AMDGPU_WAVE_SIZE)
             length_in_m =  xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() # no need xdlops_mapping.lanegroup_m_per_thread()
             if length_in_m % self.coalescing_store_groups != 0:
                 # we still asume both value are power of 2

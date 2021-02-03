@@ -137,7 +137,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                     num_v_c_clear = num_v_c_clear + 1
                 #else:
                 #    break
-            assert num_gmem != 0, f"no global mem in this instructino list, please check"
+            #assert num_gmem != 0, f"no global mem in this instructino list, please check"
             assert num_v_c_clear in (0, 1)
             num_gmem += num_v_c_clear
 
@@ -145,6 +145,7 @@ class simple_interleave_scheduler_t(mc_base_t):
             gmem_mbb_0_ratio = 2 / 3                          # if num global mem bigger than this of mbb_0 length, need add more per interval
             gmem_per_interval = 1
             #while num_gmem * gmem_per_interval >= int(len(mbb_0) * gmem_mbb_0_ratio):
+            #print(f"num_gmem={num_gmem}, gmem_per_interval={gmem_per_interval}, len(mbb_0)={len(mbb_0)}")
             while (num_gmem + gmem_per_interval - 1) // gmem_per_interval  >= int(len(mbb_0) * gmem_mbb_0_ratio):
                 gmem_per_interval += 1
 
@@ -162,7 +163,10 @@ class simple_interleave_scheduler_t(mc_base_t):
                 STATE_OTHER     = 1
                 STATE_END       = 2
                 
-                state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
+                if num_gmem == 0:
+                    state = STATE_OTHER
+                else:
+                    state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
                 m1_idx = 0
                 for m0_idx in range(len(mbb_0)):
                     self._emit(self.call_mbb(mbb_0[m0_idx]))
@@ -223,11 +227,16 @@ class simple_interleave_scheduler_t(mc_base_t):
                 m1_idx = 0
                 for i in range(len(mbb_0)):
                     smem_per_interleave_cnt = 0
+                    #self._emit(self.call_mbb(mbb_0[m0_idx]))
+                    #print("----------------")
                     while True:
                         if m1_idx >= len(mbb_1):
                             break
                         # print(f' --- inst:{mbb_1[m1_idx]()} === {m1_idx}/{len(mbb_1)}, {smem_per_interleave_cnt}/smem_per_interleave:{smem_per_interleave}')
                         self._emit(self.call_mbb(mbb_1[m1_idx]))
+                        #print("******************")
+                        #print(self.call_mbb(mbb_1[m1_idx]))
+                        #print("******************")
                         if mbb_1[m1_idx].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
                             smem_per_interleave_cnt = smem_per_interleave_cnt + 1
                         m1_idx += 1

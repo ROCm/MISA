@@ -37,10 +37,10 @@
 #include <algorithm>
 #include <numeric>
 
-typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+typedef struct{
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -160,6 +160,23 @@ public:
         return grid_size;
     }
 
+    // This is a helper function for selecting better performing config
+    bool mayHaveBiggerN1bClusterSize(int gemm_m, int gemm_n, const igemm_gtc_tunable_t *tunable)
+    {
+        float n_times_m = (float)gemm_n / float(gemm_m); 
+
+        if(n_times_m > 100.0f) {
+            if(tunable->gemm_k_per_block <= 2 * tunable->wave_tile_k)
+                return(false); 
+
+            // N1bClusterSize can be expanded by using half gemm_k_per_block
+            if((tunable->tensor_a_thread_lengths[1] > 1 || tunable->tensor_a_cluster_lengths[3] * 2 <= tunable->gemm_m_per_block) &&
+                (tunable->tensor_b_cluster_lengths[3] * 2 <= tunable->gemm_n_per_block))
+                return(true); 
+        }; 
+
+        return(false); 
+    };  
     // this is to support big tensor > 4G. need to decide how many splits needed
     // return the number of splits
     int split_batch_size(const args_t *arg, const igemm_gtc_tunable_t *tunable)
@@ -209,7 +226,8 @@ public:
     }
 
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable,
+                          const driverDataType_t& data_type)
     {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
@@ -231,6 +249,26 @@ public:
 
         assert(c % group == 0 && k % group == 0);
 
+        std::string precision = tunable->precision;
+        //std::cout << std::endl;
+        if(precision == "fp16"){
+            //std::cout << "is same type=" << std::is_same<gpu_data_type, float16>::value << std::endl;
+            if(data_type != driverHalf){
+                return false;
+            }
+        }
+        else if(precision == "fp32"){
+            //std::cout << "is same type=" << std::is_same<gpu_data_type, float>::value << std::endl;
+            if(data_type != driverFloat){
+                return false;
+            }
+        }
+        else
+        {
+            std::cout << std::endl;
+            std::cout << precision << std::endl;
+            return false;
+        }
         int splits = split_batch_size(arg, tunable);
         if(splits == 0){
             printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
@@ -254,9 +292,10 @@ public:
 
         // support pad to modulo, hence only check when nxe is 0
         if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
-        {
             return false;
-        }
+
+        // if(gemm_k % gemm_k_per_block != 0)
+            // return false;
 
         if(gemm_n_per_block % tunable->nxb != 0){
             //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -290,7 +329,7 @@ public:
         }
 
         // if tb_c1e > 1, only 1x1 case is runable, it can not check gemm_k_padding either.
-        if(tunable->tensor_b_thread_lengths[1] > 1 && (( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
+        if(tunable->tensor_b_thread_lengths[1] > 1 && ((pad_h !=0 || pad_w != 0)||( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
             return false;
         }
 
@@ -298,13 +337,18 @@ public:
         if(tunable->tensor_b_thread_lengths[0] > 1 && (gemm_k % gemm_k_per_block != 0)){
             return false;
         }
+
+        // let's check the next configuration even though this configuration is applicable
+        // if (mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
+            // return(false); 
+
         return true;
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
-        if (!tunable_is_valid(arg, tunable)) {
+                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
+                 int warmup, int repeat, const driverDataType_t& data_type) {
+        if (!tunable_is_valid(arg, tunable, data_type)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
@@ -462,7 +506,20 @@ public:
         assert(duration_list.size() == (repeat - 2));
         float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
-        usleep(1000 * 5);
+        // debug section of code
+#if 0
+        printf("workspace debug \n");
+        float* gemmc_host_check = (float* )malloc(block_size * sizeof(float));
+        hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);
+        for (int i_check = 0; i_check < (0+block_size); i_check++)
+        {
+            printf("[%d]th var to monitor:[%f, %d, 0x%x]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check]);
+        }
+        printf("workspace debug end \n");
+        free(gemmc_host_check);
+#endif
+
+        usleep(1000 * 1);
 
         result_t result;
         result.return_code = 0;

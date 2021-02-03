@@ -38,6 +38,28 @@
 #include <unordered_map>
 #include <vector>
 
+std::string ParseBaseArg(int argc, char* argv[])
+{
+    if(argc < 2)
+    {
+        printf("Invalid Number of Input Arguments\n");
+        exit(0);
+    }
+
+    std::string arg = argv[1];
+
+    if(arg != "conv" && arg != "convfp16" && arg != "--version")
+    {
+        printf("Invalid Base Input Argument\n");
+        exit(0);
+    }
+    else if(arg == "-h" || arg == "--help" || arg == "-?")
+        exit(0);
+    else
+        return arg;
+}
+
+
 static inline std::string &sltrim(std::string &s) {
     size_t startpos = s.find_first_not_of(" \t\r\n\v\f");
     if (std::string::npos != startpos) {

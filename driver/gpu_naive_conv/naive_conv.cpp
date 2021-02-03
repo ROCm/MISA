@@ -24,6 +24,7 @@
  *
  *******************************************************************************/
 #include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
 #include <hip/hip_runtime.h>
 
 // hcc seems need __device__ __host__ together to compile, and no extern "C"

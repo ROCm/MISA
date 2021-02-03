@@ -304,7 +304,7 @@ class igemm_coalescing_store_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
+        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0(), ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
         inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):
@@ -839,7 +839,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             then, consider that introduced by granularity
             '''
             self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_gemm_im}]")
-            self._emit(f"v_and_b32 v[{v_tmp4}],  {ctrl.cxm.lanegroup_m_per_cluster() - 1} v[{v_tmp4}]   ; thread id of lanegroup_m_per_cluster")
+            self._emit(f"v_and_b32 v[{v_tmp4}], {ctrl.cxm.lanegroup_m_per_cluster() - 1}, v[{v_tmp4}]   ; thread id of lanegroup_m_per_cluster")
             self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_tmp4}]")
 
             if ctrl.cxm.block_m_per_lanegroup() != 1:
@@ -1088,10 +1088,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
         if ctrl.gemm_k_global_split: 
-            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out) 
+            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * ctrl.data_byte) 
         else:
-            inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
-       
+            inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out * ctrl.data_byte)
 
         s_out_offset_itr = sym_t(s_tmp6(0))
         # s_thread_m_stride = sym_t(s_tmp4(1))
@@ -1169,6 +1168,16 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
                         # self._emit(f"s_nop 4")    # might consider nop to solve RAW
+
+                        # for fp16 and bf16, vgpr need to be cast to 16 bits
+                        if ctrl.data_byte != 4:
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 1)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 2)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{v_c(vgpr_index + 3)}]")
+                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
+                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
+
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (ctrl.data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
                             self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
@@ -1183,7 +1192,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     self._emit(f";   load from lds")
                     #for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
                     for i_d in range(ctrl.get_num_dword_per_group() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M):
-                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                         sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                         issue_list.append(inst_sld.get_issues(sld_offset))
@@ -1243,7 +1252,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     if s_k is not None:
                         self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
                         self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
-                    self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out//(4 // ctrl.data_byte)), v_out_offset, s_p_out, s_out_offset_itr(), 0, i_gst % 2))
                     if s_k is not None:
                         self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:

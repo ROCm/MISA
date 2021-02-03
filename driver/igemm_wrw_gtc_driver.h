@@ -262,7 +262,6 @@ public:
 
         int gemm_n = (c / group) * y * x;
         int gemm_k = n * b;
-
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
@@ -785,6 +784,7 @@ public:
             printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
         }
         printf("workspace debug end \r\n");
+        free(gemmc_host_check);
 #endif
         result_t result;
         result.return_code = 0;

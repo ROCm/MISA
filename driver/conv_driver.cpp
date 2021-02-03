@@ -253,13 +253,37 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
         th.join();
 }
 
+template <typename Dst_T, typename Src_T>
+void block_wise_tensor_copy(Dst_T *p_dst, Src_T *p_src, int tid, int block_size, int total_size)
+{
+    for (int i = tid; i < total_size; i += block_size) {
+        p_dst[i] = static_cast<Dst_T>(p_src[i]);
+    }
+}
+
+template <typename Dst_T, typename Src_T>
+void tensor_copy(Dst_T *p_dst, Src_T *p_src, size_t tensor_size) {
+    int num_threads = std::thread::hardware_concurrency();
+    if (num_threads < 4)
+        num_threads = 4;
+    // printf("total threads:%d\n",num_threads);
+    std::vector<std::thread> threads;
+    for (int t = 0; t < num_threads; t++) {
+        threads.push_back(std::thread(block_wise_tensor_copy<Dst_T, Src_T>,
+            p_dst, p_src, t, num_threads, tensor_size));
+    }
+    for (auto &th : threads)
+        th.join();
+}
+
 static inline bool valid_float(float p)
 {
     return !(std::isnan(p) || std::isinf(p));
 }
 
-static inline bool valid_vector(const float *ref, const float *pred, size_t n,
-                                double nrms = 1.5e-6) {
+template<typename T>
+static inline bool valid_vector(const float *ref, const T *pred, size_t n,
+                                double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
@@ -268,7 +292,7 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
 
     for (size_t i = 0; i < n; ++i) {
         if(!(valid_float(ref[i]) && valid_float(pred[i]))){
-            printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+            printf(" invalid float at %4d, ref:%f, pred:%f\n", i, ref[i], pred[i]);
             return false;
         }
         double ri = (double)ref[i];
@@ -300,29 +324,35 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
         ;
 }
 
-static inline double get_fwd_nrms()
-{
+static inline double get_nrms(int forw, driverDataType_t driver_data_type){
+    auto basic_tolerance = [=]() -> double{
+        if (driver_data_type == driverFloat){
 #ifdef USE_XDNN
-    return 5e-5;
+            return 5e-5;
 #else
-    return 1.5e-6;
+            return 1.5e-6;
 #endif
-}
-static inline double get_bwd_nrms()
-{
+        }
+        else if (driver_data_type == driverHalf){
 #ifdef USE_XDNN
-    return 5e-5;
+            return 5*8.2e-3;
 #else
-    return 1.5e-6;
+            return 8.2e-3;
 #endif
-}
-static inline double get_wrw_nrms()
-{
-#ifdef USE_XDNN
-    return 1e-4;
-#else
-    return 1e-4;
-#endif
+        }
+    };
+    double nrms = basic_tolerance();
+    // wrw has a high tolerance
+    if (forw == 4){
+        nrms *= 2;
+        if(driver_data_type == driverFloat){
+            nrms = 0.01;
+        }
+        else if(driver_data_type == driverHalf){
+            nrms *= 5;
+        }
+    }
+    return nrms;
 }
 
 void dump_arg(const args_t *arg) {
@@ -358,6 +388,7 @@ int main(int argc, char **argv) {
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int wrw_kernel_selection = env_get_int("IGEMM_LOG_SELECTED_CONFIG", 0);
+    int run_first_applicable = env_get_int("IGEMM_RUN_FIRST_APPLICABLE_CONFIG", 0); 
     int assert_when_invalid = env_get_int("IGEMM_ASSERT_WHEN_INVALID", 0);
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
@@ -377,6 +408,31 @@ int main(int argc, char **argv) {
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
+
+    // base arg might be "conv" or "convfp16" now;
+    std::string base_arg = ParseBaseArg(argc, argv);
+    if(base_arg == "--version")
+    {
+        size_t major, minor, patch;
+        major = minor = patch = 0;
+        std::cout << "conv_driver version: " << major << "." << minor << "." << patch << ")"
+                  << std::endl;
+        std::cout << "All of above is a fake version. We are sorry that driver does not have a version yet, lol" << std::endl;
+        exit(0);
+    }
+
+    // determine data type of the running config
+    driverDataType_t driver_data_type;
+    if(base_arg == "conv")
+        driver_data_type = driverFloat;
+    else if(base_arg == "convfp16")
+        driver_data_type = driverHalf;
+    else if(base_arg == "convbf16") {
+        driver_data_type = driverBFloat16;
+        exit(0);
+    }
+    else
+        exit(0);
 
     args_t conv_args = create_conv_args(argc, argv);
     // dump_arg(&conv_args);
@@ -417,6 +473,21 @@ int main(int argc, char **argv) {
     HIP_CALL(hipMalloc(&device_weight, static_cast<size_t>(k) * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, static_cast<size_t>(n) * k * ho * wo * sizeof(float)));
 
+#ifdef USE_HALF_HPP
+    // fp16 type
+    float16 *host_input_f16  = (float16 *)malloc(n * c * hi * wi * sizeof(float16));
+    float16 *host_weight_f16 = (float16 *)malloc(k * c * y * x * sizeof(float16));
+    float16 *host_output_f16 = (float16 *)malloc(n * k * ho * wo * sizeof(float16));
+
+    float16 *device_input_f16;
+    float16 *device_weight_f16;
+    float16 *device_output_f16;
+
+    HIP_CALL(hipMalloc(&device_input_f16, n * c * hi * wi * sizeof(float16)));
+    HIP_CALL(hipMalloc(&device_weight_f16, k * c * y * x * sizeof(float16)));
+    HIP_CALL(hipMalloc(&device_output_f16, n * k * ho * wo * sizeof(float16)));
+#endif
+
     int need_verify = conv_args.get_int("verify");
 
     // printf("fwd:%d, bwd:%d, wrw:%d, verify:%d\n",need_fwd, need_bwd, need_wrw, need_verify);
@@ -445,23 +516,42 @@ int main(int argc, char **argv) {
 #endif
     }
     if(gcn_arch == 908){
-        num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
+        if(driver_data_type == driverFloat)
+            num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
+        else if(driver_data_type == driverHalf)
+            num_simd = 4 * 128; // 4x miSIMD, 128x mac unit for fp16
+        else if(driver_data_type == driverBFloat16)
+            num_simd = 4 * 64 ; // 4x miSIMD, 64x mac unit for bf16
     }
     double fp32_gflops =
         theoritical_fp32_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd);
+
+    double nrms = get_nrms(forw, driver_data_type);
 
     if (need_fwd){
         result_t fastest_result_fwd;
         fastest_result_fwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
         float *device_output_to_host = NULL;
+        //float16 *device_output_to_host_f16 = NULL;
         if (need_verify) {
             // gen rand
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
-
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
+
+#ifdef USE_HALF_HPP
+            if(driver_data_type == driverHalf){
+                // move to different data type
+                tensor_copy<float16, float>(host_input_f16, host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float16, float>(host_weight_f16, host_weight, static_cast<size_t>(k) * c * y * x);
+                tensor_copy<float, float16>(host_input, host_input_f16, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float, float16>(host_weight, host_weight_f16, static_cast<size_t>(k) * c * y * x);
+            }
+#endif
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -482,35 +572,70 @@ int main(int argc, char **argv) {
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
 #endif
-            device_output_to_host = (float *)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+            if(driver_data_type == driverHalf){
+#ifdef USE_HALF_HPP
+                device_output_to_host = (float *)malloc((static_cast<size_t>(n) * k * ho * wo * sizeof(float16) + 3) / 4 * 4);
+#endif
+            }
+            else{
+                device_output_to_host = (float *)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+            }
+            
         }
-
-        HIP_CALL(hipMemcpy(device_input, host_input,
-                       static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
-        HIP_CALL(hipMemcpy(device_weight, host_weight,
-                       static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-
+        if(driver_data_type == driverFloat){
+            HIP_CALL(hipMemcpy(device_input, host_input,
+                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight,
+                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+        }
+#ifdef USE_HALF_HPP
+        else if(driver_data_type == driverHalf){
+            HIP_CALL(hipMemcpy(device_input_f16, host_input_f16,
+                        static_cast<size_t>(n) * c * hi * wi * sizeof(float16), hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_f16, host_weight_f16,
+                        static_cast<size_t>(k) * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
+        }
+#endif
         igemm_fwd_gtc_t conv_fwd_driver;
-        double nrms = get_fwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
             if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT)
                 if(run_only_kernel != conv_fwd_driver.get_kernel_name(tunable))
                     continue;
 
-            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
-            fflush(stdout);
+            if(!run_first_applicable){
+                 printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(tunable).c_str());
+                 fflush(stdout);
+            }
 
-            //if (need_verify)
-            //    HIP_CALL(hipMemset(device_output, 0,
-            //                       n * c * ho * wo * sizeof(float)));
-            result_t result =
-                conv_fwd_driver.run(&conv_args, tunable, module, device_input,
-                                device_weight, device_output, warmup, repeat);
+            result_t result;
+            if(driver_data_type == driverFloat)
+                result = conv_fwd_driver.run(&conv_args, tunable, module, device_input,
+                                              device_weight, device_output, warmup, repeat, driver_data_type);
+#ifdef USE_HALF_HPP
+            else
+                result = conv_fwd_driver.run(&conv_args, tunable, module, device_input_f16,
+                                              device_weight_f16, device_output_f16, warmup, repeat, driver_data_type);
+#endif
+
             if (result.return_code != 0){
-                printf("not applicatble\n");
+                if ( ! run_first_applicable ) 
+                     printf("not applicatble\n");
                 continue;
             }
+
+#if 0
+            printf("input\r\n");
+            for (int i_check = 0; i_check < (0+32); i_check++)
+            {
+                printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, host_input[i_check*hi*wi], ((int *)host_input)[i_check*hi*wi]);
+            }
+            printf("input fp16\r\n");
+            for (int i_check = 0; i_check < (0+32); i_check++)
+            {
+                printf("[%d]th var to monitor:[%f, %d]\r\n", i_check*hi*wi, (float)(host_input_f16[i_check*hi*wi]), ((unsigned short *)host_input_f16)[i_check*hi*wi]);
+            }
+#endif
 
             double gflops = measured_fp32_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
@@ -518,15 +643,34 @@ int main(int argc, char **argv) {
             printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
                    gflops / 1000 , (gflops / fp32_gflops) * 100);
             if (need_verify) {
-                HIP_CALL(hipMemcpy(device_output_to_host, device_output,
+                bool is_valid;
+                if(driver_data_type == driverFloat) {
+                    HIP_CALL(hipMemcpy(device_output_to_host, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_output, device_output_to_host,
+                    is_valid = valid_vector<float>(host_output, device_output_to_host,
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
+                }
+#ifdef USE_HALF_HPP
+                else if(driver_data_type == driverHalf) {
+                    HIP_CALL(hipMemcpy(device_output_to_host, device_output_f16,
+                                   static_cast<size_t>(n) * k * ho * wo * sizeof(float16),
+                                   hipMemcpyDeviceToHost));
+                    float16 *device_output_to_host_fp16 = (float16 *)device_output_to_host;
+                    is_valid = valid_vector<float16>(host_output, device_output_to_host_fp16,
+                                            static_cast<size_t>(n) * k * ho * wo, nrms);
+                }
+#endif           
+                
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
             }
             printf("\n");
+
+            if ( run_first_applicable ) {
+                printf("\n"); 
+		        break; 
+            }; 
             if(result.duration_ms < fastest_result_fwd.duration_ms){
                 fastest_result_fwd = result;
                 fastest_result_fwd.gflops = (float)gflops;
@@ -534,7 +678,7 @@ int main(int argc, char **argv) {
                 fastest_id = i;
             }
         }
-        if(log_fastest_config){
+        if(log_fastest_config && !run_first_applicable){
             dump_arg(&conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
@@ -546,8 +690,9 @@ int main(int argc, char **argv) {
                     fastest_result_fwd.gflops / 1000,
                     fastest_result_fwd.efficiency);
         }
-        if (need_verify)
+        if (need_verify){
             free(device_output_to_host);
+        }
     }
 
     if (need_bwd){
@@ -591,7 +736,7 @@ int main(int argc, char **argv) {
 
 
         igemm_bwd_gtc_t conv_bwd_driver;
-        double nrms = get_bwd_nrms();
+        //double nrms = get_bwd_nrms();
         for (int i = 0; i < tunables.size(); i++) {
             igemm_gtc_tunable_t *tunable = &tunables[i];
             if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT)
@@ -621,7 +766,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemcpy(device_input_to_host, device_input,
                                    static_cast<size_t>(n) * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_input, device_input_to_host,
+                bool is_valid = valid_vector<float>(host_input, device_input_to_host,
                                             static_cast<size_t>(n) * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -715,7 +860,7 @@ int main(int argc, char **argv) {
         igemm_wrw_gtc_t conv_wrw_driver;
         float min_duration = 10000000.0f;
         float selected_duration = 10000000.0f;
-        double nrms = get_wrw_nrms();
+        //double nrms = get_wrw_nrms();
         std::string kernel_name;
 
         std::string selected_kernel;
@@ -764,7 +909,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_weight, device_weight_to_host,
+                bool is_valid = valid_vector<float>(host_weight, device_weight_to_host,
                                             static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -810,4 +955,14 @@ int main(int argc, char **argv) {
     hipFree(device_input);
     hipFree(device_weight);
     hipFree(device_output);
+
+#ifdef USE_HALF_HPP
+    free(host_input_f16);
+    free(host_weight_f16);
+    free(host_output_f16);
+
+    hipFree(device_input_f16);
+    hipFree(device_weight_f16);
+    hipFree(device_output_f16);
+#endif
 }
