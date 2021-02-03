@@ -1,4 +1,3 @@
-.gitignore
 out/
 *.py[cod]
 __pycache__
