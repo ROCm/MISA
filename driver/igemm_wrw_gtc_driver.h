@@ -337,7 +337,7 @@ public:
         int gemm_n = (c / group) * y * (((x + e_x - 1) / e_x) * e_x);
         
 
-        int max_grid_size = 1200 * 2;
+        int max_grid_size = 1200;
 
         int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
