@@ -376,11 +376,11 @@ public:
             }
 
             // input vector load limitation, n1b
-            if(tunable->tensor_a_thread_lengths[3] > 1 && (
-                !unit_conv ||
-                unit_conv && (hi * wi) % tunable->tensor_a_thread_lengths[3] != 0)) {
-                return false;
-            }
+            //if(tunable->tensor_a_thread_lengths[3] > 1 && (
+            //    !unit_conv ||
+            //    unit_conv && (hi * wi) % tunable->tensor_a_thread_lengths[3] != 0)) {
+            //    return false;
+            //}
 
             // // weight vector load limitation, c1e
             // if(tunable->tensor_a_thread_lengths[1] > 1 &&
