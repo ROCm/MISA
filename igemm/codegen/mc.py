@@ -40,14 +40,17 @@ class mc_get_version_t(object):
             get current version of generator, by git command
             '''
             cmd = ['git', 'rev-parse', 'HEAD']
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
             na_version = 'UNKNOWN_VERSION'
             try:
-                (out, _) = p.communicate()
-                if p.returncode != 0:
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
+                try:
+                    (out, _) = p.communicate()
+                    if p.returncode != 0:
+                        self.version = na_version
+                    else:
+                        self.version = out.decode('utf-8').strip()
+                except Exception as e:
                     self.version = na_version
-                else:
-                    self.version = out.decode('utf-8').strip()
             except Exception as e:
                 self.version = na_version
         return self.version
