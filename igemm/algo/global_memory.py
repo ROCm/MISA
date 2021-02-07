@@ -107,6 +107,7 @@ class ctrl_2d_global_load_t(object):
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
         self.src_order = 0           # 0-d0xd1, 1-d1xd0
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
+        self.use_flag = 0
         self.bfe_flag = 0
 
 class macro_igemm_2d_global_load_t(macro_base_t):
@@ -226,6 +227,8 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         self.declare_arg("s_stride_d0")
         self.declare_arg("s_stride_d1")
         self.declare_arg("s_offset")
+        if self.ctrl.use_flag:
+            self.declare_arg("v_flag")
 
     def name(self):
         ctrl = self.ctrl
@@ -331,6 +334,8 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             i_soffset = 0
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_dst)}]")
                     if i_d0 == 0 and i_d1 == 0:
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
@@ -340,6 +345,8 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                     else:
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"s_mov_b64 exec, -1")
                     i_dst = i_dst + 1
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
@@ -381,7 +388,8 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
         self.declare_arg("s_ptr")
         self.declare_arg("s_os")
         self.declare_arg("v_os")
-        self.declare_arg("v_flag")
+        if self.ctrl.use_flag:
+            self.declare_arg("v_flag")
         if self.ctrl.bfe_flag:
             self.declare_arg("v_tmp")
 
@@ -415,14 +423,14 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
         i_cnt = 0
         for i_d0 in range(ctrl.length_d0):
             for i_d1 in range(n_d1):
-                if self.v_flag != None:
+                if ctrl.use_flag and self.v_flag != None:
                     if ctrl.bfe_flag:
                         self._emit(f"v_bfe_u32 v[{self.v_tmp()}], v[{self.v_flag()}], {i_cnt}, 1")
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_tmp()}]")
                     else:
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_cnt)}]")
                 self._emit(buffer_load_dword(f"{self.v_dst()}+{i_cnt*ctrl.vector_d1}", f"{self.v_os(i_cnt)}", f"{self.s_ptr()}", f"{self.s_os()}", 0))
-                if self.v_flag != None:
+                if ctrl.use_flag and self.v_flag != None:
                     self._emit(f"s_mov_b64 exec, -1")
                 i_cnt += 1
 

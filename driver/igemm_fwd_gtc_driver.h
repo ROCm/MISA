@@ -346,16 +346,19 @@ public:
                 return false;
             }
         }else if(tunable->tensor_layout == "nhwc"){
-            int gemm_m = n * b;
+            //int gemm_m = n * b;
             // int gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
-            int gemm_n = k / group;
-            int gemm_k = (c / group) * y * x;
+            //int gemm_n = k / group;
+            //int gemm_k = (c / group) * y * x;
 
             // support pad to modulo, hence only check when nxe is 0
-            if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
-            {
+            //if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
+            //{
+            //    return false;
+            //}
+
+            if((c / group) % gemm_k_per_block != 0)
                 return false;
-            }
 
             // if(gemm_m_per_block % tunable->nxb != 0){
             //     //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
