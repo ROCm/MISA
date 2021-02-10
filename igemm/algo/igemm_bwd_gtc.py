@@ -1350,11 +1350,11 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         ## use s_out_stride_k_save/s_wei_stride_k_save instead of s_dummy so that some configs where x=y=1 and nxe != 0 can be supported
         out_stride_gprs = [s.s_out_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_out_stride_k if self.tunable.nxe == 0 else s.s_out_stride_k_save if self.is_unit_yx() else s_dummy, 
+                    s.s_out_stride_k if self.tunable.nxe == 0 else (s.s_out_stride_k_save if self.is_unit_yx() else s_dummy), 
                     s.s_out_stride_n0 if t_n0 != 1 else s_dummy,
                     s_dummy]
         wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_wei_stride_k if self.tunable.nxe == 0 else s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy, 
+                    s.s_wei_stride_k if self.tunable.nxe == 0 else (s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy), 
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy,
                     s.s_wei_stride_c if self.tunable.nxe != 0 else s_dummy]
 
@@ -1675,9 +1675,12 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
 
             self._emit(f"; pad b into multiplier of nxb")
-            self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
-            self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
-            self._emit(f"s_lshl_b32 s[{s.s_dslice_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
+            if self.tunable.nxb > 1:
+                self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
+                self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
+                self._emit(f"s_lshl_b32 s[{s.s_dslice_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
+            else:
+                self._emit(f"s_mov_b32 s[{s.s_dslice_dim_b()}], s[{s.s_stride_dslice_hw()}]")
 
             if t_k0 != 1:
                 self._emit(f"s_lshl_b32 s[{s.s_out_stride_k0()}], s[{s.s_out_stride_k()}], {igemm_log2(unmerge_sub_k1)}")
