@@ -824,7 +824,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
                                         outer.tunable.num_vgpr_global_load_a // wei_data_per_vgpr + \
-                                        outer.tunable.num_vgpr_global_load_b + 18 if outer.tunable.nxe != 0 else 16 # from v_sst_a_os to v_co_sst
+                                        outer.tunable.num_vgpr_global_load_b + (18 if outer.tunable.nxe != 0 else 16) # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
