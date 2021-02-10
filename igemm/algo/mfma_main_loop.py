@@ -466,31 +466,6 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(do_interleave_share_store())
             self._emit(do_interleave_unroll_k_last())
 
-            '''
-            if ((unroll_k // k_per_inst) // 2 - 1) != 0:
-                mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                            create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
-                se_sub = create_scheduler(self.mc, mbb_list_sub)
-                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
-
-                se_last = create_scheduler(self.mc, mbb_list_last)
-
-                self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
-                self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
-                self._emit(f's_waitcnt lgkmcnt(0)')
-                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
-            else:
-                self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
-                self._emit(f's_waitcnt lgkmcnt(0)')
-                mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
-                             create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
-
-                se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
-                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
-            '''
-
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
             #self._emit(mfma_step_mxn(0, 0, 1, 1))

@@ -40,6 +40,7 @@ IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0 = 1
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C0_C1E = 4
 IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_N_C1E_C0 = 5
 IGEMM_WRW_GTC_DEBUG = 0
+IGEMM_WRW_GTC_LOADING_PRIOR_B = 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -875,7 +876,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
-                v_c_needed           = v_c_needed if v_c_needed > 2 else 2  # let at least 2
+                v_c_needed           = v_c_needed # if v_c_needed > 2 else 2  # let at least 2
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
@@ -1554,15 +1555,22 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f"; input, thread(n0,n1b,c0,c1e): {t_n0}x{t_n1b}x{t_c0}x{t_c1e}, cluster(n0,n1b,c0,c1e): {c_n0}x{c_n1b}x{c_c0}x{c_c1e}")
         self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
-        #self._emit(tc_index_dispatcher(v.v_gtc_ic1e(),  v.v_tmp(), c_c1e, t_c1e))      # merged dimension no need to do shift per thread here, do shift later
-        #self._emit(tc_index_dispatcher(v.v_gtc_ic0(),   v.v_tmp(), c_n0,  t_n0))
+        if IGEMM_WRW_GTC_LOADING_PRIOR_B == 0:
+            self._emit(tc_index_dispatcher(v.v_gtc_ic1e(),  v.v_tmp(), c_c1e, t_c1e))      # merged dimension no need to do shift per thread here, do shift later
+            self._emit(tc_index_dispatcher(v.v_gtc_ic0(),   v.v_tmp(), c_n0,  t_n0))
         self._emit(tc_index_dispatcher(v.v_gtc_in1b(),  v.v_tmp(), c_n1b, t_n1b))      # merged dimension no need to do shift per thread here, do shift later
-        self._emit(tc_index_dispatcher(v.v_gtc_in0(),   v.v_tmp(), c_n0,  t_n0))
-        self._emit(tc_index_dispatcher(v.v_gtc_ic1e(),  v.v_tmp(), c_c1e, t_c1e))      # merged dimension no need to do shift per thread here, do shift later
-        self._emit(tc_index_dispatcher(v.v_gtc_ic0(),   v.v_tmp(), c_c0,  t_c0, True))
+        if IGEMM_WRW_GTC_LOADING_PRIOR_B == 0:
+            self._emit(tc_index_dispatcher(v.v_gtc_in0(),   v.v_tmp(), c_n0,  t_n0, True))
+        else:
+            self._emit(tc_index_dispatcher(v.v_gtc_in0(),   v.v_tmp(), c_n0,  t_n0))
+            self._emit(tc_index_dispatcher(v.v_gtc_ic1e(),  v.v_tmp(), c_c1e, t_c1e))      # merged dimension no need to do shift per thread here, do shift later
+            self._emit(tc_index_dispatcher(v.v_gtc_ic0(),   v.v_tmp(), c_c0,  t_c0, True))
         self._emit_empty_line()
         self._emit(f"; output, thread(n0,n1b,k0,k1): {t_n0}x{t_n1b}x{t_k0}x{t_k1}, cluster(n0,n1b,k0,k1) {c_n0}x{c_n1b}x{c_k0}x{c_k1}")
-        self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], {igemm_log2(c_n1b)}, v0")
+        if IGEMM_WRW_GTC_LOADING_PRIOR_B == 0:
+            self._emit(f"v_mov_b32 v[{v.v_tmp()}], v0")
+        else:
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], {igemm_log2(c_n1b)}, v0")
         self._emit(tc_index_dispatcher(v.v_gtc_ik1(), v.v_tmp(), c_k1, t_k1))
         self._emit(tc_index_dispatcher(v.v_gtc_ik0(), v.v_tmp(), c_k0, t_k0, True))
         self._emit_empty_line()
