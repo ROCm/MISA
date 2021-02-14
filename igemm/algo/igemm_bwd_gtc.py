@@ -1356,7 +1356,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy,
                     s.s_wei_stride_k if self.tunable.nxe == 0 else (s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy), 
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy,
-                    s.s_wei_stride_c if self.tunable.nxe != 0 else s_dummy]
+                    s.s_wei_stride_c if not self.is_unit_yx() else s_dummy]
 
         if self.out_thread_copy_ndim == 2:
             s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
