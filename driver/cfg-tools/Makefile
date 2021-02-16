@@ -3,9 +3,9 @@ CC=g++
 BUILD_FP16_CONFIGS := 1
 
 ifdef BUILD_FP16_CONFIGS
-CFLAGS := -std=c++11 -I../ -g -DUSE_PRECISION_FP16
+CFLAGS := -std=c++11 -I/opt/rocm/include -I../ -g -DUSE_PRECISION_FP16
 else
-CFLAGS := -std=c++11 -I../ -g 
+CFLAGS := -std=c++11 -I/opt/rocm/include -I../ -g 
 endif 
 
 PROGRAMS :=  reorder_configs  generate_configs produce_header

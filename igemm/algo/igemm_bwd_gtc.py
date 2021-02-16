@@ -748,11 +748,6 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_dslice_w_left       = sym_t("s_dslice_w_left"          ,44)
                 self.s_group               = sym_t("s_group"                  ,45)
                 sseq                       = gpr_sequencer_t(46)
-
-                if outer.is_unit_yx():
-                    ## add two sgprs to store the strides and ensure correct shifting
-                    self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"      , self.s_ka.value)
-                    self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"      , self.s_ka.value+1)
             else:
                 self.s_group               = sym_t("s_group"                  ,21)
                 sseq                       = gpr_sequencer_t(22)
@@ -814,6 +809,9 @@ class igemm_bwd_gtc_t(mc_base_t):
                 if not outer.is_unit_yx():
                     self.s_gemm_k_num_dsy      = sym_t("s_gemm_k_num_dsy"         ,self.s_dslice_y.value)
                     self.s_gemm_k_num_dsx      = sym_t("s_gemm_k_num_dsx"         ,self.s_dslice_x.value)
+                else:
+                    self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"      , self.s_dslice_y.value)
+                    self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"      , self.s_dslice_x.value)
                 self.s_dtile_dy_neg        = sym_t("s_dtile_dy_neg"           ,self.s_dtile_dy.value)
                 self.s_dtile_dx_neg        = sym_t("s_dtile_dx_neg"           ,self.s_dtile_dx.value)
 
@@ -1350,13 +1348,13 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         ## use s_out_stride_k_save/s_wei_stride_k_save instead of s_dummy so that some configs where x=y=1 and nxe != 0 can be supported
         out_stride_gprs = [s.s_out_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_out_stride_k if self.tunable.nxe == 0 else s.s_out_stride_k_save if self.is_unit_yx() else s_dummy, 
+                    s.s_out_stride_k if self.tunable.nxe == 0 else (s.s_out_stride_k_save if self.is_unit_yx() else s_dummy), 
                     s.s_out_stride_n0 if t_n0 != 1 else s_dummy,
                     s_dummy]
         wei_stride_gprs = [s.s_wei_stride_k0 if t_k0 != 1 else s_dummy,
-                    s.s_wei_stride_k if self.tunable.nxe == 0 else s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy, 
+                    s.s_wei_stride_k if self.tunable.nxe == 0 else (s.s_wei_stride_k_save if self.is_unit_yx() else s_dummy), 
                     s.s_wei_stride_c0 if t_c0 != 1 else s_dummy,
-                    s.s_wei_stride_c if self.tunable.nxe != 0 else s_dummy]
+                    s.s_wei_stride_c if not self.is_unit_yx() else s_dummy]
 
         if self.out_thread_copy_ndim == 2:
             s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
@@ -1618,7 +1616,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()
 
-        if self.tunable.multihead and self.tunable.nxe != 0:
+        if self.tunable.multihead and self.tunable.nxe != 0 and not self.is_unit_yx():
             #label_mh_dispatch_end = f"L_{self.name()}_mh_dispatch_end"
             self._emit(f"; multihead dispatch code start")
             self._emit(f"s_mov_b32 s[0], s[{s.s_dtile_iy()}]        ; normal gridsize. gridsize / num_gemms")
@@ -1668,16 +1666,20 @@ class igemm_bwd_gtc_t(mc_base_t):
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_c()}],      s[{s.s_y()}],        s[{s.s_x()}]")
             self._emit(f"s_mul_i32 s[{s.s_wei_stride_k()}],      s[{s.s_c()}],        s[{s.s_wei_stride_c()}]")
             self._emit(f"s_mul_i32 s[{s.s_stride_dslice_hw()}],  s[{s.s_dslice_h()}], s[{s.s_dslice_w()}]")
-            self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
 
-            if self.is_unit_yx():
+            if not self.is_unit_yx():
+                self._emit(f"s_mul_i32 s[{s.s_stride_dslice_yx()}],  s[{s.s_dslice_y()}], s[{s.s_dslice_x()}]")
+            else:
                 self._emit(f"s_mov_b32 s[{s.s_out_stride_k_save()}], s[{s.s_out_stride_k()}]")
                 self._emit(f"s_mov_b32 s[{s.s_wei_stride_k_save()}], s[{s.s_wei_stride_k()}]")
 
             self._emit(f"; pad b into multiplier of nxb")
-            self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
-            self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
-            self._emit(f"s_lshl_b32 s[{s.s_dslice_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
+            if self.tunable.nxb > 1:
+                self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.nxb - 1}, s[{s.s_stride_dslice_hw()}]")
+                self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.nxb)}")
+                self._emit(f"s_lshl_b32 s[{s.s_dslice_dim_b()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.nxb)}")
+            else:
+                self._emit(f"s_mov_b32 s[{s.s_dslice_dim_b()}], s[{s.s_stride_dslice_hw()}]")
 
             if t_k0 != 1:
                 self._emit(f"s_lshl_b32 s[{s.s_out_stride_k0()}], s[{s.s_out_stride_k()}], {igemm_log2(unmerge_sub_k1)}")
