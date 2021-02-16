@@ -687,7 +687,7 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                 } while(0);
 			    }; 
 
-/*			    
+			    
                             // use dimension k1e for thread slice for gemm_K of tensor_a/tensor_b
 			    for(int sliceSize=2; sliceSize <= cfg.gemm_k_per_block; sliceSize *= 2) {
                                 cfg.tensor_a_thread_lengths[0] = 1;
@@ -738,7 +738,6 @@ void generate_bwd_configs(const char *precision, const char *config_file)
                                     configs.push_back(cfg);
                                 } while(0);
 			    }; 
-*/			
 		        }; 			
                    };
              };
