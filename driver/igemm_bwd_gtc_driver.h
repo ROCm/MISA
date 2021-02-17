@@ -327,7 +327,7 @@ public:
         //std::cout << std::endl << "gemm_n = " << gemm_n << " gemm_m = " << gemm_m << std::endl;
 
         // since gemm_n is much bigger than gemm_m, we want to use a config where gemm_n_per_block is bigger than gemm_m_per_block
-        if ( !is_unit_yx && n_times_m >= 16.0f && tunable->gemm_m_per_block >= tunable->gemm_n_per_block && tunable->gemm_n_per_block >= 32)
+        if ( !is_unit_yx && n_times_m >= 5.0f && tunable->gemm_m_per_block >= tunable->gemm_n_per_block && tunable->gemm_n_per_block >= 32)
              return(true); 
 
         return(false);
