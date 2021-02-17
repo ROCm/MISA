@@ -205,7 +205,14 @@ struct bwdSorterClass
 static inline void output_single_config(const igemm_gtc_tunable_t & cfg, const char *strDirection, const char *strPrecision, std::ostream &myout)
 {
          myout << "#--------------------------- " << cfg.gemm_m_per_block << "x" << cfg.gemm_n_per_block << std::endl;
-         myout << "[igemm_fwd_gtc]" << std::endl;
+
+	 const char *sectionMark;
+	
+	 if (std::string(strDirection) == "fwd")
+	     sectionMark = "[igemm_fwd_gtc]";
+	 else 
+	     sectionMark = "[igemm_bwd_gtc]";
+         myout << sectionMark << std::endl;
          myout << "gemm_m_per_block         = " << cfg.gemm_m_per_block << std::endl;
          myout << "gemm_n_per_block         = " << cfg.gemm_n_per_block << std::endl;
          myout << "gemm_k_per_block         = " << cfg.gemm_k_per_block << std::endl;
