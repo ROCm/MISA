@@ -313,14 +313,15 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             m_wei_2d_global_load, m_in_2d_global_load = self.outer.get_macro_global_load()
             with self._deferred_context():
                 self._emit(f"; load input, nxe:{self.outer.tunable.nxe}")
-                if self.outer.tunable.nxe != 0:
+                #if self.outer.tunable.nxe != 0:
+                if True:
                     self._emit(f".v_clear_nc {v.v_gld_a()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
                     if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
                         self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag(), v.v_tmp()))
                     else:
                         self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag()))
-                else:
-                    self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), None))
+                # else:
+                #     self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), None))
 
             return self._get_deferred()
 
@@ -534,7 +535,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
-                v_c_needed              = v_c_needed if v_c_needed > 2 else 2  # let at least 2
+                v_c_needed              = v_c_needed if v_c_needed > 0 else 0  # let at least 0
                 self.v_c                = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
             self.v_a                    = sym_t("v_a"               ,vseq(outer.tunable.num_vgpr_accumulate_a))
@@ -566,8 +567,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self.v_co_sst               = sym_t("v_co_sst"          ,self.v_in_in.value)
             self.v_co_sld               = sym_t("v_co_sld"          ,vseq(1))
 
-            if outer.tunable.nxe != 0:
-                self.v_out_flag         = sym_t("v_out_flag"        ,self.v_wei_ik.value)
+            #if outer.tunable.nxe != 0:
+            self.v_out_flag             = sym_t("v_out_flag"        ,self.v_wei_ik.value)
             self.v_out_inb              = sym_t("v_out_inb"         ,self.v_in_inb.value)
 
             self.v_gemm_in              = sym_t("v_gemm_in"         ,vseq(1))
@@ -697,7 +698,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_wei_gld.length_d0 = 1
             ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_wei_gld.length_d0 = 1
+            ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
 
         if self.in_thread_copy_ndim == 2:
             ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
@@ -706,13 +708,15 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_in_gld.length_d0 = 1
             ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_in_gld.length_d0 = 1
+            ctrl_in_gld.length_d1 = in_thread_copy_dims[-1]
 
         ctrl_in_gld.use_flag = 1
         ctrl_wei_gld.use_flag = 1
 
         if self.tunable.nxe != 0:
             if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
+                ctrl_wei_gld.bfe_flag = 1
                 ctrl_in_gld.bfe_flag = 1
 
         if self.tunable.precache_soffset:
@@ -802,7 +806,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             s_in_stride_d0 = s_dummy
             s_in_stride_d1 = in_stride_gprs[in_thread_copy_index[0]]
         else:
-            assert False
+            s_in_stride_d0 = s_dummy
+            s_in_stride_d1 = in_stride_gprs[-1]
 
         if self.wei_thread_copy_ndim == 2:
             # print(f" ____ wei_thread_copy_index:{len(wei_thread_copy_index)}, {wei_thread_copy_index}")
@@ -812,7 +817,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             s_wei_stride_d0 = s_dummy
             s_wei_stride_d1 = wei_stride_gprs[wei_thread_copy_index[0]]
         else:
-            assert False
+            s_wei_stride_d0 = s_dummy
+            s_wei_stride_d1 = wei_stride_gprs[-1]
 
         return s_in_stride_d0, s_in_stride_d1, s_wei_stride_d0, s_wei_stride_d1
 
@@ -1142,7 +1148,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_in_iwi_list(0)}], v[{v.v_tmp()}]")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_in_stride_wi()}], v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_in_os()}], v[{v.v_tmp(4)}], v[{v.v_tmp()}]")
-        if self.tunable.nxe != 0:
+        #if self.tunable.nxe != 0:
+        if True:
             if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
                 self._emit(f"v_bfe_u32 v[{v.v_tmp(1)}], v[{v.v_in_flag()}],  16, 1")
                 self._emit(m_set_flag_nhw(v.v_tmp(), v.v_tmp(1), v.v_in_ihi_list(0), v.v_in_iwi_list(0), s.s_hi(), s.s_wi()))
@@ -1306,7 +1313,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
         self._emit_empty_line()
 
-        if self.tunable.nxe != 0:
+        #if self.tunable.nxe != 0:
+        if True:
             self._emit(f"v_add_u32 v[{v.v_tmp()}], s[{s.s_block_gtc_ik()}], v[{v.v_co_sub_n_index()}]")
             self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_tmp()}]")
             self._emit(f"v_cndmask_b32 v[{v.v_out_flag()}], 0, 1, vcc")
@@ -1567,7 +1575,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             a = self.agpr
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
                      None, s.s_out_stride_wo(),
-                     s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else None, s.s_dim_mr(), v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
+                     s.s_tmp(), v.v_out_flag() if self.tunable.nxe != 0 else v.v_out_flag(), s.s_dim_mr(), v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
 
         self._emit_front(f"{self.label_out}:")
 

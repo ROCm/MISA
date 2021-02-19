@@ -29,6 +29,11 @@ import inspect
 from copy import deepcopy
 import subprocess
 
+# NOTE: if following set to True, better parse '-V 0' to conv_driver
+# since result can never be correct
+MC_DEBUG_IGNORE_LDS_IO = False
+MC_DEBUG_IGNORE_GLOBAL_IO = False
+
 class mc_get_version_t(object):
     def __init__(self):
         self.called = 0
@@ -147,7 +152,24 @@ class mc_emit_to_file_t(object):
         self.close()
     def emit(self, s):
         if self.f:
-            self.f.write(self.indent() + s + '\n')
+            if MC_DEBUG_IGNORE_LDS_IO or MC_DEBUG_IGNORE_GLOBAL_IO:
+                s2 = s.split('\n')
+                ignore_list = list()
+                if MC_DEBUG_IGNORE_LDS_IO:
+                    ignore_list.extend(['ds_read', 'ds_write',  's_barrier'])
+                    # ignore_list.extend(['ds_write'])
+                if MC_DEBUG_IGNORE_GLOBAL_IO:
+                    ignore_list.extend(['buffer_load', 's_waitcnt vmcnt'])
+                for iss, ss in enumerate(s2):
+                    need_emit = True
+                    for i in ignore_list:
+                        if ss.strip().startswith(i):
+                            need_emit = False
+                            break
+                    if need_emit:
+                        self.f.write((self.indent() if iss == 0 else '') + ss + '\n')
+            else:
+                self.f.write(self.indent() + s + '\n')
 
     def emit_license(self):
         '''
