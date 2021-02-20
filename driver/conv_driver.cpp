@@ -376,6 +376,24 @@ void dump_arg(const args_t *arg) {
            pad_h, pad_w, ho, wo);
 }
 
+template <typename T>
+static bool readBufferFromFile(T* data, size_t dataNumItems, const char* fileName)
+{
+    std::ifstream infile(fileName, std::ios::binary);
+    if(infile)
+    {
+        infile.read(reinterpret_cast<char*>(data), dataNumItems * sizeof(T));
+        infile.close();
+        printf("Read data from input file %s\n", fileName);
+        return true;
+    }
+    else
+    {
+        printf("Could not open file %s for reading\n", fileName);
+        return false;
+    }
+}
+
 int main(int argc, char **argv) {
     char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
     char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
@@ -401,6 +419,8 @@ int main(int argc, char **argv) {
         return 0;
     }
     // printf("tunables:%d\n", tunables.size());
+    
+    std::cout << "HSACO: " << hsaco << " CONFIG: " << config_file << std::endl; 
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
@@ -455,6 +475,11 @@ int main(int argc, char **argv) {
     int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
     int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
     int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
+
+    std::string inFileName   = conv_args.get_str("in_data");
+    std::string weiFileName  = conv_args.get_str("weights");
+    std::string biasFileName = conv_args.get_str("in_bias");
+    std::string doutFileName = conv_args.get_str("dout_data");
 
     // init host side
     // fp32 type
@@ -686,19 +711,44 @@ int main(int argc, char **argv) {
         fastest_result_bwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
         if (need_verify) {
-            // gen rand
-            gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
+            bool get_data_from_file = false; 
 
-            if(driver_data_type == driverHalf){
-                // move to different data type
-                tensor_movement<float16, float>(host_output_f16, host_output, n * k * ho * wo);
-                tensor_movement<float16, float>(host_weight_f16, host_weight, k * c * y * x);
-                tensor_movement<float, float16>(host_output, host_output_f16, n * k * ho * wo);
-                tensor_movement<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+            if ( !weiFileName.empty() && !doutFileName.empty() ) {
+                 if (driver_data_type == driverHalf) {
+                     if ( readBufferFromFile<float16>(host_weight_f16, (size_t)k * c * y * x, weiFileName.c_str()) &&
+                          readBufferFromFile<float16>(host_output_f16, (size_t)n * k * ho * wo, doutFileName.c_str()) )
+			   get_data_from_file = true;  
+		 }
+		 else {
+                     if ( readBufferFromFile<float>(host_weight, (size_t)k * c * y * x, weiFileName.c_str()) &&
+                          readBufferFromFile<float>(host_output, (size_t)n * k * ho * wo, doutFileName.c_str()) )
+			   get_data_from_file = true;  
+		 }; 
+            };
+
+	    if ( get_data_from_file ) {
+                 printf("Using weight and dout data from file\n"); 
+                 if(driver_data_type == driverHalf){
+                    // move to different data type
+                    tensor_movement<float, float16>(host_output, host_output_f16, n * k * ho * wo);
+                    tensor_movement<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+                 }
+                 gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
             }
+            else {	    
+                 // gen rand
+                 gen_rand_vector<float, float>(host_output, n * k * ho * wo, 0.0, 1.0);
+                 gen_rand_vector<float, float>(host_weight, k * c * y * x, -0.5, 0.5);
+                 gen_rand_vector<float, float>(host_input, n * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
 
+                 if(driver_data_type == driverHalf){
+                    // move to different data type
+                    tensor_movement<float16, float>(host_output_f16, host_output, n * k * ho * wo);
+                    tensor_movement<float16, float>(host_weight_f16, host_weight, k * c * y * x);
+                    tensor_movement<float, float16>(host_output, host_output_f16, n * k * ho * wo);
+                    tensor_movement<float, float16>(host_weight, host_weight_f16, k * c * y * x);
+                 }
+            }; 
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_output, host_output,
