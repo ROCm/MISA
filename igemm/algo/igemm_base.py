@@ -172,6 +172,8 @@ class igemm_gtc_tunable_parameter_t(object):
         else:
             assert False
 
+        self.tensor_a_pass_through              = utility_dict_with_default_t(tunable_dict)('tensor_a_pass_through', 0)
+        self.tensor_b_pass_through              = utility_dict_with_default_t(tunable_dict)('tensor_b_pass_through', 0)
         self.tensor_a_thread_lengths            = tunable_dict['tensor_a_thread_lengths']     # list!
         self.tensor_a_cluster_lengths           = tunable_dict['tensor_a_cluster_lengths']    # list!
         self.tensor_b_thread_lengths            = tunable_dict['tensor_b_thread_lengths']     # list!
@@ -356,6 +358,8 @@ class igemm_gtc_tunable_parameter_t(object):
             tunable_dict['wave_tile_k']                 = self.wave_tile_k
         else:
             assert False
+        tunable_dict['tensor_a_pass_through']           = self.tensor_a_pass_through
+        tunable_dict['tensor_b_pass_through']           = self.tensor_b_pass_through
         tunable_dict['tensor_a_thread_lengths']         = self.tensor_a_thread_lengths
         tunable_dict['tensor_a_cluster_lengths']        = self.tensor_a_cluster_lengths
         tunable_dict['tensor_b_thread_lengths']         = self.tensor_b_thread_lengths
@@ -417,6 +421,12 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_start + 'wave_step_n                {} {}'.format(equal, self.wave_step_n) + new_line + \
                 line_start + 'wave_repeat_n              {} {}'.format(equal, self.wave_repeat_n) + new_line + \
                 line_start + 'wave_tile_k                {} {}'.format(equal, self.wave_tile_k) + new_line
+        if self.tensor_a_pass_through:
+            sstr += \
+                line_start + 'tensor_a_pass_through      {} {}'.format(equal, self.tensor_a_pass_through) + new_line
+        if self.tensor_b_pass_through:
+            sstr += \
+                line_start + 'tensor_b_pass_through      {} {}'.format(equal, self.tensor_b_pass_through) + new_line
         sstr += \
                 line_start + 'tensor_a_thread_lengths    {} {}'.format(equal, self.tensor_a_thread_lengths) + new_line + \
                 line_start + 'tensor_a_cluster_lengths   {} {}'.format(equal, self.tensor_a_cluster_lengths) + new_line + \
@@ -475,6 +485,12 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     kernel_name +=       "ta" + lengths_str(tunable.tensor_a_thread_lengths) + "_" + lengths_str(tunable.tensor_a_cluster_lengths) + "_" +\
                          "tb" + lengths_str(tunable.tensor_b_thread_lengths) + "_" + lengths_str(tunable.tensor_b_cluster_lengths)
+
+    if tunable.tensor_a_pass_through:
+        kernel_name += "_pta"
+
+    if tunable.tensor_b_pass_through:
+        kernel_name += "_ptb"
 
     if tunable.gemm_m_unmerge_cluster:
         kernel_name += "_mc"

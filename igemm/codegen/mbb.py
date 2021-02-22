@@ -133,6 +133,17 @@ class machine_basic_block_t(object):
         print(self())
         print('-----------------------------------')
 
+def machine_basic_block_call(p, mbb):
+    '''
+    to pretty print mbb, the indent
+    currently p can not be mc_base_t directly. must be some child class
+    '''
+    mbb_lines = mbb().split('\n')
+    with p._deferred_context():
+        for line in mbb_lines:
+            p._emit(line)
+    return p._get_deferred()
+
 def create_machine_basic_block(multi_line_inst_str, **option):
     '''
     an post analysis and construction of mbb, only based on string parse.
