@@ -221,7 +221,7 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.nxe in (0,1)
         else:
             #assert self.tensor_b_thread_lengths[3] == (self.nxe if self.nxe != 0 else 1)
-            assert self.nxe in (0,1)
+            assert self.nxe in (0,1,8)
 
         # gemm_k_pack static value
         # TODO: make gemm_k_pack to be tunable 
