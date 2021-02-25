@@ -96,7 +96,7 @@ class simple_interleave_scheduler_t(mc_base_t):
             '''
             if mbb.length() == 1:
                 if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
-                    if get_mc_inst_op(mbb.mc_inst()).startswith('.v_clear_nc'):
+                    if get_mc_inst_op(mbb.mc_inst().inst_str).startswith('.v_clear_nc'):
                         return True
             return False
 
@@ -138,7 +138,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                 #else:
                 #    break
             assert num_gmem != 0, f"no global mem in this instructino list, please check"
-            assert num_v_c_clear in (0, 1)
+            # assert num_v_c_clear in (0, 1)
             num_gmem += num_v_c_clear
 
             # second decide how many global mem to interleave per interval

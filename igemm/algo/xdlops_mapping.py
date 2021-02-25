@@ -288,6 +288,7 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  1, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  2, 4,  1,  2,  1,  1,  v_mfma_f32_32x32x2f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  32,  2, 2,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 128, 64 ,  64,  32,  1, 2,  1,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  2, 2,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  32,  2, 1,  2,  2,  2,  1,  v_mfma_f32_32x32x2f32),
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
@@ -308,6 +309,7 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 16 , 128,  16,  16,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),  # need re-design coalescing. or do irregular gemm
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  1, 4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 32 ,  16,  16,  4, 4,  2,  1,  1,  1,  v_mfma_f32_16x16x4f32),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  16,  16,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  1, 4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 64 ,  16,  16,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
@@ -376,17 +378,24 @@ class igemm_xdlops_mapping_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_xdlops_mapping_t
         self.ctrl = ctrl
-    def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4, k_pack = 1):
+    def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4, **options):
         '''
         notice! this is to calculate LDS offset for A/B matrix input, it is not the same as C matrix output layout, due to xdlops
         C matrix output describe is in coalescint_store
         '''
+        def get_dict_with_default(some_dict, key, default_value):
+            if key in some_dict:
+                return some_dict[key]
+            return default_value
         ctrl = self.ctrl
         #print(f"ctrl.block_n()={ctrl.block_n()}, ctrl.block_m()={ctrl.block_m()}")
         #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
         assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        k_pack = get_dict_with_default(options, "k_pack", 1)
+        v_pack = get_dict_with_default(options, "v_pack", 1)
+        assert v_pack in (1, k_pack),  'currently only support v_pack is 1 or k_pack'
         with self._deferred_context():
-            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}")
+            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
             if k_pack != 1:
@@ -397,12 +406,16 @@ class igemm_xdlops_mapping_t(mc_base_t):
             if ctrl.block_k() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
                 if k_pack != 1:
-                    self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack - 1}, v[{v_tmp4} + 0]   ; and k_pack:{k_pack}")
-                    self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack)}, v[{v_tmp4} + 0] ; shift right k_pack:{k_pack}")
-                    self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack:{k_pack}")
-                    self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack:{k_pack}")
-                    self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
-                    self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
+                    if v_pack == 1:
+                        self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack - 1}, v[{v_tmp4} + 0]   ; and k_pack:{k_pack}")
+                        self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack)}, v[{v_tmp4} + 0] ; shift right k_pack:{k_pack}")
+                        self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack:{k_pack}")
+                        self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack:{k_pack}")
+                        self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
+                        self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
+                    else:
+                        self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
+                        self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
                     self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")

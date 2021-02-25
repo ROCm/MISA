@@ -30,6 +30,9 @@ from .utility import *
 from .mfma import *
 from .xdlops_mapping import *
 from .nop import *
+import re
+
+MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT = 1       # last wait for ds_read advance a mfma slot
 
 class ctrl_mfma_main_loop_t(object):
     def __init__(self):
@@ -73,6 +76,11 @@ class ctrl_mfma_main_loop_t(object):
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
 
+        self.pass_through_a              = 0        # a tensor not using LDS
+        self.pass_through_b              = 0        # b tensor not using LDS
+        self.pass_through_v_pack_a       = 1        # passthough tensor may have v pack, indicate vector load
+        self.pass_through_v_pack_b       = 1
+
 class mfma_main_loop_t(mc_base_t):
     '''
     '''
@@ -80,7 +88,409 @@ class mfma_main_loop_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         self.ctrl = ctrl
         assert type(ctrl) is ctrl_mfma_main_loop_t
+    
+    def emit_single_pass_through(self):
+        '''
+        one side of A/B tensor not using LDS, used for skinny gemm
+        a/b -> p/q, where p side passthrough lds, q side is normal
+        '''
+
+        p_idx = 0 if self.ctrl.pass_through_a else 1
+        q_idx = p_idx ^ 1
+        ctrl = self.ctrl
+
+        label_mfma_body = 'L_{}_mfma_body'.format(self.ctrl.label_prefix)
+        label_mfma_finishing = 'L_{}_mfma_finishing'.format(self.ctrl.label_prefix)
+        label_mfma_end = 'L_{}_mfma_end'.format(self.ctrl.label_prefix)
+
+        f_gld_p = [ctrl.global_load_a_functor, ctrl.global_load_b_functor][p_idx]
+        f_gld_q = [ctrl.global_load_a_functor, ctrl.global_load_b_functor][q_idx]
+        f_sst_p = [ctrl.shared_store_a_functor, ctrl.shared_store_b_functor][p_idx]
+        f_sst_q = [ctrl.shared_store_a_functor, ctrl.shared_store_b_functor][q_idx]
+
+        f_sld_p = [ctrl.shared_load_a_functor, ctrl.shared_load_b_functor][p_idx]
+        f_sld_q = [ctrl.shared_load_a_functor, ctrl.shared_load_b_functor][q_idx]
+
+        f_move_slice_window_p    = [ctrl.move_slice_window_a_functor, ctrl.move_slice_window_b_functor][p_idx]
+        f_move_slice_window_q    = [ctrl.move_slice_window_a_functor, ctrl.move_slice_window_b_functor][q_idx]
+        f_move_slice_window_acc  = ctrl.move_slice_window_accumule_functor
+
+        v_gld_p     = [ctrl.v_gld_a, ctrl.v_gld_b][p_idx]
+        v_gld_q     = [ctrl.v_gld_a, ctrl.v_gld_b][q_idx]
+
+        a_c         = ctrl.a_c
+        v_q         = [ctrl.v_a, ctrl.v_b][q_idx]
+        v_sld_q_os  = [ctrl.v_sld_a_os, ctrl.v_sld_b_os][q_idx]
+        v_sst_q_os  = [ctrl.v_sst_a_os, ctrl.v_sst_b_os][q_idx]
+
+        s_kitr = ctrl.s_kitr
+        s_knum = ctrl.s_knum
+        cxm = ctrl.cxm
+
+        data_byte = amdgpu_precision_data_byte(ctrl.data_type)
+
+        lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
+        lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n
+        lds_single_size = ctrl.lds_single_size
+
+        lds_width_q = [lds_width_m, lds_width_n][q_idx]
+
+        # used as offset:x number. may some 
+        lds_base_m = 0
+        lds_base_n = 0
+        assert ctrl.unroll_k % cxm.block_k() == 0
+        unroll_k = ctrl.unroll_k
+        k_per_inst = cxm.block_k()
+
+        pad_m = ctrl.lds_pad_m
+        pad_n = ctrl.lds_pad_n
+
+        lds_base_q = [lds_base_m, lds_base_n][q_idx]
+        pad_q      = [pad_m, pad_n][q_idx]
+
+        num_v_p         = [cxm.inst_mfma.num_v_a, cxm.inst_mfma.num_v_b][p_idx]
+        num_v_q         = [cxm.inst_mfma.num_v_a, cxm.inst_mfma.num_v_b][q_idx]
+        wave_step_p     = [cxm.wave_step_m, cxm.wave_step_n][p_idx]
+        wave_step_q     = [cxm.wave_step_m, cxm.wave_step_n][q_idx]
+        wave_repeat_p   = [cxm.wave_repeat_m,  cxm.wave_repeat_n][p_idx]
+        wave_repeat_q   = [cxm.wave_repeat_m,  cxm.wave_repeat_n][q_idx]
+
+        v_pack_p        = [ctrl.pass_through_v_pack_a, ctrl.pass_through_v_pack_b][p_idx]
+        v_pack_q        = [ctrl.pass_through_v_pack_a, ctrl.pass_through_v_pack_b][q_idx]
+        assert v_pack_p == v_pack_q, "currently only support p, q the same"
+
+        assert unroll_k % (v_pack_p * k_per_inst) == 0
+        unroll_k_slot = unroll_k // (v_pack_p * k_per_inst)
+
+        def global_load_p():
+            with self._deferred_context():
+                self._emit(f_gld_p())
+            return self._get_deferred()
+        
+        def global_load_q():
+            with self._deferred_context():
+                self._emit(f_gld_q())
+            return self._get_deferred()
+        
+        def move_slice_window_pq():
+            with self._deferred_context():
+                if f_move_slice_window_p:
+                    self._emit(f_move_slice_window_p())
+                if f_move_slice_window_q:
+                    self._emit(f_move_slice_window_q())
+            return self._get_deferred()
+        
+        def move_slice_window_acc():
+            with self._deferred_context():
+                self._emit(f_move_slice_window_acc())
+            return self._get_deferred()
+
+        def call_mbb(mbb):
+            return machine_basic_block_call(self, mbb)
+        
+        # parse global load of p tensor into list of single load
+        mbb_gld_p = create_machine_basic_block(global_load_p())
+        mbb_gld_q = create_machine_basic_block(global_load_q())
+
+        mbb_p_clear = 1 if  mbb_gld_p[0].mc_inst(-1).type() == MC_INST_TYPE_LEGACY_MACRO else 0
+        mbb_q_clear = 1 if  mbb_gld_q[0].mc_inst(-1).type() == MC_INST_TYPE_LEGACY_MACRO else 0
+
+        if mbb_p_clear == 1:
+            # hack on v_clear_nc
+            v_clear_nc_strs = mbb_gld_p[0].mc_inst(-1).inst_str
+            v_clear_nc_list = re.split('[,\s]+', v_clear_nc_strs)
+            assert len(v_clear_nc_list) == 3 and v_clear_nc_list[0] == '.v_clear_nc'
+            num_gld_p = int(v_clear_nc_list[2]) # TODO: check number
+            assert num_gld_p % (len(mbb_gld_p) - mbb_p_clear) == 0
+            num_gld_p_per_issue = num_gld_p // (len(mbb_gld_p) - mbb_p_clear)
+            def emit_v_clear_nc_p(i):
+                with self._deferred_context():
+                    self._emit(f".v_clear_nc {v_gld_p(i * num_gld_p_per_issue)}, {num_gld_p_per_issue}")
+                return self._get_deferred()
+
+            mbb_gld_p_wrapper = list()
+            for i in range(len(mbb_gld_p) - mbb_p_clear):
+                mbb_gld_p_wrapper += create_machine_basic_block(emit_v_clear_nc_p(i) + '\n' + call_mbb(mbb_gld_p[i+1]), merge_mbb = 1)
+
+            mbb_gld_p = mbb_gld_p_wrapper
+            mbb_p_clear = 0
+
+        num_p_issue = len(mbb_gld_p) - mbb_p_clear
+        num_q_issue = len(mbb_gld_q) - mbb_q_clear
+
+        mbb_msw_pq = create_machine_basic_block(move_slice_window_pq(), merge_mbb = 1) if (f_move_slice_window_p or f_move_slice_window_q) else list()
+        mbb_msw_acc = create_machine_basic_block(move_slice_window_acc(), merge_mbb = 1) if f_move_slice_window_acc else list()
+
+        def mapped_ioffset(i_k, width_byte, pad_pixel, offset = 0):
+            k_pack = self.ctrl.lds_k_pack
+            i_k0 = i_k // k_pack
+            i_kp = i_k % k_pack
+            return i_k0 * (width_byte * k_pack + pad_pixel * data_byte) + i_kp * data_byte + offset * k_pack
+       
+        def mi_q(i_k, offset = 0):
+            return mapped_ioffset(i_k, lds_width_q, pad_q, offset)
+
+        def mfma_step_pxq_vk(i_k, i_repeat_p, i_repeat_q, i_v, i_local_buffer_q = 0):
+            # v_pack is in k direction, hence c_index stay the same across different i_v
+            mfma = cxm.inst_mfma
+            num_agpr_per_issue = mfma.num_a_c
+            with self._deferred_context():
+                for i_step_q in range(wave_step_q):
+                    for i_step_p in range(wave_step_p):
+                        if p_idx == 0:
+                            c_index = i_repeat_p * wave_step_p * wave_step_q * wave_repeat_q * num_agpr_per_issue + \
+                                            i_repeat_q * wave_step_p * wave_step_q * num_agpr_per_issue + \
+                                            i_step_p * wave_step_q * num_agpr_per_issue + \
+                                            i_step_q * num_agpr_per_issue
+                        else:
+                            c_index = i_repeat_q * wave_step_q * wave_step_p * wave_repeat_p * num_agpr_per_issue + \
+                                            i_repeat_p * wave_step_q * wave_step_p * num_agpr_per_issue + \
+                                            i_step_q * wave_step_p * num_agpr_per_issue + \
+                                            i_step_p * num_agpr_per_issue
+                        c_index_end = c_index + num_agpr_per_issue - 1
+
+                        p_index = i_k * wave_repeat_p * wave_step_p * v_pack_p * num_v_p + \
+                                    i_repeat_p * wave_step_p * v_pack_p * num_v_p + \
+                                    i_step_p * v_pack_p * num_v_p + \
+                                    i_v * num_v_p
+
+                        q_index = i_local_buffer_q * wave_step_q * wave_repeat_q * v_pack_q * num_v_q + \
+                                    i_repeat_q * wave_step_q * v_pack_q * num_v_q + \
+                                    i_step_q * v_pack_q * num_v_q + \
+                                    i_v * num_v_q
+                        self._emit(mfma(a_c((c_index, c_index_end)), v_gld_p(p_index), v_q(q_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_p}x{i_repeat_q}, step:{i_step_p}x{i_step_q}, k:{i_k}, v:{i_v}, num_a_c:{num_agpr_per_issue}")
+            return self._get_deferred()
+
+        def mfma_loop():
+            mfma = cxm.inst_mfma
+
+            repeat_q_thread_offset = wave_step_q * num_v_q * v_pack_p
+            local_buffer_q = wave_repeat_q * repeat_q_thread_offset
+            mfma_v_pack_slot = unroll_k_slot * wave_repeat_p * wave_repeat_q    # TODO: not consider step
+            cnt_mfma_v_pack_slot = 0
+
+            def first_sld():
+                # when start of mfma main loop, do this load
+                with self._deferred_context():
+                    for i in range(wave_repeat_q):
+                        self._emit(f_sld_q(v_q(i * repeat_q_thread_offset), v_sld_q_os(), lds_base_q + mi_q(0, i * (lds_width_q // 2))))
+                    if ctrl.local_prefetch_num == 2:
+                        # always load a single piece of repeat
+                        self._emit(f_sld_q(v_q(wave_step_q * wave_repeat_q * v_pack_q * num_v_q), v_sld_q_os(), lds_base_q + mi_q(1 * v_pack_p * k_per_inst, 0)))
+                return self._get_deferred()
+
+            mbb_first_sld = create_machine_basic_block(first_sld())
+
+            def mfma_per_k_slot(i_k, i_mfma_v_pack_slot, is_last_fma):
+                '''
+                k slot is unroll_k / k_per_inst
+                pattern:
+                prefetch:1, repeat:1 (phase:1)
+                                 0           0            0
+                    i_k   i_r    load_i_r    load_i_buf   load_i_k  lgkmcnt     need_load
+                    0     0      0           0            1         0
+                    1     0      0           0            2         0
+                    2     0      0           0            3         0
+                    3     0      0           0            4         0           x
+
+                prefetch:2, repeat:1 (phase:1)
+                                 0           0            0
+                                 0           1            1
+                    i_k   i_r    load_i_r    load_i_buf   load_i_k  lgkmcnt     need_load
+                    0     0      0           0            2         1
+                    1     0      0           1            3         1
+                    2     0      0           0            4         1           x
+                    3     0      0           1            5         0           x
+
+                prefetch:1, repeat:2 (phase:2)
+                                 0           0            0
+                                 1           0            0
+                    i_k   i_r    load_i_r    load_i_buf   load_i_k  lgkmcnt     need_load
+                    0     0      0           0            1         1
+                    0     1      1           0            1         1
+                    1     0      0           0            2         1
+                    1     1      1           0            2         1
+                    2     0      0           0            3         1
+                    2     1      0           0            3         1
+                    3     0      1           0            4         1           x
+                    3     1      1           0            4         0           x
+
+                prefetch:2, repeat:2 (phase:3)
+                                 0           0            0
+                                 1           0            0
+                                 0           1            1
+                    i_k   i_r    load_i_r    load_i_buf   load_i_k  lgkmcnt     need_load
+                    0     0      1           1            1         2
+                    0     1      0           0            2         2
+                    1     0      1           0            2         2
+                    1     1      0           1            3         2
+                    2     0      1           1            3         2
+                    2     1      0           0            4         2           x
+                    3     0      1           0            4         1           x
+                    3     1      0           1            5         0           x
+                '''
+                pref = ctrl.local_prefetch_num
+                rept = wave_repeat_q
+                phase = pref + rept - 1               # idx before entering main loop
+
+                i_r_sequence = [ x & (rept - 1) for x in range(pref * rept)]
+                i_b_sequence = [(x >> (rept - 1)) & (pref - 1) for x in range(pref * rept)]
+
+                i_local_buffer_q = i_k & 1 if pref == 2 else 0
+                i_k_sst_q = i_k == (unroll_k_slot - ctrl.local_prefetch_num)
+                # print(f"i_k:{i_k}, i_k_sst_q:{i_k_sst_q}")
+                gld_p_per_k = wave_repeat_p * wave_step_p
+                cnt_mfma = 0
+                def try_do_gld_per_slot(i_slot):
+                    if is_last_fma:
+                        if i_k == 0:
+                            mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ]
+                        else:
+                            mbb_gld_p_per_k = list()
+                        mbb_gld_per_k = mbb_gld_p_per_k
+                    else:
+                        if i_k == 0:
+                            mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ]
+                        else:
+                            start_p_idx = mbb_p_clear if i_k == 1 else ((i_k - 1) * gld_p_per_k + mbb_p_clear)  # always no clear
+                            mbb_gld_p_per_k = mbb_gld_p[start_p_idx : i_k * gld_p_per_k + mbb_p_clear  ]
+                        mbb_gld_per_k = mbb_gld_p_per_k + mbb_msw_pq + mbb_msw_acc + mbb_gld_q if i_k == 0 else mbb_gld_p_per_k
+                    num_gld_slot_per_k = wave_repeat_p * wave_repeat_q * v_pack_p
+                    num_gld_per_slot = utility_next_mul(len(mbb_gld_per_k), num_gld_slot_per_k) // num_gld_slot_per_k
+                    for i_gld in range(num_gld_per_slot):
+                        current_gld = i_slot * num_gld_per_slot + i_gld
+                        if current_gld < len(mbb_gld_per_k):
+                            self._emit(call_mbb(mbb_gld_per_k[current_gld]))
+
+                def do_sst_q():
+                    # print(f"do_sst_q, i_k:{i_k}")
+                    if ctrl.lds_buffer_num == 1:
+                        self._emit(f"s_barrier")
+                    self._emit(f_sst_q())
+                    if ctrl.lds_buffer_num != 1:
+                        self._emit(f"v_xor_b32 v[{v_sst_q_os()}], {hex(lds_single_size)}, v[{v_sst_q_os()}]")
+
+                def do_sld_q(i_v, i_r):
+                    # interleave into different v_pack
+                    i_idx = i_k * rept + i_r
+                    i_idx_mod = (i_idx + phase) % (pref * rept)
+                    i_idx_int = (i_idx + phase) // (pref * rept)
+
+                    # print(f"  ==i_r_sequence:{i_r_sequence}, i_b_sequence:{i_b_sequence}, i_idx:{i_idx}, mod:{i_idx_mod}, int:{i_idx_int}")
+
+                    load_i_r = i_r_sequence[i_idx_mod]
+                    load_i_b = i_b_sequence[i_idx_mod]
+                    load_i_k = i_idx_int * pref + load_i_b
+
+                    if i_v == (v_pack_p - 1) and load_i_k < unroll_k_slot:
+                        the_str = f' ; i_r:{load_i_r}, i_b:{load_i_b}, i_k:{load_i_k}'
+                        self._emit(f_sld_q(v_q(load_i_b * local_buffer_q + load_i_r * repeat_q_thread_offset), v_sld_q_os(), lds_base_q + mi_q(load_i_k * v_pack_p * k_per_inst, load_i_r * (lds_width_q // 2) )) + the_str)
+
+
+                if i_k == 0:
+                    for mbb_1st in mbb_first_sld[1:]:
+                        self._emit(call_mbb(mbb_1st))
+
+                for i_rp in range(wave_repeat_p):
+                    # cnt_p_load = cnt_p_load + 1
+                    for i_rq in range(wave_repeat_q):
+                        if i_rq != 0:
+                            vmcnt_str = ""
+                        else:
+                            if i_k == 0:
+                                vmcnt_str = f'vmcnt({num_p_issue - 1 - gld_p_per_k})'
+                            else:
+                                if not is_last_fma:
+                                    vmcnt_str = f'vmcnt({num_p_issue + num_q_issue - 2})'
+                                else:
+                                    vmcnt_str = f'vmcnt({num_p_issue - i_k - 1})'
+                        num_lgkmcnt = (pref + rept - 2) - ((pref - 1 + i_rq) if i_k == (unroll_k_slot-1) else 0)
+                        if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT and num_lgkmcnt == 0:
+                            # we need a change to put last lgkmcnt earlier
+                            assert vmcnt_str == ""
+                            if is_last_fma:
+                                self._emit(f's_waitcnt lgkmcnt(0)')
+                        else:
+                            self._emit(f's_waitcnt lgkmcnt({num_lgkmcnt}) {vmcnt_str}')
+
+                        for i_v in range(v_pack_p):
+                            self._emit(mfma_step_pxq_vk(i_k, i_rp, i_rq, i_v, i_local_buffer_q))
+                            if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT:
+                                if (i_mfma_v_pack_slot == mfma_v_pack_slot - 2) and (v_pack_p == 1 or i_v == (v_pack_p // 2) - 1):
+                                    assert i_rq == 0
+                                    if not is_last_fma:
+                                        self._emit(f's_waitcnt lgkmcnt(0) vmcnt({num_p_issue - gld_p_per_k})')
+                                        do_sst_q()
+                            do_sld_q(i_v, i_rq) # will not emit when last ds wait, hence will never co-exist when last ds wait emit
+                            #if not is_last_fma:
+                            try_do_gld_per_slot(cnt_mfma)
+                            cnt_mfma = cnt_mfma + 1
+                        assert i_mfma_v_pack_slot < mfma_v_pack_slot, f'i_mfma_v_pack_slot:{i_mfma_v_pack_slot}, mfma_v_pack_slot:{mfma_v_pack_slot}'
+                        i_mfma_v_pack_slot = i_mfma_v_pack_slot + 1
+
+                if not is_last_fma and i_k == (unroll_k_slot - 1):
+                    self._emit(f's_waitcnt lgkmcnt(0)')
+                    self._emit(f"s_barrier")
+                    self._emit(call_mbb(mbb_first_sld[0]))
+                    self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                    self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                    self._emit(f"s_cbranch_scc1 {label_mfma_body}")
+                return i_mfma_v_pack_slot
+
+            self._emit(call_mbb(mbb_first_sld[0]))
+            self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_knum()}], {unroll_k}")
+            self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+            self._emit(f"s_cbranch_scc0 {label_mfma_end}")
+            self._emit_empty_line()
+
+            self._emit_front(f"{label_mfma_body}:")
+            self._emit(f"; do fma accumulate with unroll {unroll_k}, mfma_v_pack_slot:{mfma_v_pack_slot}")
+
+            for i_k in range(unroll_k_slot):
+                cnt_mfma_v_pack_slot = mfma_per_k_slot(i_k, cnt_mfma_v_pack_slot, False)
+
+            self._emit_front(f"{label_mfma_end}:")
+            cnt_mfma_v_pack_slot = 0
+            for i_k in range(unroll_k_slot):
+                cnt_mfma_v_pack_slot = mfma_per_k_slot(i_k, cnt_mfma_v_pack_slot, True)
+
+        # start emit, first load q tensor, then p tensor.
+        self._emit(f"; start MFMA loop, wave tile:{cxm.wave_tile_m}x{cxm.wave_tile_n}, repeat:{cxm.wave_repeat_m}x{cxm.wave_repeat_n}, step:{cxm.wave_step_m}x{cxm.wave_step_n}" +\
+                f", k_pack:{self.ctrl.lds_k_pack}, p_issue:{num_p_issue}, q_issue:{num_q_issue}, local_prefetch_num:{ctrl.local_prefetch_num}")
+
+        self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
+        # self._emit(f"; make sure acc WAR harzard, at least 1 nop for src_c")
+
+        self._emit(f"s_waitcnt vmcnt({f_gld_p.get_issues() - wave_repeat_p * wave_step_p})")
+        self._emit(f_sst_q())
+        self._emit_empty_line()
+
+        # decrese k
+        # self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_knum()}], {unroll_k}")
+        # self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+        # self._emit(f"s_cbranch_scc0 {label_mfma_end}")
+        # self._emit_empty_line()
+
+        # right after clear acc
+        # self._emit(f_move_slice_window_p())
+        # self._emit(f_move_slice_window_q())
+        # if f_move_slice_window_acc != None:
+        #     self._emit(f_move_slice_window_acc())
+
+        self._emit(f"s_waitcnt lgkmcnt(0)")
+        self._emit(f"s_barrier")
+        self._emit_empty_line()
+
+        mfma_loop()
+
+        nop = emit_nop_t(self.mc)
+        nop(cxm.inst_mfma.get_nop_count_mfma_acc_raw())   # solve dependency 
+
+
     def emit(self):
+        if self.ctrl.pass_through_a ^ self.ctrl.pass_through_b:
+            return self.emit_single_pass_through()
+
         label_mfma_body = 'L_{}_mfma_body'.format(self.ctrl.label_prefix)
         label_mfma_finishing = 'L_{}_mfma_finishing'.format(self.ctrl.label_prefix)
         label_mfma_end = 'L_{}_mfma_end'.format(self.ctrl.label_prefix)
@@ -241,7 +651,6 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_front(f"{label_mfma_finishing}:")
             self._emit(mfma_step_mxn(0, 0, 1, 1))
 
-            
             self._emit_front(f"{label_mfma_end}:")
             self._emit("s_waitcnt lgkmcnt(0)")
             self._emit("s_barrier")

@@ -74,6 +74,8 @@ def get_mc_inst_type(inst_str):
         return MC_INST_TYPE_SHARE_MEM
     if mc_inst_is_global_mem(inst_op):
         return MC_INST_TYPE_GLOBAL_MEM
+    if mc_inst_is_legacy_macro(inst_op):
+        return MC_INST_TYPE_LEGACY_MACRO
     return MC_INST_TYPE_OTHER
 
 class mc_inst_t(object):
@@ -156,6 +158,7 @@ def create_machine_basic_block(multi_line_inst_str, **option):
 
     option:
     group_mbb_by_end_of_inst_op    :   str,  group several mc_inst into mbb, each mbb is by end of this value
+    merge_mbb                      :   int,  do not split into multiple mbb
     '''
     class parse_mbb_list_t(object):
         STATE_NORMAL = 0
@@ -236,6 +239,8 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                     return dictionary[key]
                 else:
                     return default_value
+            
+            merge_mbb = get_dict_with_default(option, "merge_mbb", 0)
 
             group_mbb_by_end_of_inst_op = get_dict_with_default(option, "group_mbb_by_end_of_inst_op", "")
             def match_group_mbb_by_end_of_inst_op(inst_op):
@@ -258,9 +263,15 @@ def create_machine_basic_block(multi_line_inst_str, **option):
 
             if len(istrs) == 0:
                 return None
+            
             for i, istr in enumerate(istrs):
                 mc_inst = create_mc_inst(istr)
                 if not mc_inst:
+                    continue
+
+                # merge every string into a single mbb
+                if merge_mbb:
+                    mc_inst_buffer.append(mc_inst)
                     continue
 
                 # early pass rule

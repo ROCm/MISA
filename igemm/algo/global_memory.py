@@ -109,6 +109,13 @@ class ctrl_2d_global_load_t(object):
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
         self.use_flag = 0
         self.bfe_flag = 0
+        self.precache_vs_ptn = 0     # 0: d0 use sgpr precache, d1 use vgpr precache
+                                     # 1: d0 use vgpr precache, d1 use sgpr precache
+                                     # 2: d0 use vgpr precache, d1 use vgpr precache
+                                     # 3: d0 use sgpr precache, d1 use sgpr precache
+                                     # 4: .... maybe consider not using precache?
+
+
 
 class macro_igemm_2d_global_load_t(macro_base_t):
     # TODO: if need vectorize further LDS write, need shuffle dst gpr while load
@@ -433,6 +440,138 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
                 if ctrl.use_flag and self.v_flag != None:
                     self._emit(f"s_mov_b64 exec, -1")
                 i_cnt += 1
+
+    def get_issues(self):
+        ctrl = self.ctrl
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        return  ctrl.length_d0 * n_d1
+
+class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
+    # precache voffset for d0 dimension
+    # precache soffset for d1 dimension
+    # hence v_flag is along d0 dimension
+    def __init__(self, mc, ctrl, inline = False):
+        assert type(ctrl) is ctrl_2d_global_load_t
+        macro_base_t.__init__(self, mc, inline)
+        self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("v_os")
+        self.declare_arg("s_stride_d0") # can be None
+        self.declare_arg("s_stride_d1")
+        self.declare_arg("s_offset")
+        if self.ctrl.use_flag:
+            self.declare_arg("v_flag")
+        if self.ctrl.bfe_flag:
+            self.declare_arg("v_tmp")
+
+    def name(self):
+        ctrl = self.ctrl
+        if ctrl.precision == "fp32":
+            bits_str = 'b32'
+        elif ctrl.precision in ("fp16", "bf16"):
+            bits_str = 'b16'
+        else:
+            assert False
+
+        if ctrl.vector_d1 == 4:
+            vec_str = 'v4'
+        elif ctrl.vector_d1 == 2:
+            vec_str = 'v2'
+        elif ctrl.vector_d1 == 1:
+            vec_str = 'v1'
+        else:
+            assert False
+
+        return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_vs_offset"
+
+    def expr(self):
+        ctrl = self.ctrl
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+
+        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+            i_dst = 0
+            for i_d0 in range(ctrl.length_d0):
+                for i_d1 in range(n_d1):
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d0)}]")
+                    current_s_offset = 0 if i_d1 == 0 else (self.s_stride_d1() if i_d1 == 1 else self.s_offset(i_d1 - 2))
+                    self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d0)}", f"{self.s_ptr()}", current_s_offset, 0))
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"s_mov_b64 exec, -1")
+                    i_dst = i_dst + 1
+
+        else:
+            assert False
+
+    def get_issues(self):
+        ctrl = self.ctrl
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        return  ctrl.length_d0 * n_d1
+
+class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
+    # precache soffset for d0 dimension
+    # precache voffset for d1 dimension
+    # hence v_flag is along d1 dimension
+    def __init__(self, mc, ctrl, inline = False):
+        assert type(ctrl) is ctrl_2d_global_load_t
+        macro_base_t.__init__(self, mc, inline)
+        self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("v_os")
+        self.declare_arg("s_stride_d0") # can be None
+        self.declare_arg("s_stride_d1")
+        self.declare_arg("s_offset")
+        if self.ctrl.use_flag:
+            self.declare_arg("v_flag")
+        if self.ctrl.bfe_flag:
+            self.declare_arg("v_tmp")
+
+    def name(self):
+        ctrl = self.ctrl
+        if ctrl.precision == "fp32":
+            bits_str = 'b32'
+        elif ctrl.precision in ("fp16", "bf16"):
+            bits_str = 'b16'
+        else:
+            assert False
+
+        if ctrl.vector_d1 == 4:
+            vec_str = 'v4'
+        elif ctrl.vector_d1 == 2:
+            vec_str = 'v2'
+        elif ctrl.vector_d1 == 1:
+            vec_str = 'v1'
+        else:
+            assert False
+
+        return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_sv_offset"
+
+    def expr(self):
+        ctrl = self.ctrl
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+
+        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+            i_dst = 0
+            for i_d0 in range(ctrl.length_d0):
+                for i_d1 in range(n_d1):
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d1)}]")
+                    current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
+                    self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
+                    if ctrl.use_flag and self.v_flag != None:
+                        self._emit(f"s_mov_b64 exec, -1")
+                    i_dst = i_dst + 1
+
+        else:
+            assert False
 
     def get_issues(self):
         ctrl = self.ctrl

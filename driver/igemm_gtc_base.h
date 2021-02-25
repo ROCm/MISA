@@ -123,6 +123,8 @@ typedef struct {
             int wave_tile_k;
         };
     };
+    int tensor_a_pass_through;
+    int tensor_b_pass_through;
     std::vector<int> tensor_a_thread_lengths;
     std::vector<int> tensor_a_cluster_lengths;
     std::vector<int> tensor_b_thread_lengths;
@@ -187,6 +189,8 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
                 tunable.wave_repeat_n            = sec.at("wave_repeat_n").get_int();
                 tunable.wave_tile_k              = sec.count("wave_tile_k") > 0 ? sec.at("wave_tile_k").get_int() : 1;
             }
+            tunable.tensor_a_pass_through    = sec.count("tensor_a_pass_through") > 0 ? sec.at("tensor_a_pass_through").get_int() : 0;
+            tunable.tensor_b_pass_through    = sec.count("tensor_b_pass_through") > 0 ? sec.at("tensor_b_pass_through").get_int() : 0;
             tunable.tensor_a_thread_lengths  = sec.at("tensor_a_thread_lengths").get_list_int();
             tunable.tensor_a_cluster_lengths = sec.at("tensor_a_cluster_lengths").get_list_int();
             tunable.tensor_b_thread_lengths  = sec.at("tensor_b_thread_lengths").get_list_int();
@@ -222,6 +226,8 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     // auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
     // auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
     // auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
+    auto tensor_a_pass_through    = tunable->tensor_a_pass_through;
+    auto tensor_b_pass_through    = tunable->tensor_b_pass_through;
     auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
     auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
     auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
@@ -296,6 +302,10 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
                     utility_int_list_to_string(tensor_b_cluster_lengths);
     // printf("[%s]\n",kernel_name.c_str());
+    if(tensor_a_pass_through)
+        kernel_name += std::string("_pta");
+    if(tensor_b_pass_through)
+        kernel_name += std::string("_ptb");
     if(gemm_m_unmerge_cluster)
         kernel_name += std::string("_mc");
     if(gemm_n_unmerge_cluster)
