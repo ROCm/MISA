@@ -352,7 +352,12 @@ class igemm_gtc_tunable_parameter_t(object):
         brace_left='   {'
         brace_right='}'
         direction = "\"" + self.direction + "\""
-        precision = "\"" + self.precision + "\""
+        if self.precision == "fp32":
+            precision = "miopenFloat"
+        elif self.precision == "fp16":
+            precision = "miopenHalf"
+        else:
+            assert False
         out_str = (f"\t\t{'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
         out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_tile_k:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
         out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
