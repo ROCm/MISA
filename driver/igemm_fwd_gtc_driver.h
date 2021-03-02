@@ -92,7 +92,7 @@ typedef struct {
     int x;
     int group;
 #if USE_MAGIC_DIV
-    uint32_t magic_0;                       // denom: gemm_n / n_per_block
+    uint32_t magic_0;                       // denom: (gemm_n + n_per_block - 1) / n_per_block
     uint32_t magic_1;                       // denom: ho*wo
     uint32_t magic_2;                       // denom: wo
     uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
@@ -532,7 +532,7 @@ public:
             int gemm_m = n * ho * wo;
             int gemm_n = k / group;
 
-            magic_div_u32_t mdiv_0 = magic_div_u32_gen(gemm_n / gemm_n_per_block);
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen((gemm_n + gemm_n_per_block - 1) / gemm_n_per_block);
             magic_div_u32_t mdiv_1 = magic_div_u32_gen(ho*wo);
             magic_div_u32_t mdiv_2 = magic_div_u32_gen(wo);
             magic_div_u32_t mdiv_3 = magic_div_u32_gen((gemm_m/gemm_m_per_block) * (gemm_n/gemm_n_per_block));

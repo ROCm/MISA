@@ -537,8 +537,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 # allocate several sgpr to hold magic/shift value.
                 self.s_magic_0             = sym_t("s_magic_0"                ,self.s_p_in.value + 2)
                 self.s_magic_1             = sym_t("s_magic_1"                ,self.s_p_in.value + 3)
-                self.s_magic_2             = sym_t("s_magic_2"                ,self.s_p_wei.value + 2)
-                self.s_magic_3             = sym_t("s_magic_3"                ,self.s_p_wei.value + 3)
+                self.s_magic_2             = sym_t("s_magic_2"                ,self.s_p_out.value + 2)
+                self.s_magic_3             = sym_t("s_magic_3"                ,self.s_p_out.value + 3)
                 self.s_shift_pack_0        = sym_t("s_shift_pack_0"           ,self.s_flag_need_acc_yx.value)
 
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))

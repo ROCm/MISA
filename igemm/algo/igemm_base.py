@@ -36,7 +36,7 @@ IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
 IGEMM_GTC_FEAT_PRECACHE_SOFFSET = 1
 IGEMM_GTC_FEAT_LOCAL_PREFETCH = 1
 IGEMM_GTC_FEAT_FMA_INTERLEAVE = 1
-IGEMM_GTC_FEAT_MAGIC_DIVISION = 0
+IGEMM_GTC_FEAT_MAGIC_DIVISION = 1
 IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME = 0
 
 # IGEMM_GTC_TENSOR_LAYOUT_NCHW = ((1 << 4) | 0)
@@ -189,7 +189,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         default_source_access_order             = IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M if (self.direction == 'fwd' and self.tensor_layout == 'nchw') \
                                                         else IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N
-        self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M)
+        self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', default_source_access_order)
 
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
