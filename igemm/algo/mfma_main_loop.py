@@ -341,10 +341,6 @@ class mfma_main_loop_t(mc_base_t):
                 self._emit(do_interleave_gload_and_move_slice_window())
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
 
-                se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
-                self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
-
             # Label: finishing of fma body
             self._emit_front(f"{label_mfma_finishing}:")
             #self._emit(mfma_step_mxn(0, 0, 1, 1))
