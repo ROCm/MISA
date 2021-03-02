@@ -189,7 +189,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         default_source_access_order             = IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M if (self.direction == 'fwd' and self.tensor_layout == 'nchw') \
                                                         else IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N
-        self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', default_source_access_order)
+        self.source_access_order                = utility_dict_with_default_t(tunable_dict)('source_access_order', IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_N_GEMM_M)
 
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
@@ -255,6 +255,9 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = 1
             self.unmerge_sub_c = self.gemm_n_per_block
 
+        self.tensor_a_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
+        self.tensor_b_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
+
         self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1
         # vector global/lds implicit here
@@ -268,7 +271,7 @@ class igemm_gtc_tunable_parameter_t(object):
 
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.local_prefetch_num             = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1
-            if (self.tensor_a_pass_through and self.wave_repeat_n) or (self.tensor_b_pass_through and self.wave_repeat_m):
+            if (self.tensor_a_pass_through and self.wave_repeat_n == 2) or (self.tensor_b_pass_through and self.wave_repeat_m == 2):
                 self.local_prefetch_num         = 1
             # register for a,b,c buffer
             xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
@@ -276,6 +279,9 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
             self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
             self.num_vgpr_accumulate_b          = self.wave_step_n * self.wave_repeat_n * xdlops_mapping.inst_mfma.num_v_b * self.local_prefetch_num
+
+        self.global_prefetch_a_num              = 2 if self.tensor_a_pass_through and not self.tensor_a_pass_through_interleave_gld else 1
+        self.global_prefetch_b_num              = 2 if self.tensor_b_pass_through and not self.tensor_b_pass_through_interleave_gld else 1
 
         self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
@@ -380,6 +386,8 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['precache_soffset']                = self.precache_soffset
 
         tunable_dict['local_prefetch_num']              = self.local_prefetch_num
+        tunable_dict['global_prefetch_a_num']           = self.global_prefetch_a_num
+        tunable_dict['global_prefetch_b_num']           = self.global_prefetch_b_num
         tunable_dict['fma_interleave']                  = self.fma_interleave
 
         tunable_dict['gemm_m_unmerge_cluster']          = self.gemm_m_unmerge_cluster

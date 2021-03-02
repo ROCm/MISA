@@ -310,10 +310,12 @@ ctrl_xdlops_mapping_fp32 = [
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  1, 4,  1,  1,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 32 ,  16,  16,  4, 4,  2,  1,  1,  1,  v_mfma_f32_16x16x4f32),
         ctrl_xdlops_mapping_t( 64 , 32 ,  16,  16,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  32,  32,  2, 2,  1,  1,  1,  1,  v_mfma_f32_32x32x2f32),
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  1, 4,  1,  1,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 64 ,  16,  16,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4, 4,  1,  1,  1,  1,  v_mfma_f32_16x16x4f32),
+        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4, 2,  1,  2,  1,  1,  v_mfma_f32_16x16x4f32),
         #ctrl_xdlops_mapping_t( 256, 4  ,  64,  4 ,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
         #ctrl_xdlops_mapping_t( 4  , 256,  4 ,  64,  4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),      # TODO: small/skinny gemm
         ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  1, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x1f32),

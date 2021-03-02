@@ -63,7 +63,11 @@ class ctrl_mfma_main_loop_t(object):
         self.v_b                         = None
         self.a_c                         = None
         self.v_gld_a                     = None
+        self.v_gld_a_gpf                 = None     # used for a pass through and not interleaved, as global prefetch register
+        self.v_gld_a_num                 = 1
         self.v_gld_b                     = None
+        self.v_gld_b_gpf                 = None     # used for b pass through and not interleaved, as global prefetch register
+        self.v_gld_b_num                 = 1
         self.v_sld_a_os                  = None
         self.v_sld_b_os                  = None
         self.v_sst_a_os                  = None
@@ -78,8 +82,10 @@ class ctrl_mfma_main_loop_t(object):
 
         self.pass_through_a              = 0        # a tensor not using LDS
         self.pass_through_b              = 0        # b tensor not using LDS
-        self.pass_through_v_pack_a       = 1        # passthough tensor may have v pack, indicate vector load
-        self.pass_through_v_pack_b       = 1
+        self.pass_through_a_v_pack       = 1        # passthough tensor may have v pack, indicate vector load
+        self.pass_through_b_v_pack       = 1
+        self.pass_through_a_interleave_gld         = 1
+        self.pass_through_b_interleave_gld         = 1
 
 class mfma_main_loop_t(mc_base_t):
     '''
@@ -118,6 +124,9 @@ class mfma_main_loop_t(mc_base_t):
         v_gld_p     = [ctrl.v_gld_a, ctrl.v_gld_b][p_idx]
         v_gld_q     = [ctrl.v_gld_a, ctrl.v_gld_b][q_idx]
 
+        v_gld_p_gpf = [ctrl.v_gld_a_gpf, ctrl.v_gld_b_gpf][p_idx]
+        v_gld_p_num = [ctrl.v_gld_a_num, ctrl.v_gld_b_num][p_idx]
+
         a_c         = ctrl.a_c
         v_q         = [ctrl.v_a, ctrl.v_b][q_idx]
         v_sld_q_os  = [ctrl.v_sld_a_os, ctrl.v_sld_b_os][q_idx]
@@ -155,8 +164,12 @@ class mfma_main_loop_t(mc_base_t):
         wave_repeat_p   = [cxm.wave_repeat_m,  cxm.wave_repeat_n][p_idx]
         wave_repeat_q   = [cxm.wave_repeat_m,  cxm.wave_repeat_n][q_idx]
 
-        v_pack_p        = [ctrl.pass_through_v_pack_a, ctrl.pass_through_v_pack_b][p_idx]
-        v_pack_q        = [ctrl.pass_through_v_pack_a, ctrl.pass_through_v_pack_b][q_idx]
+        p_interleave_gld = [ctrl.pass_through_a_interleave_gld, ctrl.pass_through_b_interleave_gld][p_idx]
+
+        assert wave_repeat_q == 2, "currently the side need LDS must have repeat 2, following limitation seems have BUG"
+
+        v_pack_p        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][p_idx]
+        v_pack_q        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][q_idx]
         assert v_pack_p == v_pack_q, "currently only support p, q the same"
 
         assert unroll_k % (v_pack_p * k_per_inst) == 0
@@ -190,7 +203,7 @@ class mfma_main_loop_t(mc_base_t):
         
         # parse global load of p tensor into list of single load
         mbb_gld_p = create_machine_basic_block(global_load_p())
-        mbb_gld_q = create_machine_basic_block(global_load_q())
+        mbb_gld_q = create_machine_basic_block(global_load_q(), merge_mbb = 1)
 
         mbb_p_clear = 1 if  mbb_gld_p[0].mc_inst(-1).type() == MC_INST_TYPE_LEGACY_MACRO else 0
         mbb_q_clear = 1 if  mbb_gld_q[0].mc_inst(-1).type() == MC_INST_TYPE_LEGACY_MACRO else 0
@@ -205,7 +218,7 @@ class mfma_main_loop_t(mc_base_t):
             num_gld_p_per_issue = num_gld_p // (len(mbb_gld_p) - mbb_p_clear)
             def emit_v_clear_nc_p(i):
                 with self._deferred_context():
-                    self._emit(f".v_clear_nc {v_gld_p(i * num_gld_p_per_issue)}, {num_gld_p_per_issue}")
+                    self._emit(f".v_clear_nc {v_gld_p(i * num_gld_p_per_issue) if p_interleave_gld else v_gld_p_gpf(i * num_gld_p_per_issue)}, {num_gld_p_per_issue}")
                 return self._get_deferred()
 
             mbb_gld_p_wrapper = list()
@@ -343,18 +356,22 @@ class mfma_main_loop_t(mc_base_t):
                 cnt_mfma = 0
                 def try_do_gld_per_slot(i_slot):
                     if is_last_fma:
-                        if i_k == 0:
-                            mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ]
+                        if p_interleave_gld:
+                            mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ] if i_k == 0 else list()
                         else:
                             mbb_gld_p_per_k = list()
                         mbb_gld_per_k = mbb_gld_p_per_k
                     else:
-                        if i_k == 0:
-                            mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ]
+                        if p_interleave_gld:
+                            if i_k == 0:
+                                mbb_gld_p_per_k = mbb_gld_p[len(mbb_gld_p) - gld_p_per_k : ]
+                            else:
+                                start_p_idx = mbb_p_clear if i_k == 1 else ((i_k - 1) * gld_p_per_k + mbb_p_clear)  # always no clear
+                                mbb_gld_p_per_k = mbb_gld_p[start_p_idx : i_k * gld_p_per_k + mbb_p_clear  ]
                         else:
-                            start_p_idx = mbb_p_clear if i_k == 1 else ((i_k - 1) * gld_p_per_k + mbb_p_clear)  # always no clear
-                            mbb_gld_p_per_k = mbb_gld_p[start_p_idx : i_k * gld_p_per_k + mbb_p_clear  ]
-                        mbb_gld_per_k = mbb_gld_p_per_k + mbb_msw_pq + mbb_msw_acc + mbb_gld_q if i_k == 0 else mbb_gld_p_per_k
+                            mbb_gld_p_per_k = mbb_gld_p if i_k == 0 else list()
+                        mbb_gld_per_k = ((mbb_gld_p_per_k + mbb_msw_pq + mbb_msw_acc + mbb_gld_q) if p_interleave_gld else (mbb_gld_q + mbb_gld_p_per_k)) \
+                            if i_k == 0 else mbb_gld_p_per_k
                     num_gld_slot_per_k = wave_repeat_p * wave_repeat_q * v_pack_p
                     num_gld_per_slot = utility_next_mul(len(mbb_gld_per_k), num_gld_slot_per_k) // num_gld_slot_per_k
                     for i_gld in range(num_gld_per_slot):
@@ -388,34 +405,54 @@ class mfma_main_loop_t(mc_base_t):
 
 
                 if i_k == 0:
+                    if not p_interleave_gld and not is_last_fma:
+                        self._emit(move_slice_window_pq())
                     for mbb_1st in mbb_first_sld[1:]:
                         self._emit(call_mbb(mbb_1st))
+                    if not p_interleave_gld and not is_last_fma:
+                        self._emit(move_slice_window_acc())
 
                 for i_rp in range(wave_repeat_p):
                     # cnt_p_load = cnt_p_load + 1
                     for i_rq in range(wave_repeat_q):
-                        if i_rq != 0:
-                            vmcnt_str = ""
-                        else:
-                            if i_k == 0:
-                                vmcnt_str = f'vmcnt({num_p_issue - 1 - gld_p_per_k})'
-                            else:
-                                if not is_last_fma:
-                                    vmcnt_str = f'vmcnt({num_p_issue + num_q_issue - 2})'
-                                else:
-                                    vmcnt_str = f'vmcnt({num_p_issue - i_k - 1})'
                         num_lgkmcnt = (pref + rept - 2) - ((pref - 1 + i_rq) if i_k == (unroll_k_slot-1) else 0)
-                        if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT and num_lgkmcnt == 0:
-                            # we need a change to put last lgkmcnt earlier
-                            assert vmcnt_str == ""
+                        if not p_interleave_gld:
+                            vmcnt_str =  "vmcnt(0)" if i_k == 0 and i_rp == 0 and i_rq == 0 else \
+                                    ( f"vmcnt({f_gld_p.get_issues()})" if num_lgkmcnt == 0 and  not is_last_fma else "")
+                        else:
+                            if i_rq != 0 and wave_repeat_q != 1:
+                                vmcnt_str = ""
+                            else:
+                                if i_k == 0:
+                                    vmcnt_str = f'vmcnt({num_p_issue - 1 - gld_p_per_k})'
+                                else:
+                                    if not is_last_fma:
+                                        vmcnt_str = f'vmcnt({num_p_issue + num_q_issue - 2})'
+                                    else:
+                                        vmcnt_str = f'vmcnt({num_p_issue - i_k - 1})'
+
+                        if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT and num_lgkmcnt == 0 and p_interleave_gld:
+                            # we need a chance to put last lgkmcnt earlier
+                            # assert vmcnt_str == ""
                             if is_last_fma:
-                                self._emit(f's_waitcnt lgkmcnt(0)')
+                                self._emit(f's_waitcnt lgkmcnt(0)   ; vmcnt_str:{vmcnt_str}')
+                            else:
+                                # self._emit(f"; __ vmcnt_str:{vmcnt_str}")
+                                pass
                         else:
                             self._emit(f's_waitcnt lgkmcnt({num_lgkmcnt}) {vmcnt_str}')
+                            if num_lgkmcnt == 0 and not p_interleave_gld and not is_last_fma:
+                                # self._emit(move_slice_window_acc())
+                                do_sst_q()
+                        if i_k == 0 and i_rp == 0 and i_rq == 0:
+                            if not p_interleave_gld and v_gld_p_gpf:
+                                # move buffer
+                                for i_pnum in range(v_gld_p_num):
+                                    self._emit(f"v_mov_b32 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
 
                         for i_v in range(v_pack_p):
                             self._emit(mfma_step_pxq_vk(i_k, i_rp, i_rq, i_v, i_local_buffer_q))
-                            if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT:
+                            if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT and p_interleave_gld:
                                 if (i_mfma_v_pack_slot == mfma_v_pack_slot - 2) and (v_pack_p == 1 or i_v == (v_pack_p // 2) - 1):
                                     assert i_rq == 0
                                     if not is_last_fma:
@@ -461,21 +498,12 @@ class mfma_main_loop_t(mc_base_t):
         self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
         # self._emit(f"; make sure acc WAR harzard, at least 1 nop for src_c")
 
-        self._emit(f"s_waitcnt vmcnt({f_gld_p.get_issues() - wave_repeat_p * wave_step_p})")
+        self._emit(f"s_waitcnt vmcnt({f_gld_p.get_issues() - ((wave_repeat_p * wave_step_p) if p_interleave_gld else 0)})")
         self._emit(f_sst_q())
         self._emit_empty_line()
-
-        # decrese k
-        # self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_knum()}], {unroll_k}")
-        # self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
-        # self._emit(f"s_cbranch_scc0 {label_mfma_end}")
-        # self._emit_empty_line()
-
-        # right after clear acc
-        # self._emit(f_move_slice_window_p())
-        # self._emit(f_move_slice_window_q())
-        # if f_move_slice_window_acc != None:
-        #     self._emit(f_move_slice_window_acc())
+        # if not p_interleave_gld:
+        #     self._emit(move_slice_window_pq())
+        #     self._emit(move_slice_window_acc())
 
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit(f"s_barrier")

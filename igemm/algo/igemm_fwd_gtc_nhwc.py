@@ -36,6 +36,7 @@ from .coalescing_store import *
 from .mfma_main_loop import *
 
 IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG = 0
+# IGEMM_FWD_GTC_NHWC_P_INTERLEAVE_GLD = False     # p tensor interleave
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -345,9 +346,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"; load input, nxe:{self.outer.tunable.nxe}")
                 #if self.outer.tunable.nxe != 0:
                 # if tunable.tensor_a_pass_through:
-                self._emit(f".v_clear_nc {v.v_gld_a()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
+                self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
                 if tunable.tensor_a_pass_through:
-                    self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), v.v_in_os(), None, s.s_in_stride_k_pack(), s.s_in_offset(),
+                    self._emit(m_in_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(), s.s_p_in(), v.v_in_os(), None, s.s_in_stride_k_pack(), s.s_in_offset(),
                             *(v.v_in_flag(), v.v_tmp()) if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG else (v.v_in_flag(),)))
                 else:
                     if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
@@ -588,7 +589,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
             self.v_gld_a                = sym_t("v_gld_a"           ,vseq(outer.tunable.num_vgpr_global_load_a))
+            if outer.tunable.global_prefetch_a_num == 2:
+                self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(outer.tunable.num_vgpr_global_load_a))
             self.v_gld_b                = sym_t("v_gld_b"           ,vseq(outer.tunable.num_vgpr_global_load_b))
+            if outer.tunable.global_prefetch_b_num == 2:
+                self.v_gld_b_gpf        = sym_t("v_gld_b_gpf"       ,vseq(outer.tunable.num_vgpr_global_load_b))
             if not outer.tunable.tensor_a_pass_through:
                 self.v_sst_a_os         = sym_t("v_sst_a_os"        ,vseq(1))
                 self.v_sld_a_os         = sym_t("v_sld_a_os"        ,vseq(1))
@@ -772,6 +777,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_wei_gld.length_d0 = tb_k0 if tb_k0 != 1 else tb_k1
             ctrl_wei_gld.length_d1 = tb_c
             ctrl_wei_gld.vector_d1 = self.get_k_pack()
+            ctrl_wei_gld.flag_merge_v = 0 if self.tunable.tensor_b_pass_through_interleave_gld else 1
         else:
             if self.wei_thread_copy_ndim == 2:
                 ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
@@ -787,6 +793,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_in_gld.length_d0 = ta_c // self.get_k_pack()
             ctrl_in_gld.length_d1 = (ta_nb0 if ta_nb0 != 1 else ta_nb1) * self.get_k_pack()
             ctrl_in_gld.vector_d1 = self.get_k_pack()
+            ctrl_in_gld.flag_merge_v = 0 if self.tunable.tensor_a_pass_through_interleave_gld else 1
         else:
             if self.in_thread_copy_ndim == 2:
                 ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
@@ -1323,7 +1330,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             # load in
             self._emit(f"s_mov_b32 s[{s.s_p_in(2)}], 0xffffffff")
             self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], 0x27000")
-            if self.tunable.tensor_a_pass_through:
+            if self.tunable.tensor_a_pass_through and self.tunable.tensor_a_pass_through_interleave_gld:
                 mbb_gld_in = create_machine_basic_block(self.global_load_in())
                 gld_per_k = self.tunable.wave_repeat_m * self.tunable.wave_step_m
                 for i_mbb in mbb_gld_in[0:(-1 * gld_per_k)]:
@@ -1373,7 +1380,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f".v_clear_nc {v.v_gld_b()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
-            if self.tunable.tensor_b_pass_through:
+            if self.tunable.tensor_b_pass_through and self.tunable.tensor_b_pass_through_interleave_gld:
                 mbb_gld_wei = create_machine_basic_block(self.global_load_wei())
                 gld_per_k = self.tunable.wave_repeat_n * self.tunable.wave_step_n
                 for i_mbb in mbb_gld_wei[0:(-1 * gld_per_k)]:
@@ -1686,16 +1693,23 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.a_c                         = a.a_c
             fctrl.v_gld_a                     = v.v_gld_a
             fctrl.v_gld_b                     = v.v_gld_b
-            fctrl.v_sld_a_os                  = v.v_sld_a_os    if not self.tunable.tensor_a_pass_through else None
-            fctrl.v_sld_b_os                  = v.v_sld_b_os    if not self.tunable.tensor_b_pass_through else None
-            fctrl.v_sst_a_os                  = v.v_sst_a_os    if not self.tunable.tensor_a_pass_through else None
-            fctrl.v_sst_b_os                  = v.v_sst_b_os    if not self.tunable.tensor_b_pass_through else None
+            fctrl.v_gld_a_gpf                 = v.v_gld_a_gpf if self.tunable.global_prefetch_a_num == 2 else None
+            fctrl.v_gld_b_gpf                 = v.v_gld_b_gpf if self.tunable.global_prefetch_b_num == 2 else None
+            fctrl.v_gld_a_num                 = self.tunable.num_vgpr_global_load_a
+            fctrl.v_gld_b_num                 = self.tunable.num_vgpr_global_load_b
+            fctrl.v_sld_a_os                  = v.v_sld_a_os  if not self.tunable.tensor_a_pass_through else None
+            fctrl.v_sld_b_os                  = v.v_sld_b_os  if not self.tunable.tensor_b_pass_through else None
+            fctrl.v_sst_a_os                  = v.v_sst_a_os  if not self.tunable.tensor_a_pass_through else None
+            fctrl.v_sst_b_os                  = v.v_sst_b_os  if not self.tunable.tensor_b_pass_through else None
             fctrl.s_kitr                      = s.s_kitr
             fctrl.s_knum                      = s.s_knum
             fctrl.pass_through_a              = self.tunable.tensor_a_pass_through
             fctrl.pass_through_b              = self.tunable.tensor_b_pass_through
-            fctrl.pass_through_v_pack_a       = self.get_k_pack()
-            fctrl.pass_through_v_pack_b       = self.get_k_pack()
+            fctrl.pass_through_a_v_pack       = self.get_k_pack()
+            fctrl.pass_through_b_v_pack       = self.get_k_pack()
+
+            fctrl.pass_through_a_interleave_gld = 1 if self.tunable.tensor_a_pass_through_interleave_gld else 0
+            fctrl.pass_through_b_interleave_gld = 1 if self.tunable.tensor_b_pass_through_interleave_gld else 0
 
             mfma_main_loop = mfma_main_loop_t(self.mc, fctrl)
             mfma_main_loop.emit()

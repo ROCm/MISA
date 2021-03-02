@@ -114,7 +114,7 @@ class ctrl_2d_global_load_t(object):
                                      # 2: d0 use vgpr precache, d1 use vgpr precache
                                      # 3: d0 use sgpr precache, d1 use sgpr precache
                                      # 4: .... maybe consider not using precache?
-
+        self.flag_merge_v = 0        # when flag on v_offset, flag and multiple load, or flag per load
 
 
 class macro_igemm_2d_global_load_t(macro_base_t):
@@ -560,15 +560,27 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
-            for i_d0 in range(ctrl.length_d0):
-                for i_d1 in range(n_d1):
-                    if ctrl.use_flag and self.v_flag != None:
-                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d1)}]")
-                    current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
-                    self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
-                    if ctrl.use_flag and self.v_flag != None:
-                        self._emit(f"s_mov_b64 exec, -1")
-                    i_dst = i_dst + 1
+            if ctrl.flag_merge_v and n_d1 == 1:
+                # v is along d1 dimension, hence only possible when n_d1 is 1
+                if ctrl.use_flag and self.v_flag != None:
+                    self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag()}]")
+                for i_d0 in range(ctrl.length_d0):
+                    for i_d1 in range(1):
+                        current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
+                        i_dst = i_dst + 1
+                if ctrl.use_flag and self.v_flag != None:
+                    self._emit(f"s_mov_b64 exec, -1")
+            else:
+                for i_d0 in range(ctrl.length_d0):
+                    for i_d1 in range(n_d1):
+                        if ctrl.use_flag and self.v_flag != None:
+                            self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d1)}]")
+                        current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
+                        if ctrl.use_flag and self.v_flag != None:
+                            self._emit(f"s_mov_b64 exec, -1")
+                        i_dst = i_dst + 1
 
         else:
             assert False
