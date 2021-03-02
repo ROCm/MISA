@@ -532,10 +532,10 @@ public:
             int gemm_m = n * ho * wo;
             int gemm_n = k / group;
 
-            magic_div_u32_t mdiv_0 = magic_div_u32_gen((gemm_n + gemm_n_per_block - 1) / gemm_n_per_block);
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
             magic_div_u32_t mdiv_1 = magic_div_u32_gen(ho*wo);
             magic_div_u32_t mdiv_2 = magic_div_u32_gen(wo);
-            magic_div_u32_t mdiv_3 = magic_div_u32_gen((gemm_m/gemm_m_per_block) * (gemm_n/gemm_n_per_block));
+            magic_div_u32_t mdiv_3 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) * utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;
             karg.magic_2        = mdiv_2.magic;
