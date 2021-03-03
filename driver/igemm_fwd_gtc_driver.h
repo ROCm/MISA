@@ -37,6 +37,8 @@
 #include <algorithm>
 #include <numeric>
 
+#define GEMM_K_GLOBAL_SPLIT 3
+
 typedef struct {
     float *p_in;
     float *p_wei;
@@ -182,6 +184,7 @@ public:
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
         int b                        = ho * wo;
+        int gemm_k_global_split      = GEMM_K_GLOBAL_SPLIT;
         if(tunable->tensor_layout == "nchw")
             b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
@@ -199,7 +202,7 @@ public:
             assert(false);
         }
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
-                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * (1 << gemm_k_global_split);
         assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
@@ -451,6 +454,8 @@ public:
         size_t karg_size = 0;
         uint8_t karg_buffer[IGEMM_FWD_GTC_MAX_KARG_SIZE];
 
+        int gemm_k_global_split = GEMM_K_GLOBAL_SPLIT;
+
         if(tunable->tensor_layout == "nchw"){
             igemm_fwd_gtc_karg_t karg;
             karg.p_in          = p_in;
@@ -541,6 +546,7 @@ public:
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+            karg.__pack_0       = gemm_k_global_split;
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
@@ -553,7 +559,7 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+        printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -564,6 +570,8 @@ public:
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
             float ms = .0;
+
+            hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * sizeof(float));
 
 #if USE_EXT_MODULE_LAUNCH
             hipEvent_t start;
