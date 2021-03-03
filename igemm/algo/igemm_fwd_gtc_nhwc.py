@@ -227,7 +227,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"s_cmp_le_u32 s[{self.s_gemm_k_num_c()}], s[{self.s_in_c_itr()}]")
             else:
                 self._emit(f"s_cmp_le_u32 s[{self.s_gemm_k_num_c()}], s[{self.s_in_offset()}]")
-            self._emit(f"s_cselect_b32 s[{self.s_flag_need_acc_yx()}], 1, 0")
+            if not self.tunable.tensor_a_pass_through and not self.tunable.tensor_b_pass_through:
+                self._emit(f"s_cselect_b32 s[{self.s_flag_need_acc_yx()}], 1, 0")
             self._emit_empty_line()
 
     class macro_move_slice_window_block_wise_acc_yx_t(macro_base_t):
@@ -278,7 +279,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             assert 'm_set_flag_nhw' in self.options
             m_set_flag_nhw = self.options['m_set_flag_nhw']
 
-            self._emit(f"s_cmp_eq_u32 1, s[{self.s_flag_need_acc_yx()}]")
+            if not self.tunable.tensor_a_pass_through and not self.tunable.tensor_b_pass_through:
+                self._emit(f"s_cmp_eq_u32 1, s[{self.s_flag_need_acc_yx()}]")
             self._emit(f"s_cbranch_scc0 {label_acc_yx_end}  ; no need do accumulate yx")
             self._emit_front(f"{label_acc_yx}:")
             if self.tunable.tensor_a_pass_through:
