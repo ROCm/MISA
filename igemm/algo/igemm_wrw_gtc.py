@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -823,7 +823,8 @@ class igemm_wrw_gtc_t(mc_base_t):
                 self.s_in_stride_wo        = sym_t("s_in_stride_wo"                  ,sseq(1))
             # self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
             if IGEMM_WRW_GTC_DEBUG == 1:
-                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(4, 2))
+                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
+            self.s_k_padded                = sym_t("s_k_padded"             ,sseq(1))
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             self.s_end                     = sym_t("s_end"                    ,sseq())
 
@@ -831,6 +832,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             return self.s_end.value
 
         def emit(self):
+            assert self.s_end.value <= amdgpu_sgpr_limit(self.mc.arch_config.arch), f"s_end:{self.s_end.value}, tunable:{self.outer.tunable.serialize()}"
             for k, v in self.__dict__.items():
                 if k.startswith('s_'):
                     self._emit(v.declare())
@@ -1155,6 +1157,8 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         in_sst_ctrl.src_order = 1 if vector_in_d1 > 1 else 0
         out_sst_ctrl.src_order = 1 if vector_out_d1 > 1 else 0
+        in_sst_ctrl.v_tmp = self.vgpr.v_tmp
+        out_sst_ctrl.v_tmp = self.vgpr.v_tmp
 
         #print(f"in_sst_ctrl.src_order={in_sst_ctrl.src_order}, out_sst_ctrl.src_order={out_sst_ctrl.src_order}")
         #print(f"gemm_n_order={gemm_n_order}, gemm_m_order={gemm_m_order}")
@@ -1580,6 +1584,11 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}],      s[{s.s_ho()}],        s[{s.s_wo()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}],  s[{s.s_out_stride_k()}],  s[{s.s_k()}]")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}],      s[{s.s_group()}],        s[{s.s_tmp()}]")
+
+        self._emit("; config for weight range")
+        self._emit(f"s_mul_i32 s[{s.s_p_out(2)}], s[{s.s_out_stride_n()}], s[{s.s_n()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], {igemm_log2(data_byte)}")
+
         if t_n0 != 1:
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_n0()}], s[{s.s_in_stride_n()}], {igemm_log2(unmerge_sub_n1)}")
             self._emit(f"s_lshl_b32 s[{s.s_out_stride_n0()}], s[{s.s_out_stride_n()}], {igemm_log2(unmerge_sub_n1)}")
@@ -1620,6 +1629,12 @@ class igemm_wrw_gtc_t(mc_base_t):
         if self.tunable.nxe != 0:
             self._emit(f"v_mov_b32 v[{v.v_move_slice_n_in0()}], v[{v.v_gtc_in0()}]")
             #self._emit(f"v_mov_b32 v[{v.v_flag_n()}], 1")
+
+        self._emit_empty_line()
+        self._emit(f"; pad gemm_m if needed")
+        self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_m_per_block - 1}, s[{s.s_k()}]")
+        self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(f"s_lshl_b32 s[{s.s_k_padded()}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
 
         self._emit_empty_line()
         self._emit(f"; add block i_n")
@@ -2336,7 +2351,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                         s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
             else:
                 self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
-                    s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
+                    s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None, s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
 
         if IGEMM_WRW_GTC_DEBUG == 1:
             self._emit_empty_line()

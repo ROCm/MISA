@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -599,43 +599,39 @@ class inst_ds_write2_likely_t(mc_base_t):
         v_src = sym_t(v_src)
         v_sst = sym_t(v_sst)
         def emit_write2_fallback(sst_offset = 0):
+            sstx1 = inst_ds_write_t(self.vec_byte)
+            # print(f"vec_count={self.vec_count}, vector={self.vector}")
             with self._deferred_context():
-                if self.vec_byte == 2:
+                if self.data_byte == 4:
                     for n in range(self.vec_count):
-                        self._emit('ds_write_b16 v[{}], v[{}] offset:{}'.format(v_sst(), v_src(n), (self.sst_base + sst_offset) + n * self.vec_stride))
-                elif self.vec_byte == 4:
-                    for n in range(self.vec_count):
-                        self._emit('ds_write_b32 v[{}], v[{}] offset:{}'.format(v_sst(), v_src(n), (self.sst_base + sst_offset) + n * self.vec_stride))
-                elif self.vec_byte == 8:
-                    if self.vec_count == 1:
-                        self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), (self.sst_base + sst_offset) ))
-                    else:
-                        if self.data_byte == 2:
+                        self._emit(sstx1(v_sst(), v_src(n*(self.vector)), (self.sst_base + sst_offset) + n * self.vec_stride))
+                else:
+                    if self.vec_byte <= 4:
+                        for n in range(self.vec_count):
+                            self._emit(sstx1(v_sst(), v_src(n), (self.sst_base + sst_offset) + n * self.vec_stride))
+                    elif self.vec_byte == 8:
+                        if self.vec_count == 1:
+                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), (self.sst_base + sst_offset) ))
+                        else:
                             self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(0), v_src(1), (self.sst_base + sst_offset)))
                             self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2) , v_src(3), (self.sst_base + sst_offset) + self.vec_stride))
-                        if self.data_byte == 4:
-                            swap_start = (self.vec_count*(self.vec_byte//self.data_byte)) // 2
-                            for n in range(self.vec_count // 2):
-                                self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n + 1), v_src(2*n + swap_start)))
-                                self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), (self.sst_base + sst_offset) + 2*n * self.vec_stride))
-                                self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), (self.sst_base + sst_offset) + (2*n+1) * self.vec_stride))
-                elif self.vec_byte == 16:
-                    if self.vec_count == 1:
-                        self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), (self.sst_base + sst_offset) ))
+                    elif self.vec_byte == 16:
+                        if self.vec_count == 1:
+                            self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), (self.sst_base + sst_offset) ))
+                        else:
+                            # though we use algorithm in swap_seq to interleave swap with ds_write, but it is still wise to use extra tmp register for swap is half speed
+                            swap_list = amdgpu_swap_sequencer_t(self.vec_count , self.vec_byte // self.data_byte)()
+                            # print('self.vec_count:{}, self.vec_byte:{}, {}'.format(self.vec_count , self.vec_byte // self.data_byte, swap_list))
+                            for n in range(self.vec_count):
+                                sw = swap_list[n]
+                                if type(sw) is str:
+                                    pass
+                                else:
+                                    for sw_item in sw:
+                                        self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(sw_item[0]) , v_src(sw_item[1]) ))
+                                self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(4*n), v_src(4*n + 3), (self.sst_base + sst_offset) + n * self.vec_stride))
                     else:
-                        # though we use algorithm in swap_seq to interleave swap with ds_write, but it is still wise to use extra tmp register for swap is half speed
-                        swap_list = amdgpu_swap_sequencer_t(self.vec_count , self.vec_byte // self.data_byte)()
-                        # print('self.vec_count:{}, self.vec_byte:{}, {}'.format(self.vec_count , self.vec_byte // self.data_byte, swap_list))
-                        for n in range(self.vec_count):
-                            sw = swap_list[n]
-                            if type(sw) is str:
-                                pass
-                            else:
-                                for sw_item in sw:
-                                    self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(sw_item[0]) , v_src(sw_item[1]) ))
-                            self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(4*n), v_src(4*n + 3), (self.sst_base + sst_offset) + n * self.vec_stride))
-                else:
-                    assert False, 'unsupported vector size'
+                        assert False, 'unsupported vector size'
             return self._get_deferred()
 
         def emit_write2_b32(sst_offset = 0):
@@ -844,7 +840,7 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                         swap_per_row = swap_sequencer.get_swap_per_row()
                         start_id_per_row = swap_sequencer.get_start_id_per_row()
     
-                        assert ctrl.length_d0 == len(swap_per_row) and ctrl.length_d0 == start_id_per_row
+                        assert ctrl.length_d0 == len(swap_per_row) and ctrl.length_d0 == len(start_id_per_row), f"length_d0:{ctrl.length_d0}, len:{len(swap_per_row)}, s:{start_id_per_row}"
     
                         ds_write = inst_ds_write_t(ctrl.vector_d1 * data_byte)
                         for i_d0 in range(ctrl.length_d0):

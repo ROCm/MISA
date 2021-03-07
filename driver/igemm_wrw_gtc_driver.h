@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -157,10 +157,12 @@ public:
         int gemm_m = k / group ;
         int gemm_n = (c / group) * y * (((x + e_x - 1) / e_x) * e_x);
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = 1 << gemm_k_global_split;
         grid_size *= num_of_gemm;
+
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
@@ -231,6 +233,7 @@ public:
         int gemm_n = (c / group) * y * x;
         int gemm_k = n * b;
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
         // do not need to check gemm_n when n_c0 == 1; n_c0 = t_c0 * c_c0
         if((tunable->tensor_b_thread_lengths[2] * tunable->tensor_b_cluster_lengths[2] > 1) || (tunable->nxe == 0)){
@@ -241,8 +244,7 @@ public:
         }
 
         if((tunable->tensor_a_thread_lengths[2] * tunable->tensor_a_thread_lengths[3] > 1) || (tunable->nxe == 0)){
-            if (gemm_m % gemm_m_per_block !=0 ){
-            //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+            if(gemm_m % gemm_m_per_block !=0 ){
                 return false;
             }
         }
@@ -294,6 +296,23 @@ public:
         }
         else {
             if (n_per_block * b % gemm_k_per_block !=0){
+                return false;
+            }
+        }
+
+        if (precision == "fp32"){
+            // these two cases are only valid for fp32 data type
+            // input vector load limitation, n1b
+            if(tunable->tensor_b_thread_lengths[1] > 1 && (
+                !unit_conv ||
+                unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[1] != 0)) {
+                return false;
+            }
+
+            // output vector load limitation, n1b
+            if(tunable->tensor_a_thread_lengths[1] > 1 && (
+                !unit_conv ||
+                unit_conv && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0)) {
                 return false;
             }
         }
@@ -517,7 +536,7 @@ public:
                         gemm_n_per_block = 1 << r;
                     }
                     
-                    if (gemm_m % gemm_m_per_block != 0 || gemm_n % gemm_n_per_block != 0)
+                    if (gemm_n % gemm_n_per_block != 0)
                         continue;
                     for (j = 5; j > 1; j--){
                         gemm_k_per_block = 1 << j;
@@ -555,7 +574,7 @@ public:
                             continue;
 
                         int log2_gemm_k_splits = 0;
-                        int grid_size = group * gemm_m / gemm_m_per_block * gemm_n / gemm_n_per_block;
+                        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) * gemm_n / gemm_n_per_block;
                         for (int gs = 0; gs < 8; gs++){
                             if ((grid_size << gs) > 1200)
                                 break;

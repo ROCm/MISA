@@ -1,14 +1,36 @@
 #!/bin/bash
 # need use posix cmopatible bash
 
-if [ $# -ne 1 ]; then 
-    echo "please give this script a direction"
-    echo "now I use bwd as default"
-    DIR=bwd
+if [ $# -ne 2 ]
+then 
+    if [ $# -eq 1 ]
+    then 
+        echo "please give this script a precision(fp32 or fp16)"
+        echo "now I use fp32 as default"
+        echo "use me as: /bin/bash script/smoke_test.sh fwd/bwd/wrw fp32/fp16"
+        DIR=$1
+        PRECISION=fp32
+    else
+        echo "please give this script a direction(fwd, bwd or wrw) and a precision(fp32 or fp16)"
+        echo "now I use fwd and fp32 as default"
+        echo "use me as: /bin/bash script/smoke_test.sh fwd/bwd/wrw fp32/fp16"
+        DIR=fwd
+        PRECISION=fp32
+    fi
 else
     DIR=$1
+    PRECISION=$2
 fi
-export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908.hsaco
+if [ "${PRECISION}" = "fp32" ]
+then
+    export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908.hsaco
+elif [ "${PRECISION}" = "fp16" ]
+then
+    export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908_${PRECISION}.hsaco
+else
+    echo "wrong precision, I will use fp32 as default"
+    export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908.hsaco
+fi
 export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_ASSERT_WHEN_INVALID=1
@@ -26,6 +48,18 @@ then
 else
     echo "wrong direction"
     exit 1
+fi
+
+# Flag enables fp32 or fp16
+if [ "${PRECISION}" = "fp32" ]
+then
+    CONV=conv
+elif [ "${PRECISION}" = "fp16" ]
+then
+    CONV=convfp16
+else
+    echo "wrong precision, I will use fp32 as default"
+    CONV=conv
 fi
 
 EXE=./out/conv_driver.exe
@@ -66,9 +100,9 @@ if (( ( $hi + 2 * $py - $dy * ( $fy - 1 ) - 1 ) < 0 || ( $wi + 2 * $px - $dx * (
 continue
 fi
 
-echo "conv -n $n -c $c -H $hi -W $wi -k $k -y $fy -x $fx -p $py -q $px -u $sy -v $sx -l $dy -j $dx -g $g -F $FORW  (ho:$ho, wo:$wo)"
+echo "${CONV} -n $n -c $c -H $hi -W $wi -k $k -y $fy -x $fx -p $py -q $px -u $sy -v $sx -l $dy -j $dx -g $g -F $FORW  (ho:$ho, wo:$wo)"
 
-$EXE conv -n $n -c $c -H $hi -W $wi -k $k -y $fy -x $fx -p $py -q $px -u $sy -v $sx -l $dy -j $dx -g $g -F $FORW || exit 1
+$EXE $CONV -n $n -c $c -H $hi -W $wi -k $k -y $fy -x $fx -p $py -q $px -u $sy -v $sx -l $dy -j $dx -g $g -F $FORW || exit 1
 
 
 done

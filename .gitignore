@@ -8,11 +8,8 @@ driver/xdnn_conv.h
 *.inc
 *_bak
 *.txt
-config/igemm_*_gtc_gfx908_fp16_fail.config
-script/gtc_conv_model_fp16_fail.sh
-*.xml
 sqtt_out/
+*_fail.*
+*_out/
 *.csv
-.gitignore
-config/fp16-configs/
-driver/cfg-tools/
+*.xml

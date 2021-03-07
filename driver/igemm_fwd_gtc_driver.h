@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,11 +37,10 @@
 #include <algorithm>
 #include <numeric>
 
-template <class Tgpu>
-struct igemm_fwd_gtc_karg_t{
-    Tgpu *p_in;
-    Tgpu *p_wei;
-    Tgpu *p_out;
+typedef struct{
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -70,9 +69,9 @@ struct igemm_fwd_gtc_karg_t{
     uint32_t shift_pack_1;
     uint32_t __pack_0;
 #endif
-} __attribute__((packed));
+} __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
-static void dump_fwd_karg(igemm_fwd_gtc_karg_t<float> * karg){
+static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<"p_in:"         <<karg->p_in<<",";
     std::cout<<"p_wei:"        <<karg->p_wei<<",";
     std::cout<<"p_out:"        <<karg->p_out<<",";
@@ -143,6 +142,9 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
 
+        int splits = split_batch_size(arg, tunable);
+        n = n/splits;   // split batch size here
+
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int nxe                      = tunable->nxe;
@@ -152,32 +154,32 @@ public:
         int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
         int gemm_n = n * b;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
     // This is a helper function for selecting better performing config
     bool mayHaveBiggerN1bClusterSize(int gemm_m, int gemm_n, const igemm_gtc_tunable_t *tunable)
     {
-        float n_times_m = (float) gemm_n / float(gemm_m); 
+        float n_times_m = (float)gemm_n / float(gemm_m); 
 
-	if ( n_times_m > 100.0f ) {
-             if ( tunable->gemm_k_per_block <= 2 * tunable->wave_tile_k )
-		  return(false); 
+        if(n_times_m > 100.0f) {
+            if(tunable->gemm_k_per_block <= 2 * tunable->wave_tile_k)
+                return(false); 
 
-             // N1bClusterSize can be expanded by using half gemm_k_per_block
-	     if ( (tunable->tensor_a_thread_lengths[1] > 1 || tunable->tensor_a_cluster_lengths[3] * 2 <= tunable->gemm_m_per_block ) &&
-	          (tunable->tensor_b_cluster_lengths[3] * 2 <= tunable->gemm_n_per_block ) )
-		   return(true); 
-	}; 
+            // N1bClusterSize can be expanded by using half gemm_k_per_block
+            if((tunable->tensor_a_thread_lengths[1] > 1 || tunable->tensor_a_cluster_lengths[3] * 2 <= tunable->gemm_m_per_block) &&
+                (tunable->tensor_b_cluster_lengths[3] * 2 <= tunable->gemm_n_per_block))
+                return(true); 
+        }; 
 
-	return(false); 
+        return(false); 
     };  
-
-    template <typename gpu_data_type>
-    bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+    // this is to support big tensor > 4G. need to decide how many splits needed
+    // return the number of splits
+    int split_batch_size(const args_t *arg, const igemm_gtc_tunable_t *tunable)
     {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
@@ -195,7 +197,55 @@ public:
         int x = arg->get_int("fil_w");
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
-		int group = arg->get_int("group_count");
+
+        int data_byte = utility_string_to_data_byte(tunable->precision);
+        size_t image_size_input = static_cast<size_t>(c) * hi * wi * data_byte;
+        size_t image_size_output = static_cast<size_t>(k) * ho * wo * data_byte;
+        size_t size_4g = 0xffffffffUL;
+        if(image_size_input >= size_4g || image_size_output >= size_4g)
+            return 0;
+
+        size_t image_size = image_size_input >= image_size_output ? image_size_input : image_size_output;
+        size_t splited_n = size_4g / image_size;
+
+        // round up splits, we must match
+        // 1. splited_n * image_size < size_4g
+        // 2. n % splited_n == 0
+        // if(splited_n >= n)
+        //     return 1;
+        assert(splited_n != 0);
+        while(splited_n >= 1){
+            // printf("n:%d, splited_n:%d\n", n, splited_n);
+            if(n % splited_n == 0)
+                break;
+            splited_n--;
+        }
+
+        assert(splited_n * image_size < size_4g && n % splited_n == 0);
+        return n / splited_n;
+    }
+
+    bool tunable_is_valid(const args_t *arg,
+                          const igemm_gtc_tunable_t *tunable,
+                          const driverDataType_t& data_type)
+    {
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
 
@@ -203,18 +253,15 @@ public:
         //std::cout << std::endl;
         if(precision == "fp16"){
             //std::cout << "is same type=" << std::is_same<gpu_data_type, float16>::value << std::endl;
-            if(!std::is_same<gpu_data_type, float16>::value){
+            if(data_type != driverHalf){
                 return false;
             }
         }
         else if(precision == "fp32"){
             //std::cout << "is same type=" << std::is_same<gpu_data_type, float>::value << std::endl;
-            if(!std::is_same<gpu_data_type, float>::value){
+            if(data_type != driverFloat){
                 return false;
             }
-        }
-        else if(precision == "bf16"){
-            return false;
         }
         else
         {
@@ -222,6 +269,12 @@ public:
             std::cout << precision << std::endl;
             return false;
         }
+        int splits = split_batch_size(arg, tunable);
+        if(splits == 0){
+            printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -235,15 +288,14 @@ public:
         int gemm_n                   = n * b;
         int gemm_k                   = (c / group) * y * x;
 
+        bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
         // support pad to modulo, hence only check when nxe is 0
-        if((nxe == 0) && (gemm_n % gemm_n_per_block != 0))
+        if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
             return false;
 
-        if(gemm_m % gemm_m_per_block != 0)
-            return false;
-
-        if(gemm_k % gemm_k_per_block != 0)
-            ;//return false;
+        // if(gemm_k % gemm_k_per_block != 0)
+            // return false;
 
         if(gemm_n_per_block % tunable->nxb != 0){
             //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -255,31 +307,48 @@ public:
             return false;
         }
 
-        if((nxe == 0) && (b % tunable->nxb != 0)){
+        if((nxe == 0) && ((b % tunable->nxb != 0) || (gemm_k % gemm_k_per_block != 0))){
             return false;
         }
 
-        if(nxe == 0){
-            if((x!=1)||(y!=1)||(stride_h!=1)||(stride_w!=1)||(dilation_h!=1)||(dilation_w!=1)||(pad_h!=0)||(pad_w!=0)){
-                return false;
-            }
+        if((nxe == 0) && !unit_conv){
+            return false;
         }
-        if(tunable->tensor_b_thread_lengths[1] > 1 && ( x !=1 || y != 1)){
+
+        // input vector load limitation, n1b
+        if(tunable->tensor_b_thread_lengths[3] > 1 && (
+            !unit_conv ||
+            unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[3] != 0)) {
+            return false;
+        }
+
+        // weight vector load limitation, c1e
+        if(tunable->tensor_a_thread_lengths[1] > 1 &&
+                gemm_k % tunable->tensor_a_thread_lengths[1] != 0){
+            return false;
+        }
+
+        // if tb_c1e > 1, only 1x1 case is runable, it can not check gemm_k_padding either.
+        if(tunable->tensor_b_thread_lengths[1] > 1 && ((pad_h !=0 || pad_w != 0)||( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
+            return false;
+        }
+
+        // if t_c0 > 1, need to check gemmk per block
+        if(tunable->tensor_b_thread_lengths[0] > 1 && (gemm_k % gemm_k_per_block != 0)){
             return false;
         }
 
         // let's check the next configuration even though this configuration is applicable
-        if ( mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
-             ;//return(false); 
+        // if (mayHaveBiggerN1bClusterSize(gemm_m, gemm_n, tunable) )
+            // return(false); 
 
         return true;
     }
 
-    template <class Tgpu>
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
-                 int warmup, int repeat) {
-        if (!tunable_is_valid<Tgpu>(arg, tunable)) {
+                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
+                 int warmup, int repeat, const driverDataType_t& data_type) {
+        if (!tunable_is_valid(arg, tunable, data_type)) {
             result_t result;
             result.return_code = -1;
             //printf("this kernel can not support this config\n");
@@ -306,14 +375,17 @@ public:
 
         assert(c % group == 0 && k % group == 0);
 
+        int splits = split_batch_size(arg, tunable);
+        n = n/splits;   // split batch size here
+
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
         int b                        = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
-        
-        igemm_fwd_gtc_karg_t<Tgpu> karg;
+
+        igemm_fwd_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
         karg.p_in          = p_in;
         karg.p_wei         = p_wei;
@@ -337,6 +409,7 @@ public:
         karg.group         = group;
 
         int gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
+        int gemm_n = n * b;
 
 #if USE_MAGIC_DIV
         {
@@ -354,7 +427,8 @@ public:
             magic_div_u32_t mdiv_3 = magic_div_u32_gen(x);
             magic_div_u32_t mdiv_4 = magic_div_u32_gen(b);
             magic_div_u32_t mdiv_5 = magic_div_u32_gen(wo);
-            magic_div_u32_t mdiv_6 = magic_div_u32_gen((n * b * (gemm_m)) / (gemm_m_per_block * gemm_n_per_block));
+            magic_div_u32_t mdiv_6 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
 
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;
@@ -378,7 +452,7 @@ public:
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
         auto launch_fwd = [&]() -> float {
-            // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
+            // printf("launch fwd block:%d, grid:%dx%d\n", block_size, grid_size, splits);
             // dump_fwd_karg(&karg);
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
@@ -392,7 +466,7 @@ public:
             hipEventCreate(&stop);
 
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
 
@@ -404,7 +478,7 @@ public:
             gpu_timer_t timer(NULL);
             timer.start();
 
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config));
 
@@ -439,7 +513,7 @@ public:
         hipMemcpy(gemmc_host_check, p_out, block_size * sizeof(float), hipMemcpyDeviceToHost);
         for (int i_check = 0; i_check < (0+block_size); i_check++)
         {
-            printf("[%d]th var to monitor:[%f, %d]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
+            printf("[%d]th var to monitor:[%f, %d, 0x%x]\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check]);
         }
         printf("workspace debug end \n");
         free(gemmc_host_check);

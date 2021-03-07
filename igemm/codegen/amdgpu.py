@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020 Advanced Micro Devices, Inc.
+#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -130,6 +130,24 @@ def amdgpu_wave_size(arch):
         return 64
     else:
         return 32
+
+def amdgpu_sgpr_limit(arch):
+    if type(arch) is str:
+        a = amdgpu_string_to_arch(arch)
+    else:
+        a = arch
+
+    # https://llvm.org/docs/AMDGPUOperandSyntax.html#s
+    if a >= 700 and a < 800:
+        return 104
+    if a >= 800 and a < 900:
+        return 102
+    if a >= 900 and a < 1000:
+        return 102
+    if a >= 1000:
+        return 106
+    assert False, f"unsupported arch:{a}"
+
 
 class amdgpu_arch_detail_t(object):
     '''
@@ -442,7 +460,7 @@ class amd_kernel_code_t(mc_base_t):
 
                 self._emit('.amdhsa_system_vgpr_workitem_id {}'.format(             self.ki.kernel_code.enable_vgpr_workitem_id))
                 self._emit('.amdhsa_next_free_vgpr {}'.format(                      self.ki.kernel_code.workitem_vgpr_count))
-                self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count - 2 * 3))
+                self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count - 2*3))
 
                 self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
                 self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
