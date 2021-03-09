@@ -637,6 +637,7 @@ public:
         
     }
 
+#ifdef USE_HALF_HPP
     void host_wrw_reduction(float16* out, float16* input, int length, int n_groups){
         int i_len, i_group;
         float16 val_out; 
@@ -649,6 +650,7 @@ public:
             out[i_len] = val_out;
         }
     }
+#endif
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
                  hipModule_t module, hipModule_t module_reduction, hipModule_t module_tensor_cast, void *p_in, void *p_wei, void *p_out,
@@ -689,7 +691,7 @@ public:
         
         int num_of_gemm = 1 << gemm_k_global_split;
         void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * num_of_gemm * k * c * y * x * sizeof(float16)));
+        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * num_of_gemm * k * c * y * x * sizeof(short)));
 
 #if USE_HOST_REDUCTION_TO_CHECK
         float16 *p_wei_host_workspace = (float16 *)malloc(num_of_gemm * k * c * y * x * sizeof(float16));
@@ -895,7 +897,7 @@ public:
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         if(gemm_k_global_split > 0){
             printf("copy workspace\n");
-            hipMemcpy(gemmc_host_check, p_wei_workspace, group * (k / group) * (c / group) * y * x * sizeof(float), hipMemcpyDeviceToHost);
+            hipMemcpy(gemmc_host_check, p_wei_workspace, (1 << gemm_k_global_split) * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
         }
         else{
             printf("copy weight\n");

@@ -300,7 +300,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
     for (size_t i = 0; i < n; ++i) {
         if(!(valid_float(ref[i]) && valid_float(pred[i]))){
-            printf(" invalid float at %4d, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+            printf(" invalid float at %4zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
             return false;
         }
         double ri = (double)ref[i];
@@ -324,7 +324,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         }
     }
-    printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
+    // printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)

@@ -823,7 +823,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 self.s_in_stride_wo        = sym_t("s_in_stride_wo"                  ,sseq(1))
             # self.s_group_left              = sym_t("s_group_left"             ,self.s_knum.value)
             if IGEMM_WRW_GTC_DEBUG == 1:
-                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(2, 2))
+                self.s_dbg                     = sym_t("s_dbg"                    ,sseq(4, 2))
             self.s_k_padded                = sym_t("s_k_padded"             ,sseq(1))
             self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             self.s_end                     = sym_t("s_end"                    ,sseq())
@@ -1969,6 +1969,11 @@ class igemm_wrw_gtc_t(mc_base_t):
 
         self._emit(f"; weight offset")
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k()}]")
+
+        #for fp16 atomic add version, weight is in type fp32
+        if IGEMM_GTC_FP16_USE_ATOMIC_ADD == 1 and self.tunable.gemm_k_global_split == 1:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], {igemm_log2(unmerge_sub_c1 * 4)} - {igemm_log2(unmerge_sub_c1 * data_byte)}")
+        
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
