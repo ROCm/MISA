@@ -37,7 +37,8 @@
 #include <algorithm>
 #include <numeric>
 
-#define GEMM_K_GLOBAL_SPLIT 3
+//#define GEMM_K_GLOBAL_SPLIT 3
+#define MAX_GEMM_K_SPLITS 8
 
 typedef struct {
     float *p_in;
@@ -184,7 +185,7 @@ public:
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
         int b                        = ho * wo;
-        int gemm_k_global_split      = GEMM_K_GLOBAL_SPLIT;
+        //int gemm_k_global_split      = GEMM_K_GLOBAL_SPLIT;
         if(tunable->tensor_layout == "nchw")
             b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
@@ -202,7 +203,7 @@ public:
             assert(false);
         }
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
-                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * (1 << gemm_k_global_split);
+                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * (1 << log2_gemm_k_global_split);
         assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
@@ -360,7 +361,7 @@ public:
             //    return false;
             //}
 
-            if((c / group) % gemm_k_per_block != 0)
+            if(((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
                 return false;
 
             // if(gemm_m_per_block % tunable->nxb != 0){
@@ -454,7 +455,7 @@ public:
         size_t karg_size = 0;
         uint8_t karg_buffer[IGEMM_FWD_GTC_MAX_KARG_SIZE];
 
-        int gemm_k_global_split = GEMM_K_GLOBAL_SPLIT;
+        //int gemm_k_global_split = GEMM_K_GLOBAL_SPLIT;
 
         if(tunable->tensor_layout == "nchw"){
             igemm_fwd_gtc_karg_t karg;
@@ -546,7 +547,7 @@ public:
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            karg.__pack_0       = gemm_k_global_split;
+            karg.__pack_0       = log2_gemm_k_global_split;
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
@@ -556,78 +557,109 @@ public:
 
         int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
+        
+        int max_split_num = 0;//(tunable->gemm_k_global_split == 0 || tunable->tensor_layout == "nchw") ? 0 : 1;
 
-        hipFunction_t kernel_func;
+        if(tunable->gemm_k_global_split == 0 || tunable->tensor_layout == "nchw"){
+            max_split_num = 0;
+        }
+        else{
+            for(int i = 0; i < MAX_GEMM_K_SPLITS; i++){
+                if((c >> i) % tunable->gemm_k_per_block == 0){
+                    max_split_num = i;
+                }
+                else{
+                    break;
+                }
+            }
+        }
+        
         std::string kernel_name = get_kernel_name(tunable);
-        printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+        float min_avg_duration = FLT_MAX;
+        for(int i = 0; i <= max_split_num; i++){
+            if(tunable->tensor_layout == "nhwc"){
+                log2_gemm_k_global_split = i;
+                grid_size = get_grid_size(arg, tunable);
+                igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
+                karg_revalue->__pack_0 = log2_gemm_k_global_split;
+            }
 
-        auto launch_fwd = [&]() -> float {
-            // printf("launch fwd block:%d, grid:%dx%d\n", block_size, grid_size, splits);
-            // dump_fwd_karg(&karg);
-            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, static_cast<void*>(&karg_buffer[0]),
+            hipFunction_t kernel_func;            
+            printf("kernel:%s\n, block:%d, grid:%d, ", kernel_name.c_str(), block_size, grid_size);
+            HIP_CALL(
+                hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+
+            auto launch_fwd = [&]() -> float {
+                // printf("launch fwd block:%d, grid:%dx%d\n", block_size, grid_size, splits);
+                // dump_fwd_karg(&karg);
+                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, static_cast<void*>(&karg_buffer[0]),
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
-            float ms = .0;
+                float ms = .0;
 
-            hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+                hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * sizeof(float));
 
 #if USE_EXT_MODULE_LAUNCH
-            hipEvent_t start;
-            hipEvent_t stop;
-            hipEventCreate(&start);
-            hipEventCreate(&stop);
+                hipEvent_t start;
+                hipEvent_t stop;
+                hipEventCreate(&start);
+                hipEventCreate(&stop);
 
-            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
+                // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+                HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
+                                                  block_size, 1, 1, 0, 0, NULL,
+                                                  (void **)&config, start, stop));
 
-            hipEventSynchronize(stop);
-            hipEventElapsedTime(&ms, start, stop);
-            hipEventDestroy(start);
-            hipEventDestroy(stop);
+                hipEventSynchronize(stop);
+                hipEventElapsedTime(&ms, start, stop);
+                hipEventDestroy(start);
+                hipEventDestroy(stop);
 #else
-            gpu_timer_t timer(NULL);
-            timer.start();
+                gpu_timer_t timer(NULL);
+                timer.start();
 
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config));
+                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
+                                               block_size, 1, 1, 0, 0, NULL,
+                                               (void **)&config));
 
-            timer.stop();
-            ms = timer.duration();
+                timer.stop();
+                ms = timer.duration();
 #endif
-            return ms;
-        };
+                return ms;
+            };
 
-        for (int i = 0; i < warmup; i++) {
-            launch_fwd();
+            for (int i = 0; i < warmup; i++) {
+                launch_fwd();
+            }
+
+            std::vector<float> duration_list;
+            for (int i = 0; i < repeat; i++) {
+                float d = launch_fwd();
+                duration_list.push_back(d);
+            }
+            // remove min and max from list, then do average
+            auto imin = std::min_element(begin(duration_list), end(duration_list));
+            duration_list.erase(imin);
+            auto imax = std::max_element(begin(duration_list), end(duration_list));
+            duration_list.erase(imax);
+            assert(duration_list.size() == (repeat - 2));
+            float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
+            if(min_avg_duration > avg_duration){
+                min_avg_duration = avg_duration;
+            }
+            printf("cost:%.3fms, \n", avg_duration);
         }
-
-        std::vector<float> duration_list;
-        for (int i = 0; i < repeat; i++) {
-            float d = launch_fwd();
-            duration_list.push_back(d);
-        }
-
-        // remove min and max from list, then do average
-        auto imin = std::min_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imin);
-        auto imax = std::max_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imax);
-        assert(duration_list.size() == (repeat - 2));
-        float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
         usleep(1000 * 5);
 
         result_t result;
         result.return_code = 0;
-        result.duration_ms = avg_duration;
+        result.duration_ms = min_avg_duration;
         result.kernel_name = kernel_name;
         return result;
     }
+private:
+    int log2_gemm_k_global_split;
 };
 
 #endif
