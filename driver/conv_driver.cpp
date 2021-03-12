@@ -365,13 +365,13 @@ int main(int argc, char **argv) {
         printf("no tunable specified, may not work\n");
         return 0;
     }
-    // printf("tunables:%d\n", tunables.size());
+    printf("tunables:%d, hsaco:%s\n", tunables.size(), hsaco);
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
 
     args_t conv_args = create_conv_args(argc, argv);
-    // dump_arg(&conv_args);
+    dump_arg(&conv_args);
 
     int hi = conv_args.get_int("in_h");
     int wi = conv_args.get_int("in_w");
