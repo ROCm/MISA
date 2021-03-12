@@ -175,13 +175,13 @@ igemm_fwd_btm_nhwc_fp16_256x16x16_r3:
     v_cndmask_b32 v[v_wei_flag+2], 0, v[v_wei_flag+2]
 
     v_cmpx_le_u32 1, v[v_wei_flag+0]
-    global_load_dwordx4 v[v_gld_b+0:v_gld_b+3], v[v_wei_os+0:v_wei_os+1], s[s_p_wei:s_p_wei+1]
+    global_load_dwordx4 v[v_gld_b+0:v_gld_b+3], v[v_wei_os+0], s[s_p_wei:s_p_wei+1]
     s_mov_b64 exec, -1
     v_cmpx_le_u32 1, v[v_wei_flag+1]
-    global_load_dwordx4 v[v_gld_b+4:v_gld_b+7], v[v_wei_os+1:v_wei_os+2], s[s_p_wei:s_p_wei+1]
+    global_load_dwordx4 v[v_gld_b+4:v_gld_b+7], v[v_wei_os+1], s[s_p_wei:s_p_wei+1]
     s_mov_b64 exec, -1
     v_cmpx_le_u32 1, v[v_wei_flag+2] 
-    global_load_dwordx4 v[v_gld_b+8:v_gld_b+11], v[v_wei_os+2:v_wei_os+3], s[s_p_wei:s_p_wei+1]
+    global_load_dwordx4 v[v_gld_b+8:v_gld_b+11], v[v_wei_os+2], s[s_p_wei:s_p_wei+1]
     s_mov_b64 exec, -1
 
     s_mov_b32 s[s_tmp+5], 32*17*4       ; stride for wei sst offset. 8 thread for k, each thread store 4 c, hence 8*4=32
@@ -229,8 +229,8 @@ igemm_fwd_btm_nhwc_fp16_256x16x16_r3:
     v_sub_nc_i32 v[v_in_iwi+1], v[v_in_iwi+1], s[s_pad_w]
 
     v_cmpx_le_u32 1, v[v_in_flag]
-    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
     v_mul_lo_u32 v[v_tmp], s[s_wi], v[v_in_ihi+1]
@@ -242,8 +242,8 @@ igemm_fwd_btm_nhwc_fp16_256x16x16_r3:
     v_mul_lo_u32 v[v_in_os+1], s[s_in_stride_wi], v[v_tmp]
 
     v_cmpx_le_u32 1, v[v_in_flag+1]
-    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
 
@@ -365,12 +365,12 @@ igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_acc_yx_x_end_1:
     v_mov_b32 v[v_a +15], v[v_gld_a +15]
     .v_clear_nc v_gld_a, 16
     v_cmpx_le_u32 1, v[v_in_flag+0]
-    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
     v_cmpx_le_u32 1, v[v_in_flag+1]
-    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
     s_waitcnt lgkmcnt(4)
@@ -521,8 +521,8 @@ L_igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_end:
     v_sub_nc_i32 v[v_in_iwi+1], v[v_in_iwi+1], s[s_pad_w]
 
     v_cmpx_le_u32 1, v[v_in_flag]
-    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os:v_in_os+1], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+0:v_gld_a+3], v[v_in_os], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+4:v_gld_a+7], v[v_in_os], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
     v_mul_u32_u24 v[v_in_os+1], s[s_wi], v[v_in_ihi+1]
@@ -536,8 +536,8 @@ L_igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_end:
     s_mov_b32 s[s_move_slice_k_ix], 0
 
     v_cmpx_le_u32 1, v[v_in_flag+1]
-    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1]
-    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1:v_in_os+2], s[s_p_in:s_p_in+1] offset:16
+    global_load_dwordx4 v[v_gld_a+ 8:v_gld_a+11], v[v_in_os+1], s[s_p_in:s_p_in+1]
+    global_load_dwordx4 v[v_gld_a+12:v_gld_a+15], v[v_in_os+1], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 L_igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_end_not_load_next:
     ; --- end move slice for batch m
@@ -668,8 +668,8 @@ L_igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_end_not_load_next:
     v_pack_b32_f16 v[v_c_buf+7], v[v_c+14], v[v_c+15]
 
     v_cmpx_le_u32 1, v[v_out_flag]
-    global_store_dwordx4 v[v_out_os:v_out_os+1], v[v_c_buf+0:v_c_buf+3], s[s_p_out:s_p_out+1]
-    global_store_dwordx4 v[v_out_os:v_out_os+1], v[v_c_buf+4:v_c_buf+7], s[s_p_out:s_p_out+1], offset:16
+    global_store_dwordx4 v[v_out_os], v[v_c_buf+0:v_c_buf+3], s[s_p_out:s_p_out+1]
+    global_store_dwordx4 v[v_out_os], v[v_c_buf+4:v_c_buf+7], s[s_p_out:s_p_out+1], offset:16
     s_mov_b64 exec, -1
 
     v_pack_b32_f16 v[v_c_buf+ 8], v[v_c+16], v[v_c+17]
@@ -683,8 +683,8 @@ L_igemm_fwd_btm_nhwc_fp16_256x16x16_r3_fma_end_not_load_next:
     v_pack_b32_f16 v[v_c_buf+15], v[v_c+30], v[v_c+31]
 
     v_cmpx_le_u32 1, v[v_out_flag+1]
-    global_store_dwordx4 v[v_out_os+1:v_out_os+2], v[v_c_buf+ 8:v_c_buf+11], s[s_p_out:s_p_out+1]
-    global_store_dwordx4 v[v_out_os+1:v_out_os+2], v[v_c_buf+12:v_c_buf+15], s[s_p_out:s_p_out+1], offset:16
+    global_store_dwordx4 v[v_out_os+1], v[v_c_buf+ 8:v_c_buf+11], s[s_p_out:s_p_out+1]
+    global_store_dwordx4 v[v_out_os+1], v[v_c_buf+12:v_c_buf+15], s[s_p_out:s_p_out+1], offset:16
     s_mov_b64 exec, -1
 
     s_cmp_le_i32 s[s_batch_m], 0
