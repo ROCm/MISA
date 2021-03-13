@@ -206,7 +206,8 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
         th.join();
 }
 
-static inline bool valid_float(float p)
+template<typename T>
+static inline bool valid_float(T p)
 {
     return !(std::isnan(p) || std::isinf(p));
 }
@@ -225,7 +226,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     for (size_t i = 0; i < n; ++i) {
         double ri = (double)ref[i];
         double pi = (double)pred[i];
-        if(!(valid_float(ref[i]) && valid_float(pred[i]))){
+        if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
             printf(" invalid float at %4zu, ref:%f, pred:%f\n", i, ri, pi);
             return false;
         }
