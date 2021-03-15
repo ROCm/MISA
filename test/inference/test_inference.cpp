@@ -512,9 +512,13 @@ int main(int argc, char **argv){
             result_t result;
 
 #ifdef USE_HALF_HPP
-                result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_f16,
+            result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_f16,
                                                device_weight_f16, device_output_f16, warmup, repeat, driver_data_type);
 #endif
+            if (result.return_code != 0){
+                printf("not applicatble\n");
+                continue;
+            }
 
             double gflops = measured_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,

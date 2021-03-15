@@ -124,7 +124,8 @@ igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] =
     {"igemm_fwd_btm_nhwc_fp16_128x16x16_r3", 128, 16, 16, 128, 3, 4},
     {"igemm_fwd_btm_nhwc_fp16_256x16x16_r3", 256, 16, 16, 128, 3, 4},
     {"igemm_fwd_btm_nhwc_fp16_256x8x16_r2",  256,  8, 16, 128, 2, 4},
-    {"igemm_fwd_btm_nhwc_fp16_512x8x16_r2",  512,  8, 16, 128, 2, 2}
+    {"igemm_fwd_btm_nhwc_fp16_512x8x16_r2",  512,  8, 16, 128, 2, 2},
+    {"igemm_fwd_btm_nhwc_fp16_512x8x8_r1",  512,  8, 8, 128, 1, 4}
 };
 
 class igemm_fwd_btm_t {
@@ -146,9 +147,50 @@ public:
         return kernel_info->kernel_name;
     }
 
+    bool is_valid(const args_t *arg, igemm_fwd_btm_kernel_info_t * kernel_info)
+    {
+        size_t hi = arg->get_int("in_h");
+        size_t wi = arg->get_int("in_w");
+        size_t n = arg->get_int("batchsize");
+        size_t k = arg->get_int("out_channels");
+        size_t c = arg->get_int("in_channels");
+
+        size_t sy = arg->get_int("conv_stride_h");
+        size_t sx = arg->get_int("conv_stride_w");
+        size_t dy = arg->get_int("dilation_h");
+        size_t dx = arg->get_int("dilation_w");
+        size_t py = arg->get_int("pad_h");
+        size_t px = arg->get_int("pad_w");
+        size_t fy = arg->get_int("fil_h");
+        size_t fx = arg->get_int("fil_w");
+        size_t ho = gpu_conv_out_size(hi, py, dy, fy, sy);
+        size_t wo = gpu_conv_out_size(wi, px, dx, fx, sx);
+        size_t group = arg->get_int("group_count");
+
+        assert(c % group == 0 && k % group == 0);
+
+        assert(group != 0 && c % group == 0 && k % group == 0);
+
+        size_t k_per_group  = k / group;
+        size_t c_per_group  = c / group;
+
+        if(c_per_group != kernel_info->k_per_block)
+            return false;
+
+        if(k_per_group % kernel_info->n_per_block != 0)
+            return false;
+        
+        return true;
+    }
+
     result_t run(const args_t *arg,  hipModule_t module, igemm_fwd_btm_kernel_info_t * kernel_info,
                  void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat, const driverDataType_t& data_type) {
+        if(!is_valid(arg, kernel_info)){
+            result_t result;
+            result.return_code = -1;
+            return result;
+        }
         size_t hi = arg->get_int("in_h");
         size_t wi = arg->get_int("in_w");
         size_t n = arg->get_int("batchsize");

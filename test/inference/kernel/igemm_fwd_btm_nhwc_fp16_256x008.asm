@@ -289,7 +289,7 @@ igemm_fwd_btm_nhwc_fp16_256x8x16_r2:
 
     s_mov_b32 s[s_sld_b_stride],    k_n_dword*8*4
 
-    s_waitcnt vmcnt(2)
+    s_waitcnt vmcnt(4)
 
     v_cmpx_le_u32 1, v[v_wei_flag+0]
     ds_write2_b32 v[v_sst_b_os+0], v[v_gld_b+0], v[v_gld_b+1], offset0:k_n_dword*0  offset1:k_n_dword*1
@@ -358,7 +358,7 @@ igemm_fwd_btm_nhwc_fp16_256x8x16_r2_fma_acc_yx_x_end_1:
     v_cndmask_b32 v[v_in_flag+1], 0, v[v_in_flag+1]
     ;--- end move slice window
 
-    s_waitcnt vmcnt(0)
+    ; s_waitcnt vmcnt(0)
     .v_clear_nc v_ay, 16
     v_cmpx_le_u32 1, v[v_in_flag+0]
     global_load_dwordx4 v[v_ay+0:v_ay+3], v[v_in_os], s[s_p_in:s_p_in+1]
@@ -369,7 +369,7 @@ igemm_fwd_btm_nhwc_fp16_256x8x16_r2_fma_acc_yx_x_end_1:
     global_load_dwordx4 v[v_ay+12:v_ay+15], v[v_in_os+1], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
-    s_waitcnt lgkmcnt(8)
+    s_waitcnt vmcnt(4) lgkmcnt(8)
     .fma_1x8_fp16 v_c+ 0, v_ax + 0, v_b + 0
     .fma_1x8_fp16 v_c+ 8, v_ax + 8, v_b + 0
     .fma_1x8_fp16 v_c+ 0, v_ax + 1, v_b + 8
@@ -437,7 +437,7 @@ igemm_fwd_btm_nhwc_fp16_256x8x16_r2_fma_acc_yx_x_end_2:
     v_cndmask_b32 v[v_in_flag+1], 0, v[v_in_flag+1]
     ;--- end move slice window
 
-    s_waitcnt vmcnt(0)
+    ;s_waitcnt vmcnt(0)
     .v_clear_nc v_ax, 16
     v_cmpx_le_u32 1, v[v_in_flag+0]
     global_load_dwordx4 v[v_ax+0:v_ax+3], v[v_in_os], s[s_p_in:s_p_in+1]
@@ -448,7 +448,7 @@ igemm_fwd_btm_nhwc_fp16_256x8x16_r2_fma_acc_yx_x_end_2:
     global_load_dwordx4 v[v_ax+12:v_ax+15], v[v_in_os+1], s[s_p_in:s_p_in+1] offset:16
     s_mov_b64 exec, -1
 
-    s_waitcnt lgkmcnt(8)
+    s_waitcnt vmcnt(4) lgkmcnt(8)
     .fma_1x8_fp16 v_c+ 0, v_ay + 0, v_b + 0
     .fma_1x8_fp16 v_c+ 8, v_ay + 8, v_b + 0
     .fma_1x8_fp16 v_c+ 0, v_ay + 1, v_b + 8
