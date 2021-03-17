@@ -138,6 +138,7 @@ igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] =
     {"igemm_fwd_btm_nhwc_int8_512x8x16_r1"  , "int8",  512,  8, 16, 128, 1, 4},
     {"igemm_fwd_btm_nhwc_int8_512x16x8_r2"  , "int8",  512, 16,  8, 128, 2, 3},
     {"igemm_fwd_btm_nhwc_int8_512x16x16_r2" , "int8",  512, 16, 16, 128, 2, 2},
+    {"igemm_fwd_btm_nhwc_int8_1024x16x8_r2" , "int8", 1024, 16,  8, 128, 2, 2},
 };
 
 class igemm_fwd_btm_t {

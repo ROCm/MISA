@@ -191,6 +191,7 @@
 .include "igemm_fwd_btm_nhwc_int8_256x008.asm"
 .include "igemm_fwd_btm_nhwc_int8_512x008.asm"
 .include "igemm_fwd_btm_nhwc_int8_512x016.asm"
+.include "igemm_fwd_btm_nhwc_int8_1024x016.asm"
 
 .amdgpu_metadata
 ---
@@ -311,6 +312,43 @@ amdhsa.kernels:
     .symbol: igemm_fwd_btm_nhwc_int8_512x16x16_r2.kd
     .sgpr_count: 64
     .vgpr_count: 188
+    .kernarg_segment_align: 8
+    .kernarg_segment_size: 112
+    .group_segment_fixed_size: 4096
+    .private_segment_fixed_size: 0
+    .wavefront_size: 32
+    .reqd_workgroup_size : [128, 1, 1]
+    .max_flat_workgroup_size: 128
+    .args:
+    - { .name: p_in      , .size: 8, .offset:   0, .value_kind: global_buffer, .value_type: f32, .address_space: global, .is_const: true}
+    - { .name: p_wei     , .size: 8, .offset:   8, .value_kind: global_buffer, .value_type: f32, .address_space: global, .is_const: true}
+    - { .name: p_out     , .size: 8, .offset:  16, .value_kind: global_buffer, .value_type: f32, .address_space: global, .is_const: false}
+    - { .name: hi        , .size: 4, .offset:  24, .value_kind: by_value, .value_type: i32}
+    - { .name: wi        , .size: 4, .offset:  28, .value_kind: by_value, .value_type: i32}
+    - { .name: n         , .size: 4, .offset:  32, .value_kind: by_value, .value_type: i32}
+    - { .name: k         , .size: 4, .offset:  36, .value_kind: by_value, .value_type: i32}
+    - { .name: c         , .size: 4, .offset:  40, .value_kind: by_value, .value_type: i32}
+    - { .name: ho        , .size: 4, .offset:  44, .value_kind: by_value, .value_type: i32}
+    - { .name: wo        , .size: 4, .offset:  48, .value_kind: by_value, .value_type: i32}
+    - { .name: stride_h  , .size: 4, .offset:  52, .value_kind: by_value, .value_type: i32}
+    - { .name: stride_w  , .size: 4, .offset:  56, .value_kind: by_value, .value_type: i32}
+    - { .name: dilation_h, .size: 4, .offset:  60, .value_kind: by_value, .value_type: i32}
+    - { .name: dilation_w, .size: 4, .offset:  64, .value_kind: by_value, .value_type: i32}
+    - { .name: pad_h     , .size: 4, .offset:  68, .value_kind: by_value, .value_type: i32}
+    - { .name: pad_w     , .size: 4, .offset:  72, .value_kind: by_value, .value_type: i32}
+    - { .name: y         , .size: 4, .offset:  76, .value_kind: by_value, .value_type: i32}
+    - { .name: x         , .size: 4, .offset:  80, .value_kind: by_value, .value_type: i32}
+    - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
+    - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
+    - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+  - .name: igemm_fwd_btm_nhwc_int8_1024x16x8_r2
+    .symbol: igemm_fwd_btm_nhwc_int8_1024x16x8_r2.kd
+    .sgpr_count: 64
+    .vgpr_count: 244
     .kernarg_segment_align: 8
     .kernarg_segment_size: 112
     .group_segment_fixed_size: 4096
