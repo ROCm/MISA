@@ -513,20 +513,17 @@ int main(int argc, char **argv){
             // gen rand
             //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             //gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
-            
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
             if(driver_data_type == driverHalf){
-                gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-                gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
                 // move to different data type
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float16, float>(static_cast<float16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
             }
             else if(driver_data_type == driverInt8){
-                gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-                gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
                 // move to different data type
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
@@ -587,6 +584,8 @@ int main(int argc, char **argv){
 
             result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_dtype,
                                                device_weight_dtype, device_output_dtype, warmup, repeat, driver_data_type);
+            valid_index++;
+
             if (result.return_code != 0){
                 printf("not applicatble\n");
                 continue;
@@ -622,8 +621,6 @@ int main(int argc, char **argv){
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
-
-            valid_index++;
         }
 
         if (need_verify){
