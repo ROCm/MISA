@@ -111,6 +111,7 @@ static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
 
 typedef struct {
     std::string kernel_name;
+    std::string data_type;
     uint32_t m_per_block;
     uint32_t n_per_block;
     uint32_t k_per_block;
@@ -121,17 +122,19 @@ typedef struct {
 
 igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] = 
 {
-    {"igemm_fwd_btm_nhwc_fp16_128x4x16_r2",   128,  4, 16,  64, 2, 4},
-    {"igemm_fwd_btm_nhwc_fp16_128x16x16_r3",  128, 16, 16, 128, 3, 4},
-    {"igemm_fwd_btm_nhwc_fp16_256x16x16_r3",  256, 16, 16, 128, 3, 4},
-    {"igemm_fwd_btm_nhwc_fp16_256x4x16_r1",   256,  4, 16, 128, 1, 4},
-    {"igemm_fwd_btm_nhwc_fp16_256x8x8_r2",    256,  8,  8,  64, 2, 4},
-    {"igemm_fwd_btm_nhwc_fp16_256x8x16_r2",   256,  8, 16, 128, 2, 4},
-    {"igemm_fwd_btm_nhwc_fp16_384x4x16_r1",   384,  4, 16, 128, 1, 4},
-    {"igemm_fwd_btm_nhwc_fp16_512x4x16_r1",   512,  4, 16, 128, 1, 3},
-    {"igemm_fwd_btm_nhwc_fp16_512x8x16_r2",   512,  8, 16, 128, 2, 2},
-    {"igemm_fwd_btm_nhwc_fp16_512x8x8_r1",    512,  8,  8, 128, 1, 4},
-    {"igemm_fwd_btm_nhwc_fp16_1024x8x8_r1",  1024,  8,  8, 128, 1, 2}
+    {"igemm_fwd_btm_nhwc_fp16_128x4x16_r2"  , "fp16",  128,  4, 16,  64, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_128x16x16_r3" , "fp16",  128, 16, 16, 128, 3, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x16x16_r3" , "fp16",  256, 16, 16, 128, 3, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x4x16_r1"  , "fp16",  256,  4, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x8x8_r2"   , "fp16",  256,  8,  8,  64, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x8x16_r2"  , "fp16",  256,  8, 16, 128, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_384x4x16_r1"  , "fp16",  384,  4, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_512x4x16_r1"  , "fp16",  512,  4, 16, 128, 1, 3},
+    {"igemm_fwd_btm_nhwc_fp16_512x8x16_r2"  , "fp16",  512,  8, 16, 128, 2, 2},
+    {"igemm_fwd_btm_nhwc_fp16_512x8x8_r1"   , "fp16",  512,  8,  8, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_1024x8x8_r1"  , "fp16", 1024,  8,  8, 128, 1, 2},
+
+    {"igemm_fwd_btm_nhwc_int8_512x16x16_r2" , "int8",  512, 16, 16, 128, 2, 2},
 };
 
 class igemm_fwd_btm_t {
