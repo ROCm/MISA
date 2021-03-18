@@ -250,10 +250,15 @@ class igemm_gtc_tunable_parameter_t(object):
             self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
             self.unmerge_sub_c = 1                             # not used
         else:
-            assert self.gemm_k_per_block % self.nxb == 0
-            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
-            self.unmerge_sub_k = 1
-            self.unmerge_sub_c = self.gemm_n_per_block
+            if self.tensor_layout == 'nchw':
+                assert self.gemm_k_per_block % self.nxb == 0
+                self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
+                self.unmerge_sub_k = 1
+                self.unmerge_sub_c = self.gemm_n_per_block
+            elif self.tensor_layout == 'nhwc':
+                self.unmerge_sub_n = 1                          # not used
+                self.unmerge_sub_k = 1                          # not used
+                self.unmerge_sub_c = 1                          # not used
 
         self.tensor_a_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
         self.tensor_b_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
