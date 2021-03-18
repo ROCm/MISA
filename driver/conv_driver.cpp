@@ -272,7 +272,7 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            //printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -284,7 +284,7 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
 
         }
     }
-    printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
+    //printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -365,13 +365,13 @@ int main(int argc, char **argv) {
         printf("no tunable specified, may not work\n");
         return 0;
     }
-    printf("tunables:%d, hsaco:%s\n", tunables.size(), hsaco);
+    // printf("tunables:%d, hsaco:%s\n", tunables.size(), hsaco);
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
 
     args_t conv_args = create_conv_args(argc, argv);
-    dump_arg(&conv_args);
+    // dump_arg(&conv_args);
 
     int hi = conv_args.get_int("in_h");
     int wi = conv_args.get_int("in_w");
@@ -460,8 +460,8 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
 
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
-            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,

@@ -585,7 +585,7 @@ public:
             }
 
             hipFunction_t kernel_func;            
-            printf("kernel:%s\n, block:%d, grid:%d, ", kernel_name.c_str(), block_size, grid_size);
+            printf("kernel:%s(%d)\n, block:%d, grid:%d, ", kernel_name.c_str(), i, block_size, grid_size);
             HIP_CALL(
                 hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
