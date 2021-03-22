@@ -454,7 +454,13 @@ static inline float igemm_launch_kernels_with_epilog(const std::vector<igemm_lau
 
 static inline int igemm_get_max_gks(int gemm_k, int gemm_k_per_block, int max_log2_splits)
 {
-    int gks = gemm_k % gemm_k_per_block == 0 ? (int)log2(gemm_k / gemm_k_per_block) : 0;
+    if(gemm_k % gemm_k_per_block != 0)
+        return 0;
+    int rem = gemm_k / gemm_k_per_block;
+    // to find the highest power of 2 value that can divide rem
+    // https://www.geeksforgeeks.org/highest-power-of-two-that-divides-a-given-number/
+    int rem_pow2 = rem & (~(rem - 1));
+    int gks = (int)log2(rem_pow2);
     if(gks > max_log2_splits)
         gks = max_log2_splits;
     return gks;
