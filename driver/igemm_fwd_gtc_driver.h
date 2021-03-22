@@ -141,6 +141,37 @@ static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<std::endl;
 }
 
+static void dump_fwd_karg(igemm_fwd_gtc_nhwc_karg_t * karg){
+    std::cout<<"p_in:"         <<karg->p_in<<",";
+    std::cout<<"p_wei:"        <<karg->p_wei<<",";
+    std::cout<<"p_out:"        <<karg->p_out<<",";
+    std::cout<<"hi:"           <<karg->hi<<",";
+    std::cout<<"wi:"           <<karg->wi<<",";
+    std::cout<<"n:"            <<karg->n<<",";
+    std::cout<<"k:"            <<karg->k<<",";
+    std::cout<<"c:"            <<karg->c<<",";
+    std::cout<<"ho:"           <<karg->ho<<",";
+    std::cout<<"wo:"           <<karg->wo<<",";
+    std::cout<<"stride_h:"     <<karg->stride_h<<",";
+    std::cout<<"stride_w:"     <<karg->stride_w<<",";
+    std::cout<<"dilation_h:"   <<karg->dilation_h<<",";
+    std::cout<<"dilation_w:"   <<karg->dilation_w<<",";
+    std::cout<<"pad_h:"        <<karg->pad_h<<",";
+    std::cout<<"pad_w:"        <<karg->pad_w<<",";
+    std::cout<<"y:"            <<karg->y<<",";
+    std::cout<<"x:"            <<karg->x<<",";
+    std::cout<<"group:"        <<karg->group<<",";
+#if USE_MAGIC_DIV
+    std::cout<<"magic_0:"      <<karg->magic_0<<",";
+    std::cout<<"magic_1:"      <<karg->magic_1<<",";
+    std::cout<<"magic_2:"      <<karg->magic_2<<",";
+    std::cout<<"magic_3:"      <<karg->magic_3<<",";
+    std::cout<<"shift_pack_0:" <<karg->shift_pack_0<<",";
+#endif
+    std::cout<<"ks:"           <<karg->ks;
+    std::cout<<std::endl;
+}
+
 class igemm_fwd_gtc_t : public igemm_driver_base_t {
 public:
     igemm_fwd_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
@@ -525,13 +556,16 @@ public:
             float min_duration = FLT_MAX;
             int selected_gks = 0;
             int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(c, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
+                0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
             for(int gks = 0; gks <= max_split_num; gks++){
                 size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
                 if(tunable->tensor_layout == "nhwc"){
                     // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
                     igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
                     karg_revalue->ks = gks;
+                    // dump_fwd_karg(karg_revalue);
+                    // printf("block:%d, grid:%d\n", block_size, grid_size);
+                    // fflush(stdout);
                 }
                 float duration = igemm_launch_kernels_with_epilog({
                         {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
