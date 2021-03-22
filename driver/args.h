@@ -157,13 +157,30 @@ class args_t {
     std::unordered_map<char, args_input_t> input_map;
 };
 
+static inline std::string create_base_args(int argc, char *argv[]) {
+    if(argc < 2)
+    {
+        printf("Invalid Number of Input Arguments\n");
+        exit(0);
+    }
+
+    std::string arg = argv[1];
+
+    if(arg != "conv" && arg != "convfp16" && arg != "convint8" && arg != "--version")
+    {
+        printf("Invalid Base Input Argument\n");
+        exit(0);
+    }
+    else if(arg == "-h" || arg == "--help" || arg == "-?")
+        exit(0);
+    else
+        return arg;
+}
+
 static inline args_t create_conv_args(int argc, char *argv[]) {
-    const std::string base("conv");
-    const std::string base_fp16("convfp16");
-    const std::string base_bf16("convbf16");
-    const std::string base_int8("convint8");
-    if (argc >= 2 && argv[1] != base && argv[1] != base_fp16 && argv[1] != base_bf16 && argv[1] != base_int8) {
-        printf("not proper base arg name\n");
+    const std::string base = create_base_args(argc, argv);
+    if (argc >= 2 && argv[1] != base) {
+        printf("not proper base arg name");
         exit(1);
     }
 

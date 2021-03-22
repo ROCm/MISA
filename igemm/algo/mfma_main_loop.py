@@ -166,7 +166,7 @@ class mfma_main_loop_t(mc_base_t):
 
         p_interleave_gld = [ctrl.pass_through_a_interleave_gld, ctrl.pass_through_b_interleave_gld][p_idx]
 
-        assert wave_repeat_q == 2, "currently the side need LDS must have repeat 2, following limitation seems have BUG"
+        # assert wave_repeat_q == 2, "currently the side need LDS must have repeat 2, following limitation seems have BUG"
 
         v_pack_p        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][p_idx]
         v_pack_q        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][q_idx]

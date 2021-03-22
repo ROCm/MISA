@@ -38,9 +38,9 @@
 #include <numeric>
 
 typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -85,83 +85,13 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
     std::cout<<std::endl;
 }
 
-class igemm_wrw_gtc_t {
+class igemm_wrw_gtc_t : public igemm_driver_base_t {
 public:
-    igemm_wrw_gtc_t(){}
+    igemm_wrw_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
+        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_wrw_gtc_t(){}
-    std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-#if 0
-        auto gemm_m_per_block         = tunable->gemm_m_per_block;
-        auto gemm_n_per_block         = tunable->gemm_n_per_block;
-        auto gemm_k_per_block         = tunable->gemm_k_per_block;
-        auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
-        auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
-        auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
-        auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
-        auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
-        auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
-        auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
-        auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
-        auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
-        auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
-        auto direction                = tunable->direction;
-        auto precision                = tunable->precision;
-        auto nxb                      = tunable->nxb;
-        auto nxe                      = tunable->nxe;
-        auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
-        auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
-        auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
-        auto multihead                = tunable->multihead;
 
-        assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
-        assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
-        int gemm_m_repeat = gemm_m_per_block / (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster);
-        int gemm_n_repeat = gemm_n_per_block / (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster);
-
-        int thread_tile_m = gemm_m_repeat * gemm_m_per_thread;
-        int thread_tile_n = gemm_n_repeat * gemm_n_per_thread;
-
-        assert(direction == "wrw");
-
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + precision +
-                std::string("_bx") + std::to_string(nxb) + 
-                std::string("_ex") + std::to_string(nxe) + "_";
-        std::string kernel_name =
-            kernel_prefix +
-               "bt" +
-               std::to_string(gemm_m_per_block) + "x" +
-               std::to_string(gemm_n_per_block) + "x" +
-               std::to_string(gemm_k_per_block) + "_" +
-               "tt" +
-               std::to_string(thread_tile_m) + "x" +
-               std::to_string(thread_tile_n) + "_" +
-               "gm" + 
-               std::to_string(gemm_m_repeat) + "x" +
-               std::to_string(gemm_m_level0_cluster) + "x" +
-               std::to_string(gemm_m_level1_cluster) + "_" +
-               "gn" + 
-               std::to_string(gemm_n_repeat) + "x" +
-               std::to_string(gemm_n_level0_cluster) + "x" +
-               std::to_string(gemm_n_level1_cluster) + "_" +
-               "ta" + utility_int_list_to_string(tensor_a_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_a_cluster_lengths)+ "_" + 
-               "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_b_cluster_lengths);
-        // printf("[%s]\n",kernel_name.c_str());
-        if(gemm_m_unmerge_cluster)
-            kernel_name += std::string("_mc");
-        if(gemm_n_unmerge_cluster)
-            kernel_name += std::string("_nc");
-        if(gemm_k_unmerge_cluster)
-            kernel_name += std::string("_kc");
-        if(multihead)
-            kernel_name += std::string("_mh");
-        return kernel_name;
-#else
-        return igemm_gtc_encode_kernel_name(tunable);
-#endif
-    }
-    int get_block_size(const igemm_gtc_tunable_t *tunable) {
+    size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
         if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
@@ -177,8 +107,8 @@ public:
             return 0;
         }
     }
-    int get_grid_size(const args_t *arg,
-                      const igemm_gtc_tunable_t *tunable) {
+    size_t get_grid_size(const args_t *arg,
+                      const igemm_gtc_tunable_t *tunable) override {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -224,7 +154,7 @@ public:
     }
 
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable) override
     {
         // TODO:
         int hi = arg->get_int("in_h");
@@ -634,8 +564,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
+                 void *p_in, void *p_wei, void *p_out) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -698,8 +627,8 @@ public:
 
         //printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
-        int block_size = get_block_size(tunable);
-        int grid_size = get_grid_size(arg, tunable);
+        size_t block_size = get_block_size(tunable);
+        size_t grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
@@ -710,89 +639,27 @@ public:
 
         // hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
 
-        auto launch_wrw_driver = [&](){
-            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
-                              HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
-                              HIP_LAUNCH_PARAM_END};
-            float ms = .0;
-
-            if(gemm_k_global_split){
-                // TODO: current implementation of global split K need pre-clear the wei tensor
-                // This may not be true in the future!
+        auto wrw_epilog = gemm_k_global_split ? 
+            std::function<float()>{[&]() -> float{
                 hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
-            }
+                return .0;
+            }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
 
-#if USE_EXT_MODULE_LAUNCH
-            hipEvent_t start;
-            hipEvent_t stop;
-            hipEventCreate(&start);
-            hipEventCreate(&stop);
-
-            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-
-            hipEventSynchronize(stop);
-            hipEventElapsedTime(&ms, start, stop);
-            hipEventDestroy(start);
-            hipEventDestroy(stop);
-#else
-            gpu_timer_t timer(NULL);
-            timer.start();
-
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config));
-
-            timer.stop();
-            ms = timer.duration();
-#endif
-            return ms;
-        };
-
-        for (int i = 0; i < warmup; i++) {
-            launch_wrw_driver();
-        }
-        std::vector<float> duration_list;
-        for (int i = 0; i < repeat; i++) {
-            float d = launch_wrw_driver();
-            duration_list.push_back(d);
-        }
-
-        // for (int i = 0; i < warmup; i++) {
-        //     hipMemset(p_wei, 0x0, k * c * y * x * sizeof(float));
-        //     launch_wrw_driver();
-        // }
-
-        // remove min and max from list, then do average
-        auto imin = std::min_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imin);
-        auto imax = std::max_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imax);
-        assert(duration_list.size() == (repeat - 2));
-        float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
-
-        usleep(1000 * 1);
-
-        // debug section of code
-#if 0
-        printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
-        for (int i_check = 0; i_check < (0+block_size); i_check++)
-        {
-            printf("[%d]th var to monitor:[%f, %d]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check]);
-        }
-        printf("workspace debug end \r\n");
-#endif
         result_t result;
+        float duration = igemm_launch_kernels_with_epilog({
+                        {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
+                    }, wrw_epilog, this->warmup, this->repeat);
+
         result.return_code = 0;
-        result.duration_ms = avg_duration;
+        result.duration_ms = duration;
+        result.gks         = gemm_k_global_split;
         result.kernel_name = kernel_name;
+
         return result;
     }
 };
-
 
 #endif
