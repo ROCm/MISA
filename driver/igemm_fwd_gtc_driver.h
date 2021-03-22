@@ -36,14 +36,15 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <math.h>
 
 //#define GEMM_K_GLOBAL_SPLIT 3
 #define MAX_GEMM_K_SPLITS 8
 
 typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -70,14 +71,14 @@ typedef struct {
     uint32_t magic_6;                       // denom: n*b*k / (m_per_block*n_per_block)
     uint32_t shift_pack_0;
     uint32_t shift_pack_1;
-    uint32_t __pack_0;
+    uint32_t ks;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_karg_t;
 
 typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -100,7 +101,7 @@ typedef struct {
     uint32_t magic_2;                       // denom: wo
     uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
     uint32_t shift_pack_0;
-    uint32_t __pack_0;
+    uint32_t ks;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_nhwc_karg_t;
 
@@ -140,14 +141,13 @@ static void dump_fwd_karg(igemm_fwd_gtc_karg_t * karg){
     std::cout<<std::endl;
 }
 
-class igemm_fwd_gtc_t {
+class igemm_fwd_gtc_t : public igemm_driver_base_t {
 public:
-    igemm_fwd_gtc_t(){}
+    igemm_fwd_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
+        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_fwd_gtc_t(){}
-    std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-        return igemm_gtc_encode_kernel_name(tunable);
-    }
-    int get_block_size(const igemm_gtc_tunable_t *tunable) {
+
+    size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
         if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
@@ -157,8 +157,9 @@ public:
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
     }
-    int get_grid_size(const args_t *arg,
-                      const igemm_gtc_tunable_t *tunable) {
+    // return grid size without consideration of split k
+    size_t get_grid_size(const args_t *arg,
+                      const igemm_gtc_tunable_t *tunable) override {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -177,7 +178,7 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
 
-        int splits = split_batch_size(arg, tunable);
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
         n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
@@ -185,7 +186,7 @@ public:
         int nxe                      = tunable->nxe;
         int nxb                      = tunable->nxb;
         int b                        = ho * wo;
-        //int gemm_k_global_split      = GEMM_K_GLOBAL_SPLIT;
+
         if(tunable->tensor_layout == "nchw")
             b = nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
 
@@ -203,61 +204,13 @@ public:
             assert(false);
         }
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
-                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * (1 << log2_gemm_k_global_split);
+                                        utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         assert(grid_size <= 0xffffffffUL);
         return grid_size;
     }
 
-    // this is to support big tensor > 4G. need to decide how many splits needed
-    // return the number of splits
-    int split_batch_size(const args_t *arg, const igemm_gtc_tunable_t *tunable)
-    {
-        int hi = arg->get_int("in_h");
-        int wi = arg->get_int("in_w");
-        int n = arg->get_int("batchsize");
-        int k = arg->get_int("out_channels");
-        int c = arg->get_int("in_channels");
-
-        int stride_h = arg->get_int("conv_stride_h");
-        int stride_w = arg->get_int("conv_stride_w");
-        int dilation_h = arg->get_int("dilation_h");
-        int dilation_w = arg->get_int("dilation_w");
-        int pad_h = arg->get_int("pad_h");
-        int pad_w = arg->get_int("pad_w");
-        int y = arg->get_int("fil_h");
-        int x = arg->get_int("fil_w");
-        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
-        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
-
-        int data_byte = utility_string_to_data_byte(tunable->precision);
-        size_t image_size_input = static_cast<size_t>(c) * hi * wi * data_byte;
-        size_t image_size_output = static_cast<size_t>(k) * ho * wo * data_byte;
-        size_t size_4g = 0xffffffffUL;
-        if(image_size_input >= size_4g || image_size_output >= size_4g)
-            return 0;
-
-        size_t image_size = image_size_input >= image_size_output ? image_size_input : image_size_output;
-        size_t splited_n = size_4g / image_size;
-
-        // round up splits, we must match
-        // 1. splited_n * image_size < size_4g
-        // 2. n % splited_n == 0
-        // if(splited_n >= n)
-        //     return 1;
-        assert(splited_n != 0);
-        while(splited_n >= 1){
-            // printf("n:%d, splited_n:%d\n", n, splited_n);
-            if(n % splited_n == 0)
-                break;
-            splited_n--;
-        }
-
-        assert(splited_n * image_size < size_4g && n % splited_n == 0);
-        return n / splited_n;
-    }
-
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable) override
     {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
@@ -279,7 +232,7 @@ public:
 
         assert(c % group == 0 && k % group == 0);
 
-        int splits = split_batch_size(arg, tunable);
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
         if(splits == 0){
             printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
             return false;
@@ -410,9 +363,7 @@ public:
         return true;
     }
 
-    result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
+    result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -440,7 +391,7 @@ public:
 
         assert(c % group == 0 && k % group == 0);
 
-        int splits = split_batch_size(arg, tunable);
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
         n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
@@ -454,8 +405,6 @@ public:
 
         size_t karg_size = 0;
         uint8_t karg_buffer[IGEMM_FWD_GTC_MAX_KARG_SIZE];
-
-        //int gemm_k_global_split = GEMM_K_GLOBAL_SPLIT;
 
         if(tunable->tensor_layout == "nchw"){
             igemm_fwd_gtc_karg_t karg;
@@ -547,7 +496,6 @@ public:
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            karg.__pack_0       = log2_gemm_k_global_split;
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
@@ -555,111 +503,67 @@ public:
             assert(0);
         }
 
-        int block_size = get_block_size(tunable);
-        int grid_size = get_grid_size(arg, tunable);
-        
-        int max_split_num = 0;//(tunable->gemm_k_global_split == 0 || tunable->tensor_layout == "nchw") ? 0 : 1;
+        size_t block_size = get_block_size(tunable);
 
-        if(tunable->gemm_k_global_split == 0 || tunable->tensor_layout == "nchw"){
-            max_split_num = 0;
-        }
-        else{
-            for(int i = 0; i < MAX_GEMM_K_SPLITS; i++){
-                if((c >> i) % tunable->gemm_k_per_block == 0){
-                    max_split_num = i;
-                }
-                else{
-                    break;
-                }
-            }
-        }
-        
+        hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        float min_avg_duration = FLT_MAX;
-        for(int i = 0; i <= max_split_num; i++){
-            if(tunable->tensor_layout == "nhwc"){
-                log2_gemm_k_global_split = i;
-                grid_size = get_grid_size(arg, tunable);
-                igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
-                karg_revalue->__pack_0 = log2_gemm_k_global_split;
-            }
+        HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
-            hipFunction_t kernel_func;            
-            printf("kernel:%s(%d)\n, block:%d, grid:%d, ", kernel_name.c_str(), i, block_size, grid_size);
-            HIP_CALL(
-                hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
-
-            auto launch_fwd = [&]() -> float {
-                // printf("launch fwd block:%d, grid:%dx%d\n", block_size, grid_size, splits);
-                // dump_fwd_karg(&karg);
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, static_cast<void*>(&karg_buffer[0]),
-                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
-                        HIP_LAUNCH_PARAM_END};
-                float ms = .0;
-
+        // TODO: use kernel to pre-clear when atomic
+        auto fwd_epilog = tunable->gemm_k_global_split ? 
+            std::function<float()>{[&]() -> float{
                 hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+                return .0;
+            }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
 
-#if USE_EXT_MODULE_LAUNCH
-                hipEvent_t start;
-                hipEvent_t stop;
-                hipEventCreate(&start);
-                hipEventCreate(&stop);
+        result_t result;
+        result.kernel_name = kernel_name;
+        if(this->driver_mode == driver_mode_normal){
+            float min_duration = FLT_MAX;
+            int selected_gks = 0;
+            int max_split_num = tunable->gemm_k_global_split == 0 ?
+                0 : igemm_get_max_gks(c, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
+            for(int gks = 0; gks <= max_split_num; gks++){
+                size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
+                if(tunable->tensor_layout == "nhwc"){
+                    // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
+                    igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
+                    karg_revalue->ks = gks;
+                }
+                float duration = igemm_launch_kernels_with_epilog({
+                        {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
+                    }, fwd_epilog, this->warmup, this->repeat);
 
-                // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-                HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
-                                                  block_size, 1, 1, 0, 0, NULL,
-                                                  (void **)&config, start, stop));
-
-                hipEventSynchronize(stop);
-                hipEventElapsedTime(&ms, start, stop);
-                hipEventDestroy(start);
-                hipEventDestroy(stop);
-#else
-                gpu_timer_t timer(NULL);
-                timer.start();
-
-                HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
-                                               block_size, 1, 1, 0, 0, NULL,
-                                               (void **)&config));
-
-                timer.stop();
-                ms = timer.duration();
-#endif
-                return ms;
-            };
-
-            for (int i = 0; i < warmup; i++) {
-                launch_fwd();
+                if(min_duration > duration){
+                    min_duration = duration;
+                    selected_gks = gks;
+                }
             }
 
-            std::vector<float> duration_list;
-            for (int i = 0; i < repeat; i++) {
-                float d = launch_fwd();
-                duration_list.push_back(d);
-            }
-            // remove min and max from list, then do average
-            auto imin = std::min_element(begin(duration_list), end(duration_list));
-            duration_list.erase(imin);
-            auto imax = std::max_element(begin(duration_list), end(duration_list));
-            duration_list.erase(imax);
-            assert(duration_list.size() == (repeat - 2));
-            float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
-            if(min_avg_duration > avg_duration){
-                min_avg_duration = avg_duration;
-            }
-            printf("cost:%.3fms, \n", avg_duration);
+            result.return_code = 0;
+            result.duration_ms = min_duration;
+            result.gks         = selected_gks;
+        }else if(this->driver_mode == driver_mode_heuristic){
+            int gks   = heuristic_select_gks(arg, tunable);
+            size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
+
+            float duration = igemm_launch_kernels_with_epilog({
+                    {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
+                }, fwd_epilog, this->warmup, this->repeat);
+
+            result.return_code = 0;
+            result.duration_ms = duration;
+            result.gks         = gks;
+        }else{
+            assert(0);
         }
 
         usleep(1000 * 5);
-
-        result_t result;
-        result.return_code = 0;
-        result.duration_ms = min_avg_duration;
-        result.kernel_name = kernel_name;
         return result;
     }
-private:
-    int log2_gemm_k_global_split;
 };
 
 #endif
