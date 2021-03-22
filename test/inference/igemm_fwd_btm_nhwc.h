@@ -77,8 +77,8 @@ typedef struct {
     uint32_t stride_m;
     uint32_t magic_0;
     uint32_t magic_1;
+    uint32_t magic_2;
     uint32_t shift_pack_0;
-    uint32_t __pack_0;
 } __attribute__((packed)) igemm_fwd_btm_2d_karg_t;
 static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
 {
@@ -105,11 +105,13 @@ static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
     std::cout<<"stride_m:"<<karg->stride_m<<", ";
     std::cout<<"magic_0:"<<karg->magic_0<<", ";
     std::cout<<"magic_1:"<<karg->magic_1<<", ";
+    std::cout<<"magic_2:"<<karg->magic_2<<", ";
     std::cout<<"shift_pack_0:"<<karg->shift_pack_0<<std::endl;
 }
 
 typedef struct {
     std::string kernel_name;
+    std::string data_type;
     uint32_t m_per_block;
     uint32_t n_per_block;
     uint32_t k_per_block;
@@ -120,8 +122,24 @@ typedef struct {
 
 igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] = 
 {
-    {"igemm_fwd_btm_nhwc_fp16_128x16x16_r3", 128, 16, 16, 128, 3, 4},
-    {"igemm_fwd_btm_nhwc_fp16_256x16x16_r3", 256, 16, 16, 128, 3, 4}
+    {"igemm_fwd_btm_nhwc_fp16_128x4x16_r2"  , "fp16",  128,  4, 16,  64, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_128x16x16_r3" , "fp16",  128, 16, 16, 128, 3, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x16x16_r3" , "fp16",  256, 16, 16, 128, 3, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x4x16_r1"  , "fp16",  256,  4, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x8x8_r2"   , "fp16",  256,  8,  8,  64, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_256x8x16_r2"  , "fp16",  256,  8, 16, 128, 2, 4},
+    {"igemm_fwd_btm_nhwc_fp16_384x4x16_r1"  , "fp16",  384,  4, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_512x4x16_r1"  , "fp16",  512,  4, 16, 128, 1, 3},
+    {"igemm_fwd_btm_nhwc_fp16_512x8x16_r2"  , "fp16",  512,  8, 16, 128, 2, 2},
+    {"igemm_fwd_btm_nhwc_fp16_512x8x8_r1"   , "fp16",  512,  8,  8, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_fp16_1024x8x8_r1"  , "fp16", 1024,  8,  8, 128, 1, 2},
+
+    {"igemm_fwd_btm_nhwc_int8_256x4x16_r1"  , "int8",  256,  4, 16,  64, 1, 4},
+    {"igemm_fwd_btm_nhwc_int8_256x8x16_r1"  , "int8",  256,  8, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_int8_512x8x16_r1"  , "int8",  512,  8, 16, 128, 1, 4},
+    {"igemm_fwd_btm_nhwc_int8_512x16x8_r2"  , "int8",  512, 16,  8, 128, 2, 3},
+    {"igemm_fwd_btm_nhwc_int8_512x16x16_r2" , "int8",  512, 16, 16, 128, 2, 2},
+    {"igemm_fwd_btm_nhwc_int8_1024x16x8_r2" , "int8", 1024, 16,  8, 128, 2, 2},
 };
 
 class igemm_fwd_btm_t {
@@ -143,9 +161,50 @@ public:
         return kernel_info->kernel_name;
     }
 
+    bool is_valid(const args_t *arg, igemm_fwd_btm_kernel_info_t * kernel_info)
+    {
+        size_t hi = arg->get_int("in_h");
+        size_t wi = arg->get_int("in_w");
+        size_t n = arg->get_int("batchsize");
+        size_t k = arg->get_int("out_channels");
+        size_t c = arg->get_int("in_channels");
+
+        size_t sy = arg->get_int("conv_stride_h");
+        size_t sx = arg->get_int("conv_stride_w");
+        size_t dy = arg->get_int("dilation_h");
+        size_t dx = arg->get_int("dilation_w");
+        size_t py = arg->get_int("pad_h");
+        size_t px = arg->get_int("pad_w");
+        size_t fy = arg->get_int("fil_h");
+        size_t fx = arg->get_int("fil_w");
+        size_t ho = gpu_conv_out_size(hi, py, dy, fy, sy);
+        size_t wo = gpu_conv_out_size(wi, px, dx, fx, sx);
+        size_t group = arg->get_int("group_count");
+
+        assert(c % group == 0 && k % group == 0);
+
+        assert(group != 0 && c % group == 0 && k % group == 0);
+
+        size_t k_per_group  = k / group;
+        size_t c_per_group  = c / group;
+
+        if(c_per_group != kernel_info->k_per_block)
+            return false;
+
+        if(k_per_group % kernel_info->n_per_block != 0)
+            return false;
+        
+        return true;
+    }
+
     result_t run(const args_t *arg,  hipModule_t module, igemm_fwd_btm_kernel_info_t * kernel_info,
                  void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat, const driverDataType_t& data_type) {
+        if(!is_valid(arg, kernel_info)){
+            result_t result;
+            result.return_code = -1;
+            return result;
+        }
         size_t hi = arg->get_int("in_h");
         size_t wi = arg->get_int("in_w");
         size_t n = arg->get_int("batchsize");
@@ -200,18 +259,29 @@ public:
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_info->kernel_name.c_str()));
 
         int block_size  = kernel_info->block_size;
-        int grid_size   = kernel_info->occupancy * num_cu;
-        grid_size = env_get_int("GRID_SIZE", grid_size);
-        int b_grids = (ho * wo + kernel_info->m_per_block - 1) / kernel_info->m_per_block;
+        int num_gemm_m  = (ho * wo + kernel_info->m_per_block - 1) / kernel_info->m_per_block;
+        int num_gemm_n  = (k_per_group + kernel_info->n_per_block - 1) / kernel_info->n_per_block;
 
-        karg.batch_m    = (b_grids + grid_size - 1) / grid_size;
-        karg.stride_m   = kernel_info->m_per_block * grid_size;
+        int grid_size = kernel_info->occupancy * num_cu;
+        grid_size = env_get_int("GRID_SIZE", grid_size);
+        if(grid_size % num_gemm_n == 0){
+            int grids_for_m = grid_size / num_gemm_n;
+            karg.batch_m    = (num_gemm_m + grids_for_m - 1) / grids_for_m;
+            karg.stride_m   = kernel_info->m_per_block * grids_for_m;
+
+        }else{
+            grid_size = num_gemm_m * num_gemm_n;
+            karg.batch_m    = 1;
+            karg.stride_m   = 0;
+        }
 
         magic_div_u32_t mdiv_0 = magic_div_u32_gen(fx);
         magic_div_u32_t mdiv_1 = magic_div_u32_gen(wo);
+        magic_div_u32_t mdiv_2 = magic_div_u32_gen(num_gemm_n);
         karg.magic_0        = mdiv_0.magic;
         karg.magic_1        = mdiv_1.magic;
-        karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, 0, 0);
+        karg.magic_2        = mdiv_2.magic;
+        karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, 0);
 
         // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
         // dump_igemm_fwd_btm_2d_karg(&karg);

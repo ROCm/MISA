@@ -17,12 +17,9 @@
 #include <iostream>
 #include "args.h"
 
-#define USE_HALF_HPP
 
-#ifdef USE_HALF_HPP
 #include "half.hpp"
 using float16 = half_float::half;
-#endif
 
 std::string parse_base_arg(int argc, char* argv[])
 {
@@ -34,7 +31,7 @@ std::string parse_base_arg(int argc, char* argv[])
 
     std::string arg = argv[1];
 
-    if(arg != "conv" && arg != "convfp16" && arg != "--version")
+    if(arg != "conv" && arg != "convfp16" && arg != "convint8" && arg != "--version")
     {
         printf("Invalid Base Input Argument\n");
         exit(0);
@@ -89,9 +86,24 @@ typedef struct {
 typedef enum {
     driverHalf  = 0, /*!< 16-bit floating point (Fully supported) */
     driverFloat = 1, /*!< 32-bit floating point (Fully supported) */
+    driverInt8  = 3,
     driverBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)
                            (Partially supported) */
 } driverDataType_t;
+
+static inline size_t get_data_byte(driverDataType_t dtype)
+{
+    if(dtype == driverHalf)
+        return 2;
+    if(dtype == driverFloat)
+        return 4;
+    if(dtype == driverInt8)
+        return 1;
+    if(dtype == driverBFloat16)
+        return 2;
+    assert(0);
+    return 0;
+}
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
@@ -206,15 +218,24 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
         th.join();
 }
 
-static inline bool valid_float(float p)
+template<typename T>
+bool valid_float(T p)
 {
     return !(std::isnan(p) || std::isinf(p));
 }
+
+template<>
+bool valid_float<int8_t>(int8_t p)
+{
+    // there is no meaning to valid integer number
+    return true;
+}
+
 #ifndef ABS
 #define ABS(b) ((b) > 0 ? (b) : -1 * (b))
 #endif
 template<typename T>
-static inline bool valid_vector(const float *ref, const T *pred, size_t n,
+bool valid_vector(const float *ref, const T *pred, size_t n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
@@ -225,7 +246,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     for (size_t i = 0; i < n; ++i) {
         double ri = (double)ref[i];
         double pi = (double)pred[i];
-        if(!(valid_float(ref[i]) && valid_float(pred[i]))){
+        if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
             printf(" invalid float at %4zu, ref:%f, pred:%f\n", i, ri, pi);
             return false;
         }
@@ -236,12 +257,12 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, ((uint32_t *)pred)[i], delta > 3e-5? "N":"Y");
+            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi,  *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
                         printf("diff at %zu, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
-                            pi, ((uint32_t *)pred)[i], delta);
+                            pi, *(uint32_t*)(&pred[i]), delta);
                 }
                 pp_err++;
             }
@@ -253,6 +274,36 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
            && (pp_err == 0)
 #endif
         ;
+}
+
+template<>
+bool valid_vector<int8_t>(const float *ref, const int8_t *pred, size_t n,
+                                double nrms) {
+    // int8 valid, we prefer a per pixel match
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
+    size_t pp_err = 0;
+
+    for (size_t i = 0; i < n; ++i) {
+        if(!(valid_float<float>(ref[i]) ) ){
+            printf(" invalid float at %4zu, ref:%f\n", i, ref[i]);
+            return false;
+        }
+        int8_t pi = pred[i];
+        int32_t ri = static_cast<int32_t>(ref[i]);
+        int8_t ri_clamp;
+        memcpy(&ri_clamp, &ri, 1);
+
+        if(igemm_per_pixel_check){
+            printf("[%zu] ref:%d(%d), pred:%d(0x%08x) [%s]\n", i, ri, ri_clamp, pi,
+                        *(uint32_t*)(&pred[i]), pi != ri_clamp ? "N":"Y");
+        }
+
+        if(pi != ri_clamp){
+            pp_err++;
+        }
+    }
+    return pp_err == 0;
 }
 
 static inline void dump_output_dword(const float *out, size_t n)
@@ -334,23 +385,38 @@ int main(int argc, char **argv){
     int repeat = env_get_int("REPEAT", REPEAT);
     int sclk_mhz = env_get_int("SCLK_MHZ", SCLK_MHZ);
     int dump_out = env_get_int("DUMP_OUT", 0);
-    char *hsaco = env_get_str("HSACO", HSACO);
+    
     char *gpu_naive_conv_hsaco = env_get_str("GPU_NAIVE_CONV_HSACO", GPU_NAIVE_CONV_HSACO);
     gpu_naive_conv_init(gpu_naive_conv_hsaco);
 
     std::string base_arg = parse_base_arg(argc, argv);
+    std::string default_hsaco = "igemm_fwd_btm_nhwc_";
 
     driverDataType_t driver_data_type;
-    if(base_arg == "conv")
+    int fp_factor = 1;
+    if(base_arg == "conv"){
         driver_data_type = driverFloat;
-    else if(base_arg == "convfp16")
+        default_hsaco += "fp32.hsaco";
+    }
+    else if(base_arg == "convfp16"){
         driver_data_type = driverHalf;
+        default_hsaco += "fp16.hsaco";
+        fp_factor = 2;
+    }
     else if(base_arg == "convbf16") {
         driver_data_type = driverBFloat16;
         exit(0);
     }
+    else if(base_arg == "convint8") {
+        driver_data_type = driverInt8;
+        default_hsaco += "int8.hsaco";
+        fp_factor = 4;
+    }
     else
         exit(0);
+
+    size_t data_byte = get_data_byte(driver_data_type);
+    char *hsaco = env_get_str("HSACO", const_cast<char*>(default_hsaco.c_str()));
 
     hipModule_t module;
     HIP_CALL(hipModuleLoad(&module, hsaco));
@@ -394,20 +460,18 @@ int main(int argc, char **argv){
     HIP_CALL(hipMalloc(&device_weight, static_cast<size_t>(k) * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, static_cast<size_t>(n) * k * ho * wo * sizeof(float)));
 
-#ifdef USE_HALF_HPP
-    // fp16 type
-    float16 *host_input_f16  = (float16 *)malloc(n * c * hi * wi * sizeof(float16));
-    float16 *host_weight_f16 = (float16 *)malloc(k * c * y * x * sizeof(float16));
-    float16 *host_output_f16 = (float16 *)malloc(n * k * ho * wo * sizeof(float16));
 
-    float16 *device_input_f16;
-    float16 *device_weight_f16;
-    float16 *device_output_f16;
+    void *host_input_dtype  = malloc(n * c * hi * wi * data_byte);
+    void *host_weight_dtype = malloc(k * c * y * x * data_byte);
+    void *host_output_dtype = malloc(n * k * ho * wo * data_byte);
 
-    HIP_CALL(hipMalloc(&device_input_f16, n * c * hi * wi * sizeof(float16)));
-    HIP_CALL(hipMalloc(&device_weight_f16, k * c * y * x * sizeof(float16)));
-    HIP_CALL(hipMalloc(&device_output_f16, n * k * ho * wo * sizeof(float16)));
-#endif
+    void *device_input_dtype;
+    void *device_weight_dtype;
+    void *device_output_dtype;
+
+    HIP_CALL(hipMalloc(&device_input_dtype, n * c * hi * wi * data_byte));
+    HIP_CALL(hipMalloc(&device_weight_dtype, k * c * y * x * data_byte));
+    HIP_CALL(hipMalloc(&device_output_dtype, n * k * ho * wo * data_byte));
 
     int need_verify = conv_args.get_int("verify");
 
@@ -438,13 +502,13 @@ int main(int argc, char **argv){
 #endif
     }
 
-    double theo_gflops = theoritical_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd * 2/*fp16, 2x speed*/);
+    double theo_gflops = theoritical_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd * fp_factor);
     double nrms = get_nrms(forw, driver_data_type);
 
     printf("num_cu:%d, gcn_arch:%d, theo_gflops:%f\n", num_cu, gcn_arch, theo_gflops);
 
     if (need_fwd){
-        float *device_output_to_host = NULL;
+        void *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
             //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
@@ -454,13 +518,16 @@ int main(int argc, char **argv){
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
-#ifdef USE_HALF_HPP
             if(driver_data_type == driverHalf){
                 // move to different data type
-                tensor_copy<float16, float>(host_input_f16, host_input, static_cast<size_t>(n) * c * hi * wi);
-                tensor_copy<float16, float>(host_weight_f16, host_weight, static_cast<size_t>(k) * c * y * x);
+                tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float16, float>(static_cast<float16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
             }
-#endif
+            else if(driver_data_type == driverInt8){
+                // move to different data type
+                tensor_copy<int8_t, float>(static_cast<int8_t*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
 
             HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
@@ -476,44 +543,53 @@ int main(int argc, char **argv){
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
 
-            if(driver_data_type == driverHalf){
-#ifdef USE_HALF_HPP
-                device_output_to_host = (float *)malloc((static_cast<size_t>(n) * k * ho * wo * sizeof(float16) + 3) / 4 * 4);
-#endif
+            if(driver_data_type == driverHalf || driver_data_type == driverInt8){
+                device_output_to_host = malloc((static_cast<size_t>(n) * k * ho * wo * data_byte + 3) / 4 * 4);
             }
             else{
-                device_output_to_host = (float *)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+                device_output_to_host = malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
             }
             
         }
+
         if(driver_data_type == driverFloat){
             HIP_CALL(hipMemcpy(device_input, host_input,
                         static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                         static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+        }else{
+            HIP_CALL(hipMemcpy(device_input_dtype, host_input_dtype,
+                        static_cast<size_t>(n) * c * hi * wi * data_byte, hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_dtype, host_weight_dtype,
+                        static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
         }
-#ifdef USE_HALF_HPP
-        else if(driver_data_type == driverHalf){
-            HIP_CALL(hipMemcpy(device_input_f16, host_input_f16,
-                        static_cast<size_t>(n) * c * hi * wi * sizeof(float16), hipMemcpyHostToDevice));
-            HIP_CALL(hipMemcpy(device_weight_f16, host_weight_f16,
-                        static_cast<size_t>(k) * c * y * x * sizeof(float16), hipMemcpyHostToDevice));
-        }
-#endif
+
         igemm_fwd_btm_t conv_fwd_driver;
+        int valid_index = 0;
         for (int i = 0; i < sizeof(igemm_fwd_btm_kernel_list)/sizeof(igemm_fwd_btm_kernel_list[0]); i++) {
             igemm_fwd_btm_kernel_info_t *kinfo = &igemm_fwd_btm_kernel_list[i];
+            if(driver_data_type == driverHalf){
+                if(kinfo->data_type != "fp16")
+                    continue;
+            }
+            else if(driver_data_type == driverInt8){
+                if(kinfo->data_type != "int8")
+                    continue;
+            }
 
-
-            printf("[fwd:%2d] %s, ", i, conv_fwd_driver.get_kernel_name(kinfo).c_str());
+            printf("[fwd:%2d] %s, ", valid_index, conv_fwd_driver.get_kernel_name(kinfo).c_str());
             fflush(stdout);
 
             result_t result;
 
-#ifdef USE_HALF_HPP
-                result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_f16,
-                                               device_weight_f16, device_output_f16, warmup, repeat, driver_data_type);
-#endif
+            result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_dtype,
+                                               device_weight_dtype, device_output_dtype, warmup, repeat, driver_data_type);
+            valid_index++;
+
+            if (result.return_code != 0){
+                printf("not applicatble\n");
+                continue;
+            }
 
             double gflops = measured_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
@@ -526,21 +602,22 @@ int main(int argc, char **argv){
                     HIP_CALL(hipMemcpy(device_output_to_host, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                    is_valid = valid_vector<float>(host_output, device_output_to_host,
+                    is_valid = valid_vector<float>(host_output, static_cast<float*>(device_output_to_host),
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
-#ifdef USE_HALF_HPP
-                else if(driver_data_type == driverHalf) {
-                    HIP_CALL(hipMemcpy(device_output_to_host, device_output_f16,
-                                   static_cast<size_t>(n) * k * ho * wo * sizeof(float16),
+                else if(driver_data_type == driverHalf || driver_data_type == driverInt8) {
+                    HIP_CALL(hipMemcpy(device_output_to_host, device_output_dtype,
+                                   static_cast<size_t>(n) * k * ho * wo * data_byte,
                                    hipMemcpyDeviceToHost));
                     if(dump_out)
-                        dump_output_dword(device_output_to_host, static_cast<size_t>(n) * k * ho * wo / 2);
-                    float16 *device_output_to_host_fp16 = (float16 *)device_output_to_host;
-                    is_valid = valid_vector<float16>(host_output, device_output_to_host_fp16,
+                        dump_output_dword(static_cast<float*>(device_output_to_host), static_cast<size_t>(n) * k * ho * wo / fp_factor);
+                    if(driver_data_type == driverHalf)
+                        is_valid = valid_vector<float16>(host_output, static_cast<float16*>(device_output_to_host),
+                                            static_cast<size_t>(n) * k * ho * wo, nrms);
+                    else if(driver_data_type == driverInt8)
+                        is_valid = valid_vector<int8_t>(host_output, static_cast<int8_t*>(device_output_to_host),
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
-#endif          
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");

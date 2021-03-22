@@ -21,7 +21,8 @@
 .set k_stride_m, 92
 .set k_magic_0, 96
 .set k_magic_1, 100
-.set k_shift_pack_0, 104
+.set k_magic_2, 104
+.set k_shift_pack_0, 108
 
 .set s_block_ib, 2      ; bx, ho*wo
 .set s_ka, 0
@@ -50,25 +51,26 @@
 .set s_stride_m, 33
 .set s_magic_0, 34
 .set s_magic_1, 35
-.set s_shift_pack_0, 36
-.set s_shift_m0, 37
+.set s_magic_2, 36
+.set s_shift_pack_0, 37
+.set s_shift_m0, 38
 .set s_shift_m1, s_shift_pack_0
 .set s_in_stride_wi, 12
 .set s_in_stride_n, 13
 .set s_wei_stride_k, 14
 .set s_out_stride_wo, 15
-.set s_out_stride_n, 38
-.set s_in_diff_hi, 39
-.set s_in_diff_wi, 40
-.set s_dilation_w_x, 41
-.set s_move_slice_k_ix, 42
+.set s_out_stride_n, 39
+.set s_in_diff_hi, 40
+.set s_in_diff_wi, 41
+.set s_dilation_w_x, 42
+.set s_move_slice_k_ix, 43
 
 .set s_kitr, 1
-.set s_wei_offset, 43
+.set s_wei_offset, 44
 .set s_out_stride, s_wei_offset
-.set s_sld_b_stride, 44
-.set s_br, 45
-.set s_ib_stride, 46
+.set s_sld_b_stride, 45
+.set s_br, 46
+.set s_ib_stride, 47
 
 .set s_tmp, 48
 .set s_end, 54
@@ -114,7 +116,7 @@ igemm_fwd_btm_nhwc_fp16_256x16x16_r3:
     s_load_dwordx4  s[s_p_wei+0:s_p_wei+3],  s[s_ka+0:s_ka+1],    0+k_p_wei
     s_load_dwordx16 s[s_hi+0:s_hi+15],    s[s_ka+0:s_ka+1],    0+k_hi
     s_load_dwordx4  s[s_batch_m:s_batch_m+3],    s[s_ka+0:s_ka+1],    0+k_batch_m
-    s_load_dword    s[s_shift_pack_0],    s[s_ka+0:s_ka+1],    0+k_shift_pack_0
+    s_load_dwordx2  s[s_magic_2:s_magic_2+1],    s[s_ka+0:s_ka+1],    0+k_magic_2
     v_mov_b32       v[v_tid], v0
     s_mov_b32 s[s_ib_stride], 128
 
