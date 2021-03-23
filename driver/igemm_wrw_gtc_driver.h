@@ -568,7 +568,7 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
-            std::cout << "not valid tunable config." << std::endl;
+            // std::cout << "not valid tunable config." << std::endl;
             return result;
         }
         
