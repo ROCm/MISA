@@ -29,7 +29,7 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
+from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
@@ -274,7 +274,8 @@ class igemm_gtc_tunable_parameter_t(object):
             if (self.tensor_a_pass_through and self.wave_repeat_n == 2) or (self.tensor_b_pass_through and self.wave_repeat_m == 2):
                 self.local_prefetch_num         = 1
             # register for a,b,c buffer
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.wave_tile_k, 
+                    self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n, self.block_size // amdgpu_wave_size(tunable_dict['arch']), self.precision)
             self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
             assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
             self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
@@ -319,7 +320,8 @@ class igemm_gtc_tunable_parameter_t(object):
         shrinked_lds_buffer_num = self.lds_buffer_num
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # check on grouping
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.wave_tile_k, 
+                    self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n, self.block_size // amdgpu_wave_size(tunable_dict['arch']), self.precision)
             length_in_m =  xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() # no need xdlops_mapping.lanegroup_m_per_thread()
             if length_in_m % self.coalescing_store_groups != 0:
                 # we still asume both value are power of 2
@@ -330,6 +332,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 shrinked_lds_buffer_num = shrinked_lds_buffer_num * shrink_in_co_group
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
+                assert length_in_m % self.coalescing_store_groups == 0
 
     def output(self):
         brace_left='   {'
