@@ -28,6 +28,13 @@
 #ifndef __IGEMM_GTC_BASE_H
 #define __IGEMM_GTC_BASE_H
 
+#ifdef USE_HALF
+#include "half.hpp"
+using float16 = half_float::half;
+#else
+using float16 = int16_t;
+#endif
+
 #include "config_parser.h"
 #include "utility.h"
 #include <string>
@@ -36,6 +43,7 @@
 #include <assert.h>
 #include <math.h>
 #include <functional>
+#include <stdint.h>
 
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_MAC              "mac"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
@@ -50,6 +58,20 @@ typedef enum {
     driverBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)
                            (Partially supported) */
 } driverDataType_t;
+
+static inline size_t get_data_byte(driverDataType_t dtype)
+{
+    if(dtype == driverHalf)
+        return 2;
+    if(dtype == driverFloat)
+        return 4;
+    if(dtype == driverInt8)
+        return 1;
+    if(dtype == driverBFloat16)
+        return 2;
+    assert(0);
+    return 0;
+}
 
 typedef enum {
     driver_mode_normal      = 0,    // bench all solutions

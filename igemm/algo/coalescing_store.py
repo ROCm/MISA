@@ -42,7 +42,7 @@ class ctrl_coalescing_store_t(object):
         self.coalescing_groups = 1
         self.block_size = 256
         self.vector_store_size = 1
-        self.data_byte = 1
+        self.precision = 'fp32'
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
         # for simplicity, if order is IGEMM_COALESCING_GEMM_M_ORDER_M1_M0, coalescing_groups must be multiply of t_m0
@@ -234,6 +234,7 @@ class igemm_coalescing_store_t(mc_base_t):
         v_gemm_im, v_gemm_in must be computed from get_gemm_index_for_dst_matrix
         '''
         ctrl = self.ctrl
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         g_mr, g_m1, g_m0, g_nr, g_n1, g_n0 = self.ctrl.get_subgroups()
         with self._deferred_context():
             self._emit(f"; init_co_lds_offset")
@@ -243,8 +244,8 @@ class igemm_coalescing_store_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
             else:
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_gemm_im}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(data_byte)}, v[{v_co_sst}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -293,6 +294,7 @@ class igemm_coalescing_store_t(mc_base_t):
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
         ctrl = self.ctrl
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
@@ -304,11 +306,11 @@ class igemm_coalescing_store_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # mc, vec_count, vec_byte, vec_stride, sst_base=0):
-        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * ctrl.data_byte, ctrl.ctm.n_n_total() * ctrl.data_byte // 2)
+        inst_sst = inst_ds_write2_likely_t(self.mc, 2, ctrl.ctm.t_n0() * data_byte, ctrl.ctm.n_n_total() * data_byte // 2)
         # mc, vec_count, vec_byte, vec_stride, sld_base = 0):
-        inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * ctrl.data_byte, ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte)
+        inst_sld = inst_ds_read2_likely_t(self.mc, 2, ctrl.vector_write_out * data_byte, ctrl.block_size * ctrl.vector_write_out * data_byte)
         # self, vdata, vaddr, srsrc, soffset, offset):
-        inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
+        inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
 
         s_out_offset_itr = sym_t(s_tmp4(0))
         s_thread_m_stride = sym_t(s_tmp4(1))
@@ -342,7 +344,7 @@ class igemm_coalescing_store_t(mc_base_t):
                 self._emit(f"s_barrier")
                 for i_sub_length in range(l_mr * l_m0):
                     c_sub_start_index = c_group_start_index + i_sub_length * ctrl.ctm.t_n0() * ctrl.ctm.t_nr()
-                    sst_offset = i_sub_length * ctrl.ctm.n_n_total() * ctrl.data_byte
+                    sst_offset = i_sub_length * ctrl.ctm.n_n_total() * data_byte
                     self._emit(inst_sst(v_co_sst(), v_c(c_sub_start_index), sst_offset))
 
                 self._emit(f"s_waitcnt lgkmcnt(0)")
@@ -351,7 +353,7 @@ class igemm_coalescing_store_t(mc_base_t):
                 issue_list = []
                 for i_d in range(ctrl.get_num_dword_per_group() // (2 * ctrl.vector_write_out)):
                     c_sub_start_index = c_group_start_index + i_d * 2 * ctrl.vector_write_out
-                    sld_offset = i_d * 2 * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
+                    sld_offset = i_d * 2 * ctrl.block_size * ctrl.vector_write_out * data_byte
                     self._emit(inst_sld(v_c(c_sub_start_index), v_co_sld(), sld_offset))
                     issue_list.append(inst_sld.get_issues(sld_offset))
 
@@ -423,7 +425,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.coalescing_groups = 1
         self.block_size = 256
         self.vector_store_size = 1
-        self.data_byte = 1
+        self.precision = 'fp32'
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
         self.gemm_k_global_split = False
@@ -829,6 +831,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
 
     def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp4):
         ctrl = self.ctrl
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
         l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
 
@@ -869,8 +872,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             #     self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
             # else:
             #     assert False, "impossible"
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(ctrl.data_byte * ctrl.vector_write_out * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(data_byte)}, v[{v_co_sst}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * ctrl.vector_write_out * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -1055,6 +1058,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             from functools import reduce
             return reduce(lambda a, b: a*b, x, 1)
         ctrl = self.ctrl
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
         a_c = sym_t(a_c)
         v_c = sym_t(v_c)
         v_co_sst = sym_t(v_co_sst)
@@ -1085,12 +1089,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
-        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
-        inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.data_byte)
+        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte)
+        inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte)
         if ctrl.gemm_k_global_split: 
             inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out) 
         else:
-            inst_gst = inst_buffer_store_dword_t(ctrl.vector_write_out)
+            inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
        
 
         s_out_offset_itr = sym_t(s_tmp6(0))
@@ -1119,7 +1123,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             i_g_list.append((i_g_mr, i_g_ms, i_g_mw, i_g_mb, i_g_mt))
 
         agpr_consume_list = list()      # used for assertion
-        lds_size_per_group = (ctrl.cxm.macro_tile_m * ctrl.cxm.macro_tile_n // ctrl.coalescing_groups) * ctrl.data_byte # used for assertion
+        lds_size_per_group = (ctrl.cxm.macro_tile_m * ctrl.cxm.macro_tile_n // ctrl.coalescing_groups) * data_byte # used for assertion
 
         with self._deferred_context():
             self._emit(f"; coalescing store, mapping:{ctrl.cxm.serialize()}")
@@ -1161,16 +1165,24 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         #vgpr_index = gpr_m_offset + gpr_n_offset
                         vgpr_index = vgpr_index_acc
                         sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M + \
-                                     sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * ctrl.data_byte
-                        assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * ctrl.data_byte < lds_size_per_group
+                                     sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * data_byte
+                        assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * data_byte < lds_size_per_group
 
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
                         # self._emit(f"s_nop 4")    # might consider nop to solve RAW
+                        # for fp16 and bf16, vgpr need to be cast to 16 bits
+                        if ctrl.precision == 'fp16':
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 1)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 2)}]")
+                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{v_c(vgpr_index + 3)}]")
+                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
+                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
                         if not ctrl.can_skip_coalescing():
-                            idword = sst_offset // (ctrl.data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
+                            idword = sst_offset // (data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
                             self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
                                 f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
                                 f" /{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
@@ -1183,8 +1195,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     self._emit(f";   load from lds")
                     #for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
                     for i_d in range(ctrl.get_num_dword_per_group() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M):
-                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
-                        sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * ctrl.data_byte
+                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                        sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                         issue_list.append(inst_sld.get_issues(sld_offset))
 
@@ -1243,7 +1255,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     if s_k is not None:
                         self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
                         self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
-                    self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    # self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
+                    self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out//(4 // data_byte)), v_out_offset, s_p_out, s_out_offset_itr(), 0, i_gst % 2))
                     if s_k is not None:
                         self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:

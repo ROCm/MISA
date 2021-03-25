@@ -27,25 +27,10 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-class inst_global_load_dword_t(object):
-    def __init__(self, dwords):
-        self.dwords = dwords
-    
-    def __call__(self, vdst, vaddr, saddr, offset = 0):
-        if self.dwords == 1:
-            return f"global_load_dword v[{vdst}], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
-        if self.dwords == 2:
-            return f"global_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
-        if self.dwords == 3:
-            return f"global_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
-        if self.dwords == 4:
-            return f"global_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}:{vaddr}+1], s[{srsrc}:{srsrc}+1], offset:{offset}"
-        assert False
-
-class inst_buffer_load_dword_t(object):
+class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, dwords):
-        self.dwords = dwords
+    def __init__(self, data_bytes):
+        self.data_bytes = data_bytes
 
     def __call__(self, vdst, vaddr, srsrc, soffset, offset):
         if type(soffset) is int and soffset == 0:
@@ -53,34 +38,41 @@ class inst_buffer_load_dword_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.data_bytes == 2:
+            return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_bytes == 4:
             return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 2:
+        if self.data_bytes == 8:
             return f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 3:
+        if self.data_bytes == 12:
             return f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 4:
+        if self.data_bytes == 16:
             return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
-class inst_buffer_store_dword_t(object):
+class inst_buffer_store_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, dwords):
-        self.dwords = dwords
+    def __init__(self, data_bytes):
+        self.data_bytes = data_bytes
 
-    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi = 0):
         if type(soffset) is int and soffset == 0:
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.data_bytes == 2:
+            if lo_hi == 0:
+                return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            else:
+                return f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_bytes == 4:
             return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 2:
+        if self.data_bytes == 8:
             return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 3:
+        if self.data_bytes == 12:
             return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.dwords == 4:
+        if self.data_bytes == 16:
             return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
@@ -89,7 +81,7 @@ class inst_buffer_atomic_add_dword_t(object):
     def __init__(self, dwords):
         self.dwords = dwords
 
-    def __call__(self, vdata, vaddr, srsrc, soffset, offset):
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi=0):
         if type(soffset) is int and soffset == 0:
             soffset_str = "0"
         else:
@@ -156,8 +148,8 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -332,8 +324,8 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
@@ -424,8 +416,8 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
 
         i_cnt = 0
         for i_d0 in range(ctrl.length_d0):
@@ -489,8 +481,8 @@ class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -555,8 +547,8 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
-        assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_dword_t(ctrl.vector_d1)
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0

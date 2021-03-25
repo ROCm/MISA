@@ -641,7 +641,7 @@ public:
 
         auto wrw_epilog = gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
-                hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
+                hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{

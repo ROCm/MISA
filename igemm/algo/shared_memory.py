@@ -670,7 +670,7 @@ class inst_ds_read_t(object):
             return 'ds_read_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
-        assert False
+        assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1
 
@@ -891,7 +891,7 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
 
     def expr(self):
         ctrl = self.ctrl
-        assert ctrl.precision == 'fp32', "TO BE supported"
+        # assert ctrl.precision == 'fp32', "TO BE supported"
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
 

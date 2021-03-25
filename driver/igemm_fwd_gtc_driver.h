@@ -543,7 +543,7 @@ public:
         // TODO: use kernel to pre-clear when atomic
         auto fwd_epilog = tunable->gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
-                hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+                hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{

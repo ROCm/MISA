@@ -588,7 +588,7 @@ public:
             assert(kernels.size() == valid_kernel_index && kargs.size() == valid_kernel_index);
             auto bwd_epilog = need_set_zero ? 
                 std::function<float()>{[&]() -> float{
-                    hipMemset(p_in, 0, n*c*hi*wi*sizeof(float));
+                    hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
                     return .0;
                 }} : 
                 std::function<float()>{[&]() -> float{

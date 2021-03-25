@@ -95,7 +95,8 @@ class ctrl_xdlops_mapping_t(object):
 
     k_dim   | thread_length                | cluster_length
     --------+------------------------------+-----------------------------+
-    level_0 | 1                            | block_k()                   |
+    level_0 | lanegroup_k_per_thread()     | 1                           |
+    level_1 | 1                            | block_k()                   |
 
     '''
     def __init__(self, macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k, waves, wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, inst_mfma):
@@ -159,7 +160,7 @@ class ctrl_xdlops_mapping_t(object):
         assert self.wave_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block() * self.block_n_per_lanegroup() * self.lanegroup_n_per_wave()
         assert self.lanegroup_m_per_cluster() * self.block_m_per_lanegroup() * self.lanegroup_n_per_cluster() * self.block_n_per_lanegroup() == AMDGPU_WAVE_SIZE
         assert self.block_m() * self.block_m_per_wave() == self.wave_tile_m and self.block_n() * self.block_n_per_wave() == self.wave_tile_n
-        assert self.block_n() == self.block_m() and self.block_k() * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert self.block_n() == self.block_m() and self.block_k_per_wave() * self.block_n() * self.block_n_per_wave() * self.block_m_per_wave() == AMDGPU_WAVE_SIZE
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.wave_tile_m * self.wave_step_m * self.wave_repeat_m * self.waves_per_m()
@@ -199,6 +200,10 @@ class ctrl_xdlops_mapping_t(object):
         assert self.inst_mfma.n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block()
         return self.wave_tile_n // (self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_block())
 
+    def block_k_per_wave(self):
+        assert self.block_k() % self.lanegroup_k_per_thread() == 0
+        return self.block_k() // self.lanegroup_k_per_thread()
+
     def block_m_per_lanegroup(self):
         ''' [among different thread] '''
         assert self.block_m_per_wave() % self.lanegroup_m_per_wave() == 0
@@ -216,6 +221,20 @@ class ctrl_xdlops_mapping_t(object):
     def lanegroup_n_per_thread(self):
         ''' [within thread] for xdlops, always 1 column per lanegroup'''
         return 1
+
+    def lanegroup_k_per_thread(self):
+        ''' [within thread] for xdlops, 
+            fp32 1/
+            fp16 4/
+            bf16 2
+            columns per lanegroup'''
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_FP32:
+            return 1
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_FP16:
+            return 4
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_BF16:
+            return 2
+        assert False
 
     def lanegroup_m_per_cluster(self):
         ''' [among different thread] for xdlops, always m per block as clusters. perthread agpr do not contain this'''
@@ -451,7 +470,7 @@ class igemm_xdlops_mapping_t(mc_base_t):
         ctrl = self.ctrl
         #print(f"ctrl.block_n()={ctrl.block_n()}, ctrl.block_m()={ctrl.block_m()}")
         #print(f"ctrl.block_n_per_wave()={ctrl.block_n_per_wave()}, ctrl.block_m_per_wave()={ctrl.block_m_per_wave()}")
-        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
+        assert ctrl.block_n() == ctrl.block_m() and ctrl.block_k_per_wave() * ctrl.block_n() * ctrl.block_n_per_wave() * ctrl.block_m_per_wave() == AMDGPU_WAVE_SIZE
         k_pack = get_dict_with_default(options, "k_pack", 1)
         v_pack = get_dict_with_default(options, "v_pack", 1)
         assert v_pack in (1, k_pack),  'currently only support v_pack is 1 or k_pack'
@@ -464,8 +483,8 @@ class igemm_xdlops_mapping_t(mc_base_t):
                 self._emit(f"v_lshlrev_b32 v[{v_gemm_im}], {utility_log2(k_pack)}, v[{v_gemm_im}]   ; shift left k_pack:{k_pack}")
 
             self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_n())}, v[{v_thread_id}]")
-            if ctrl.block_k() != 1:
-                self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
+            if ctrl.block_k_per_wave() != 1:
+                self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k_per_wave() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
                 if k_pack != 1:
                     if v_pack == 1:
                         self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack - 1}, v[{v_tmp4} + 0]   ; and k_pack:{k_pack}")
@@ -480,7 +499,7 @@ class igemm_xdlops_mapping_t(mc_base_t):
                 else:
                     self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
                     self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k())}, v[{v_thread_id}]")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k_per_wave())}, v[{v_thread_id}]")
                 pass
 
             if ctrl.block_n_per_wave() != 1:
