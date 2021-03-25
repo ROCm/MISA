@@ -818,13 +818,12 @@ int main(int argc, char **argv) {
         float *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, n * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_output, n * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
-            //gen_rand_vector<float, int>(host_input, n * c * hi * wi, 1, 1);
-            //gen_rand_vector<float, int>(host_output, n * k * ho * wo, 1, 1);
-            //memset(host_output + k * ho * wo, 0x0, (n - 1) * k * ho * wo * sizeof(float));
+            gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
 #ifdef USE_HALF_HPP
             if(driver_data_type == driverHalf){
                 // move to different data type
@@ -980,7 +979,6 @@ int main(int argc, char **argv) {
             }
             printf("\n");
         }
-        dump_arg(&conv_args);
         double gflops = measured_fp32_conv_gflops(
                 min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w, ngroups);
