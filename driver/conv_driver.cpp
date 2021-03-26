@@ -377,6 +377,22 @@ void dump_arg(const args_t *arg) {
 }
 
 template <typename T>
+static void dumpBufferToFile(const char* fileName, T* data, size_t dataNumItems)
+{
+    std::ofstream outFile(fileName, std::ios::binary);
+    if(outFile)
+    {
+        outFile.write(reinterpret_cast<char*>(data), dataNumItems * sizeof(T));
+        outFile.close();
+        printf("Wrote output to file %s\n", fileName);
+    }
+    else
+    {
+        printf("Could not open file %s for writing\n", fileName);
+    }
+}
+
+template <typename T>
 static bool readBufferFromFile(T* data, size_t dataNumItems, const char* fileName)
 {
     std::ifstream infile(fileName, std::ios::binary);
@@ -864,8 +880,16 @@ int main(int argc, char **argv) {
                     fastest_result_bwd.gflops / 1000,
                     fastest_result_bwd.efficiency);
         }
-        if (need_verify) 
+
+        if ( conv_args.get_int("dump_output")  > 0 ) {
+             dumpBufferToFile("dump_in_host.bin",  host_input, static_cast<size_t>(n) * c * hi * wi);
+             dumpBufferToFile("dump_in_dev.bin", device_input_to_host, static_cast<size_t>(n) * c * hi * wi);
+        };
+
+        if (need_verify) {
             free(device_input_to_host);
+            free(device_input_to_host_f16); 
+        }	
     }
     if (need_wrw){
         float *device_weight_to_host = NULL;
