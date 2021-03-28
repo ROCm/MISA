@@ -486,9 +486,82 @@ void dump_arg(const args_t *arg) {
            pad_h, pad_w, ho, wo);
 }
 
+int string_to_dir(std::string direction)
+{
+    if(direction == "fwd")
+        return 1;
+    if(direction == "bwd")
+        return 2;
+    if(direction == "wrw")
+        return 4;
+    assert(0);
+}
+
+std::string log_cmd(const args_t *arg, driverDataType_t driver_data_type, std::string direction)
+{
+    int hi = arg->get_int("in_h");
+    int wi = arg->get_int("in_w");
+    int n = arg->get_int("batchsize");
+    int k = arg->get_int("out_channels");
+    int c = arg->get_int("in_channels");
+
+    int stride_h = arg->get_int("conv_stride_h");
+    int stride_w = arg->get_int("conv_stride_w");
+    int dilation_h = arg->get_int("dilation_h");
+    int dilation_w = arg->get_int("dilation_w");
+    int pad_h = arg->get_int("pad_h");
+    int pad_w = arg->get_int("pad_w");
+    int y = arg->get_int("fil_h");
+    int x = arg->get_int("fil_w");
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+    int ngroups = arg->get_int("group_count");
+    std::string in_layout = arg->get_str("in_layout");
+    std::string out_layout = arg->get_str("out_layout");
+    std::string fil_layout = arg->get_str("fil_layout");
+
+    std::stringstream ss;
+    if(driver_data_type == driverHalf)
+    {
+        ss << "convfp16";
+    }
+    else if(driver_data_type == driverFloat)
+    {
+        ss << "conv";
+    }
+
+    ss << " -n " << n
+        << " -c " << c
+        << " -H " << hi
+        << " -W " << wi
+        << " -k " << k
+        << " -y " << y
+        << " -x " << x
+        << " -p " << pad_h
+        << " -q " << pad_w
+        << " -u " << stride_h
+        << " -v " << stride_w
+        << " -l " << stride_h
+        << " -j " << stride_w;
+
+    if(in_layout != "NCHW")
+        ss << " --in_layout " << in_layout;
+    if(fil_layout != "NCHW")
+        ss << " --fil_layout " << fil_layout;
+    if(out_layout != "NCHW")
+        ss << " --out_layout " << out_layout;
+
+    ss << " -g " << ngroups
+            << " -F " << std::to_string(string_to_dir(direction))
+            << " -t 1";
+
+    return ss.str();
+}
+
 
 template<typename driver_t, typename pre_func_t, typename post_func_t>
 void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::vector<igemm_gtc_tunable_t> & tunables, std::string direction,
+                    driverDataType_t driver_data_type, FILE * p_bcsv,
                     void* device_input, void* device_weight, void* device_output,
                     pre_func_t && pre_func, post_func_t && post_func)
 {
@@ -536,16 +609,15 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         return result;
     };
 
+    result_t fastest_result;
+    fastest_result.duration_ms = FLT_MAX;
+    int fastest_id = -1;
     if(driver->driver_mode == driver_mode_normal){
-        result_t fastest_result_fwd;
-        fastest_result_fwd.duration_ms = FLT_MAX;
-        int fastest_id = -1;
-
         for(int i=0; i<tunables.size(); i++){
             result_t result = launch(&tunables[i], i);
 
-            if(result.duration_ms < fastest_result_fwd.duration_ms){
-                fastest_result_fwd = result;
+            if(result.duration_ms < fastest_result.duration_ms){
+                fastest_result = result;
                 fastest_id = i;
             }
         }
@@ -557,10 +629,10 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             else
                 printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
-                    fastest_result_fwd.kernel_name.c_str(),
-                    fastest_result_fwd.duration_ms,
-                    fastest_result_fwd.gflops / 1000,
-                    fastest_result_fwd.efficiency);
+                    fastest_result.kernel_name.c_str(),
+                    fastest_result.duration_ms,
+                    fastest_result.gflops / 1000,
+                    fastest_result.efficiency);
         }
     }else if(driver->driver_mode == driver_mode_heuristic){
         igemm_gtc_tunable_t selected_tunable = driver->heuristic_select_kernel(conv_args);
@@ -571,8 +643,19 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
 
         result_t result = launch(&selected_tunable, 0);
+        fastest_result = result;
+        fastest_id = 0;
     }else{
         assert(0);
+    }
+
+    if(p_bcsv){
+        //          time tflops efficiency kernel
+        fprintf(p_bcsv, "%.3f,%.3f,%.2f%%,%s,",
+            fastest_result.duration_ms, fastest_result.gflops/1000, fastest_result.efficiency, fastest_result.kernel_name.c_str());
+        std::string conv_cmd = log_cmd(conv_args, driver_data_type, direction);
+        fprintf(p_bcsv, "%s\n", conv_cmd.c_str());
+        fflush(p_bcsv);
     }
 }
 
@@ -585,10 +668,16 @@ int main(int argc, char **argv) {
     int assert_when_invalid = env_get_int("IGEMM_ASSERT_WHEN_INVALID", 0);
     int verbose     = env_get_int("IGEMM_VERBOSE", 0);
     int igemm_rand_int = env_get_int("IGEMM_RAND_INT", 0);
+    int igemm_bench_csv = env_get_int("IGEMM_BENCH_CSV", 0);
     driver_mode_t driver_mode = static_cast<driver_mode_t>(env_get_int("IGEMM_MODE", 0));
     config_parser_t config_parser(config_file);
     auto content = config_parser.parse();
     //content.dump();
+    FILE * p_bcsv = nullptr;
+    if(igemm_bench_csv){
+        p_bcsv = fopen ("bench_model.csv", "a");
+        assert(p_bcsv);
+    }
 
 #ifdef USE_GPU_NAIVE_CONV
     char *gpu_naive_conv_hsaco = env_get_str("IGEMM_GPU_NAIVE_CONV_HSACO", IGEMM_GPU_NAIVE_CONV_HSACO);
@@ -692,10 +781,16 @@ int main(int argc, char **argv) {
 
 
     int need_verify = conv_args.get_int("verify");
+    if(p_bcsv){
+        //               N   C   H   W   K   Y   X   P   Q   U   V   L   J   G
+        fprintf(p_bcsv, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,",
+                         n,  c, hi, wi,  k,  y,  x, pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w, ngroups);
+        //               GFLOP
+        fprintf(p_bcsv, "%.2f,", get_theoritical_conv_flop(&conv_args)/1e9);
+        fflush(p_bcsv);
+    }
 
     if (need_fwd){
-        result_t fastest_result_fwd;
-        fastest_result_fwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
         void *device_output_to_host = NULL;
         if (need_verify) {
@@ -807,9 +902,9 @@ int main(int argc, char **argv) {
         };
 
         if(driver_data_type == driverFloat)
-            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", device_input, device_weight, device_output, fwd_pre, fwd_post);
+            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input, device_weight, device_output, fwd_pre, fwd_post);
         else
-            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", device_input_dtype, device_weight_dtype, device_output_dtype, fwd_pre, fwd_post);
+            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, fwd_pre, fwd_post);
 
         if (need_verify)
             free(device_output_to_host);
@@ -895,7 +990,7 @@ int main(int argc, char **argv) {
             }
         };
 
-        launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd", device_input, device_weight, device_output, bwd_pre, bwd_post);
+        launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input, device_weight, device_output, bwd_pre, bwd_post);
 
         if (need_verify) 
             free(device_input_to_host);
@@ -978,11 +1073,14 @@ int main(int argc, char **argv) {
             }
         };
 
-        launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", device_input, device_weight, device_output, wrw_pre, wrw_post);
+        launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw",  driver_data_type, p_bcsv, device_input, device_weight, device_output, wrw_pre, wrw_post);
 
         if (need_verify) 
             free(device_weight_to_host);
     }
+
+    if(p_bcsv)
+        fclose(p_bcsv);
 
     free(host_input);
     free(host_weight);
