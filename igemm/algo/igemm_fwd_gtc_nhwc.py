@@ -355,7 +355,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"; load input, nxe:{self.outer.tunable.nxe}")
                 #if self.outer.tunable.nxe != 0:
                 # if tunable.tensor_a_pass_through:
-                self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
+                self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
                 if tunable.tensor_a_pass_through:
                     self._emit(m_in_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(), s.s_p_in(), v.v_in_os(), None, s.s_in_stride_k_pack(), s.s_in_offset(),
                             *(v.v_in_flag(), v.v_tmp()) if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG else (v.v_in_flag(),)))
@@ -586,6 +586,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
             is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
+            data_byte                   = amdgpu_precision_data_byte(outer.tunable.precision)
+            num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
+            num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
             num_vgpr_acc_a              = share_load_packed * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
             num_vgpr_acc_b              = share_load_packed * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
             if is_vgpr_acc_c:
@@ -593,7 +596,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 v_c_num                 = vseq()
             else:
                 v_c_resuable_num        = num_vgpr_acc_a + num_vgpr_acc_b + \
-                                            outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
+                                            num_vgpr_global_load_a + num_vgpr_global_load_b + \
                                             16       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -605,12 +608,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a))
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
-            self.v_gld_a                = sym_t("v_gld_a"           ,vseq(outer.tunable.num_vgpr_global_load_a))
+            self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
             if outer.tunable.global_prefetch_a_num == 2:
-                self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(outer.tunable.num_vgpr_global_load_a))
-            self.v_gld_b                = sym_t("v_gld_b"           ,vseq(outer.tunable.num_vgpr_global_load_b))
+                self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(num_vgpr_global_load_a))
+            self.v_gld_b                = sym_t("v_gld_b"           ,vseq(num_vgpr_global_load_b))
             if outer.tunable.global_prefetch_b_num == 2:
-                self.v_gld_b_gpf        = sym_t("v_gld_b_gpf"       ,vseq(outer.tunable.num_vgpr_global_load_b))
+                self.v_gld_b_gpf        = sym_t("v_gld_b_gpf"       ,vseq(num_vgpr_global_load_b))
             if not outer.tunable.tensor_a_pass_through:
                 self.v_sst_a_os         = sym_t("v_sst_a_os"        ,vseq(1))
                 self.v_sld_a_os         = sym_t("v_sld_a_os"        ,vseq(1))
@@ -688,6 +691,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             for k, v in self.__dict__.items():
                 if k.startswith('a_'):
                     self._emit(v.declare())
+
+    def get_num_vgpr_global_load_a(self):
+        return self.tunable.num_global_load_a // (4 // amdgpu_precision_data_byte(self.tunable.precision))
+    
+    def get_num_vgpr_global_load_b(self):
+        return self.tunable.num_global_load_b // (4 // amdgpu_precision_data_byte(self.tunable.precision))
 
     def get_thread_lengths(self):
         t_ta = self.tunable.tensor_a_thread_lengths
@@ -1424,7 +1433,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             if self.tunable.precache_soffset:
                 self._emit(m_wei_2d_global_load.init_precache_soffset(s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset(), s.s_tmp()))
 
-            self._emit(f".v_clear_nc {v.v_gld_b()}, {m_wei_2d_global_load.ctrl.length_d0 * m_wei_2d_global_load.ctrl.length_d1}")
+            self._emit(f".v_clear_nc {v.v_gld_b()}, {self.get_num_vgpr_global_load_b()}")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
             if self.tunable.tensor_b_pass_through and self.tunable.tensor_b_pass_through_interleave_gld:
@@ -1458,7 +1467,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         gemm_k * gemm_m * k_pack
         '''
         if not self.tunable.tensor_a_pass_through:
-            self._emit(f"; LDS store, in: e,c,nb0,nb1: {ta_e}x{ta_c}x{ta_nb0}x{ta_nb1}, {ca_e}x{ca_c}x{ca_nb0}x{ca_nb1}, k_pack:{k_pack}")
+            self._emit(f"; LDS store, in: e,c,nb0,nb1: {ta_e}x{ta_c}x{ta_nb0}x{ta_nb1}, {ca_e}x{ca_c}x{ca_nb0}x{ca_nb1}, k_pack:{k_pack}, {self.tunable.precision}")
             if k_pack != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_in_inb()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
@@ -1470,7 +1479,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load in")
 
         if not self.tunable.tensor_b_pass_through:
-            self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}")
+            self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}, {self.tunable.precision}")
             if k_pack != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_wei_ik()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
@@ -1748,8 +1757,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.v_gld_b                     = v.v_gld_b
             fctrl.v_gld_a_gpf                 = v.v_gld_a_gpf if self.tunable.global_prefetch_a_num == 2 else None
             fctrl.v_gld_b_gpf                 = v.v_gld_b_gpf if self.tunable.global_prefetch_b_num == 2 else None
-            fctrl.v_gld_a_num                 = self.tunable.num_vgpr_global_load_a
-            fctrl.v_gld_b_num                 = self.tunable.num_vgpr_global_load_b
+            fctrl.v_gld_a_num                 = self.get_num_vgpr_global_load_a()
+            fctrl.v_gld_b_num                 = self.get_num_vgpr_global_load_b()
             fctrl.v_sld_a_os                  = v.v_sld_a_os  if not self.tunable.tensor_a_pass_through else None
             fctrl.v_sld_b_os                  = v.v_sld_b_os  if not self.tunable.tensor_b_pass_through else None
             fctrl.v_sst_a_os                  = v.v_sst_a_os  if not self.tunable.tensor_a_pass_through else None
@@ -1763,6 +1772,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
             fctrl.pass_through_a_interleave_gld = 1 if self.tunable.tensor_a_pass_through_interleave_gld else 0
             fctrl.pass_through_b_interleave_gld = 1 if self.tunable.tensor_b_pass_through_interleave_gld else 0
+
+            fctrl.precision                   = self.tunable.precision
 
             mfma_main_loop = mfma_main_loop_t(self.mc, fctrl)
             mfma_main_loop.emit()

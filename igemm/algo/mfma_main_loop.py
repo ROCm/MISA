@@ -40,7 +40,7 @@ class ctrl_mfma_main_loop_t(object):
 
         self.unroll_k                    = 0
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
-        self.data_type                   = AMDGPU_PRECISION_FP32
+        self.precision                   = 'fp32'
 
         self.lds_single_size             = 0                    # in byte, should be power of 2
         self.lds_buffer_num              = 2
@@ -75,7 +75,7 @@ class ctrl_mfma_main_loop_t(object):
         self.s_kitr                      = None
         self.s_knum                      = None
 
-        # below is in unit of pixel, not considered data_type bytes
+        # below is in unit of pixel, not considered data bytes
         self.lds_k_pack                  = 1
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
@@ -136,7 +136,7 @@ class mfma_main_loop_t(mc_base_t):
         s_knum = ctrl.s_knum
         cxm = ctrl.cxm
 
-        data_byte = amdgpu_precision_data_byte(ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
 
         lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
         lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n
@@ -551,7 +551,7 @@ class mfma_main_loop_t(mc_base_t):
         s_knum = self.ctrl.s_knum
         cxm = self.ctrl.cxm
 
-        data_byte = amdgpu_precision_data_byte(self.ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(self.ctrl.precision)
 
         lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
         lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n

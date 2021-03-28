@@ -894,7 +894,8 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         # assert ctrl.precision == 'fp32', "TO BE supported"
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
-
+        pixel_per_vgpr = 4 // data_byte
+        vgpr_per_vector = (ctrl.length_dp + pixel_per_vgpr - 1) // pixel_per_vgpr
         if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
             # this is indeed a 2d case.
             ds_write = inst_ds_write_t(ctrl.length_dp * data_byte)
@@ -909,12 +910,12 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                 if length_d % 2 == 0 and data_byte == 4 and ctrl.length_dp in (1, 2):
                     ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.length_dp * data_byte, stride_d)
                     for i_d in range(length_d // 2):
-                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d*ctrl.length_dp}', 2 * i_d * stride_d))
+                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d*vgpr_per_vector}', 2 * i_d * stride_d))
                         issue_cnt += ds_write2.get_issues(2 * i_d * stride_d)
                 else:
                     # nhwc almost all case goes here
                     for i_d in range(length_d):
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*ctrl.length_dp}', i_d * stride_d))
+                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*vgpr_per_vector}', i_d * stride_d))
                         issue_cnt += ds_write.get_issues()
         else:
             assert False, "un implemented yet"

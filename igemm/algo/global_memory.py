@@ -29,8 +29,8 @@ from ..codegen import *
 
 class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, data_bytes):
-        self.data_bytes = data_bytes
+    def __init__(self, data_byte):
+        self.data_byte = data_byte
 
     def __call__(self, vdst, vaddr, srsrc, soffset, offset):
         if type(soffset) is int and soffset == 0:
@@ -38,22 +38,22 @@ class inst_buffer_load_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.data_bytes == 2:
+        if self.data_byte == 2:
             return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 4:
+        if self.data_byte == 4:
             return f"buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 8:
+        if self.data_byte == 8:
             return f"buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 12:
+        if self.data_byte == 12:
             return f"buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 16:
+        if self.data_byte == 16:
             return f"buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
 class inst_buffer_store_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, data_bytes):
-        self.data_bytes = data_bytes
+    def __init__(self, data_byte):
+        self.data_byte = data_byte
 
     def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi = 0):
         if type(soffset) is int and soffset == 0:
@@ -61,18 +61,18 @@ class inst_buffer_store_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.data_bytes == 2:
+        if self.data_byte == 2:
             if lo_hi == 0:
                 return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
             else:
                 return f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 4:
+        if self.data_byte == 4:
             return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 8:
+        if self.data_byte == 8:
             return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 12:
+        if self.data_byte == 12:
             return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        if self.data_bytes == 16:
+        if self.data_byte == 16:
             return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
@@ -328,6 +328,9 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
+        pixel_per_vgpr = 4 // data_byte
+        vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
             i_soffset = 0
@@ -336,13 +339,13 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                     if ctrl.use_flag and self.v_flag != None:
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_dst)}]")
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                     elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
                         i_soffset += 1
                     if ctrl.use_flag and self.v_flag != None:
                         self._emit(f"s_mov_b64 exec, -1")
@@ -354,15 +357,15 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             for i_d1 in range(ctrl.length_d1):
                 for i_d0 in range(ctrl.length_d0):
                     if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                     elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
                     elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
                     else:
                         i_soffset = index_mapping[i_d0][i_d1]
                         assert i_soffset != 1, "impossible"
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
         elif ctrl.src_order == 0 and ctrl.dst_order == 1:
             assert False, "un implemented"
         elif ctrl.src_order == 1 and ctrl.dst_order == 1:
@@ -418,7 +421,8 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
-
+        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
         i_cnt = 0
         for i_d0 in range(ctrl.length_d0):
             for i_d1 in range(n_d1):
@@ -428,7 +432,7 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_tmp()}]")
                     else:
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_cnt)}]")
-                self._emit(buffer_load_dword(f"{self.v_dst()}+{i_cnt*ctrl.vector_d1}", f"{self.v_os(i_cnt)}", f"{self.s_ptr()}", f"{self.s_os()}", 0))
+                self._emit(buffer_load_dword(f"{self.v_dst()}+{i_cnt*vgpr_per_vector}", f"{self.v_os(i_cnt)}", f"{self.s_ptr()}", f"{self.s_os()}", 0))
                 if ctrl.use_flag and self.v_flag != None:
                     self._emit(f"s_mov_b64 exec, -1")
                 i_cnt += 1
@@ -483,6 +487,8 @@ class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
+        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -491,7 +497,7 @@ class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
                     if ctrl.use_flag and self.v_flag != None:
                         self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d0)}]")
                     current_s_offset = 0 if i_d1 == 0 else (self.s_stride_d1() if i_d1 == 1 else self.s_offset(i_d1 - 2))
-                    self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d0)}", f"{self.s_ptr()}", current_s_offset, 0))
+                    self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os(i_d0)}", f"{self.s_ptr()}", current_s_offset, 0))
                     if ctrl.use_flag and self.v_flag != None:
                         self._emit(f"s_mov_b64 exec, -1")
                     i_dst = i_dst + 1
@@ -549,6 +555,8 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
         buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
+        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -559,7 +567,7 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
                 for i_d0 in range(ctrl.length_d0):
                     for i_d1 in range(1):
                         current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
                         i_dst = i_dst + 1
                 if ctrl.use_flag and self.v_flag != None:
                     self._emit(f"s_mov_b64 exec, -1")
@@ -569,7 +577,7 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
                         if ctrl.use_flag and self.v_flag != None:
                             self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d1)}]")
                         current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*ctrl.vector_d1}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
                         if ctrl.use_flag and self.v_flag != None:
                             self._emit(f"s_mov_b64 exec, -1")
                         i_dst = i_dst + 1

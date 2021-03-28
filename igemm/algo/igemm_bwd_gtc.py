@@ -842,7 +842,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 v_c_num              = vseq()
             else:
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
-                                        outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
+                                        outer.tunable.num_global_load_a + outer.tunable.num_global_load_b + \
                                         8       # from v_sst_a_os to v_wei_os
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -851,8 +851,8 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.v_c             = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
-            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
-            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_vgpr_global_load_b))
+            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_global_load_a))
+            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_global_load_b))
             self.v_sst_a_os          = sym_t("v_sst_a_os"     ,vseq(1))
             self.v_sst_b_os          = sym_t("v_sst_b_os"     ,vseq(1))
             self.v_sld_a_os          = sym_t("v_sld_a_os"     ,vseq(1))

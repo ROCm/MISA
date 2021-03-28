@@ -284,11 +284,11 @@ class igemm_gtc_tunable_parameter_t(object):
         self.global_prefetch_a_num              = 2 if self.tensor_a_pass_through and not self.tensor_a_pass_through_interleave_gld else 1
         self.global_prefetch_b_num              = 2 if self.tensor_b_pass_through and not self.tensor_b_pass_through_interleave_gld else 1
 
-        self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
-        self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
+        self.num_global_load_a                  = igemm_flatten_list_product(self.tensor_a_thread_lengths)
+        self.num_global_load_b                  = igemm_flatten_list_product(self.tensor_b_thread_lengths)
 
-        assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
-        assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
+        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
+        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
 
         # LDS size
         self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0

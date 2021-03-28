@@ -474,8 +474,11 @@ class igemm_xdlops_mapping_t(mc_base_t):
         k_pack = get_dict_with_default(options, "k_pack", 1)
         v_pack = get_dict_with_default(options, "v_pack", 1)
         assert v_pack in (1, k_pack),  'currently only support v_pack is 1 or k_pack'
+        assert k_pack % ctrl.lanegroup_k_per_thread() == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack since lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}'
+        # assert k_pack % ctrl.inst_mfma.num_v_a == 0 and k_pack % ctrl.inst_mfma.num_v_b == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack since num_v_a:{ctrl.inst_mfma.num_v_a}, num_v_b:{ctrl.inst_mfma.num_v_b}'
+        k_pack_per_thread = k_pack // ctrl.lanegroup_k_per_thread()
         with self._deferred_context():
-            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}")
+            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
             if k_pack != 1:
@@ -487,12 +490,20 @@ class igemm_xdlops_mapping_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k_per_wave() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
                 if k_pack != 1:
                     if v_pack == 1:
-                        self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack - 1}, v[{v_tmp4} + 0]   ; and k_pack:{k_pack}")
-                        self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack)}, v[{v_tmp4} + 0] ; shift right k_pack:{k_pack}")
-                        self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack:{k_pack}")
-                        self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack:{k_pack}")
-                        self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
-                        self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
+                        if k_pack_per_thread >= ctrl.block_k_per_wave():
+                            #self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 0], v[{v_gemm_in}]  ; or k_pack_per_thread:{k_pack_per_thread}")
+                            #self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 0], v[{v_gemm_im}]  ; or k_pack_per_thread:{k_pack_per_thread}")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_in}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_im}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
+                        else:
+                            self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack_per_thread - 1}, v[{v_tmp4} + 0]   ; and k_pack_per_thread:{k_pack_per_thread}")
+                            self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack_per_thread)}, v[{v_tmp4} + 0] ; shift right k_pack_per_thread:{k_pack_per_thread}")
+                            #self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack_per_thread:{k_pack_per_thread}")
+                            #self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack_per_thread:{k_pack_per_thread}")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_in}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_im}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
+                            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
                     else:
                         self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
                         self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
