@@ -710,47 +710,46 @@ class igemm_bwd_gtc_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
             self.outer = outer
+            sseq                       = gpr_sequencer_t()
 
-            self.s_ka                      = sym_t("s_ka"                     ,0)
-            self.s_bx                      = sym_t("s_bx"                     ,2)
-            self.s_p_in                    = sym_t("s_p_in"                   ,4)
-            self.s_p_wei                   = sym_t("s_p_wei"                  ,8)
-            self.s_p_out                   = sym_t("s_p_out"                  ,12)
-            self.s_hi                      = sym_t("s_hi"                     ,16)
-            self.s_wi                      = sym_t("s_wi"                     ,17)
-            self.s_n                       = sym_t("s_n"                      ,18)
-            self.s_k                       = sym_t("s_k"                      ,19)  # this is indeed k_per_group
-            self.s_c                       = sym_t("s_c"                      ,20)  # this is indeed c_per_group
+            self.s_ka                      = sym_t("s_ka"                     ,sseq(2))
+            self.s_bx                      = sym_t("s_bx"                     ,sseq(2))
+            self.s_p_in                    = sym_t("s_p_in"                   ,sseq(4))
+            self.s_p_wei                   = sym_t("s_p_wei"                  ,sseq(4))
+            self.s_p_out                   = sym_t("s_p_out"                  ,sseq(4))
+            self.s_hi                      = sym_t("s_hi"                     ,sseq(1))
+            self.s_wi                      = sym_t("s_wi"                     ,sseq(1))
+            self.s_n                       = sym_t("s_n"                      ,sseq(1))
+            self.s_k                       = sym_t("s_k"                      ,sseq(1))  # this is indeed k_per_group
+            self.s_c                       = sym_t("s_c"                      ,sseq(1))  # this is indeed c_per_group
             if outer.tunable.nxe != 0:
-                self.s_ho                  = sym_t("s_ho"                     ,21)
-                self.s_wo                  = sym_t("s_wo"                     ,22)
-                self.s_stride_h            = sym_t("s_stride_h"               ,23)
-                self.s_stride_w            = sym_t("s_stride_w"               ,24)
-                self.s_dilation_h          = sym_t("s_dilation_h"             ,25)
-                self.s_dilation_w          = sym_t("s_dilation_w"             ,26)
-                self.s_pad_h               = sym_t("s_pad_h"                  ,27)
-                self.s_pad_w               = sym_t("s_pad_w"                  ,28)
-                self.s_y                   = sym_t("s_y"                      ,29)
-                self.s_x                   = sym_t("s_x"                      ,30)
-                self.s_dtile_iy            = sym_t("s_dtile_iy"               ,31)
-                self.s_dtile_ix            = sym_t("s_dtile_ix"               ,32)
-                self.s_dtile_dy            = sym_t("s_dtile_dy"               ,33)
-                self.s_dtile_dx            = sym_t("s_dtile_dx"               ,34)
-                self.s_dtile_y             = sym_t("s_dtile_y"                ,35)
-                self.s_dtile_x             = sym_t("s_dtile_x"                ,36)
-                self.s_dtile_h             = sym_t("s_dtile_h"                ,37)       # not used
-                self.s_dtile_w             = sym_t("s_dtile_w"                ,38)       # not used
-                self.s_dslice_y            = sym_t("s_dslice_y"               ,39)
-                self.s_dslice_x            = sym_t("s_dslice_x"               ,40)
-                self.s_dslice_h            = sym_t("s_dslice_h"               ,41)
-                self.s_dslice_w            = sym_t("s_dslice_w"               ,42)
-                self.s_dslice_h_left       = sym_t("s_dslice_h_left"          ,43)
-                self.s_dslice_w_left       = sym_t("s_dslice_w_left"          ,44)
-                self.s_group               = sym_t("s_group"                  ,45)
-                sseq                       = gpr_sequencer_t(46)
+                self.s_ho                  = sym_t("s_ho"                     ,sseq(1))
+                self.s_wo                  = sym_t("s_wo"                     ,sseq(1))
+                self.s_stride_h            = sym_t("s_stride_h"               ,sseq(1))
+                self.s_stride_w            = sym_t("s_stride_w"               ,sseq(1))
+                self.s_dilation_h          = sym_t("s_dilation_h"             ,sseq(1))
+                self.s_dilation_w          = sym_t("s_dilation_w"             ,sseq(1))
+                self.s_pad_h               = sym_t("s_pad_h"                  ,sseq(1))
+                self.s_pad_w               = sym_t("s_pad_w"                  ,sseq(1))
+                self.s_y                   = sym_t("s_y"                      ,sseq(1))
+                self.s_x                   = sym_t("s_x"                      ,sseq(1))
+                self.s_dtile_iy            = sym_t("s_dtile_iy"               ,sseq(1))
+                self.s_dtile_ix            = sym_t("s_dtile_ix"               ,sseq(1))
+                self.s_dtile_dy            = sym_t("s_dtile_dy"               ,sseq(1))
+                self.s_dtile_dx            = sym_t("s_dtile_dx"               ,sseq(1))
+                self.s_dtile_y             = sym_t("s_dtile_y"                ,sseq(1))
+                self.s_dtile_x             = sym_t("s_dtile_x"                ,sseq(1))
+                self.s_dtile_h             = sym_t("s_dtile_h"                ,sseq(1))
+                self.s_dtile_w             = sym_t("s_dtile_w"                ,sseq(1))       
+                self.s_dslice_y            = sym_t("s_dslice_y"               ,sseq(1))
+                self.s_dslice_x            = sym_t("s_dslice_x"               ,sseq(1))
+                self.s_dslice_h            = sym_t("s_dslice_h"               ,sseq(1))
+                self.s_dslice_w            = sym_t("s_dslice_w"               ,sseq(1))
+                self.s_dslice_h_left       = sym_t("s_dslice_h_left"          ,sseq(1))
+                self.s_dslice_w_left       = sym_t("s_dslice_w_left"          ,sseq(1))
+                self.s_group               = sym_t("s_group"                  ,sseq(1))
             else:
-                self.s_group               = sym_t("s_group"                  ,21)
-                sseq                       = gpr_sequencer_t(22)
+                self.s_group               = sym_t("s_group"                  ,sseq(1))
 
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,self.s_dtile_h.value if outer.tunable.nxe != 0 else sseq(1))
 
@@ -807,11 +806,11 @@ class igemm_bwd_gtc_t(mc_base_t):
             self.s_gemm_k_num_k1           = sym_t("s_gemm_k_num_k1"          ,2)
             if outer.tunable.nxe != 0:
                 if not outer.is_unit_yx():
-                    self.s_gemm_k_num_dsy      = sym_t("s_gemm_k_num_dsy"         ,self.s_dslice_y.value)
-                    self.s_gemm_k_num_dsx      = sym_t("s_gemm_k_num_dsx"         ,self.s_dslice_x.value)
+                    self.s_gemm_k_num_dsy      = sym_t("s_gemm_k_num_dsy"     ,self.s_dslice_y.value)
+                    self.s_gemm_k_num_dsx      = sym_t("s_gemm_k_num_dsx"     ,self.s_dslice_x.value)
                 else:
-                    self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"      , self.s_dslice_y.value)
-                    self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"      , self.s_dslice_x.value)
+                    self.s_out_stride_k_save   = sym_t("s_out_stride_k_save"  ,self.s_dslice_y.value)
+                    self.s_wei_stride_k_save   = sym_t("s_wei_stride_k_save"  ,self.s_dslice_x.value)
                 self.s_dtile_dy_neg        = sym_t("s_dtile_dy_neg"           ,self.s_dtile_dy.value)
                 self.s_dtile_dx_neg        = sym_t("s_dtile_dx_neg"           ,self.s_dtile_dx.value)
 
@@ -822,7 +821,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 wei_npc = m_wei_2d_global_load.get_num_precache_soffset()
                 self.s_out_offset          = sym_t("s_out_offset"             ,sseq(out_npc))   # if this number is zero, it is also OK, since we would not use
                 self.s_wei_offset          = sym_t("s_wei_offset"             ,sseq(wei_npc))
-            self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
+
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 m0_num = self.s_block_gtc_ic.value + self.s_block_gtc_ic.value % 2  # warp to multiply of 2
                 self.s_magic_0             = sym_t("s_magic_0"                ,m0_num)
@@ -835,6 +834,7 @@ class igemm_bwd_gtc_t(mc_base_t):
                 self.s_shift_pack_0        = sym_t("s_shift_pack_0"           ,self.s_p_in.value + 2)
                 self.s_shift_pack_1        = sym_t("s_shift_pack_1"           ,self.s_p_in.value + 3)
 
+            self.s_tmp                     = sym_t("s_tmp"                    ,sseq(6, 2))
             self.s_end                     = sym_t("s_end"                    ,sseq())
 
         def get_count(self):
