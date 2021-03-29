@@ -15,5 +15,4 @@ sqtt_out/
 *.csv
 .gitignore
 config/fp16-configs/
-*.config
 *.o
