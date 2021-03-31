@@ -4,8 +4,8 @@ ARCH=gfx1030
 rm -rf out
 mkdir out
 
-#AS_CLAGS="-Wa,-defsym,activ_mode=0" # PASTHRU = 0      
-AS_CLAGS="-Wa,-defsym,activ_mode=1" # LOGISTIC = 1     
+AS_CLAGS="-Wa,-defsym,activ_mode=0" # PASTHRU = 0      
+#AS_CLAGS="-Wa,-defsym,activ_mode=1" # LOGISTIC = 1     
 #AS_CLAGS="-Wa,-defsym,activ_mode=2" # TANH = 2         
 #AS_CLAGS="-Wa,-defsym,activ_mode=3" # RELU = 3         
 #AS_CLAGS="-Wa,-defsym,activ_mode=4" # SOFTRELU = 4     
