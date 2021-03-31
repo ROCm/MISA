@@ -385,6 +385,7 @@ int main(int argc, char **argv){
     int repeat = env_get_int("REPEAT", REPEAT);
     int sclk_mhz = env_get_int("SCLK_MHZ", SCLK_MHZ);
     int dump_out = env_get_int("DUMP_OUT", 0);
+    int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     
     char *gpu_naive_conv_hsaco = env_get_str("GPU_NAIVE_CONV_HSACO", GPU_NAIVE_CONV_HSACO);
     gpu_naive_conv_init(gpu_naive_conv_hsaco);
@@ -566,6 +567,9 @@ int main(int argc, char **argv){
 
         igemm_fwd_btm_t conv_fwd_driver;
         int valid_index = 0;
+        result_t fastest_result;
+        fastest_result.duration_ms = FLT_MAX;
+        int fastest_id = -1;
         for (int i = 0; i < sizeof(igemm_fwd_btm_kernel_list)/sizeof(igemm_fwd_btm_kernel_list[0]); i++) {
             igemm_fwd_btm_kernel_info_t *kinfo = &igemm_fwd_btm_kernel_list[i];
             if(driver_data_type == driverHalf){
@@ -584,6 +588,7 @@ int main(int argc, char **argv){
 
             result = conv_fwd_driver.run(&conv_args, module, kinfo, device_input_dtype,
                                                device_weight_dtype, device_output_dtype, warmup, repeat, driver_data_type);
+
             valid_index++;
 
             if (result.return_code != 0){
@@ -594,8 +599,15 @@ int main(int argc, char **argv){
             double gflops = measured_conv_gflops(
                 result.duration_ms, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w, ngroups);
+            result.gflops =  gflops;
+            result.efficiency = (gflops / theo_gflops) * 100;
             printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
                    gflops / 1000 , (gflops / theo_gflops) * 100);
+
+            if(result.duration_ms < fastest_result.duration_ms){
+                fastest_result = result;
+                fastest_id = valid_index - 1;
+            }
             if (need_verify) {
                 bool is_valid;
                 if(driver_data_type == driverFloat) {
@@ -621,6 +633,19 @@ int main(int argc, char **argv){
                 printf(", valid:%s", is_valid ? "y" : "n");
             }
             printf("\n");
+        }
+
+        if(log_fastest_config){
+            // dump_arg(conv_args);
+            if(fastest_id == -1)
+                printf("  fastest: no suitable kernel\n");
+            else
+                printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
+                    fastest_id,
+                    fastest_result.kernel_name.c_str(),
+                    fastest_result.duration_ms,
+                    fastest_result.gflops / 1000,
+                    fastest_result.efficiency);
         }
 
         if (need_verify){

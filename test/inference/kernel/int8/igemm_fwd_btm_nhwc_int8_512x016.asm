@@ -19,10 +19,13 @@
 .set k_group, 84
 .set k_batch_m, 88
 .set k_stride_m, 92
-.set k_magic_0, 96
-.set k_magic_1, 100
-.set k_magic_2, 104
-.set k_shift_pack_0, 108
+.set k_alpha, 96
+.set k_beta, 100
+.set k_gamma, 104
+.set k_magic_0, 108
+.set k_magic_1, 112
+.set k_magic_2, 116
+.set k_shift_pack_0, 120
 .set k_n_dword, 16
 
 .set s_ka, 0
@@ -50,34 +53,38 @@
 .set s_group, 31
 .set s_batch_m, 32
 .set s_stride_m, 33
-.set s_magic_0, 34
-.set s_magic_1, 35
-.set s_magic_2, 36
-.set s_shift_pack_0, 37
-.set s_shift_m0, 38
+.set s_alpha, 34
+.set s_beta, 35
+.set s_gamma, 36
+.set s_magic_0, 37
+.set s_magic_1, 38
+.set s_magic_2, 39
+.set s_shift_pack_0, 40
+.set s__pack_0, 41
+.set s_shift_m0, 42
 .set s_shift_m1, s_shift_pack_0
-.set s_shift_m2, 39
+.set s_shift_m2, 43
 .set s_in_stride_wi, 12
 .set s_in_stride_n, 13
 .set s_wei_stride_k, 14
 .set s_out_stride_wo, 15
-.set s_out_stride_n, 40
-.set s_in_diff_hi, 41
-.set s_in_diff_wi, 42
-.set s_dilation_w_x, 43
-.set s_move_slice_k_ix, 44
+.set s_out_stride_n, 44
+.set s_in_diff_hi, 45
+.set s_in_diff_wi, 46
+.set s_dilation_w_x, 47
+.set s_move_slice_k_ix, 48
 
 .set s_kitr, 1
-.set s_wei_offset, 45
+.set s_wei_offset, 49
 .set s_out_stride, s_wei_offset
-.set s_sld_b_stride, 46
-.set s_br, 47
-.set s_ib_stride, 48
-.set s_block_ik, 49
-.set s_block_ib, 50
-.set s_0xff, 51
-.set s_tmp, 52
-.set s_end, 58
+.set s_sld_b_stride, 50
+.set s_br, 51
+.set s_ib_stride, 52
+.set s_block_ik, 53
+.set s_block_ib, 54
+.set s_0xff, 55
+.set s_tmp, 56
+.set s_end, 62
 
 ; magic_0: x
 ; magic_1: wo
@@ -119,8 +126,8 @@ igemm_fwd_btm_nhwc_int8_512x16x16_r2:
     s_load_dwordx2  s[s_p_in+0:s_p_in+1],    s[s_ka+0:s_ka+1],    0+k_p_in
     s_load_dwordx4  s[s_p_wei+0:s_p_wei+3],  s[s_ka+0:s_ka+1],    0+k_p_wei
     s_load_dwordx16 s[s_hi+0:s_hi+15],    s[s_ka+0:s_ka+1],    0+k_hi
-    s_load_dwordx4  s[s_batch_m:s_batch_m+3],    s[s_ka+0:s_ka+1],    0+k_batch_m
-    s_load_dwordx2  s[s_magic_2:s_magic_2+1],    s[s_ka+0:s_ka+1],    0+k_magic_2
+    s_load_dwordx8  s[s_batch_m:s_batch_m+7],    s[s_ka+0:s_ka+1],    0+k_batch_m
+    s_load_dword  s[s_shift_pack_0],    s[s_ka+0:s_ka+1],    0+k_shift_pack_0
     v_mov_b32       v[v_tid], v0
     s_mov_b32 s[s_ib_stride], 128
     s_mov_b32 s[s_0xff], 0xff
@@ -723,7 +730,39 @@ L_igemm_fwd_btm_nhwc_int8_512x16x16_r2_fma_end_not_load_next:
 
     v_mov_b32 v[v_sld_b_os], 0                                  ; reset to start
  
+    .activ_int32 v_c + 0, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 0, v_c+ 0, s_0xff
+    .activ_int32 v_c + 0+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 4, v_c+16, s_0xff
     v_cmpx_le_u32 1, v[v_out_flag]
     global_store_dwordx4 v[v_out_os], v[v_c_buf+0:v_c_buf+3], s[s_p_out:s_p_out+1]
@@ -733,7 +772,40 @@ L_igemm_fwd_btm_nhwc_int8_512x16x16_r2_fma_end_not_load_next:
     global_store_dwordx4 v[v_out_os+1], v[v_c_buf+ 4:v_c_buf+ 7], s[s_p_out:s_p_out+1]
     s_mov_b64 exec, -1
 
+    .activ_int32 v_c + 0+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 8, v_c+32, s_0xff
+
+    .activ_int32 v_c + 0+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+12, v_c+48, s_0xff
 
     v_cmpx_le_u32 1, v[v_out_flag+2]
@@ -801,7 +873,7 @@ L_igemm_fwd_btm_nhwc_int8_512x16x16_r2_end:
     .amdhsa_system_sgpr_workgroup_id_z 1
     .amdhsa_system_vgpr_workitem_id 0
     .amdhsa_next_free_vgpr 188
-    .amdhsa_next_free_sgpr 58
+    .amdhsa_next_free_sgpr 62
     .amdhsa_ieee_mode 0
     .amdhsa_dx10_clamp 0
     .amdhsa_wavefront_size32 1
@@ -830,10 +902,13 @@ L_igemm_fwd_btm_nhwc_int8_512x16x16_r2_end:
 .set k_group, 84
 .set k_batch_m, 88
 .set k_stride_m, 92
-.set k_magic_0, 96
-.set k_magic_1, 100
-.set k_magic_2, 104
-.set k_shift_pack_0, 108
+.set k_alpha, 96
+.set k_beta, 100
+.set k_gamma, 104
+.set k_magic_0, 108
+.set k_magic_1, 112
+.set k_magic_2, 116
+.set k_shift_pack_0, 120
 .set k_n_dword, 16
 
 .set s_ka, 0
@@ -861,34 +936,38 @@ L_igemm_fwd_btm_nhwc_int8_512x16x16_r2_end:
 .set s_group, 31
 .set s_batch_m, 32
 .set s_stride_m, 33
-.set s_magic_0, 34
-.set s_magic_1, 35
-.set s_magic_2, 36
-.set s_shift_pack_0, 37
-.set s_shift_m0, 38
+.set s_alpha, 34
+.set s_beta, 35
+.set s_gamma, 36
+.set s_magic_0, 37
+.set s_magic_1, 38
+.set s_magic_2, 39
+.set s_shift_pack_0, 40
+.set s__pack_0, 41
+.set s_shift_m0, 42
 .set s_shift_m1, s_shift_pack_0
-.set s_shift_m2, 39
+.set s_shift_m2, 43
 .set s_in_stride_wi, 12
 .set s_in_stride_n, 13
 .set s_wei_stride_k, 14
 .set s_out_stride_wo, 15
-.set s_out_stride_n, 40
-.set s_in_diff_hi, 41
-.set s_in_diff_wi, 42
-.set s_dilation_w_x, 43
-.set s_move_slice_k_ix, 44
+.set s_out_stride_n, 44
+.set s_in_diff_hi, 45
+.set s_in_diff_wi, 46
+.set s_dilation_w_x, 47
+.set s_move_slice_k_ix, 48
 
 .set s_kitr, 1
-.set s_wei_offset, 45
+.set s_wei_offset, 49
 .set s_out_stride, s_wei_offset
-.set s_sld_b_stride, 46
-.set s_br, 47
-.set s_ib_stride, 48
-.set s_block_ik, 49
-.set s_block_ib, 50
-.set s_0xff, 51
-.set s_tmp, 52
-.set s_end, 58
+.set s_sld_b_stride, 50
+.set s_br, 51
+.set s_ib_stride, 52
+.set s_block_ik, 53
+.set s_block_ib, 54
+.set s_0xff, 55
+.set s_tmp, 56
+.set s_end, 62
 
 ; magic_0: x
 ; magic_1: wo
@@ -930,8 +1009,8 @@ igemm_fwd_btm_nhwc_int8_512x16x8_r2:
     s_load_dwordx2  s[s_p_in+0:s_p_in+1],    s[s_ka+0:s_ka+1],    0+k_p_in
     s_load_dwordx4  s[s_p_wei+0:s_p_wei+3],  s[s_ka+0:s_ka+1],    0+k_p_wei
     s_load_dwordx16 s[s_hi+0:s_hi+15],    s[s_ka+0:s_ka+1],    0+k_hi
-    s_load_dwordx4  s[s_batch_m:s_batch_m+3],    s[s_ka+0:s_ka+1],    0+k_batch_m
-    s_load_dwordx2  s[s_magic_2:s_magic_2+1],    s[s_ka+0:s_ka+1],    0+k_magic_2
+    s_load_dwordx8  s[s_batch_m:s_batch_m+7],    s[s_ka+0:s_ka+1],    0+k_batch_m
+    s_load_dword  s[s_shift_pack_0],    s[s_ka+0:s_ka+1],    0+k_shift_pack_0
     v_mov_b32       v[v_tid], v0
     s_mov_b32 s[s_ib_stride], 128
     s_mov_b32 s[s_0xff], 0xff
@@ -1468,7 +1547,40 @@ L_igemm_fwd_btm_nhwc_int8_512x16x8_r2_fma_end_not_load_next:
 
     v_mov_b32 v[v_sld_b_os], 0                                  ; reset to start
  
+    .activ_int32 v_c + 0, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 0, v_c+ 0, s_0xff
+
+    .activ_int32 v_c + 0+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+16, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+24, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 4, v_c+16, s_0xff
     v_cmpx_le_u32 1, v[v_out_flag]
     global_store_dwordx4 v[v_out_os], v[v_c_buf+0:v_c_buf+3], s[s_p_out:s_p_out+1]
@@ -1478,7 +1590,40 @@ L_igemm_fwd_btm_nhwc_int8_512x16x8_r2_fma_end_not_load_next:
     global_store_dwordx4 v[v_out_os+1], v[v_c_buf+ 4:v_c_buf+ 7], s[s_p_out:s_p_out+1]
     s_mov_b64 exec, -1
 
+    .activ_int32 v_c + 0+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+32, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+40, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+ 8, v_c+32, s_0xff
+
+    .activ_int32 v_c + 0+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+48, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 0+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 1+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 2+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 3+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 4+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 5+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 6+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_int32 v_c + 7+56, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     .pack_i8x4_i32_r4 v_c_buf+12, v_c+48, s_0xff
 
     v_cmpx_le_u32 1, v[v_out_flag+2]
@@ -1537,7 +1682,7 @@ L_igemm_fwd_btm_nhwc_int8_512x16x8_r2_end:
     .amdhsa_system_sgpr_workgroup_id_z 1
     .amdhsa_system_vgpr_workitem_id 0
     .amdhsa_next_free_vgpr 140
-    .amdhsa_next_free_sgpr 58
+    .amdhsa_next_free_sgpr 62
     .amdhsa_ieee_mode 0
     .amdhsa_dx10_clamp 0
     .amdhsa_wavefront_size32 1

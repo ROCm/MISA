@@ -188,6 +188,93 @@
     .endr
 .endm
 
+.macro exp_f_float base, sign, vtmp //e^x = 2^(xlog2e)
+    .if \sign < 0
+        v_mov_b32 v[\vtmp], 0xbfb8aa3b //-log2e
+    .else
+        v_mov_b32 v[\vtmp], 0x3fb8aa3b //log2e
+    .endif
+    v_mul_f32 v[\base], v[\base], v[\vtmp]
+    v_exp_f32 v[\base], v[\base]
+.endm
+
+.macro ln_f_float base, vtmp // ln(x) = log2x * 1 / (log2e)
+    v_log_f32 v[\base], v[\base]
+    v_mov_b32 v[\vtmp], 0x3f317218 // 1/(log2e)
+    v_mul_f32 v[\base], v[\base], v[\vtmp]
+.endm
+
+MIOPEN_NEURON_PASTHRU = 0      // x
+MIOPEN_NEURON_LOGISTIC = 1     // 1 / (1 + e^-x)	//Sigmoid
+MIOPEN_NEURON_TANH = 2         // beta * tanh(alpha * x)
+MIOPEN_NEURON_RELU = 3         // max(0, x)
+MIOPEN_NEURON_SOFTRELU = 4     // log(1 + e^x)   // bonomial normal log likelihood
+MIOPEN_NEURON_ABS = 5          // abs(x)
+MIOPEN_NEURON_POWER = 6        // (alpha + beta * x )^gamma
+MIOPEN_NEURON_CLIPPED_RELU = 7 // min(alpha, max(0, x))
+MIOPEN_NEURON_LEAKY_RELU = 8   // alpha * x | x <= 0; x | x > 0
+MIOPEN_NEURON_ELU = 9          // alpha * (e^x - 1) | x <= 0; x | x > 0
+
+.ifnotdef activ_mode
+      activ_mode = MIOPEN_NEURON_PASTHRU
+.endif
+
+.macro .activ_f32 base, activ_mode, alpha, beta, gamma, vtmp0, vtmp1
+    .if \activ_mode == MIOPEN_NEURON_LOGISTIC //1 / (1 + e^-x)
+        exp_f_float \base, -1, \vtmp0
+        v_add_f32 v[\base], 1.0, v[\base]
+        v_rcp_f32 v[\base], v[\base]
+    .elseif \activ_mode == MIOPEN_NEURON_TANH // \beta * tanh(\alpha * x)
+        v_mul_f32 v[\base], s[\alpha], v[\base]
+        v_mul_f32 v[\base], 2.0, v[\base]
+        exp_f_float \base, 1, \vtmp0
+        v_add_f32 v[\base], 1.0, v[\base]
+        v_rcp_f32 v[\base], v[\base]
+        v_mul_f32 v[\base], 2.0, v[\base]
+        v_sub_f32 v[\base], 1.0, v[\base]
+        v_mov_b32 v[\vtmp0], 1.0
+        v_mul_f32 v[\base], s[\beta], v[\base]
+    .elseif \activ_mode == MIOPEN_NEURON_RELU //max(0, x)
+        v_max_f32 v[\base], v[\base], 0
+    .elseif \activ_mode == MIOPEN_NEURON_SOFTRELU //log(1 + e^x)
+        exp_f_float \base, 1, \vtmp0
+        v_add_f32 v[\base], 1.0, v[\base]
+        ln_f_float \base, \vtmp0
+    .elseif \activ_mode == MIOPEN_NEURON_ABS //abs(x)
+        v_max_f32 v[\base], v[\base], -v[\base]
+    .elseif \activ_mode == MIOPEN_NEURON_POWER //(\alpha + \beta * x )^\gamma
+        v_mul_f32 v[\base], s[\beta], v[\base]
+        v_add_f32 v[\base], s[\alpha], v[\base]
+        v_mov_b32 v[\vtmp0], v[\base]
+        v_log_f32 v[\base], v[\base]
+        v_mul_f32 v[\base], s[\gamma], v[\base]
+        v_exp_f32 v[\base], v[\base]
+        v_cmp_lt_f32 vcc, EPSILON_float, v[\vtmp0]
+        v_cndmask_b32 v[\base], 0, v[\base], vcc
+    .elseif \activ_mode == MIOPEN_NEURON_CLIPPED_RELU //min(\alpha, max(0, x))
+        v_max_f32 v[\base], v[\base], 0
+        v_min_f32 v[\base], s[\alpha], v[\base] 
+    .elseif \activ_mode == MIOPEN_NEURON_LEAKY_RELU //\alpha * x | x <= 0; x | x > 0
+        v_cmp_lt_f32 vcc, 0, v[\base]
+        v_mov_b32 v[\vtmp0], s[\alpha]
+        v_cndmask_b32 v[\vtmp0], v[\vtmp0], 1.0, vcc
+        v_mul_f32 v[\base], v[\base], v[\vtmp0]
+    .elseif \activ_mode == MIOPEN_NEURON_ELU //\alpha * (e^x - 1) | x <= 0; x | x > 0
+        v_cmp_lt_f32 vcc, 0, v[\base]
+        v_mov_b32 v[\vtmp1], v[\base]
+        exp_f_float \base, 1, \vtmp0
+        v_add_f32 v[\base], -1.0, v[\base]
+        v_mul_f32 v[\base], s[\alpha], v[\base]
+        v_cndmask_b32 v[\base], v[\base], v[\vtmp1], vcc
+    .endif
+.endm
+
+.macro .activ_int32 base, activ_mode, alpha, beta, gamma, vtmp0, vtmp1
+    v_cvt_f32_i32 v[\base], v[\base]
+    .activ_f32 \base, \activ_mode, \alpha, \beta, \gamma, \vtmp0, \vtmp1
+    v_cvt_i32_f32 v[\base], v[\base]
+.endm
+
 .include "igemm_fwd_btm_nhwc_int8_256x004.asm"
 .include "igemm_fwd_btm_nhwc_int8_256x008.asm"
 .include "igemm_fwd_btm_nhwc_int8_512x008.asm"
@@ -200,10 +287,10 @@ amdhsa.version: [ 1, 0 ]
 amdhsa.kernels:
   - .name: igemm_fwd_btm_nhwc_int8_256x4x16_r1
     .symbol: igemm_fwd_btm_nhwc_int8_256x4x16_r1.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 108
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 1024
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -231,16 +318,20 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
   - .name: igemm_fwd_btm_nhwc_int8_256x8x16_r1
     .symbol: igemm_fwd_btm_nhwc_int8_256x8x16_r1.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 80
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 2048
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -268,16 +359,20 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
   - .name: igemm_fwd_btm_nhwc_int8_512x8x16_r1
     .symbol: igemm_fwd_btm_nhwc_int8_512x8x16_r1.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 124
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 2048
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -305,16 +400,20 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
   - .name: igemm_fwd_btm_nhwc_int8_512x16x8_r2
     .symbol: igemm_fwd_btm_nhwc_int8_512x16x8_r2.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 140
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 4096
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -342,16 +441,20 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
   - .name: igemm_fwd_btm_nhwc_int8_512x16x16_r2
     .symbol: igemm_fwd_btm_nhwc_int8_512x16x16_r2.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 188
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 4096
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -379,16 +482,20 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
   - .name: igemm_fwd_btm_nhwc_int8_1024x16x8_r2
     .symbol: igemm_fwd_btm_nhwc_int8_1024x16x8_r2.kd
-    .sgpr_count: 64
+    .sgpr_count: 68
     .vgpr_count: 244
     .kernarg_segment_align: 8
-    .kernarg_segment_size: 112
+    .kernarg_segment_size: 128
     .group_segment_fixed_size: 4096
     .private_segment_fixed_size: 0
     .wavefront_size: 32
@@ -416,9 +523,13 @@ amdhsa.kernels:
     - { .name: group     , .size: 4, .offset:  84, .value_kind: by_value, .value_type: i32}
     - { .name: batch_m   , .size: 4, .offset:  88, .value_kind: by_value, .value_type: i32}
     - { .name: stride_m  , .size: 4, .offset:  92, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_0   , .size: 4, .offset:  96, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_1   , .size: 4, .offset: 100, .value_kind: by_value, .value_type: i32}
-    - { .name: magic_2   , .size: 4, .offset: 104, .value_kind: by_value, .value_type: i32}
-    - { .name: shift_pack_0, .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: alpha     , .size: 4, .offset:  96, .value_kind: by_value, .value_type: f32}
+    - { .name: beta      , .size: 4, .offset: 100, .value_kind: by_value, .value_type: f32}
+    - { .name: gamma     , .size: 4, .offset: 104, .value_kind: by_value, .value_type: f32}
+    - { .name: magic_0   , .size: 4, .offset: 108, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_1   , .size: 4, .offset: 112, .value_kind: by_value, .value_type: i32}
+    - { .name: magic_2   , .size: 4, .offset: 116, .value_kind: by_value, .value_type: i32}
+    - { .name: shift_pack_0, .size: 4, .offset: 120, .value_kind: by_value, .value_type: i32}
+    - { .name: __pack_0  , .size: 4, .offset: 124, .value_kind: by_value, .value_type: i32}
 ...
 .end_amdgpu_metadata

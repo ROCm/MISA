@@ -75,6 +75,9 @@ typedef struct {
     uint32_t group;
     uint32_t batch_m;
     uint32_t stride_m;
+    float    alpha;
+    float    beta;
+    float    gamma;
     uint32_t magic_0;
     uint32_t magic_1;
     uint32_t magic_2;
@@ -103,6 +106,9 @@ static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
     std::cout<<"group:"<<karg->group<<", ";
     std::cout<<"batch_m:"<<karg->batch_m<<", ";
     std::cout<<"stride_m:"<<karg->stride_m<<", ";
+    std::cout<<"alpha:"<<karg->alpha<<", ";
+    std::cout<<"beta:"<<karg->beta<<", ";
+    std::cout<<"gamma:"<<karg->gamma<<", ";
     std::cout<<"magic_0:"<<karg->magic_0<<", ";
     std::cout<<"magic_1:"<<karg->magic_1<<", ";
     std::cout<<"magic_2:"<<karg->magic_2<<", ";
@@ -274,6 +280,11 @@ public:
             karg.batch_m    = 1;
             karg.stride_m   = 0;
         }
+
+        // TODO: proper set alpha/beta/gamma
+        karg.alpha          = 1.0f;
+        karg.beta           = 1.0f;
+        karg.gamma          = 1.0f;
 
         magic_div_u32_t mdiv_0 = magic_div_u32_gen(fx);
         magic_div_u32_t mdiv_1 = magic_div_u32_gen(wo);

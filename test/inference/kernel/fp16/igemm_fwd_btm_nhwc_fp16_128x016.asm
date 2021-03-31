@@ -19,10 +19,13 @@
 .set k_group, 84
 .set k_batch_m, 88
 .set k_stride_m, 92
-.set k_magic_0, 96
-.set k_magic_1, 100
-.set k_magic_2, 104
-.set k_shift_pack_0, 108
+.set k_alpha, 96
+.set k_beta, 100
+.set k_gamma, 104
+.set k_magic_0, 108
+.set k_magic_1, 112
+.set k_magic_2, 116
+.set k_shift_pack_0, 120
 
 .set s_block_ib, 2      ; bx, ho*wo
 .set s_ka, 0
@@ -49,30 +52,34 @@
 .set s_group, 31
 .set s_batch_m, 32
 .set s_stride_m, 33
-.set s_magic_0, 34
-.set s_magic_1, 35
-.set s_magic_2, 36
-.set s_shift_pack_0, 37
-.set s_shift_m0, 38
+.set s_alpha, 34
+.set s_beta, 35
+.set s_gamma, 36
+.set s_magic_0, 37
+.set s_magic_1, 38
+.set s_magic_2, 39
+.set s_shift_pack_0, 40
+.set s__pack_0, 41
+.set s_shift_m0, 42
 .set s_shift_m1, s_shift_pack_0
 .set s_in_stride_wi, 12
 .set s_in_stride_n, 13
 .set s_wei_stride_k, 14
 .set s_out_stride_wo, 15
-.set s_out_stride_n, 39
-.set s_in_diff_hi, 40
-.set s_in_diff_wi, 41
-.set s_dilation_w_x, 42
-.set s_move_slice_k_ix, 43
+.set s_out_stride_n, 43
+.set s_in_diff_hi, 44
+.set s_in_diff_wi, 45
+.set s_dilation_w_x, 46
+.set s_move_slice_k_ix, 47
 
 .set s_kitr, 1
-.set s_wei_offset, 44
+.set s_wei_offset, 48
 .set s_out_stride, s_wei_offset
-.set s_sld_b_stride, 45
-.set s_br, 46
+.set s_sld_b_stride, 49
+.set s_br, 50
 
-.set s_tmp, 48
-.set s_end, 54
+.set s_tmp, 52
+.set s_end, 58
 
 ; magic_0: x
 ; magic_1: wo
@@ -114,8 +121,8 @@ igemm_fwd_btm_nhwc_fp16_128x16x16_r3:
     s_load_dwordx2  s[s_p_in+0:s_p_in+1],    s[s_ka+0:s_ka+1],    0+k_p_in
     s_load_dwordx4  s[s_p_wei+0:s_p_wei+3],  s[s_ka+0:s_ka+1],    0+k_p_wei
     s_load_dwordx16 s[s_hi+0:s_hi+15],    s[s_ka+0:s_ka+1],    0+k_hi
-    s_load_dwordx4  s[s_batch_m:s_batch_m+3],    s[s_ka+0:s_ka+1],    0+k_batch_m
-    s_load_dwordx2  s[s_magic_2:s_magic_2+1],    s[s_ka+0:s_ka+1],    0+k_magic_2
+    s_load_dwordx8  s[s_batch_m:s_batch_m+7],    s[s_ka+0:s_ka+1],    0+k_batch_m
+    s_load_dword  s[s_shift_pack_0],    s[s_ka+0:s_ka+1],    0+k_shift_pack_0
     v_mov_b32       v[v_tid], v0
 
     ; calculate wei offset, 16x8, 16 for k, 8 for yxc, 4 for yx, 2 for c
@@ -508,6 +515,14 @@ L_igemm_fwd_btm_nhwc_fp16_128x16x16_r3_fma_end_not_load_next:
 
     s_waitcnt lgkmcnt(2)
     .fma_1x8_fp16 v_c+ 0, v_a + 7, v_b +16
+    .activ_f32 v_c + 0, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 1, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 2, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 3, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 4, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 5, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 6, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 7, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     v_cvt_f16_f32 v[v_c + 0], v[v_c + 0]
     v_cvt_f16_f32 v[v_c + 1], v[v_c + 1]
     v_cvt_f16_f32 v[v_c + 2], v[v_c + 2]
@@ -518,6 +533,14 @@ L_igemm_fwd_btm_nhwc_fp16_128x16x16_r3_fma_end_not_load_next:
     v_cvt_f16_f32 v[v_c + 7], v[v_c + 7]
     s_waitcnt lgkmcnt(0)
     .fma_1x8_fp16 v_c+ 8, v_a + 7, v_b +24
+    .activ_f32 v_c + 8, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c + 9, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +10, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +11, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +12, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +13, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +14, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
+    .activ_f32 v_c +15, activ_mode, s_alpha, s_beta, s_gamma, v_tmp+0, v_tmp+1
     v_cvt_f16_f32 v[v_c + 8], v[v_c + 8]
     v_cvt_f16_f32 v[v_c + 9], v[v_c + 9]
     v_cvt_f16_f32 v[v_c +10], v[v_c +10]
@@ -576,7 +599,7 @@ L_igemm_fwd_btm_nhwc_fp16_128x16x16_r3_end:
     .amdhsa_system_sgpr_workgroup_id_z 1
     .amdhsa_system_vgpr_workitem_id 0
     .amdhsa_next_free_vgpr 74
-    .amdhsa_next_free_sgpr 54
+    .amdhsa_next_free_sgpr 58
     .amdhsa_ieee_mode 0
     .amdhsa_dx10_clamp 0
     .amdhsa_wavefront_size32 1
