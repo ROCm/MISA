@@ -348,6 +348,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         def __call__(self):
             s = self.outer.sgpr
             v = self.outer.vgpr
+            k = self.outer.karg
             tunable = self.outer.tunable
 
             m_wei_2d_global_load, m_in_2d_global_load = self.outer.get_macro_global_load()
@@ -356,14 +357,19 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 #if self.outer.tunable.nxe != 0:
                 # if tunable.tensor_a_pass_through:
                 self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
-                if tunable.tensor_a_pass_through:
-                    self._emit(m_in_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(), s.s_p_in(), v.v_in_os(), None, s.s_in_stride_k_pack(), s.s_in_offset(),
-                            *(v.v_in_flag(), v.v_tmp()) if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG else (v.v_in_flag(),)))
-                else:
-                    if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
-                        self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag(), v.v_tmp()))
-                    else:
-                        self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag()))
+                #if tunable.tensor_a_pass_through:
+                #    self._emit(m_in_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(), s.s_p_in(), v.v_in_os(), None, s.s_in_stride_k_pack(), s.s_in_offset(),
+                #            *(v.v_in_flag(), v.v_tmp()) if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG else (v.v_in_flag(),)))
+                #else:
+                #    if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:
+                #        self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag(), v.v_tmp()))
+                #    else:
+                #        self._emit(m_in_2d_global_load(v.v_gld_a(), s.s_p_in(), s.s_in_offset(), v.v_in_os(), v.v_in_flag()))
+                #        #     *(v.v_in_flag(), v.v_tmp()) if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG else (v.v_in_flag(),)))
+                self._emit(m_in_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(),
+                    s.s_p_in(), v.v_in_os(),
+                    *(None, None, s.s_in_stride_k_pack(), s.s_in_offset()) if tunable.tensor_a_pass_through else (s.s_in_offset(), None, None, None),
+                    v.v_in_flag(), v.v_tmp(), None, k.k_gload_in_c_stride))
 
             return self._get_deferred()
 
@@ -459,6 +465,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     self.k_end                  = sym_t('k_end'             ,112)
             else:
                 self.k_end          = sym_t('k_end'             ,88)
+            
+
+            ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = outer.get_thread_lengths()
+            ca_nb0, ca_nb1, ca_e, ca_c, cb_e, cb_c, cb_k0, cb_k1 = outer.get_cluster_lengths()
+            data_byte = amdgpu_precision_data_byte(outer.tunable.precision)
+
+            self.k_gload_in_c_stride    = sym_t('k_gload_in_c_stride', \
+                        data_byte * utility_gcd(ta_c, 4 * (4 // data_byte)) * (ca_c if outer.tunable.tensor_a_pass_through else 1))
 
         def get_count(self):
             return self.k_end.value
@@ -714,7 +728,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             if self.tunable.precision == 'fp32':
                 assert ta_c in (1, 2, 4), "currently c will be used as LDS store/load vector size, now only support this"
             elif self.tunable.precision in ('fp16', 'bf16'):
-                assert ta_c in (1, 2, 4, 8)
+                assert ta_c in (1, 2, 4, 8, 16, 32)
 
         assert ta_e == 1, "currently not support >1 in e dimension"
 
@@ -823,15 +837,24 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
 
         if self.tunable.tensor_a_pass_through:
-            ctrl_in_gld.length_d0 = ta_c // self.get_k_pack()
-            ctrl_in_gld.length_d1 = (ta_nb0 if ta_nb0 != 1 else ta_nb1) * self.get_k_pack()
+            #ctrl_in_gld.length_d0 = ta_c // self.get_k_pack()
+            #ctrl_in_gld.length_d1 = (ta_nb0 if ta_nb0 != 1 else ta_nb1) * self.get_k_pack()
+            #ctrl_in_gld.vector_d1 = self.get_k_pack()
+            #ctrl_in_gld.flag_merge_v = 0 if self.tunable.tensor_a_pass_through_interleave_gld else 1
+            ctrl_in_gld.length_d0 = ta_nb0 if ta_nb0 != 1 else ta_nb1
+            ctrl_in_gld.length_d1 = ta_c
             ctrl_in_gld.vector_d1 = self.get_k_pack()
-            ctrl_in_gld.flag_merge_v = 0 if self.tunable.tensor_a_pass_through_interleave_gld else 1
+            assert not self.tunable.tensor_a_pass_through_interleave_gld, "NHWC always not interleave, this may reduce performance"
+            ctrl_in_gld.flag_merge_v = 1
+            ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K
         else:
+            # ctrl_in_gld.vector_d1 = self.get_k_pack()
             if self.in_thread_copy_ndim == 2:
+                ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K
                 ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
                 ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
             elif self.in_thread_copy_ndim == 1:
+                ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_K | GLOBAL_PTN_D1_V if (ta_nb0 * ta_nb1 != 1) else GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K    # D1_V if dim is nb0, nb1, or D1_K
                 ctrl_in_gld.length_d0 = 1
                 ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
             else:
@@ -847,10 +870,13 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 ctrl_in_gld.bfe_flag = 1
 
         if self.tunable.precache_soffset:
+            #return  macro_igemm_2d_global_load_precache_sv_offset_t(self.mc, ctrl_wei_gld, inline) if self.tunable.tensor_b_pass_through else \
+            #        macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld, inline), \
+            #        macro_igemm_2d_global_load_precache_sv_offset_t(self.mc, ctrl_in_gld, inline) if self.tunable.tensor_a_pass_through else \
+            #        macro_igemm_2d_global_load_precache_voffset_t(self.mc, ctrl_in_gld, inline)
             return  macro_igemm_2d_global_load_precache_sv_offset_t(self.mc, ctrl_wei_gld, inline) if self.tunable.tensor_b_pass_through else \
-                    macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld, inline), \
-                    macro_igemm_2d_global_load_precache_sv_offset_t(self.mc, ctrl_in_gld, inline) if self.tunable.tensor_a_pass_through else \
-                    macro_igemm_2d_global_load_precache_voffset_t(self.mc, ctrl_in_gld, inline)
+                     macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld, inline), \
+                     macro_igemm_2d_global_load_precache_offset_t(self.mc, ctrl_in_gld, inline)
         else:
             return macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld, inline),  macro_igemm_2d_global_load_precache_voffset_t(self.mc, ctrl_in_gld, inline)
 
@@ -870,6 +896,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.length_d0 = ta_nb0
             in_sst_ctrl.length_d1 = ta_nb1
             in_sst_ctrl.length_dp = k_pack
+            in_sst_ctrl.vector_dp = utility_gcd(k_pack, 4 * (4 // data_byte))
             in_sst_ctrl.stride_d0 = na_nb1 * k_pack * data_byte
             in_sst_ctrl.stride_d1 = k_pack * data_byte
 
@@ -880,6 +907,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             wei_sst_ctrl.length_d0 = tb_k0
             wei_sst_ctrl.length_d1 = tb_k1
             wei_sst_ctrl.length_dp = k_pack
+            wei_sst_ctrl.vector_dp = utility_gcd(k_pack, 4 * (4 // data_byte))
             wei_sst_ctrl.stride_d0 = nb_k1 * k_pack * data_byte
             wei_sst_ctrl.stride_d1 = k_pack * data_byte
 

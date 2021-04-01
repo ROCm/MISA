@@ -91,6 +91,18 @@ class inst_buffer_atomic_add_dword_t(object):
             return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
+
+# pattern is logic or of below:
+GLOBAL_PTN_D0_S = (1 << 0)
+GLOBAL_PTN_D0_V = (1 << 1)
+GLOBAL_PTN_D0_K = (1 << 2)
+GLOBAL_PTN_D1_S = (1 << 0) << 4
+GLOBAL_PTN_D1_V = (1 << 1) << 4
+GLOBAL_PTN_D1_K = (1 << 2) << 4
+
+
+
+
 class ctrl_2d_global_load_t(object):
     def __init__(self):
         self.length_d0 = 1           # if d0 is 1, it is indeed 1d access
@@ -101,10 +113,12 @@ class ctrl_2d_global_load_t(object):
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
         self.use_flag = 0
         self.bfe_flag = 0
-        self.precache_vs_ptn = 0     # 0: d0 use sgpr precache, d1 use vgpr precache
-                                     # 1: d0 use vgpr precache, d1 use sgpr precache
-                                     # 2: d0 use vgpr precache, d1 use vgpr precache
-                                     # 3: d0 use sgpr precache, d1 use sgpr precache
+        self.precache_ptn = 0        # 0: d0 use sgpr precache, d1 use sgpr precache
+                                     # 1: d0 use sgpr precache, d1 use vgpr precache
+                                     # 2: d0 use sgpr precache, d1 use immidiate value
+                                     # 3: d0 use vgpr precache, d1 use sgpr precache
+                                     # 4: d0 use vgpr precache, d1 use vgpr precache
+                                     # 5: d0 use vgpr precache, d1 use immidiate value
                                      # 4: .... maybe consider not using precache?
         self.flag_merge_v = 0        # when flag on v_offset, flag and multiple load, or flag per load
 
@@ -589,6 +603,169 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
         ctrl = self.ctrl
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         return  ctrl.length_d0 * n_d1
+
+
+
+class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
+    def __init__(self, mc, ctrl, inline = False):
+        assert type(ctrl) is ctrl_2d_global_load_t
+        macro_base_t.__init__(self, mc, inline)
+        self.ctrl = ctrl
+        self.declare_arg("v_dst")
+        self.declare_arg("s_ptr")
+        self.declare_arg("v_os")
+        self.declare_arg("s_os")    # can be None, the soffset parsed to buffer_load/store
+                                    # used when d0, d1 not sgpr, to privide an optional sstride to buffer_load/store
+                                    # TODO: remove this since duplicated idea
+
+        # following can be none, used when at least one of d0, d1 is sgpr
+        self.declare_arg("s_stride_d0")
+        self.declare_arg("s_stride_d1")
+        self.declare_arg("s_offset")
+
+        self.declare_arg("v_flag")
+        self.declare_arg("v_tmp")
+
+        self.declare_arg("k_gld_d0_stride")
+        self.declare_arg("k_gld_d1_stride")
+
+    def name(self):
+        ctrl = self.ctrl
+        if ctrl.precision == "fp32":
+            bits_str = 'b32'
+        elif ctrl.precision in ("fp16", "bf16"):
+            bits_str = 'b16'
+        else:
+            assert False
+
+        if ctrl.vector_d1 == 4:
+            vec_str = 'v4'
+        elif ctrl.vector_d1 == 2:
+            vec_str = 'v2'
+        elif ctrl.vector_d1 == 1:
+            vec_str = 'v1'
+        else:
+            assert False
+
+        return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_{ctrl.precache_ptn}"
+
+    def expr(self):
+        ctrl = self.ctrl
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        # assert ctrl.precision == 'fp32', "TO BE supported"
+        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
+        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
+
+        def gen_soffset_sequence():
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_S and ctrl.precache_ptn & GLOBAL_PTN_D1_S:
+                ssequence = list()
+                s_offset_cnt = 0
+                for x0 in range(ctrl.length_d0):
+                    for x1 in range(n_d1):
+                        if x0 == 0:
+                            if x1 == 0:
+                                ssequence.append(0)
+                            elif x1 == 1:
+                                ssequence.append(self.s_stride_d1())
+                            else:
+                                ssequence.append(self.s_offset(s_offset_cnt))
+                                s_offset_cnt = s_offset_cnt + 1
+                        else:
+                            if x0 == 1 and x1 == 0:
+                                ssequence.append(self.s_stride_d0())
+                            else:
+                                ssequence.append(self.s_offset(s_offset_cnt))
+                                s_offset_cnt = s_offset_cnt + 1
+                return ssequence
+            else:
+                return None
+
+        ssequence = gen_soffset_sequence()
+
+        def get_soffset(i_d0, i_d1):
+            # TODO: global_load/store not have sgpr offset
+            current_s_offset = 0
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_S and not ctrl.precache_ptn & GLOBAL_PTN_D1_S:
+                current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d0() if i_d0 == 1 else self.s_offset(i_d0 - 2))
+            elif not ctrl.precache_ptn & GLOBAL_PTN_D0_S and ctrl.precache_ptn & GLOBAL_PTN_D1_S:
+                current_s_offset = 0 if i_d1 == 0 else (self.s_stride_d1() if i_d1 == 1 else self.s_offset(i_d1 - 2))
+            elif ctrl.precache_ptn & GLOBAL_PTN_D0_S and ctrl.precache_ptn & GLOBAL_PTN_D1_S:
+                current_s_offset = ssequence[i_d0 * n_d1 + i_d1]
+            else:
+                current_s_offset = 0 if self.s_os is None else self.s_os()
+
+            return current_s_offset
+
+        def get_voffset(i_d0, i_d1):
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_V and ctrl.precache_ptn & GLOBAL_PTN_D1_V:
+                assert False, "it is meaningless to have both d0/d1 vgpr offset, maybe reconsider algorithm"
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_V:
+                return self.v_os(i_d0)
+            if ctrl.precache_ptn & GLOBAL_PTN_D1_V:
+                return self.v_os(i_d1)
+            return self.v_os()  # single offset value
+
+        def get_ioffset(i_d0, i_d1):
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_K and ctrl.precache_ptn & GLOBAL_PTN_D1_K:
+                assert False, "not supported yet. may not need"
+            if ctrl.precache_ptn & GLOBAL_PTN_D0_K:
+                return 0 if i_d0 == 0 else f'{i_d0} * {self.k_gld_d0_stride()}'
+            if ctrl.precache_ptn & GLOBAL_PTN_D1_K:
+                return 0 if i_d1 == 0 else f'{i_d1} * {self.k_gld_d1_stride()}'
+            else:
+                return 0
+
+        def try_exec_flag_start(idx):
+            if ctrl.use_flag and self.v_flag != None:
+                self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(idx)}]")
+
+        def try_exec_flag_finish():
+            if ctrl.use_flag and self.v_flag != None:
+                self._emit(f"s_mov_b64 exec, -1")
+
+        assert not (ctrl.precache_ptn & GLOBAL_PTN_D0_V and ctrl.precache_ptn & GLOBAL_PTN_D1_V)
+        assert not (ctrl.precache_ptn & GLOBAL_PTN_D0_K and ctrl.precache_ptn & GLOBAL_PTN_D1_K)
+
+        exec_slot_d0_up = ((ctrl.precache_ptn & GLOBAL_PTN_D1_V) and (ctrl.flag_merge_v and n_d1 == 1)) or \
+                                ((ctrl.precache_ptn & GLOBAL_PTN_D0_S or ctrl.precache_ptn & GLOBAL_PTN_D0_K) and \
+                                (ctrl.precache_ptn & GLOBAL_PTN_D1_S or ctrl.precache_ptn & GLOBAL_PTN_D1_K) and ctrl.flag_merge_v)
+        exec_slot_d0_d1 = ctrl.precache_ptn & GLOBAL_PTN_D0_V
+        exec_slot_d1_dw = (ctrl.precache_ptn & GLOBAL_PTN_D1_V) and not exec_slot_d0_up
+
+        assert not (exec_slot_d0_up and exec_slot_d0_d1 and exec_slot_d1_dw), "should not happen"
+
+        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+            if exec_slot_d0_up:
+                try_exec_flag_start(0)
+            i_dst = 0
+            for i_d0 in range(ctrl.length_d0):
+                if exec_slot_d0_d1:
+                    try_exec_flag_start(i_d0)
+                for i_d1 in range(n_d1):
+                    if exec_slot_d1_dw:
+                        try_exec_flag_start(i_d1)
+                    # print(f"get_ioffset(i_d0, i_d1):{get_ioffset(i_d0, i_d1)}")
+                    self._emit(buffer_load_dword(f"{self.v_dst(i_dst*vgpr_per_vector)}", f"{get_voffset(i_d0, i_d1)}", f"{self.s_ptr()}", get_soffset(i_d0, i_d1), get_ioffset(i_d0, i_d1)))
+                    i_dst = i_dst + 1
+                    if exec_slot_d1_dw:
+                        try_exec_flag_finish()
+                if exec_slot_d0_d1:
+                    try_exec_flag_finish()
+            if exec_slot_d0_up:
+                try_exec_flag_finish()
+
+        else:
+            assert False
+
+    def get_issues(self):
+        ctrl = self.ctrl
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        return  ctrl.length_d0 * n_d1
+
+
+
 
 class macro_igemm_write_4d_strided_t(macro_base_t):
     '''
