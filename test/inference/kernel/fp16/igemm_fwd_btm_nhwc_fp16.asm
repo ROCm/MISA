@@ -99,6 +99,8 @@ MIOPEN_NEURON_ELU = 9          // alpha * (e^x - 1) | x <= 0; x | x > 0
       activ_mode = MIOPEN_NEURON_PASTHRU
 .endif
 
+EPSILON_float = 0x358637bd
+
 .macro .activ_f32 base, activ_mode, alpha, beta, gamma, vtmp0, vtmp1
     .if \activ_mode == MIOPEN_NEURON_LOGISTIC //1 / (1 + e^-x)
         exp_f_float \base, -1, \vtmp0
@@ -129,23 +131,23 @@ MIOPEN_NEURON_ELU = 9          // alpha * (e^x - 1) | x <= 0; x | x > 0
         v_log_f32 v[\base], v[\base]
         v_mul_f32 v[\base], s[\gamma], v[\base]
         v_exp_f32 v[\base], v[\base]
-        v_cmp_lt_f32 vcc, EPSILON_float, v[\vtmp0]
-        v_cndmask_b32 v[\base], 0, v[\base], vcc
+        v_cmp_lt_f32 EPSILON_float, v[\vtmp0]
+        v_cndmask_b32 v[\base], 0, v[\base]
     .elseif \activ_mode == MIOPEN_NEURON_CLIPPED_RELU //min(\alpha, max(0, x))
         v_max_f32 v[\base], v[\base], 0
         v_min_f32 v[\base], s[\alpha], v[\base] 
     .elseif \activ_mode == MIOPEN_NEURON_LEAKY_RELU //\alpha * x | x <= 0; x | x > 0
-        v_cmp_lt_f32 vcc, 0, v[\base]
+        v_cmp_lt_f32 0, v[\base]
         v_mov_b32 v[\vtmp0], s[\alpha]
-        v_cndmask_b32 v[\vtmp0], v[\vtmp0], 1.0, vcc
+        v_cndmask_b32 v[\vtmp0], v[\vtmp0], 1.0
         v_mul_f32 v[\base], v[\base], v[\vtmp0]
     .elseif \activ_mode == MIOPEN_NEURON_ELU //\alpha * (e^x - 1) | x <= 0; x | x > 0
-        v_cmp_lt_f32 vcc, 0, v[\base]
+        v_cmp_lt_f32 0, v[\base]
         v_mov_b32 v[\vtmp1], v[\base]
         exp_f_float \base, 1, \vtmp0
         v_add_f32 v[\base], -1.0, v[\base]
         v_mul_f32 v[\base], s[\alpha], v[\base]
-        v_cndmask_b32 v[\base], v[\base], v[\vtmp1], vcc
+        v_cndmask_b32 v[\base], v[\base], v[\vtmp1]
     .endif
 .endm
 
