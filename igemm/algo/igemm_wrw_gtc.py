@@ -1706,7 +1706,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         if gemm_m_order == IGEMM_WRW_GTC_LDS_STORE_ORDER_GEMM_M_K0_K1:
             if c_k1 == 1:
                 assert c_k0 != 1
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k1)}, v[{v.v_gtc_ik0}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(n_k1)}, v[{v.v_gtc_ik0()}]")
             else:
                 if c_k0 == 1:
                     self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik1()}]")

@@ -252,7 +252,7 @@ static inline bool valid_vector(const float *ref, const float *pred, size_t n,
                                 double nrms = 1.5e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     int igemm_valid_float = env_get_int("VALID_FLOAT", 1);
     size_t pp_err = 0;
@@ -689,7 +689,9 @@ int main(int argc, char **argv) {
             // gen rand
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -725,8 +727,10 @@ int main(int argc, char **argv) {
                 assert(0);
 #endif
             device_weight_to_host = (float *)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
-            // printf("len:%d\n", k * c * y * x * sizeof(float));
+            printf("len:%d\n", k * c * y * x * sizeof(float));
         }
+
+        printf("len:%d\n", static_cast<size_t>(n) * c * hi * wi * sizeof(float));
 
         HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
@@ -766,6 +770,7 @@ int main(int argc, char **argv) {
         std::string selected_kernel;
 
         selected_kernel = conv_wrw_driver.select_kernel(&conv_args, tunables);
+        //std::cout << "selected_kernel: " << selected_kernel << std::endl;
 
         int min_grid = 0;
         int sel_grid = 0;
@@ -813,16 +818,13 @@ int main(int argc, char **argv) {
                                             static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
-                // if (!is_valid) {
-                //     printf("\n");
-                //     break;
-                // }
             }
             printf("\n");
         }
         double gflops = measured_fp32_conv_gflops(
                 min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w, ngroups);
+        dump_arg(&conv_args);
         printf("min cost:%.3fms, tflops:%.3f(%.2f%%),  min grid:%d\r\n", min_duration,
                    gflops / 1000 , (gflops / fp32_gflops) * 100, min_grid);
         std::cout << "min name:" << kernel_name << std::endl;
