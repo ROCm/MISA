@@ -112,6 +112,8 @@ class ctrl_2d_global_load_t(object):
         self.src_order = 0           # 0-d0xd1, 1-d1xd0
         self.dst_order = 0           # 0-d0xd1, 1-d1xd0
         self.use_flag = 0
+        self.flag_on_d0 = 0
+        self.flag_on_d1 = 0
         self.bfe_flag = 0
         self.precache_ptn = 0        # 0: d0 use sgpr precache, d1 use sgpr precache
                                      # 1: d0 use sgpr precache, d1 use vgpr precache
@@ -624,7 +626,7 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
         self.declare_arg("s_offset")
 
         self.declare_arg("v_flag")
-        self.declare_arg("v_tmp")
+        self.declare_arg("v_tmp")   # used when bfe_flag=1
 
         self.declare_arg("k_gld_d0_stride")
         self.declare_arg("k_gld_d1_stride")
@@ -648,6 +650,58 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
             assert False
 
         return f".v_gld_{ctrl.length_d0}x{ctrl.length_d1}_{bits_str}_{vec_str}_precache_{ctrl.precache_ptn}"
+
+    def init_precache_soffset(self, s_stride_d0, s_stride_d1, s_offset, s_tmp):
+        ctrl = self.ctrl
+        assert ctrl.precache_ptn & GLOBAL_PTN_D0_S and ctrl.precache_ptn & GLOBAL_PTN_D1_S
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        with self._deferred_context():
+            i_soffset = 0
+            for i_d0 in range(ctrl.length_d0):
+                for i_d1 in range(n_d1):
+                    if i_d0 == 0 and i_d1 == 0:
+                        continue
+                    if i_d0 == 0 and i_d1 == 1:
+                        continue
+                    if i_d0 == 1 and i_d1 == 0:
+                        continue
+
+                    # start to emit init
+                    if i_d0 == 0:
+                        self._emit(f"s_mul_i32 s[{s_offset}+{i_soffset}], {i_d1}, s[{s_stride_d1}]")
+                    elif i_d0 == 1:
+                        if i_d1 == 1:
+                            self._emit(f"s_add_u32 s[{s_offset}+{i_soffset}], s[{s_stride_d0}], s[{s_stride_d1}]")
+                        else:
+                            self._emit(f"s_add_u32 s[{s_offset}+{i_soffset}], s[{s_stride_d0}], s[{s_offset}+{i_d1-2}]")
+                    else:
+                        if i_d1 == 0:
+                            self._emit(f"s_mul_i32 s[{s_tmp}], s[{s_stride_d0}], {i_d0}")
+                        if i_d1 == 0:
+                            self._emit(f"s_mov_b32 s[{s_offset}+{i_soffset}], s[{s_tmp}]")
+                        elif i_d1 == 1:
+                            self._emit(f"s_add_u32 s[{s_offset}+{i_soffset}], s[{s_tmp}], s[{s_stride_d1}]")
+                        else:
+                            self._emit(f"s_add_u32 s[{s_offset}+{i_soffset}], s[{s_tmp}], s[{s_offset}+{i_d1-2}]")
+                    i_soffset += 1
+        return self._get_deferred()
+
+    def get_num_precache_soffset(self):
+        ctrl = self.ctrl
+        assert ctrl.length_d1 % ctrl.vector_d1 == 0
+        n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        soffset_cnt = 0
+        for i_d0 in range(ctrl.length_d0):
+            for i_d1 in range(n_d1):
+                if i_d0 == 0 and i_d1 == 0:
+                    continue
+                if i_d0 == 0 and i_d1 == 1:
+                    continue
+                if i_d0 == 1 and i_d1 == 0:
+                    continue
+                soffset_cnt += 1
+        return soffset_cnt
 
     def expr(self):
         ctrl = self.ctrl
@@ -718,21 +772,23 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
                 return 0
 
         def try_exec_flag_start(idx):
-            if ctrl.use_flag and self.v_flag != None:
+            #if ctrl.use_flag and self.v_flag != None:
+            if self.v_flag != None:
                 self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(idx)}]")
 
         def try_exec_flag_finish():
-            if ctrl.use_flag and self.v_flag != None:
+            #if ctrl.use_flag and self.v_flag != None:
+            if self.v_flag != None:
                 self._emit(f"s_mov_b64 exec, -1")
 
         assert not (ctrl.precache_ptn & GLOBAL_PTN_D0_V and ctrl.precache_ptn & GLOBAL_PTN_D1_V)
         assert not (ctrl.precache_ptn & GLOBAL_PTN_D0_K and ctrl.precache_ptn & GLOBAL_PTN_D1_K)
 
-        exec_slot_d0_up = ((ctrl.precache_ptn & GLOBAL_PTN_D1_V) and (ctrl.flag_merge_v and n_d1 == 1)) or \
+        exec_slot_d0_up = ctrl.flag_on_d1 and ((ctrl.precache_ptn & GLOBAL_PTN_D1_V) and (ctrl.flag_merge_v and n_d1 == 1)) or \
                                 ((ctrl.precache_ptn & GLOBAL_PTN_D0_S or ctrl.precache_ptn & GLOBAL_PTN_D0_K) and \
                                 (ctrl.precache_ptn & GLOBAL_PTN_D1_S or ctrl.precache_ptn & GLOBAL_PTN_D1_K) and ctrl.flag_merge_v)
-        exec_slot_d0_d1 = ctrl.precache_ptn & GLOBAL_PTN_D0_V
-        exec_slot_d1_dw = (ctrl.precache_ptn & GLOBAL_PTN_D1_V) and not exec_slot_d0_up
+        exec_slot_d0_d1 = ctrl.flag_on_d0
+        exec_slot_d1_dw = ctrl.flag_on_d1 and not exec_slot_d0_up
 
         assert not (exec_slot_d0_up and exec_slot_d0_d1 and exec_slot_d1_dw), "should not happen"
 
