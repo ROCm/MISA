@@ -727,10 +727,7 @@ int main(int argc, char **argv) {
                 assert(0);
 #endif
             device_weight_to_host = (float *)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
-            printf("len:%d\n", k * c * y * x * sizeof(float));
         }
-
-        printf("len:%d\n", static_cast<size_t>(n) * c * hi * wi * sizeof(float));
 
         HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));

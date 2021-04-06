@@ -272,8 +272,8 @@ public:
             if((n % (1 << gs)) != 0)
                 break;
 
-            if((n >> gs) * b % gemm_k_per_block != 0)
-                break;
+            //if((n >> gs) * b % gemm_k_per_block != 0)
+            //    break;
             log2_gemm_k_global_splits = gs;
         }
         return log2_gemm_k_global_splits;
@@ -581,7 +581,7 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         dump_wrw_karg(&karg);
-        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -653,7 +653,7 @@ public:
         usleep(1000 * 1);
 
         // debug section of code
-#if 1
+#if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
