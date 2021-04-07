@@ -47,6 +47,8 @@ then
 
 fi
 
+./out/conv_driver.exe conv -n 64 -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -F $FORW --in_layout "NHWC" --fil_layout "NHWC" --out_layout "NHWC"
+
 #resnext101
 ./out/conv_driver.exe conv -n 64 -c 1024 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW --in_layout "NHWC" --fil_layout "NHWC" --out_layout "NHWC"
 exit 1
