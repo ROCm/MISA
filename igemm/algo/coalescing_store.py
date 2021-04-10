@@ -41,7 +41,7 @@ class ctrl_coalescing_store_t(object):
         self.ctm = None # ctrl_thread_mapping_t
         self.coalescing_groups = 1
         self.block_size = 256
-        self.vector_store_size = 1
+        self.vector_write_out = 1
         self.precision = 'fp32'
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
@@ -86,15 +86,15 @@ class ctrl_coalescing_store_t(object):
 
     def get_transposed_thread_mapping(self):
         # after coalescing, the thread mapping is indeed transposed
-        assert self.ctm.t_n0() % self.vector_store_size == 0
+        assert self.ctm.t_n0() % self.vector_write_out == 0
         assert self.block_size == (self.ctm.c_mr()*self.ctm.c_nr()*self.ctm.c_m0()*self.ctm.c_n0()*self.ctm.c_m1()*self.ctm.c_n1())
         n_n_total = self.ctm.n_n_total()
         n_m_total = self.ctm.n_m_total()
-        assert n_n_total % self.vector_store_size == 0
+        assert n_n_total % self.vector_write_out == 0
         #trans_t_mr, trans_t_nr, trans_t_m1, trans_t_m0, trans_t_n1, trans_t_n0 = 1,1,1,1,1,1
         #trans_c_mr, trans_c_nr, trans_c_m1, trans_c_m0, trans_c_n1, trans_c_n0 = 1,1,1,1,1,1
 
-        trans_t_n0 = self.vector_store_size
+        trans_t_n0 = self.vector_write_out
         trans_c_n0 = n_n_total // trans_t_n0
         trans_t_m0 = 1
         trans_c_m0 = self.block_size // trans_c_n0
@@ -424,7 +424,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.cxm = None # ctrl_xdlops_mapping_t
         self.coalescing_groups = 1
         self.block_size = 256
-        self.vector_store_size = 1
+        self.vector_write_out = 1
         self.precision = 'fp32'
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
@@ -470,7 +470,7 @@ class ctrl_coalescing_store_xdlops_t(object):
             we want to use a single ds_write_b128/ds_read_b128 to deal with this granularity (which implies a transpose)
             hence we do not want split inside the "4" granularity within a thread
         '''
-        return self.get_length_m_groups() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+        return self.get_length_m_groups() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else 1)
 
     def get_subgroups(self):
         def split_ndim_length(total_length, dim_lengths):
@@ -516,15 +516,15 @@ class ctrl_coalescing_store_xdlops_t(object):
     def get_transposed_thread_mapping(self):
         # xdlops need transfer agpr to vgpr, then do LDS shuffle
         # here we still use legacy thread mapping to describe
-        assert self.vector_store_size == 1
+        # assert self.vector_write_out == 1
 
         n_n_total = self.cxm.macro_tile_n
         n_m_total = self.cxm.macro_tile_m
         assert self.cxm.waves * AMDGPU_WAVE_SIZE % n_n_total == 0, f"waves:{self.cxm.waves}, n_n_total:{n_n_total}, cxm:{self.cxm.serialize()}"
 
-        trans_t_n0 = self.vector_store_size
+        trans_t_n0 = self.vector_write_out
         trans_c_n0 = n_n_total // trans_t_n0
-        trans_t_m0 = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M  # here we append granularity to perthread m0
+        trans_t_m0 = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else 1
         trans_c_m0 = self.block_size // trans_c_n0
         trans_t_n1 = 1
         trans_c_n1 = 1
@@ -768,32 +768,36 @@ class ctrl_coalescing_store_xdlops_t(object):
             c_m0 = ttm.c_m0()
             nic = ic
             nd_list = list()
-            nd_stride = [n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
-            if n_mc != 1 and c_m0 != 1: x_mc = nic % n_mc; nic = nic // n_mc; c_m0 = c_m0 // n_mc; nd_list.insert(0, ('x_mc', x_mc, 1))
-            if n_ml != 1 and c_m0 != 1: x_ml = nic % n_ml; nic = nic // n_ml; c_m0 = c_m0 // n_ml; nd_list.insert(0, ('x_ml', x_ml, flatten(nd_stride[0:1])))
-            if l_mb != 1 and c_m0 != 1: x_mb = nic % l_mb; nic = nic // l_mb; c_m0 = c_m0 // l_mb; nd_list.insert(0, ('x_mb', x_mb, flatten(nd_stride[0:2])))
-            if l_mw != 1 and c_m0 != 1: x_mw = nic % l_mw; nic = nic // l_mw; c_m0 = c_m0 // l_mw; nd_list.insert(0, ('x_mw', x_mw, flatten(nd_stride[0:3])))
-            if l_ms != 1 and c_m0 != 1: x_ms = nic % l_ms; nic = nic // l_ms; c_m0 = c_m0 // l_ms; nd_list.insert(0, ('x_ms', x_ms, flatten(nd_stride[0:4])))
-            if n_mv != 1 and c_m0 != 1: x_mv = nic % n_mv; nic = nic // n_mv; c_m0 = c_m0 // n_mv; nd_list.insert(0, ('x_mv', x_mv, flatten(nd_stride[0:5])))
-            if l_mr != 1 and c_m0 != 1: x_mr = nic % l_mr;                    c_m0 = c_m0 // l_mr; nd_list.insert(0, ('x_mr', x_mr, flatten(nd_stride[0:6])))
+            nd_stride = [l_mt, n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
+            if self.vector_write_out != 1:
+                if l_mt != 1 and c_m0 != 1: x_mt = nic % l_mt; nic = nic // l_mt; c_m0 = c_m0 // l_mt; nd_list.insert(0, ('x_mt', x_mt, 1))
+            if n_mc != 1 and c_m0 != 1: x_mc = nic % n_mc; nic = nic // n_mc; c_m0 = c_m0 // n_mc; nd_list.insert(0, ('x_mc', x_mc, flatten(nd_stride[0:1])))
+            if n_ml != 1 and c_m0 != 1: x_ml = nic % n_ml; nic = nic // n_ml; c_m0 = c_m0 // n_ml; nd_list.insert(0, ('x_ml', x_ml, flatten(nd_stride[0:2])))
+            if l_mb != 1 and c_m0 != 1: x_mb = nic % l_mb; nic = nic // l_mb; c_m0 = c_m0 // l_mb; nd_list.insert(0, ('x_mb', x_mb, flatten(nd_stride[0:3])))
+            if l_mw != 1 and c_m0 != 1: x_mw = nic % l_mw; nic = nic // l_mw; c_m0 = c_m0 // l_mw; nd_list.insert(0, ('x_mw', x_mw, flatten(nd_stride[0:4])))
+            if l_ms != 1 and c_m0 != 1: x_ms = nic % l_ms; nic = nic // l_ms; c_m0 = c_m0 // l_ms; nd_list.insert(0, ('x_ms', x_ms, flatten(nd_stride[0:5])))
+            if n_mv != 1 and c_m0 != 1: x_mv = nic % n_mv; nic = nic // n_mv; c_m0 = c_m0 // n_mv; nd_list.insert(0, ('x_mv', x_mv, flatten(nd_stride[0:6])))
+            if l_mr != 1 and c_m0 != 1: x_mr = nic % l_mr;                    c_m0 = c_m0 // l_mr; nd_list.insert(0, ('x_mr', x_mr, flatten(nd_stride[0:7])))
             sub_m = 0
             # print(f"ic:{ic}, nd_list:{nd_list}")
 
             c_m0 = ttm.c_m0()
-            if n_mc != 1 and c_m0 != 1: sub_m = (x_mc * 1                       ) | sub_m; c_m0 = c_m0 // n_mc
-            if n_ml != 1 and c_m0 != 1: sub_m = (x_ml * flatten(nd_stride[0:1]) ) | sub_m; c_m0 = c_m0 // n_ml
-            if l_mb != 1 and c_m0 != 1: sub_m = (x_mb * flatten(nd_stride[0:2]) ) | sub_m; c_m0 = c_m0 // l_mb
-            if l_mw != 1 and c_m0 != 1: sub_m = (x_mw * flatten(nd_stride[0:3]) ) | sub_m; c_m0 = c_m0 // l_mw
-            if l_ms != 1 and c_m0 != 1: sub_m = (x_ms * flatten(nd_stride[0:4]) ) | sub_m; c_m0 = c_m0 // l_ms
-            if n_mv != 1 and c_m0 != 1: sub_m = (x_mv * flatten(nd_stride[0:5]) ) | sub_m; c_m0 = c_m0 // n_mv
-            if l_mr != 1 and c_m0 != 1: sub_m = (x_mr * flatten(nd_stride[0:6]) ) | sub_m; c_m0 = c_m0 // l_mr
+            if self.vector_write_out != 1:
+                if l_mt != 1 and c_m0 != 1: sub_m = (x_mt * 1                   ) | sub_m; c_m0 = c_m0 // l_mt
+            if n_mc != 1 and c_m0 != 1: sub_m = (x_mc * flatten(nd_stride[0:1]) ) | sub_m; c_m0 = c_m0 // n_mc
+            if n_ml != 1 and c_m0 != 1: sub_m = (x_ml * flatten(nd_stride[0:2]) ) | sub_m; c_m0 = c_m0 // n_ml
+            if l_mb != 1 and c_m0 != 1: sub_m = (x_mb * flatten(nd_stride[0:3]) ) | sub_m; c_m0 = c_m0 // l_mb
+            if l_mw != 1 and c_m0 != 1: sub_m = (x_mw * flatten(nd_stride[0:4]) ) | sub_m; c_m0 = c_m0 // l_mw
+            if l_ms != 1 and c_m0 != 1: sub_m = (x_ms * flatten(nd_stride[0:5]) ) | sub_m; c_m0 = c_m0 // l_ms
+            if n_mv != 1 and c_m0 != 1: sub_m = (x_mv * flatten(nd_stride[0:6]) ) | sub_m; c_m0 = c_m0 // n_mv
+            if l_mr != 1 and c_m0 != 1: sub_m = (x_mr * flatten(nd_stride[0:7]) ) | sub_m; c_m0 = c_m0 // l_mr
 
             # for i in range(len(nd_list)):
             #     i_id = nd_list[i][1]
             #     i_st = nd_list[i][2]
             #     sub_m += i_id * i_st
 
-            sub_m = sub_m * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+            # sub_m = sub_m * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else 1)
             sub_m_index[ic] = sub_m
         return sub_m_index
 
@@ -861,9 +865,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 assert length_above_waves_per_m % (g_ms * g_mw * g_mb) == 0, f"length_above_waves_per_m:{length_above_waves_per_m}, g_ms:{g_ms} g_mw:{g_mw} g_mb:{g_mb}"
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+2], {igemm_log2(length_above_waves_per_m // (g_ms * g_mw * g_mb))}, v[{v_co_sst}]")
 
-            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
-            self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+            if ctrl.vector_write_out == 1:
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+            else:
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_co_sst}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_gemm_in}]")
 
             # gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
             # gemm_m_shrink = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
@@ -873,7 +880,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             # else:
             #     assert False, "impossible"
             self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * ctrl.vector_write_out * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out))}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -889,7 +896,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         n_ml = ctrl.cxm.block_m_per_lanegroup()         # this iteration is among different thread
         n_mv = ctrl.cxm.waves_per_m()                   # this iteration is among different thread
         ttm = ctrl.get_transposed_thread_mapping()
-        nd_stride = [n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
+        nd_stride = [l_mt, n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
 
         with self._deferred_context():
             self._emit(f"; init_co_sub_m_index xdlops, block_size:{ctrl.cxm.block_size()}, macro-tile:{ctrl.cxm.macro_tile_m}x{ctrl.cxm.macro_tile_n} sub_m_index:{ctrl.get_co_sub_m_index()}")
@@ -908,6 +915,14 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
 
                 v_idx = 0
                 # iterate all dimensions
+                if ctrl.vector_write_out != 1:
+                    # if have vector store, we no longer have granularity, hence every dimension participate in m divide
+                    if l_mt != 1 and c_m0 not in (0, 1):
+                        self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mt - 1}, v[{v_co_sub_m_index}]                   ; => x_mt")
+                        v_idx = v_idx + 1
+                        c_m0  = c_m0 // l_mt
+                        if c_m0 not in (0, 1):
+                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(l_mt)}  ,v[{v_co_sub_m_index}]")
                 if n_mc != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_mc - 1}, v[{v_co_sub_m_index}]                   ; => x_mc")
                     v_idx = v_idx + 1
@@ -1001,34 +1016,41 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 # if l_mr != 1 and c_m0 not in (0, 1):
                 #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mr")
                 accumulate_co_sub_m = pretty_accumulate_co_sub_m_t()
+                if ctrl.vector_write_out != 1:
+                    # if have vector store, we no longer have granularity, hence every dimension participate in m divide
+                    if l_mt != 1 and c_m0 not in (0, 1):
+                        self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", 1) + "      ; => accumulate x_mt")
+                        v_idx_r = v_idx_r + 1
+                        c_m0    = c_m0 // l_mt
                 if n_mc != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", 1) + "      ; => accumulate x_mc")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:1])) + "      ; => accumulate x_mc")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_mc
                 if n_ml != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:1])) + "      ; => accumulate x_ml")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:2])) + "      ; => accumulate x_ml")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_ml
                 if l_mb != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:2])) + "      ; => accumulate x_mb")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:3])) + "      ; => accumulate x_mb")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_mb
                 if l_mw != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:3])) + "      ; => accumulate x_mw")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:4])) + "      ; => accumulate x_mw")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_mw
                 if l_ms != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:4])) + "      ; => accumulate x_ms")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:5])) + "      ; => accumulate x_ms")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // l_ms
                 if n_mv != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:5])) + "      ; => accumulate x_mv")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:6])) + "      ; => accumulate x_mv")
                     v_idx_r = v_idx_r + 1
                     c_m0    = c_m0 // n_mv
                 if l_mr != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:6])) + "      ; => accumulate x_mr")
+                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:7])) + "      ; => accumulate x_mr")
 
-                self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
+                # if ctrl.vector_write_out == 1:
+                #     self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
 
                 assert v_idx == v_idx_r, "please check!"
 
@@ -1089,10 +1111,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         no_s_out_offset = s_out_offset is None
 
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
-        inst_sst = inst_ds_write_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte)
-        inst_sld = inst_ds_read_t(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte)
+        inst_sst = inst_ds_write_t((AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1) * data_byte)
+        inst_sld = inst_ds_read_t((AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte)
         if ctrl.gemm_k_global_split: 
-            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out) 
+            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte) 
         else:
             inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
        
@@ -1154,6 +1176,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                     i_ms * l_mw * l_mb * n_ml * n_mc + \
                                     i_mw * l_mb * n_ml * n_mc + \
                                     i_mb * n_ml * n_mc              # ATTENTION! here is not multiplied by granularity_m, since it is shrinked to n direction, when everything is in LDS
+                    if ctrl.vector_write_out != 1:
+                        sst_m_offset = sst_m_offset * l_mt          # ATTENTION! if vector write out, we no longer have shrink granularity, hence need multiply back
                     # iterate through all m within current group
                     for i_nr, i_ns, i_nw in itertools.product(range(t_nr), range(t_ns), range(t_nw)):
                         gpr_n_offset = i_nr * s_nr + i_ns * s_ns + i_nw * s_nw
@@ -1164,8 +1188,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         agpr_index = a_group_start_index + gpr_m_offset + gpr_n_offset
                         #vgpr_index = gpr_m_offset + gpr_n_offset
                         vgpr_index = vgpr_index_acc
-                        sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M + \
-                                     sst_n_offset * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) * data_byte
+                        sst_offset = (sst_m_offset * ctrl.cxm.macro_tile_n * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1) + \
+                                     sst_n_offset * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) * data_byte
                         assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * data_byte < lds_size_per_group
 
                         self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
@@ -1182,11 +1206,16 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
                             self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
                         if not ctrl.can_skip_coalescing():
-                            idword = sst_offset // (data_byte * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)
-                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
-                                f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
-                                f" /{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
-                        vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
+                            idword = sst_offset // (data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1))
+                            if ctrl.vector_write_out == 1:
+                                self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
+                                    f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
+                                    f" /{(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
+                            else:
+                                for i in range(4):
+                                    self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
+                                            f' ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}')
+                        vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
 
                 issue_list = []
                 if not ctrl.can_skip_coalescing():
@@ -1194,9 +1223,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     self._emit(f"s_barrier")
                     self._emit(f";   load from lds")
                     #for i_mr, i_ms, i_mw, i_mb in itertools.product(range(l_mr), range(l_ms), range(l_mw), range(l_mb)):
-                    for i_d in range(ctrl.get_num_dword_per_group() // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M):
-                        vgpr_index = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
-                        sld_offset = i_d * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M * ctrl.block_size * ctrl.vector_write_out * data_byte
+                    for i_d in range(ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)):
+                        vgpr_index = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                        sld_offset = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                         issue_list.append(inst_sld.get_issues(sld_offset))
 
@@ -1246,11 +1275,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 i_m0_start, i_m1_start =  m0_index_start_per_group, m1_index_start_per_group
                 for i_gst in range(ctrl.get_num_dword_per_group() // ctrl.vector_write_out):
                     if len(issue_list) != 0:
-                        if i_gst % AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M == 0:
-                            i_issues =  (i_gst // AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M) + 1
+                        if i_gst % (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1) == 0:
+                            i_issues =  (i_gst // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) + 1
                             i_issue_list = issue_list[i_issues:]
                             i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                             self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
+                            # print(f'issue_list:{issue_list}, i_issues:{i_issues}, i_gst:{i_gst}')
                     # vdata, vaddr, srsrc, soffset, offset
                     if s_k is not None:
                         self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
