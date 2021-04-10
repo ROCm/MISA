@@ -78,8 +78,9 @@ class inst_buffer_store_t(object):
 
 class inst_buffer_atomic_add_dword_t(object):
     ''' TODO: this implementation always offen '''
-    def __init__(self, dwords):
-        self.dwords = dwords
+    def __init__(self, data_byte, pack=1):
+        self.data_byte = data_byte
+        self.pack = pack
 
     def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi=0):
         if type(soffset) is int and soffset == 0:
@@ -87,9 +88,11 @@ class inst_buffer_atomic_add_dword_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
-        if self.dwords == 1:
+        if self.data_byte == 4 and self.pack == 1:
             return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
-        assert False
+        if self.data_byte == 4 and self.pack == 2:
+            return f"buffer_atomic_pk_add_f16 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False, f"data_byte:{self.data_byte}, pack:{self.pack}"
 
 
 # pattern is logic or of below:

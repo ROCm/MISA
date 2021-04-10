@@ -106,7 +106,7 @@ static int next_pow2(int n) {
 }
 typedef struct {
     int return_code     {-1};
-    int gks             {0};  // this is to store the gks value after benchmarked
+    int gks             {0};  // this is to store the gks value after benchmarked.
     float duration_ms   {FLT_MAX};
     float gflops        {0};
     float efficiency    {0};
@@ -626,13 +626,20 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             dump_arg(conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
-            else
+            else{
+                std::string kernel_name_mock = fastest_result.kernel_name;
+                std::string gks_kernel_ending = "_gkgs";
+                if(fastest_result.kernel_name.compare(fastest_result.kernel_name.length() - gks_kernel_ending.length(),
+                                            gks_kernel_ending.length(), gks_kernel_ending) == 0){
+                    kernel_name_mock += "[" + std::to_string(fastest_result.gks) + "]";
+                }
                 printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
-                    fastest_result.kernel_name.c_str(),
+                    kernel_name_mock.c_str(),
                     fastest_result.duration_ms,
                     fastest_result.gflops / 1000,
                     fastest_result.efficiency);
+            }
         }
     }else if(driver->driver_mode == driver_mode_heuristic){
         igemm_gtc_tunable_t selected_tunable = driver->heuristic_select_kernel(conv_args);

@@ -444,7 +444,7 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
                 t.waves == waves:
             target_mfma_tiling.append(t)
 
-    assert len(target_mfma_tiling) != 0, f"unsupported wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m},  wave_repeat_n:{wave_repeat_n}"
+    assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m}, wave_repeat_n:{wave_repeat_n}, "
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling[0]
 

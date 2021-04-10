@@ -1116,8 +1116,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
         inst_sst = inst_ds_write_t(inst_sst_byte)
         inst_sld = inst_ds_read_t(inst_sld_byte)
-        if ctrl.gemm_k_global_split: 
-            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte) 
+        if ctrl.gemm_k_global_split:
+            v_pack = 2 if ctrl.vector_write_out == 2 and data_byte == 2 else 1
+            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte, v_pack) 
         else:
             inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
        
@@ -1206,8 +1207,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 1)}]")
                             self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 2)}]")
                             self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{v_c(vgpr_index + 3)}]")
-                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
-                            self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
+                            if ctrl.vector_write_out == 1:
+                                self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
+                                self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1))
                             if ctrl.vector_write_out == 1:
@@ -1218,7 +1220,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                 for i in range(4):
                                     self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
                                             f' ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}')
-                        vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
+                        #vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
+                        vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
 
                 def emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1):
                     # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")

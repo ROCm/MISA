@@ -114,7 +114,18 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
 
-            ctrl_coalescing_store_xdlops.vector_write_out = 1                      # TODO: some cases this can be set to other value
+            def get_vector_write_out():
+                if self.tunable.precision == 'fp32':
+                    return 1                        # fp32 vector seems not much perf improvement
+                if self.tunable.precision == 'fp16':
+                    if self.tunable.gemm_k_global_split:
+                        return 2                    # prefer use buffer_atomic_pk_add_f16
+                    else:
+                        return utility_gcd(self.tunable.gemm_k_per_block, 8)
+                else:
+                    assert False
+
+            ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
         
             # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
