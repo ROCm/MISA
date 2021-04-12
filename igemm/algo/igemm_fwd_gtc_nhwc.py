@@ -121,7 +121,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     if self.tunable.gemm_k_global_split:
                         return 2                    # prefer use buffer_atomic_pk_add_f16
                     else:
-                        return utility_gcd(self.tunable.gemm_n_per_block, 8)
+                        if self.is_pad_c():
+                            return 1
+                        else:
+                            return utility_gcd(self.tunable.gemm_n_per_block, 8)
                 else:
                     assert False
 
@@ -600,8 +603,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             data_byte                   = amdgpu_precision_data_byte(outer.tunable.precision)
             num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
             num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
-            num_vgpr_acc_a              = share_load_packed * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
-            num_vgpr_acc_b              = share_load_packed * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
+
+            share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
+                                            if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+
+            num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
+            num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
+
+            # print(f"share_load_packed_vgpr:{share_load_packed_vgpr}, tunable.num_vgpr_accumulate_b:{outer.tunable.num_vgpr_accumulate_b}, num_vgpr_acc_b:{num_vgpr_acc_b}")
             if is_vgpr_acc_c:
                 self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
                 v_c_num                 = vseq()
@@ -704,10 +713,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     self._emit(v.declare())
 
     def get_num_vgpr_global_load_a(self):
-        return self.tunable.num_global_load_a // (4 // amdgpu_precision_data_byte(self.tunable.precision))
+        ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_c != 1 else 1
+        return self.tunable.num_global_load_a // pack_factor
     
     def get_num_vgpr_global_load_b(self):
-        return self.tunable.num_global_load_b // (4 // amdgpu_precision_data_byte(self.tunable.precision))
+        ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c != 1 else 1
+        return self.tunable.num_global_load_b // pack_factor
 
     def get_thread_lengths(self):
         t_ta = self.tunable.tensor_a_thread_lengths
@@ -797,6 +810,18 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             else:
                 assert tb_c % ta_c == 0
                 return utility_gcd(tb_c, 4 * (4 // data_byte)) if tb_c != 1 else 1
+
+    def is_pad_c(self):
+        '''
+        NHWC implementation always want to vector load c, but we can still pad c(like 3) to a good number
+        another assumption would be write out. in fp32 we prefer non vector store, so no problem
+        but in fp16 we prefer vector store. hence another assumption would be, if this function is true
+        then fp16 no longer use vector store.
+        '''
+        ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
+        if ta_c == 1 and tb_c == 1:
+            return True
+        return False
 
     def get_macro_global_load(self):
         '''
