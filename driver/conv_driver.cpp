@@ -568,6 +568,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
     std::string run_only_kernel = env_get_str("IGEMM_RUN_ONLY_KERNEL", IGEMM_RUN_ONLY_KERNEL_DEFAULT);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
+    int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -664,6 +665,9 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         fprintf(p_bcsv, "%s\n", conv_cmd.c_str());
         fflush(p_bcsv);
     }
+
+    if(sleep_ms != 0)
+        usleep(1000 * sleep_ms);
 }
 
 int main(int argc, char **argv) {

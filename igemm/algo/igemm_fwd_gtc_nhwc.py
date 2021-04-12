@@ -121,7 +121,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     if self.tunable.gemm_k_global_split:
                         return 2                    # prefer use buffer_atomic_pk_add_f16
                     else:
-                        return utility_gcd(self.tunable.gemm_k_per_block, 8)
+                        return utility_gcd(self.tunable.gemm_n_per_block, 8)
                 else:
                     assert False
 
@@ -785,6 +785,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
     def get_k_pack(self):
         ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
+        data_byte = amdgpu_precision_data_byte(self.tunable.precision)
         if (not self.tunable.tensor_a_pass_through and not self.tunable.tensor_b_pass_through) or \
             (self.tunable.tensor_a_pass_through and self.tunable.tensor_b_pass_through):
             assert ta_c == tb_c
@@ -792,10 +793,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         else:
             if self.tunable.tensor_a_pass_through:
                 assert ta_c % tb_c == 0
-                return tb_c
+                return utility_gcd(ta_c, 4 * (4 // data_byte)) if ta_c != 1 else 1
             else:
                 assert tb_c % ta_c == 0
-                return ta_c
+                return utility_gcd(tb_c, 4 * (4 // data_byte)) if tb_c != 1 else 1
 
     def get_macro_global_load(self):
         '''
@@ -897,6 +898,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         k_pack = self.get_k_pack()
+        m_wei_2d_global_load, m_in_2d_global_load = self.get_macro_global_load()
+        k_pack_gld_a = m_in_2d_global_load.ctrl.vector_d1
+        k_pack_gld_b = m_wei_2d_global_load.ctrl.vector_d1
 
         if not self.tunable.tensor_a_pass_through:
             # input is gemm_k * gemm_m * k_pack
@@ -904,8 +908,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.precision = self.tunable.precision
             in_sst_ctrl.length_d0 = ta_nb0
             in_sst_ctrl.length_d1 = ta_nb1
-            in_sst_ctrl.length_dp = k_pack
-            in_sst_ctrl.vector_dp = utility_gcd(k_pack, 4 * (4 // data_byte))
+            in_sst_ctrl.length_dp = ta_c
+            in_sst_ctrl.vector_dp = k_pack_gld_a
             in_sst_ctrl.stride_d0 = na_nb1 * k_pack * data_byte
             in_sst_ctrl.stride_d1 = k_pack * data_byte
 
@@ -915,8 +919,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             wei_sst_ctrl.precision = self.tunable.precision
             wei_sst_ctrl.length_d0 = tb_k0
             wei_sst_ctrl.length_d1 = tb_k1
-            wei_sst_ctrl.length_dp = k_pack
-            wei_sst_ctrl.vector_dp = utility_gcd(k_pack, 4 * (4 // data_byte))
+            wei_sst_ctrl.length_dp = tb_c
+            wei_sst_ctrl.vector_dp = k_pack_gld_b
             wei_sst_ctrl.stride_d0 = nb_k1 * k_pack * data_byte
             wei_sst_ctrl.stride_d1 = k_pack * data_byte
 
@@ -1136,6 +1140,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         s_dummy = sym_t("s_dummy")
 
         k_pack = self.get_k_pack()
+        k_pack_gld_a = m_in_2d_global_load.ctrl.vector_d1
+        k_pack_gld_b = m_wei_2d_global_load.ctrl.vector_d1
 
         # start emit
         self._emit(f"s_load_dwordx2  s[{s.s_p_in((0,1))}],    s[{s.s_ka((0, 1))}],    0+{k.k_p_in()}")
@@ -1504,11 +1510,15 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         gemm_k * gemm_m * k_pack
         '''
         if not self.tunable.tensor_a_pass_through:
-            self._emit(f"; LDS store, in: e,c,nb0,nb1: {ta_e}x{ta_c}x{ta_nb0}x{ta_nb1}, {ca_e}x{ca_c}x{ca_nb0}x{ca_nb1}, k_pack:{k_pack}, {self.tunable.precision}")
+            self._emit(f"; LDS store, in: e,c,nb0,nb1: {ta_e}x{ta_c}x{ta_nb0}x{ta_nb1}, {ca_e}x{ca_c}x{ca_nb0}x{ca_nb1}, k_pack:{k_pack}, k_pack_gld_a:{k_pack_gld_a}, {self.tunable.precision}")
             if k_pack != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_in_inb()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_nb0*na_nb1 * k_pack)}, v[{v.v_tmp(2)}]")
+                if k_pack != k_pack_gld_a:
+                    assert k_pack % k_pack_gld_a == 0
+                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack - 1}, v[{v.v_gtc_ic()}]")   # gld_a k_pack smaller than k_pack
+                    self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(na_nb0*na_nb1 * k_pack)}, v[{v.v_in_inb()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
@@ -1516,11 +1526,15 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load in")
 
         if not self.tunable.tensor_b_pass_through:
-            self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}, {self.tunable.precision}")
+            self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
             if k_pack != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_wei_ik()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_k0*nb_k1 * k_pack)}, v[{v.v_tmp(2)}]")
+                if k_pack != k_pack_gld_b:
+                    assert k_pack % k_pack_gld_b == 0
+                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack - 1}, v[{v.v_gtc_ic()}]")   # gld_b k_pack smaller than k_pack
+                    self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(nb_k0*nb_k1 * k_pack)}, v[{v.v_wei_ik()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")

@@ -365,6 +365,17 @@ public:
             if((nxe == 0) && !unit_conv){
                 return false;
             }
+            if(tunable->precision == "fp16"){
+                // fp16 support vector writeout by default. check get_vector_write_out()
+                if(tunable->gemm_k_global_split){
+                    if((k / group) % 2 != 0)
+                        return false;
+                }
+                else{
+                    if((k / group) % utility_gcd(tunable->gemm_n_per_block, 8) != 0)
+                        return false;
+                }
+            }
 
             // input vector load limitation, n1b
             //if(tunable->tensor_a_thread_lengths[3] > 1 && (

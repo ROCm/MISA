@@ -121,7 +121,7 @@ class igemm_codegen_driver_t(mc_base_t):
             if type(ker) is igemm_upsampling_clear_t:
                 return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.inc")
             root_file_name = os.path.splitext(origin_file_name)[0]
-            return root_file_name + f"_{ker.tunable.gemm_m_per_block:03}x{ker.tunable.gemm_n_per_block:03}" + ".inc"
+            return root_file_name + f"_{ker.tunable.gemm_m_per_block:03}x{ker.tunable.gemm_n_per_block:03}x{ker.tunable.gemm_k_per_block:03}" + ".inc"
 
         # emit the kernel
         #emit_v4r1_dynamic_kernel(self.mc, self.tunable_dicts)

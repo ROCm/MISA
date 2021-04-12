@@ -207,7 +207,8 @@ class mfma_main_loop_t(mc_base_t):
 
         def move_slice_window_acc():
             with self._deferred_context():
-                self._emit(f_move_slice_window_acc())
+                if f_move_slice_window_acc:
+                    self._emit(f_move_slice_window_acc())
             return self._get_deferred()
 
         def call_mbb(mbb):

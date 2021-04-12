@@ -287,8 +287,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.num_global_load_a                  = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_global_load_b                  = igemm_flatten_list_product(self.tensor_b_thread_lengths)
 
-        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
-        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
+        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
+        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
         # LDS size
         self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
