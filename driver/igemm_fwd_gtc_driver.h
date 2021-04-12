@@ -345,8 +345,13 @@ public:
             //    return false;
             //}
 
-            if(((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
-                return false;
+            if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
+                ;   // if both 1, indicate padded c support
+            }
+            else{
+                if(((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
+                    return false;
+            }
 
             // if(gemm_m_per_block % tunable->nxb != 0){
             //     //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -367,13 +372,18 @@ public:
             }
             if(tunable->precision == "fp16"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->gemm_k_global_split){
-                    if((k / group) % 2 != 0)
-                        return false;
+                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
+                    ;   // if both 1, k is also write out one by one
                 }
                 else{
-                    if((k / group) % utility_gcd(tunable->gemm_n_per_block, 8) != 0)
-                        return false;
+                    if(tunable->gemm_k_global_split){
+                        if((k / group) % 2 != 0)
+                            return false;
+                    }
+                    else{
+                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, 8) != 0)
+                            return false;
+                    }
                 }
             }
 
