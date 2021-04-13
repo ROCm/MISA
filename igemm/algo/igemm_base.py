@@ -277,7 +277,7 @@ class igemm_gtc_tunable_parameter_t(object):
             xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.wave_tile_k, 
                     self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n, self.block_size // amdgpu_wave_size(tunable_dict['arch']), self.precision)
             self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
-            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
+            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size, f"block_size:{self.block_size}, {self.gemm_m_per_block}x{self.gemm_n_per_block}x{self.gemm_k_per_block}"
             self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
             self.num_vgpr_accumulate_b          = self.wave_step_n * self.wave_repeat_n * xdlops_mapping.inst_mfma.num_v_b * self.local_prefetch_num
 

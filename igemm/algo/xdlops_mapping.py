@@ -382,7 +382,9 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  4, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 64 , 256,  32,  64,  4, 4,  1,  1,  1,  2,  v_mfma_f32_32x32x4f16),
         ctrl_xdlops_mapping_t( 64 , 256,  32,  32,  8, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x8f16),
+        ctrl_xdlops_mapping_t( 256, 32 ,  64,  16,  4, 4,  2,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  4, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x4f16),
+        ctrl_xdlops_mapping_t( 32 , 256,  16,  64,  4, 4,  1,  2,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  4, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
@@ -393,13 +395,15 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 128, 128,  16,  16, 16, 4,  2,  2,  2,  2,  v_mfma_f32_16x16x16f16),
         ctrl_xdlops_mapping_t( 128,  64,  16,  16, 16, 4,  2,  2,  2,  1,  v_mfma_f32_16x16x16f16),
         ctrl_xdlops_mapping_t( 128,  64,  32,  32,  8, 4,  1,  2,  1,  1,  v_mfma_f32_32x32x8f16),
+        ctrl_xdlops_mapping_t( 128,  64,  32,  32,  4, 4,  2,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 128, 128,  32,  64,  4, 4,  1,  1,  2,  1,  v_mfma_f32_32x32x4f16),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 64 , 128,  32,  64,  4, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x4f16),
         ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  4, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x4f16),
-        ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  8, 4,  1,  1,  1,  2,  v_mfma_f32_32x32x8f16),
+        ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  8, 4,  2,  1,  1,  1,  v_mfma_f32_32x32x8f16),
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
+        ctrl_xdlops_mapping_t( 128, 32 ,  64,  16,  4, 4,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 32 , 128,  16,  64,  4, 4,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
@@ -408,7 +412,9 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4, 4,  1,  1,  1,  2,  v_mfma_f32_4x4x4f16),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  64,  16,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4, 4,  1,  1,  2,  1,  v_mfma_f32_4x4x4f16),
+        ctrl_xdlops_mapping_t( 32 , 64 ,  16,  64,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16, 16, 4,  1,  1,  1,  1,  v_mfma_f32_16x16x16f16),
         ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  4, 4,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
@@ -480,11 +486,12 @@ class igemm_xdlops_mapping_t(mc_base_t):
         k_pack = get_dict_with_default(options, "k_pack", 1)
         v_pack = get_dict_with_default(options, "v_pack", 1)
         assert v_pack in (1, k_pack),  'currently only support v_pack is 1 or k_pack'
-        assert k_pack % ctrl.lanegroup_k_per_thread() == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack since lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}'
-        # assert k_pack % ctrl.inst_mfma.num_v_a == 0 and k_pack % ctrl.inst_mfma.num_v_b == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack since num_v_a:{ctrl.inst_mfma.num_v_a}, num_v_b:{ctrl.inst_mfma.num_v_b}'
-        k_pack_per_thread = k_pack // ctrl.lanegroup_k_per_thread()
+        if k_pack != 1:
+            assert k_pack % ctrl.lanegroup_k_per_thread() == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack:{k_pack} since lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}'
+            # assert k_pack % ctrl.inst_mfma.num_v_a == 0 and k_pack % ctrl.inst_mfma.num_v_b == 0, f'inst:{ctrl.inst_mfma.name()} require k_pack since num_v_a:{ctrl.inst_mfma.num_v_a}, num_v_b:{ctrl.inst_mfma.num_v_b}'
+            k_pack_per_thread = k_pack // ctrl.lanegroup_k_per_thread()
         with self._deferred_context():
-            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread}")
+            self._emit(f"; xdlops mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread if k_pack != 1 else 1}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.block_n() - 1}, v[{v_thread_id}]           ; block_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.block_m() - 1}, v[{v_thread_id}]           ; block_m index ")
             if k_pack != 1:

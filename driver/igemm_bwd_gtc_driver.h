@@ -545,6 +545,7 @@ public:
             hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 #endif
         result_t result;
+        result.kernel_name = kernel_name;
 
         if(tunable->multihead){
             // TODO:

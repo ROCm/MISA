@@ -124,7 +124,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                         if self.is_pad_c():
                             return 1
                         else:
-                            return utility_gcd(self.tunable.gemm_n_per_block, 8)
+                            #return utility_gcd(self.tunable.gemm_n_per_block, 8)
+                            return 2
                 else:
                     assert False
 
@@ -697,8 +698,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             else:
                 v_c_resuable_num        = num_vgpr_acc_a + num_vgpr_acc_b + \
                                             num_vgpr_global_load_a + num_vgpr_global_load_b + \
-                                            16       # from v_sst_a_os to v_co_sst
-                v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
+                                            3 * nb_per_thread + 6      # from v_sst_a_os to v_co_sst
+                #v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
+                v_c_coalescing_num      = outer.coalescing_store.ctrl.get_vgpr_usage()
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
                 v_c_needed              = v_c_needed if v_c_needed > 0 else 0  # let at least 0
@@ -1010,6 +1012,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         k_pack = self.get_k_pack()
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread()
+        k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
         m_wei_2d_global_load, m_in_2d_global_load = self.get_macro_global_load()
         k_pack_gld_a = m_in_2d_global_load.ctrl.vector_d1
         k_pack_gld_b = m_wei_2d_global_load.ctrl.vector_d1
@@ -1022,8 +1026,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.length_d1 = ta_nb1
             in_sst_ctrl.length_dp = ta_c
             in_sst_ctrl.vector_dp = k_pack_gld_a
-            in_sst_ctrl.stride_d0 = na_nb1 * k_pack * data_byte
-            in_sst_ctrl.stride_d1 = k_pack * data_byte
+            in_sst_ctrl.stride_d0 = na_nb1 * k_pack_src_mat * data_byte
+            in_sst_ctrl.stride_d1 = k_pack_src_mat * data_byte
 
         if not self.tunable.tensor_b_pass_through:
             # wei is gemm_k * gemm_n * k_pack
@@ -1033,8 +1037,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             wei_sst_ctrl.length_d1 = tb_k1
             wei_sst_ctrl.length_dp = tb_c
             wei_sst_ctrl.vector_dp = k_pack_gld_b
-            wei_sst_ctrl.stride_d0 = nb_k1 * k_pack * data_byte
-            wei_sst_ctrl.stride_d1 = k_pack * data_byte
+            wei_sst_ctrl.stride_d0 = nb_k1 * k_pack_src_mat * data_byte
+            wei_sst_ctrl.stride_d1 = k_pack_src_mat * data_byte
 
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_3d_shared_store_t(self.mc, in_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
@@ -1262,6 +1266,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         s_dummy = sym_t("s_dummy")
 
         k_pack = self.get_k_pack()
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread()
+        k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
         k_pack_gld_a = m_in_2d_global_load.ctrl.vector_d1
         k_pack_gld_b = m_wei_2d_global_load.ctrl.vector_d1
 
@@ -1646,8 +1652,6 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         # do load
         calculate_and_load_weight()
         calculate_and_load_input()
-        
-
 
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
@@ -1656,7 +1660,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             v_pack = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else 1
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.xdlops_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp(),
-                                    k_pack=k_pack, v_pack=v_pack))
+                                    k_pack=k_pack_src_mat, v_pack=v_pack))
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.xdlops_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
 
@@ -1665,32 +1669,32 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         '''
         if not self.tunable.tensor_a_pass_through:
             self._emit(f"; LDS store, in: e,c,nb0,nb1: {ta_e}x{ta_c}x{ta_nb0}x{ta_nb1}, {ca_e}x{ca_c}x{ca_nb0}x{ca_nb1}, k_pack:{k_pack}, k_pack_gld_a:{k_pack_gld_a}, {self.tunable.precision}")
-            if k_pack != 1:
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_in_inb()}]")
-                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_nb0*na_nb1 * k_pack)}, v[{v.v_tmp(2)}]")
-                if k_pack != k_pack_gld_a:
-                    assert k_pack % k_pack_gld_a == 0
-                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack - 1}, v[{v.v_gtc_ic()}]")   # gld_a k_pack smaller than k_pack
+            if k_pack_src_mat != 1:
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_in_inb()}]")
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_ic()}]")
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                if k_pack_src_mat != k_pack_gld_a:
+                    assert k_pack_src_mat % k_pack_gld_a == 0
+                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_gtc_ic()}]")   # gld_a k_pack_src_mat smaller than k_pack_src_mat
                     self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(na_nb0*na_nb1 * k_pack)}, v[{v.v_in_inb()}]")
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_in_inb()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
             self._emit_empty_line()
             self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load in")
 
         if not self.tunable.tensor_b_pass_through:
             self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
-            if k_pack != 1:
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack)},  v[{v.v_wei_ik()}]")
-                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack)},  v[{v.v_gtc_ic()}]")
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_k0*nb_k1 * k_pack)}, v[{v.v_tmp(2)}]")
-                if k_pack != k_pack_gld_b:
-                    assert k_pack % k_pack_gld_b == 0
-                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack - 1}, v[{v.v_gtc_ic()}]")   # gld_b k_pack smaller than k_pack
+            if k_pack_src_mat != 1:
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_wei_ik()}]")
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_ic()}]")
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_k0*nb_k1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                if k_pack_src_mat != k_pack_gld_b:
+                    assert k_pack_src_mat % k_pack_gld_b == 0
+                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_gtc_ic()}]")   # gld_b k_pack_src_mat smaller than k_pack_src_mat
                     self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(nb_k0*nb_k1 * k_pack)}, v[{v.v_wei_ik()}]")
+                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(nb_k0*nb_k1 * k_pack_src_mat)}, v[{v.v_wei_ik()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
@@ -1806,6 +1810,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
         k_pack = self.get_k_pack()
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread()
+        k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
 
         m_move_slice_window             = self.get_macro_move_slice_window()
         m_move_slice_window_accumulate  = self.get_macro_move_slice_window_accumulate()
@@ -1955,7 +1961,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.shared_store_b_functor      = self.shared_store_wei
 
             # ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
-            fctrl.lds_k_pack                  = k_pack
+            fctrl.lds_k_pack                  = k_pack_src_mat
 
             share_load_packed                 = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else ctrl_xdlops_mapping.lanegroup_k_per_thread()
 

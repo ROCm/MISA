@@ -290,7 +290,6 @@ class igemm_coalescing_store_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
-
     def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp4, v_store_flag = None):
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
@@ -430,6 +429,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
         self.gemm_k_global_split = False
+        self.feat_vgpr_collapse = True
 
     def adjust_optimal_coalescing_groups(self):
         '''
@@ -825,6 +825,33 @@ class ctrl_coalescing_store_xdlops_t(object):
                     m_index_per_group[ig][i_cm0][i_t] = self.get_m_index_from_m1_m0(m_index)
         return m_index_per_group
 
+    def get_vgpr_usage(self):
+        '''
+        return the number of vgpr needed for coalescing store process
+        '''
+        agpr_per_store_group = self.cxm.total_acc_c() // self.coalescing_groups
+        if self.feat_vgpr_collapse:
+            data_byte = amdgpu_precision_data_byte(self.precision)
+            inst_sld_byte = (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else self.vector_write_out) * data_byte
+            issues_per_ssgroup = 4 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
+
+            num_sld_total_dword = self.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else self.vector_write_out)
+
+            total_lgkmcnt = num_sld_total_dword     # TODO: assume sld is single issue
+
+            assert MAX_LGKMCNT % issues_per_ssgroup == 0
+
+            # we need further split based on issues_per_ssgroup
+            split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
+
+            agpr_per_store_split_sld_group = (agpr_per_store_group + split_sld_groups - 1) // split_sld_groups
+            assert agpr_per_store_split_sld_group >= 4
+
+            return agpr_per_store_split_sld_group
+        else:
+            return agpr_per_store_group
+
+
 class igemm_coalescing_store_xdlops_t(mc_base_t):
     def __init__(self, mc, ctrl):
         mc_base_t.__init__(self, mc)
@@ -1073,6 +1100,32 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
+    '''
+    def get_vgpr_usage(self):
+        ctrl = self.ctrl
+        agpr_per_store_group = ctrl.cxm.total_acc_c() // ctrl.coalescing_groups
+        if ctrl.feat_vgpr_collapse:
+            data_byte = amdgpu_precision_data_byte(ctrl.precision)
+            inst_sld_byte = (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte
+            issues_per_ssgroup = 4 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
+
+            num_sld_total_dword = ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
+
+            total_lgkmcnt = num_sld_total_dword     # TODO: assume sld is single issue
+
+            assert MAX_LGKMCNT % issues_per_ssgroup == 0
+
+            # we need further split based on issues_per_ssgroup
+            split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
+
+            agpr_per_store_split_sld_group = (agpr_per_store_group + split_sld_groups - 1) // split_sld_groups
+            assert agpr_per_store_split_sld_group >= 4
+
+            return agpr_per_store_split_sld_group
+        else:
+            return agpr_per_store_group
+    '''
+
     def __call__(self, a_c, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
 
         # if no need s_out_offset, set to integer 0
@@ -1221,7 +1274,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                     self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
                                             f' ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}')
                         #vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
-                        vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
+                        if not ctrl.feat_vgpr_collapse:
+                            vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
 
                 def emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1):
                     # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")
@@ -1292,7 +1346,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     if not ctrl.can_skip_coalescing():
                         self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_per_ssgroup:{num_sld_per_ssgroup}")
                         for i_d in range(num_sld_per_ssgroup):
-                            vgpr_index = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                            vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                             sld_offset = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
                             self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
@@ -1314,7 +1368,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         if s_k is not None:
                             self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
-                        self._emit(inst_gst(v_c(i_gst_flat*ctrl.vector_write_out//(4 // data_byte)), v_out_offset, s_p_out, s_out_offset_itr(), 0, i_gst_flat % 2))
+                        self._emit(inst_gst(v_c((i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst)*ctrl.vector_write_out//(4 // data_byte)), v_out_offset, s_p_out, s_out_offset_itr(), 0, i_gst_flat % 2))
                         if s_k is not None:
                             self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                         if i_gst_flat != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
@@ -1325,6 +1379,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     if v_store_flag is not None and type(v_store_flag) is str:
                         self._emit(f"s_mov_b64 exec, -1")
 
+                if ctrl.feat_vgpr_collapse:
+                    agpr_per_store_group = ctrl.cxm.total_acc_c() // ctrl.coalescing_groups
+                    assert ctrl.get_vgpr_usage() == ((agpr_per_store_group + split_sld_groups - 1) // split_sld_groups), f"vgpr_usage:{ctrl.get_vgpr_usage()}, agpr_per_store_group:{agpr_per_store_group}, split_sld_groups:{split_sld_groups}"
             # do some assert
             agpr_consume_list.sort()
             assert agpr_consume_list == [x for x in range(ctrl.cxm.total_acc_c())], f"agpr_consume_list:{agpr_consume_list}"
