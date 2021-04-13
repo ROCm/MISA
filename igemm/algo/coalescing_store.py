@@ -1241,10 +1241,11 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
                     if s_k is not None:
-                        self._emit(f"v_cmpx_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                        self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                        self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                     self._emit(inst_gst(v_c(i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
                     if s_k is not None:
-                        self._emit(f"s_mov_b64 exec, -1")
+                        self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                     if i_gst != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                         i_m = m_index_per_group[i_group][0][i_gst+1]
                         # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")

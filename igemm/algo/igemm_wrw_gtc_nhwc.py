@@ -201,10 +201,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         def expr(self):
             self._emit(f"; ihi = iho * s_stride_h + iy * s_dilation_h - s_pad_h,   here make sure iy <- iy * s_dilation_h - s_pad_h before hand")
             self._emit(f"; iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w,   here make sure ix <- ix * s_dilation_w - s_pad_w before hand")
-            self._emit(f"v_mul_lo_u32 v[{self.v_tmp()}], s[{self.s_stride_h()}], v[{self.v_out_iho()}]")
-            self._emit(f"v_add_i32 v[{self.v_in_ihi()}], v[{self.v_tmp()}], v[{self.v_wei_iy()}]")
-            self._emit(f"v_mul_lo_u32 v[{self.v_tmp(1)}], s[{self.s_stride_w()}], v[{self.v_out_iwo()}]")   
-            self._emit(f"v_add_i32 v[{self.v_in_iwi()}], v[{self.v_tmp(1)}], v[{self.v_wei_ix()}]")
+            #self._emit(f"v_mul_lo_u32 v[{self.v_tmp()}], s[{self.s_stride_h()}], v[{self.v_out_iho()}]")
+            #self._emit(f"v_add_i32 v[{self.v_in_ihi()}], v[{self.v_tmp()}], v[{self.v_wei_iy()}]")
+            #self._emit(f"v_mul_lo_u32 v[{self.v_tmp(1)}], s[{self.s_stride_w()}], v[{self.v_out_iwo()}]")   
+            #self._emit(f"v_add_i32 v[{self.v_in_iwi()}], v[{self.v_tmp(1)}], v[{self.v_wei_ix()}]")
+            self._emit(f"v_mad_u32_u24 v[{self.v_in_ihi()}], s[{self.s_stride_h()}], v[{self.v_out_iho()}], v[{self.v_wei_iy()}]")
+            self._emit(f"v_mad_u32_u24 v[{self.v_in_iwi()}], s[{self.s_stride_w()}], v[{self.v_out_iwo()}], v[{self.v_wei_ix()}]")
 
     class macro_igemm_wrw_gtc_out_update_hw_t(macro_base_t):
         def __init__(self, mc, inline = False):
