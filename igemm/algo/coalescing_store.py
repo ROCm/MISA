@@ -1274,7 +1274,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                     self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
                                             f' ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}')
                         #vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
-                        if not ctrl.feat_vgpr_collapse:
+                        if ctrl.feat_vgpr_collapse:
+                            if vgpr_index_acc + AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M >= ctrl.get_vgpr_usage():
+                                vgpr_index_acc = 0
+                            else:
+                                vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M # to have a balanced vgpr reusage
+                        else:
                             vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
 
                 def emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1):
