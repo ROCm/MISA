@@ -1701,6 +1701,8 @@ class igemm_bwd_gtc_t(mc_base_t):
 
         self._emit_empty_line()
 
+        #################################################################################################################
+
         self._emit(f"; k1e transform")
         if self.tunable.nxe != 0:
             if not self.is_unit_yx():
@@ -1828,6 +1830,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
             self._emit(f"s_mov_b64 s[2:3], s[{s.s_magic_5((0,1))}]")
 
+        #################################################################################################################
+
         self._emit(f"; calculate output offset")
         # compute group distance
         self._emit(f"s_mul_i32 s[{s.s_tmp(5)}], s[{s.s_k()}], s[{s.s_out_stride_k() if self.tunable.nxe != 0 else s.s_stride_hw()}]")
@@ -1934,12 +1938,7 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(self.global_load_wei())
         self._emit_empty_line()
 
-        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
-            self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
-        else:
-            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
-            self._emit(self.xdlops_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+        #################################################################################################################
 
         self._emit(f"; LDS store, out: k0,k1e,n0,n1b: {t_k0}x{t_k1e}x{t_n0}x{t_n1b}, {c_k0}x{c_k1e}x{c_n0}x{c_n1b}, order:{gemm_n_order}")
         if gemm_n_order == IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_N_N0_N1B:
@@ -2033,11 +2032,22 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
+        #################################################################################################################
+
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+            self._emit(self.thread_mapping(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+        else:
+            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+            self._emit(self.xdlops_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp()))
+
         self._emit(f"; LDS load")
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_in()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte * self.tunable.gemm_k_pack)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
+
+        #################################################################################################################
 
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
@@ -2177,6 +2187,8 @@ class igemm_bwd_gtc_t(mc_base_t):
         self._emit(f"v_add3_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_tmp(1)}], v[{v.v_in_iwi()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_in_os()}], {igemm_log2(data_byte)}, v[{v.v_in_os()}]")
         self._emit_empty_line()
+
+        #################################################################################################################
 
         self._emit(f"; move slice stride")
         assert n_k0 * n_k1e == self.tunable.gemm_k_per_block
