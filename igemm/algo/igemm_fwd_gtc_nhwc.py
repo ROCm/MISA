@@ -120,7 +120,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
             def get_vector_write_out():
                 vector_write = 1
+                config_vs = self.tunable.vector_store
                 if self.tunable.precision == 'fp32':
+                    assert config_vs == 0
                     vector_write = 1                        # fp32 vector seems not much perf improvement
                 elif self.tunable.precision == 'fp16':
                     if self.tunable.gemm_k_global_split:
@@ -129,13 +131,13 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                         if self.is_pad_c():
                             vector_write = 1
                         else:
-                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, 8)
+                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
                 elif self.tunable.precision == 'int8':
                     if self.is_pad_c():
                         vector_write = 1
                     else:
-                        vector_write = utility_gcd(self.tunable.gemm_n_per_block, 16)
+                        vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 16)
                 else:
                     assert False
 
@@ -929,6 +931,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         '''
         ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
         if ta_c == 1 and tb_c == 1:
+            assert self.tunable.vector_store == 0
             return True
         return False
 

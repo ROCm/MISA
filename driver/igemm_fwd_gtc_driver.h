@@ -381,7 +381,7 @@ public:
                             return false;
                     }
                     else{
-                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, 8) != 0)
+                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 8 : tunable->vector_store) != 0)
                             return false;
                     }
                 }
@@ -397,7 +397,7 @@ public:
                         assert(false);
                     }
                     else{
-                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, 16) != 0)
+                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 16 : tunable->vector_store) != 0)
                             return false;
                     }
                 }

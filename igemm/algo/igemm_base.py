@@ -194,6 +194,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
+        self.vector_store                       = utility_dict_with_default_t(tunable_dict)('vector_store', 0)
         self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
@@ -396,6 +397,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['gemm_m_unmerge_cluster']          = self.gemm_m_unmerge_cluster
         tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
         tunable_dict['gemm_k_unmerge_cluster']          = self.gemm_k_unmerge_cluster
+        tunable_dict['vector_store']                    = self.vector_store
 
         return tunable_dict
 
@@ -455,6 +457,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.gemm_k_global_split:
             sstr += \
                 line_start + 'gemm_k_global_split        {} {}'.format(equal, self.gemm_k_global_split) + new_line
+        if self.vector_store:
+            sstr += \
+                line_start + 'vector_store               {} {}'.format(equal, self.vector_store) + new_line
         if extra_info:
             sstr += \
                 line_start + new_line + \
@@ -520,6 +525,9 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     if tunable.multihead:
         kernel_name += "_mh"
+
+    if tunable.vector_store:
+        kernel_name += f"_vs{tunable.vector_store}"
 
     if tunable.gemm_k_global_split:
         kernel_name += "_gkgs"
