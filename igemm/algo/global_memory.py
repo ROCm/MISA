@@ -38,6 +38,8 @@ class inst_buffer_load_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
+        if self.data_byte == 1:
+            return f"buffer_load_ubyte v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         if self.data_byte == 2:
             return f"buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         if self.data_byte == 4:
@@ -61,6 +63,11 @@ class inst_buffer_store_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
+        if self.data_byte == 1:
+            if lo_hi == 0:
+                return f"buffer_store_byte v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            else:
+                return f"buffer_store_byte_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         if self.data_byte == 2:
             if lo_hi == 0:
                 return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"

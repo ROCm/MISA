@@ -840,6 +840,7 @@ class ctrl_coalescing_store_xdlops_t(object):
             total_lgkmcnt = num_sld_total_dword     # TODO: assume sld is single issue
 
             assert MAX_LGKMCNT % issues_per_ssgroup == 0
+            # print(f"issues_per_ssgroup:{issues_per_ssgroup}, total_lgkmcnt:{total_lgkmcnt}, get_num_dword_per_group:{self.get_num_dword_per_group()}, vector_write_out:{self.vector_write_out}")
 
             # we need further split based on issues_per_ssgroup
             split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
@@ -1263,6 +1264,33 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             if ctrl.vector_write_out == 1:
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
+                        elif ctrl.precision == 'int8':
+                            # CAUSION: must have a symbol s_0xff and pre inited with 0xff
+                            if ctrl.vector_write_out == 1:
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 3)}], s[s_0xff], v[{v_c(vgpr_index + 3)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 3)}], 24, v[{v_c(vgpr_index + 3)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 1)}],  8, v[{v_c(vgpr_index + 1)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 2)}], 16, v[{v_c(vgpr_index + 2)}]")
+                                self._emit(f"v_or_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 3)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}]")
+                            else:
+                                # CAUSION: ds_write_b8 already clamp the value for us. if need other clamp methor, need further consideration
+                                pass
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
+                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
+                                # self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 3)}], 24, v[{v_c(vgpr_index + 3)}]")
+                                # self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 1)}],  8, v[{v_c(vgpr_index + 1)}]")
+                                # self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 2)}], 16, v[{v_c(vgpr_index + 2)}]")
+                                # self._emit(f"v_or_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 3)}]")
+                                # self._emit(f"v_or3_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}]")
+
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1))
                             if ctrl.vector_write_out == 1:
@@ -1373,9 +1401,15 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         if s_k is not None:
                             self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
-                        self._emit(inst_gst(v_c((i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst)*ctrl.vector_write_out//(4 // data_byte)), v_out_offset, s_p_out, s_out_offset_itr(), 0, i_gst_flat % 2))
+                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
+                        lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and ctrl.vector_write_out == 1 else 0
+                        self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
                         if s_k is not None:
                             self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
+                        if ctrl.precision == 'int8' and ctrl.vector_write_out == 1:
+                            if i_gst_flat % 4 != 3:
+                                self._emit(f"v_lshrrev_b32 v[{v_c(cur_vgpr_gst)}], 8, v[{v_c(cur_vgpr_gst)}]")
+
                         if i_gst_flat != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
                             i_m = m_index_per_group[i_group][0][(i_gst_flat)+1]
                             # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")

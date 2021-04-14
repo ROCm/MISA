@@ -200,6 +200,12 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
         else
             fp_factor = 2;  // dlops
     }
+    if(data_type == driverInt8){
+        if(gcn_arch == 908)
+            fp_factor = 4;  // xdlops
+        else
+            fp_factor = 4;  // dlops
+    }
     // else if(data_type == driverInt8){
     //     if(gcn_arch == 908)
     //     fp_factor = 4;
@@ -390,6 +396,36 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
            && (pp_err == 0)
 #endif
         ;
+}
+
+template<>
+bool valid_vector<int8_t>(const float *ref, const int8_t *pred, size_t n,
+                                double nrms) {
+    // int8 valid, we prefer a per pixel match
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
+    size_t pp_err = 0;
+
+    for (size_t i = 0; i < n; ++i) {
+        if(!(valid_float<float>(ref[i]) ) ){
+            printf(" invalid float at %4zu, ref:%f\n", i, ref[i]);
+            return false;
+        }
+        int8_t pi = pred[i];
+        int32_t ri = static_cast<int32_t>(ref[i]);
+        int8_t ri_clamp;
+        memcpy(&ri_clamp, &ri, 1);
+
+        if(igemm_per_pixel_check){
+            printf("[%zu] ref:%d(%d), pred:%d(0x%08x) [%s]\n", i, ri, ri_clamp, pi,
+                        *(uint32_t*)(&pred[i]), pi != ri_clamp ? "N":"Y");
+        }
+
+        if(pi != ri_clamp){
+            pp_err++;
+        }
+    }
+    return pp_err == 0;
 }
 
 #if 0
@@ -800,6 +836,9 @@ int main(int argc, char **argv) {
         fprintf(p_bcsv, "%.2f,", get_theoritical_conv_flop(&conv_args)/1e9);
         fflush(p_bcsv);
     }
+
+    if(driver_data_type == driverInt8)
+        igemm_rand_int = 1;
 
     if (need_fwd){
         int fastest_id = -1;

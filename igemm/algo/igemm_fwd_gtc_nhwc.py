@@ -113,28 +113,43 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
-
-            def get_vector_write_out():
-                if self.tunable.precision == 'fp32':
-                    return 1                        # fp32 vector seems not much perf improvement
-                if self.tunable.precision == 'fp16':
-                    if self.tunable.gemm_k_global_split:
-                        return 2                    # prefer use buffer_atomic_pk_add_f16
-                    else:
-                        if self.is_pad_c():
-                            return 1
-                        else:
-                            #return utility_gcd(self.tunable.gemm_n_per_block, 8)
-                            return 2
-                else:
-                    assert False
-
-            ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
-        
             # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
             na_nb0, na_nb1, na_e, na_c, nb_e, nb_c, nb_k0, nb_k1 = self.get_dims_lengths()
             ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [na_nb0, na_nb1]
+
+            def get_vector_write_out():
+                vector_write = 1
+                if self.tunable.precision == 'fp32':
+                    vector_write = 1                        # fp32 vector seems not much perf improvement
+                elif self.tunable.precision == 'fp16':
+                    if self.tunable.gemm_k_global_split:
+                        vector_write = 2                    # prefer use buffer_atomic_pk_add_f16
+                    else:
+                        if self.is_pad_c():
+                            vector_write = 1
+                        else:
+                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, 8)
+                            #return 2
+                elif self.tunable.precision == 'int8':
+                    if self.is_pad_c():
+                        vector_write = 1
+                    else:
+                        vector_write = utility_gcd(self.tunable.gemm_n_per_block, 16)
+                else:
+                    assert False
+
+                num_dword_per_group = ctrl_coalescing_store_xdlops.get_num_dword_per_group()
+                if vector_write > num_dword_per_group:
+                    '''
+                    each coalescing group dword can't smaller than vector write size. currently only int8 may going here
+                    '''
+                    # print(f'adjusted vector_write({vector_write}) out by num_dword_per_group({num_dword_per_group})')
+                    vector_write = num_dword_per_group
+                return vector_write
+
+            ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
+
             #if gemm_m_order == IGEMM_FWD_GTC_NHWC_LDS_STORE_ORDER_GEMM_M_N1B_N0:
             #    # we may consider not suppor this mode
             #    ctrl_coalescing_store_xdlops.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
@@ -626,6 +641,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self.s_move_slice_k_ix          = sym_t("s_move_slice_k_ix"         , sseq(1))
             self.s_flag_need_acc_yx         = sym_t("s_flag_need_acc_yx"        , sseq(1))
             self.s_kitr                     = sym_t("s_kitr"                    , 1)
+            if outer.tunable.precision == 'int8':
+                self.s_0xff                 = sym_t("s_0xff"                    , sseq(1))
             if outer.tunable.tensor_a_pass_through:
                 # need s precache
                 # in_npc = ((ta_c // k_pack) - 2) if ((ta_c // k_pack) - 2 > 0 ) else 0
@@ -828,6 +845,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 assert ta_c in (1, 2, 4), "currently c will be used as LDS store/load vector size, now only support this"
             elif self.tunable.precision in ('fp16', 'bf16'):
                 assert ta_c in (1, 2, 4, 8, 16, 32)
+            elif self.tunable.precision == 'int8':
+                assert ta_c in (1, 2, 4, 8, 16, 32, 64)
 
         assert ta_e == 1, "currently not support >1 in e dimension"
 
@@ -906,6 +925,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         another assumption would be write out. in fp32 we prefer non vector store, so no problem
         but in fp16 we prefer vector store. hence another assumption would be, if this function is true
         then fp16 no longer use vector store.
+        this is also true for int8
         '''
         ta_nb0, ta_nb1, ta_e, ta_c, tb_e, tb_c, tb_k0, tb_k1 = self.get_thread_lengths()
         if ta_c == 1 and tb_c == 1:
@@ -1314,6 +1334,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             assert False, "unimplemented"
         self._emit_empty_line()
 
+        if self.tunable.precision == 'int8':
+            self._emit(f"s_mov_b32 s[{s.s_0xff()}], 0xff")
 
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit_empty_line()

@@ -202,7 +202,7 @@ class igemm_gtc_tunable_parameter_t(object):
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
-        assert self.precision in ('fp32', 'fp16', 'bf16')
+        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8')
         if self.tensor_layout == "nchw":
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":

@@ -103,6 +103,8 @@ static inline int utility_string_to_data_byte(std::string precision)
         return 4;
     if(precision == "fp16" || precision == "bf16")
         return 2;
+    if(precision == "int8")
+        return 1;
     assert(false);
     return 1;
 }

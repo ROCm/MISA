@@ -234,6 +234,8 @@ class ctrl_xdlops_mapping_t(object):
             return 4
         if self.inst_mfma.data_type == AMDGPU_PRECISION_BF16:
             return 2
+        if self.inst_mfma.data_type == AMDGPU_PRECISION_INT8:
+            return 4
         assert False
 
     def lanegroup_m_per_cluster(self):
@@ -435,6 +437,73 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 16 , 16,  16,  16,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16)]
 
+ctrl_xdlops_mapping_int8 = [
+        ctrl_xdlops_mapping_t( 256, 256,  64,  32,  4, 4,  2,  2,  1,  2,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 256, 256,  32,  32,  8, 4,  2,  2,  2,  2,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 256, 128,  64,  32,  4, 4,  2,  2,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 256, 128,  32,  32,  8, 4,  2,  2,  2,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 128, 256,  32,  64,  4, 4,  2,  2,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 128, 256,  32,  32,  8, 4,  2,  2,  1,  2,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  4, 4,  2,  2,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 256, 64 ,  64,  32,  4, 4,  2,  1,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 256, 64 ,  64,  32,  4, 4,  1,  2,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 256, 64 ,  32,  32,  8, 4,  2,  2,  1,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  4, 4,  2,  2,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 64 , 256,  32,  64,  4, 4,  1,  1,  1,  2,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 64 , 256,  32,  32,  8, 4,  2,  2,  1,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 256, 32 ,  64,  16,  4, 4,  2,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  4, 4,  2,  2,  1,  2,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 32 , 256,  16,  64,  4, 4,  1,  2,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  4, 4,  2,  2,  2,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  4, 4,  2,  2,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  4, 4,  2,  2,  1,  1,  v_mfma_i32_4x4x4i8),
+
+        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  4, 4,  2,  2,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  8, 4,  2,  2,  1,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  8, 4,  1,  1,  2,  2,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 128, 128,  16,  16, 16, 4,  2,  2,  2,  2,  v_mfma_i32_16x16x16i8),
+        ctrl_xdlops_mapping_t( 128,  64,  16,  16, 16, 4,  2,  2,  2,  1,  v_mfma_i32_16x16x16i8),
+        ctrl_xdlops_mapping_t( 128,  64,  32,  32,  8, 4,  1,  2,  1,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 128,  64,  32,  32,  4, 4,  2,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  64,  4, 4,  1,  1,  2,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  4, 4,  2,  2,  1,  2,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  4, 4,  2,  2,  2,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 128,  32,  64,  4, 4,  1,  1,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  4, 4,  1,  1,  1,  1,  v_mfma_i32_32x32x4i8),
+        ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  8, 4,  2,  1,  1,  1,  v_mfma_i32_32x32x8i8),
+        ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  4, 4,  2,  2,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 128, 32 ,  64,  16,  4, 4,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  4, 4,  2,  2,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 32 , 128,  16,  64,  4, 4,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4, 4,  2,  2,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16, 16, 4,  2,  2,  1,  1,  v_mfma_i32_16x16x16i8),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16, 16, 4,  1,  1,  2,  2,  v_mfma_i32_16x16x16i8),
+        ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  4, 2,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  4, 2,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4, 4,  1,  1,  1,  2,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 32 ,  64,  16,  4, 2,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 32 , 64 ,  8 ,  32,  4, 4,  1,  1,  2,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 32 , 64 ,  16,  64,  4, 2,  1,  1,  1,  1,  v_mfma_i32_16x16x4i8),
+        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16,  4, 4,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 32 , 32 ,  16,  16, 16, 4,  1,  1,  1,  1,  v_mfma_i32_16x16x16i8),
+        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  4, 4,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  4, 4,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        # 2 waves
+        ctrl_xdlops_mapping_t( 64 , 16 ,  64,  4 ,  4, 2,  1,  1,  1,  2,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 64 ,  4 ,  64,  4, 2,  1,  1,  2,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 8  ,  64,  4 ,  4, 2,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 8  , 64 ,  4 ,  64,  4, 2,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  4, 2,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  4, 2,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        # 1 wave
+        ctrl_xdlops_mapping_t( 32 , 16 ,  32,  8 ,  4, 1,  1,  1,  1,  2,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 32 ,  8 ,  32,  4, 1,  1,  1,  2,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 64 , 4 ,  64,  4 ,   4, 1,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   4, 1,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8),
+        ctrl_xdlops_mapping_t( 16 , 16,  16,  16,   4, 1,  1,  1,  1,  1,  v_mfma_i32_4x4x4i8)]
+
+
+
 def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves, precision):
     if type(precision) is str:
         precision = amdgpu_string_to_precision(precision)
@@ -443,6 +512,8 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
     elif precision == AMDGPU_PRECISION_FP16:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
+    elif precision == AMDGPU_PRECISION_INT8:
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_int8
     elif precision == AMDGPU_PRECISION_BF16:
         assert False, f"not support bf16 now"
     else:

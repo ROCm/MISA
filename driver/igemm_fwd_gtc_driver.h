@@ -387,6 +387,22 @@ public:
                 }
             }
 
+            if(tunable->precision == "int8"){
+                // fp16 support vector writeout by default. check get_vector_write_out()
+                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
+                    ;   // if both 1, k is also write out one by one
+                }
+                else{
+                    if(tunable->gemm_k_global_split){
+                        assert(false);
+                    }
+                    else{
+                        if((k / group) % utility_gcd(tunable->gemm_n_per_block, 16) != 0)
+                            return false;
+                    }
+                }
+            }
+
             // input vector load limitation, n1b
             //if(tunable->tensor_a_thread_lengths[3] > 1 && (
             //    !unit_conv ||
