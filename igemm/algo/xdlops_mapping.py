@@ -280,16 +280,22 @@ ctrl_xdlops_mapping_fp32 = [
         # ctrl_xdlops_mapping_t( 256, 256,  32,  64,  4,  2,  2,  2,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 256, 128,  64,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 256, 128,  32,  32,  2, 4,  2,  2,  2,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 256, 128,  32,  32,  1, 4,  2,  2,  2,  1,  v_mfma_f32_32x32x1f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 128, 256,  32,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 256,  32,  32,  2, 4,  2,  2,  1,  2,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 128, 256,  32,  32,  1, 4,  2,  2,  1,  2,  v_mfma_f32_32x32x1f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 256, 64 ,  64,  16,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 256, 64 ,  32,  32,  2, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 256, 64 ,  32,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 64 , 256,  16,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 64 , 256,  32,  32,  2, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 64 , 256,  32,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 256, 32 ,  64,  4 ,  1, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 256, 32 ,  32,  32,  2, 4,  2,  1,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 256, 32 ,  32,  32,  1, 4,  2,  1,  1,  1,  v_mfma_f32_32x32x1f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 32 , 256,  4 ,  64,  1, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 32 , 256,  32,  32,  2, 4,  1,  2,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 32 , 256,  32,  32,  1, 4,  1,  2,  1,  1,  v_mfma_f32_32x32x2f32),  ## added by ZQF
         ctrl_xdlops_mapping_t( 256, 16 ,  64,  4 ,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 16 , 256,  4 ,  64,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
 
@@ -298,13 +304,16 @@ ctrl_xdlops_mapping_fp32 = [
 
         ctrl_xdlops_mapping_t( 128, 128,  32,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x1f32),
         ctrl_xdlops_mapping_t( 128, 128,  32,  32,  2, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 128, 128,  32,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_32x32x1f32),   ## added by ZQF
         ctrl_xdlops_mapping_t( 128, 128,  32,  64,  1, 4,  1,  1,  2,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  8 ,  1, 4,  2,  2,  1,  2,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 128, 64 ,  32,  32,  2, 4,  2,  1,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 128, 64 ,  32,  32,  1, 4,  2,  1,  1,  1,  v_mfma_f32_32x32x1f32),   ## added by ZQF
         ctrl_xdlops_mapping_t( 64 , 128,  8 ,  32,  1, 4,  2,  2,  2,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  32,  64,  1, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  64,  32,  1, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),
         ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  2, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x2f32),
+        ctrl_xdlops_mapping_t( 64 , 128,  32,  32,  1, 4,  1,  1,  1,  1,  v_mfma_f32_32x32x1f32),   ## added by ZQF
         ctrl_xdlops_mapping_t( 128, 32 ,  32,  8 ,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
         ctrl_xdlops_mapping_t( 128, 32 ,  16,  16,  4, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x4f32),
         ctrl_xdlops_mapping_t( 32 , 128,  8 ,  32,  1, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x1f32),
@@ -451,7 +460,7 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
                 t.waves == waves:
             target_mfma_tiling.append(t)
 
-    assert len(target_mfma_tiling) != 0, f"unsupported wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_repeat_m:{wave_repeat_m},  wave_repeat_n:{wave_repeat_n}"
+    assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, wave_tile_m:{wave_tile_m}, wave_tile_n:{wave_tile_n}, wave_tile_k:{wave_tile_k}, wave_repeat_m:{wave_repeat_m}, wave_repeat_n:{wave_repeat_n}"
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling[0]
 
