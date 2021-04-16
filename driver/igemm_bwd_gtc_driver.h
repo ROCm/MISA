@@ -164,77 +164,6 @@ public:
     igemm_bwd_gtc_t(){}
     ~igemm_bwd_gtc_t(){}
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-#if 0
-        auto tensor_layout            = tunable->tensor_layout;
-        auto gemm_m_per_block         = tunable->gemm_m_per_block;
-        auto gemm_n_per_block         = tunable->gemm_n_per_block;
-        auto gemm_k_per_block         = tunable->gemm_k_per_block;
-        auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
-        auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
-        auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
-        auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
-        auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
-        auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
-        auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
-        auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
-        auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
-        auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
-        auto direction                = tunable->direction;
-        auto precision                = tunable->precision;
-        auto nxb                      = tunable->nxb;
-        auto nxe                      = tunable->nxe;
-        auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
-        auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
-        auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
-        auto multihead                = tunable->multihead;
-
-        assert(gemm_m_per_block % (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster) == 0);
-        assert(gemm_n_per_block % (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster) == 0);
-        int gemm_m_repeat = gemm_m_per_block / (gemm_m_per_thread * gemm_m_level0_cluster * gemm_m_level1_cluster);
-        int gemm_n_repeat = gemm_n_per_block / (gemm_n_per_thread * gemm_n_level0_cluster * gemm_n_level1_cluster);
-
-        int thread_tile_m = gemm_m_repeat * gemm_m_per_thread;
-        int thread_tile_n = gemm_n_repeat * gemm_n_per_thread;
-
-        assert(direction == "bwd");
-
-        std::string kernel_prefix = std::string("igemm_") + direction + std::string("_gtc_") + 
-                tensor_layout + std::string("_") + precision +
-                std::string("_bx") + std::to_string(nxb) + 
-                std::string("_ex") + std::to_string(nxe) + "_";
-
-        std::string kernel_name =
-            kernel_prefix +
-               "bt" +
-               std::to_string(gemm_m_per_block) + "x" +
-               std::to_string(gemm_n_per_block) + "x" +
-               std::to_string(gemm_k_per_block) + "_" +
-               "tt" +
-               std::to_string(thread_tile_m) + "x" +
-               std::to_string(thread_tile_n) + "_" +
-               "gm" + 
-               std::to_string(gemm_m_repeat) + "x" +
-               std::to_string(gemm_m_level0_cluster) + "x" +
-               std::to_string(gemm_m_level1_cluster) + "_" +
-               "gn" + 
-               std::to_string(gemm_n_repeat) + "x" +
-               std::to_string(gemm_n_level0_cluster) + "x" +
-               std::to_string(gemm_n_level1_cluster) + "_" +
-               "ta" + utility_int_list_to_string(tensor_a_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_a_cluster_lengths)+ "_" + 
-               "tb" + utility_int_list_to_string(tensor_b_thread_lengths) + "_" + 
-                      utility_int_list_to_string(tensor_b_cluster_lengths);
-        // printf("[%s]\n",kernel_name.c_str());
-        if(gemm_m_unmerge_cluster)
-            kernel_name += std::string("_mc");
-        if(gemm_n_unmerge_cluster)
-            kernel_name += std::string("_nc");
-        if(gemm_k_unmerge_cluster)
-            kernel_name += std::string("_kc");
-        if(multihead)
-            kernel_name += std::string("_mh");
-        return kernel_name;
-#endif
         return igemm_gtc_encode_kernel_name(tunable);
     }
     int get_block_size(const igemm_gtc_tunable_t *tunable) {
@@ -304,7 +233,7 @@ public:
         b = (nxe == 0) ? (b) : ((b + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int gemm_n = n * b;
 
-        int grid_size = group * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         int num_of_gemm = y_tilda * x_tilda;
         if(tunable->multihead)
@@ -452,9 +381,8 @@ public:
         return true;
     }
 
-    template <typename Tgpu> 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, Tgpu *p_in, Tgpu *p_wei, Tgpu *p_out,
+                 hipModule_t module, void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat) {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
