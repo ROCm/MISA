@@ -607,7 +607,7 @@ int main(int argc, char **argv) {
                                    (size_t)n * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
+            naive_conv_fwd_nchw(host_input, host_weight, host_output, n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
 #endif
@@ -786,7 +786,7 @@ int main(int argc, char **argv) {
                                    (size_t)n * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_bwd_nchw(host_input, host_weight, host_output, n,
+            naive_conv_bwd_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
 #endif
@@ -919,7 +919,7 @@ int main(int argc, char **argv) {
                                    (size_t)k * c * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
 #else
-            conv_wrw_nchw(host_input, host_weight, host_output, n,
+            naive_conv_wrw_nchw(host_input, host_weight, host_output, n,
                                          wi, hi, c, k, x, y, pad_w,
                                          pad_h, stride_w, stride_h, dilation_w, dilation_h, ngroups);
 #endif
