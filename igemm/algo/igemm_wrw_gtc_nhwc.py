@@ -250,13 +250,16 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self.tunable = tunable
             self.declare_arg("v_move_slice_n_idsho")
             self.declare_arg("v_move_slice_n_idswo")
-            self.declare_arg("s_gemm_k_num_dsho")
-            self.declare_arg("s_gemm_k_num_dswo")
+            self.declare_arg("v_gemm_k_num_dsho")
+            self.declare_arg("v_gemm_k_num_dswo")
             self.declare_arg("s_move_slice_n_dsho")
             self.declare_arg("s_move_slice_n_dswo")
             self.declare_arg("v_in_os_base")
             self.declare_arg("s_in_stride_n")
             self.declare_arg("s_in_stride_n_n")
+            self.declare_arg("s_stride_h")
+            self.declare_arg("s_ho_line")
+            self.declare_arg("s_wo_line")
 
         def name(self):
             return '.s_wrw_gtc_move_slice_window_n_dsho_dswo'
@@ -264,14 +267,14 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         def expr(self):
             # n0, n1b is unmerge.  n1b is merged from n1, b
             self._emit(f"v_add_u32 v[{self.v_move_slice_n_idswo()}], s[{self.s_move_slice_n_dswo()}], v[{self.v_move_slice_n_idswo()}]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_dswo()}], v[{self.v_move_slice_n_idswo()}]")
-            self._emit(f"v_subrev_u32 v[{self.v_move_slice_n_idswo()}], s[{self.s_gemm_k_num_dswo()}], v[{self.v_move_slice_n_idswo()}]")
-            self._emit(f"v_add_u32 v[{self.v_move_slice_n_idsho()}], 1, v[{self.v_move_slice_n_idsho()}]")
+            self._emit(f"v_cmpx_le_u32 vcc, v[{self.v_gemm_k_num_dswo()}], v[{self.v_move_slice_n_idswo()}]")
+            self._emit(f"v_subrev_u32 v[{self.v_move_slice_n_idswo()}], s[{self.s_wo_line()}], v[{self.v_move_slice_n_idswo()}]")
+            self._emit(f"v_add_u32 v[{self.v_move_slice_n_idsho()}], s[{self.s_stride_h()}], v[{self.v_move_slice_n_idsho()}]")
             self._emit(f"s_mov_b64 exec, -1")
             self._emit_empty_line()
             self._emit(f"v_add_u32 v[{self.v_move_slice_n_idsho()}], s[{self.s_move_slice_n_dsho()}], v[{self.v_move_slice_n_idsho()}]")
-            self._emit(f"v_cmpx_le_u32 vcc, s[{self.s_gemm_k_num_dsho()}], v[{self.v_move_slice_n_idsho()}]")
-            self._emit(f"v_subrev_u32 v[{self.v_move_slice_n_idsho()}], s[{self.s_gemm_k_num_dsho()}], v[{self.v_move_slice_n_idsho()}]")
+            self._emit(f"v_cmpx_le_u32 vcc, v[{self.v_gemm_k_num_dsho()}], v[{self.v_move_slice_n_idsho()}]")
+            self._emit(f"v_subrev_u32 v[{self.v_move_slice_n_idsho()}], s[{self.s_ho_line()}], v[{self.v_move_slice_n_idsho()}]")
             self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_n()}], v[{self.v_in_os_base()}]")
             self._emit(f"s_mov_b64 exec, -1")
             self._emit_empty_line()
@@ -423,6 +426,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self.s_gemmk_split             = sym_t("s_gemmk_split"            ,sseq(1))
             self.s_group                   = sym_t("s_group"                  ,sseq(1))
 
+            self.s_ho_x_stride_h           = sym_t("s_ho_x_stride_h"          ,sseq(1))
+            self.s_wo_x_stride_w           = sym_t("s_wo_x_stride_w"          ,sseq(1))
+
             self.s_in_stride_wi            = sym_t("s_in_stride_wi"           ,sseq(1))
             self.s_in_stride_hi            = sym_t("s_in_stride_hi"           ,sseq(1))
             self.s_in_stride_n             = sym_t("s_in_stride_n"            ,sseq(1))
@@ -493,7 +499,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             else:
                 v_c_resuable_num          = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
                                             outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
-                                            12       # from v_sst_a_os to v_wei_os
+                                            14       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num        = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed                = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
@@ -513,6 +519,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self.v_in_os_base             = sym_t("v_in_os_base"   ,vseq(1))
             self.v_out_iho                = sym_t("v_out_iho"      ,vseq(1))
             self.v_out_iwo                = sym_t("v_out_iwo"      ,vseq(1))
+            self.v_in_ihi_max             = sym_t("v_in_ihi_max"   ,vseq(1))
+            self.v_in_iwi_max             = sym_t("v_in_iwi_max"   ,vseq(1))
             self.v_gtc_in                 = sym_t("v_gtc_in"       ,vseq(1))
             self.v_out_os                 = sym_t("v_out_os"       ,vseq(1))
             self.v_out_os_base            = sym_t("v_out_os_base"  ,vseq(1))
@@ -1026,6 +1034,13 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_mul_u32_u24 v[{v.v_tmp(1)}], s[{s.s_dilation_w()}], v[{v.v_wei_ix()}]")
             self._emit(f"v_sub_i32 v[{v.v_wei_iy()}], v[{v.v_tmp()}], s[{s.s_pad_h()}]")
             self._emit(f"v_sub_i32 v[{v.v_wei_ix()}], v[{v.v_tmp(1)}], s[{s.s_pad_w()}]")
+
+            # move by wi and hi, compute new boundary
+            self._emit(f"s_mul_i32 s[{s.s_ho_x_stride_h()}], s[{s.s_ho()}], s[{s.s_stride_h()}]")
+            self._emit(f"s_mul_i32 s[{s.s_wo_x_stride_w()}], s[{s.s_wo()}], s[{s.s_stride_w()}]")
+            self._emit(f"v_add_i32 v[{v.v_in_ihi_max()}], v[{v.v_wei_iy()}], s[{s.s_ho_x_stride_h()}]")
+            self._emit(f"v_add_i32 v[{v.v_in_iwi_max()}], v[{v.v_wei_ix()}], s[{s.s_wo_x_stride_w()}]")
+
             m_in_update_hw   = self.get_macro_in_update_hw()
             self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_wei_iy(), v.v_wei_ix(), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
         else:
@@ -1198,6 +1213,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n_n(), '0', s.s_dim_b(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit_empty_line()
+            self._emit(f"; convert dswo and dsho to dswi and dshi, dswi=dswo*stride_w, dshi=dsho*stride_h")
+            self._emit(f"s_mul_i32 s[{s.s_move_slice_n_dswo()}], s[{s.s_move_slice_n_dswo()}], s[{s.s_stride_w()}]  ; might be 0 or larger")
+            self._emit(f"s_mul_i32 s[{s.s_move_slice_n_dsho()}], s[{s.s_move_slice_n_dsho()}], s[{s.s_stride_h()}]  ; might be 0 or larger")
             self._emit(f"s_mul_i32 s[{s.s_in_stride_n_n()}], s[{s.s_move_slice_n_n()}], s[{s.s_in_stride_n()}]  ; might be 0 or larger")
             self._emit(self.try_shift_stride(s.s_in_stride_n_n, igemm_log2(data_byte)))
             self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
@@ -1222,9 +1240,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             with self._deferred_context():
                 if self.tunable.nxe != 0:
                     m_move_slice_window   = self.get_macro_move_slice_window()
-                    self._emit(m_move_slice_window(v.v_out_iho(), v.v_out_iwo(), s.s_ho(), s.s_wo(),
-                        s.s_move_slice_n_dsho(), s.s_move_slice_n_dswo(), v.v_in_os_base(), s.s_in_stride_n(), s.s_in_stride_n_n()))
-                    self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_wei_iy(), v.v_wei_ix(), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
+                    self._emit(m_move_slice_window(v.v_in_ihi(), v.v_in_iwi(), v.v_in_ihi_max(), v.v_in_iwi_max(),
+                        s.s_move_slice_n_dsho(), s.s_move_slice_n_dswo(), v.v_in_os_base(), s.s_in_stride_n(), 
+                        s.s_in_stride_n_n(), s.s_stride_h(), s.s_ho_x_stride_h(), s.s_wo_x_stride_w()))
+                    #self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_wei_iy(), v.v_wei_ix(), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
                     self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), s.s_in_stride_wi(), v.v_tmp()))
                     self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
                 else:

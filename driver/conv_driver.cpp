@@ -687,10 +687,10 @@ int main(int argc, char **argv) {
         float *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -1, 1);
+            //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_output, static_cast<size_t>(n) * k * ho * wo, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -1, 1);
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
 #ifdef USE_GPU_NAIVE_CONV
