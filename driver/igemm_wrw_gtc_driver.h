@@ -135,7 +135,7 @@ public:
         int max_grid_size            = 1200;
 
         int gemm_m = k / group ;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
 
@@ -204,54 +204,55 @@ public:
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
-        if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
-        {
-            return false;
-        }
-        if (gemm_k % gemm_k_per_block != 0){
-            //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
-            return false;
-        }
+        if(tunable->tensor_layout == "nchw"){
+            if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
+            {
+                return false;
+            }
+            if (gemm_k % gemm_k_per_block != 0){
+                //std::cout << __func__ << " false: gemm_n is " << gemm_n << ", gemm_n_per_block is " << gemm_n_per_block << ", gemm_m is " << gemm_m << ", gemm_m_per_block is " << gemm_m_per_block << std::endl;
+                return false;
+            }
 
-        if (gemm_k_per_block % nxb != 0){
-            //std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", nxb is " << nxb << std::endl;
-            return false;
+            if (gemm_k_per_block % nxb != 0){
+                //std::cout << __func__ << " false: gemm_n_per_block is " << gemm_n_per_block << ", nxb is " << nxb << std::endl;
+                return false;
+            }
+
+            int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
+        
+            if (n_n0 > 1){
+                if (n_per_block % (tunable->tensor_a_thread_lengths[1] * tunable->tensor_a_cluster_lengths[1] * n_n0) != 0){
+                    return false;
+                }
+            }
+            else {
+                if (n_per_block * b % gemm_k_per_block !=0){
+                    return false;
+                }
+            }
+
+            // input vector load limitation, n1b
+            if(tunable->tensor_b_thread_lengths[1] > 1 && (
+                !unit_conv ||
+                unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[1] != 0)) {
+                return false;
+            }
+
+            // output vector load limitation, n1b
+            if(tunable->tensor_a_thread_lengths[1] > 1 && (
+                !unit_conv ||
+                unit_conv && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0)) {
+                return false;
+            }
+            if (b % nxb != 0){
+                //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", nxb is " << nxb << std::endl;
+                return false;
+            }
         }
 
         if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
             return false;
-
-        if (b % nxb != 0){
-            //std::cout << __func__ << " false: (ho * wo) is " << (ho * wo) << ", nxb is " << nxb << std::endl;
-            return false;
-        }
-
-        int n_n0 = tunable->tensor_a_cluster_lengths[0] * tunable->tensor_a_thread_lengths[0];
-        
-        if (n_n0 > 1){
-            if (n_per_block % (tunable->tensor_a_thread_lengths[1] * tunable->tensor_a_cluster_lengths[1] * n_n0) != 0){
-                return false;
-            }
-        }
-        else {
-            if (n_per_block * b % gemm_k_per_block !=0){
-                return false;
-            }
-        }
-
-        // input vector load limitation, n1b
-        if(tunable->tensor_b_thread_lengths[1] > 1 && (
-            !unit_conv ||
-            unit_conv && (hi * wi) % tunable->tensor_b_thread_lengths[1] != 0)) {
-            return false;
-        }
-
-        // output vector load limitation, n1b
-        if(tunable->tensor_a_thread_lengths[1] > 1 && (
-            !unit_conv ||
-            unit_conv && (ho * wo) % tunable->tensor_a_thread_lengths[1] != 0)) {
-            return false;
-        }
 
         return true;
     }
