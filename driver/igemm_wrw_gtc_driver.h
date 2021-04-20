@@ -639,7 +639,7 @@ public:
 
         // hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
 
-        auto wrw_epilog = gemm_k_global_split ? 
+        auto wrw_prolog = gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
                 hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * utility_string_to_data_byte(tunable->precision));
                 return .0;
@@ -649,9 +649,9 @@ public:
             }};
 
         result_t result;
-        float duration = igemm_launch_kernels_with_epilog({
+        float duration = igemm_launch_kernels_with_prolog({
                         {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
-                    }, wrw_epilog, this->warmup, this->repeat);
+                    }, wrw_prolog, this->warmup, this->repeat);
 
         result.return_code = 0;
         result.duration_ms = duration;

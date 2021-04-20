@@ -578,7 +578,7 @@ public:
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
         // TODO: use kernel to pre-clear when atomic
-        auto fwd_epilog = tunable->gemm_k_global_split ? 
+        auto fwd_prolog = tunable->gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
                 hipMemset(p_out, 0, static_cast<size_t>(n) * k * ho * wo * utility_string_to_data_byte(tunable->precision));
                 return .0;
@@ -604,9 +604,9 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
-                float duration = igemm_launch_kernels_with_epilog({
+                float duration = igemm_launch_kernels_with_prolog({
                         {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                    }, fwd_epilog, this->warmup, this->repeat);
+                    }, fwd_prolog, this->warmup, this->repeat);
 
                 if(min_duration > duration){
                     min_duration = duration;
@@ -621,9 +621,9 @@ public:
             int gks   = heuristic_select_gks(arg, tunable);
             size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
 
-            float duration = igemm_launch_kernels_with_epilog({
+            float duration = igemm_launch_kernels_with_prolog({
                     {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                }, fwd_epilog, this->warmup, this->repeat);
+                }, fwd_prolog, this->warmup, this->repeat);
 
             result.return_code = 0;
             result.duration_ms = duration;

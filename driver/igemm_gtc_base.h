@@ -446,12 +446,12 @@ static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t
     float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
     return avg_duration;
 }
-template<typename epilog_kernel_t>
-static inline float igemm_launch_kernels_with_epilog(const std::vector<igemm_launch_kernel_t> & kernels, epilog_kernel_t epilog_kernel, int warmup, int repeat)
+template<typename prolog_kernel_t>
+static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, int warmup, int repeat)
 {
     auto launch_kernels = [&]() -> float{
         float ms = .0;
-        ms += epilog_kernel();
+        ms += prolog_kernel();
         for(const auto & ker :  kernels)
             ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
         return ms;

@@ -587,7 +587,7 @@ public:
             }
 
             assert(kernels.size() == valid_kernel_index && kargs.size() == valid_kernel_index);
-            auto bwd_epilog = need_set_zero ? 
+            auto bwd_prolog = need_set_zero ? 
                 std::function<float()>{[&]() -> float{
                     hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
                     return .0;
@@ -595,7 +595,7 @@ public:
                 std::function<float()>{[&]() -> float{
                     return .0;
                 }};
-            float ms = igemm_launch_kernels_with_epilog(kernels, bwd_epilog, warmup, repeat);
+            float ms = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
 
             result.return_code = 0;
             result.duration_ms = ms;
