@@ -139,6 +139,14 @@ public:
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
 
+        int data_byte = utility_string_to_data_byte(tunable->precision);
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        if(splits == 0){
+            printf("image size (c*h*w or k*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
+
         int b = ho * wo;
         if(tunable->tensor_layout == "nchw")
             b = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
@@ -183,7 +191,15 @@ public:
         int group = arg->get_int("group_count");
         int nxb = tunable->nxb == 0 ? 1 : tunable->nxb;
         int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
+        int data_byte = utility_string_to_data_byte(tunable->precision);
         assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        if(splits == 0){
+            printf("image size (c*h*w or k*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -203,6 +219,12 @@ public:
 
         int nxe = tunable->nxe == 0 ? 1 : tunable->nxe;
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
+
+        if(splits > 1 && gemm_k_global_split == 0)
+        {
+            // large tensor can only used for gkgs kernel
+            return false;
+        }
 
         if(tunable->tensor_layout == "nchw"){
             if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
@@ -283,7 +305,8 @@ public:
     static int if_gemm_k_global_split(const args_t *arg,
                                   const int gemm_m_per_block,
                                   const int gemm_n_per_block,
-                                  const int gemm_k_per_block)
+                                  const int gemm_k_per_block,
+                                  const int data_byte)
     {
         int gemm_k_global_split = 0;
         int hi = arg->get_int("in_h");
@@ -303,7 +326,12 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        
         assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
+        n = n/splits;   // split batch size here
 
         // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int gemm_m = k / group;
@@ -363,6 +391,7 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunables[0].precision);
         assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block = 0;
@@ -439,7 +468,8 @@ public:
                                     gemm_k_global_split = if_gemm_k_global_split(arg, 
                                         gemm_m_per_block, 
                                         gemm_n_per_block,
-                                        gemm_k_per_block);
+                                        gemm_k_per_block,
+                                        data_byte);
 
                                     int tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, gemm_k_global_split, nxb, nxe);
                                     if (tunable_index < 0 || tunable_index >= tunables.size())
@@ -529,7 +559,12 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
         assert(c % group == 0 && k % group == 0);
+
+        int splits = igemm_split_batch_size(n, wi, hi, 1, c, k, wo, ho, 1, data_byte);
+        assert(splits != 0);
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -607,7 +642,7 @@ public:
             hipEventCreate(&stop);
 
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, splits, 1,
                                               block_size, 1, 1, 0, 0, NULL,
                                               (void **)&config, start, stop));
 
@@ -619,7 +654,7 @@ public:
             gpu_timer_t timer(NULL);
             timer.start();
 
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
+            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, splits, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config));
 

@@ -404,6 +404,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
             self.s_ka                      = sym_t("s_ka"                     ,0)
             self.s_bx                      = sym_t("s_bx"                     ,2)
+            self.s_by                      = sym_t("s_by"                     ,3)
             self.s_p_in                    = sym_t("s_p_in"                   ,4)
             self.s_p_wei                   = sym_t("s_p_wei"                  ,8)
             self.s_p_out                   = sym_t("s_p_out"                  ,12)
@@ -798,6 +799,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         kernel_code = amdgpu_kernel_code_t({
                 'enable_sgpr_kernarg_segment_ptr'   :   1,
                 'enable_sgpr_workgroup_id_x'        :   1,
+                'enable_sgpr_workgroup_id_y'        :   1,
                 'enable_vgpr_workitem_id'           :   0,
                 'workgroup_group_segment_byte_size' :   self.tunable.lds_total,
                 'kernarg_segment_byte_size'         :   self.karg.get_count(),
@@ -969,6 +971,25 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_ho()}], s[{s.s_tmp(2)}]")
 
         self._emit(f"s_mul_i32 s[{s.s_dim_b()}], s[{s.s_ho()}], s[{s.s_wo()}]")
+
+        if self.tunable.gemm_k_global_split != 0:
+            # calculate batch split and accumulate the base pointer for input/output
+            self._emit(f"s_mul_i32  s[{s.s_tmp(0)}], s[{s.s_n()}], s[{s.s_in_stride_n()}]")
+            self._emit(f"s_mul_i32  s[{s.s_tmp(1)}], s[{s.s_n()}], s[{s.s_out_stride_n()}]")
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(4)}], s[{s.s_tmp(0)}], {igemm_log2(data_byte)}")
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(5)}], s[{s.s_tmp(1)}], {igemm_log2(data_byte)}")
+
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_by()}], s[{s.s_tmp(4)}]")
+            self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_by()}], s[{s.s_tmp(4)}]")
+            self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
+
+            self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
+
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_by()}], s[{s.s_tmp(5)}]")
+            self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_by()}], s[{s.s_tmp(5)}]")
+            self._emit(f"s_add_u32 s[{s.s_p_out()}], s[{s.s_p_out()}], s[{s.s_tmp()}]")
+            self._emit(f"s_addc_u32 s[{s.s_p_out(1)}], s[{s.s_p_out(1)}], s[{s.s_tmp(1)}]")
+
         if self.tunable.nxe == 1:
             self._emit(f"; n1b transform")
             self._emit(m_int_div_rem_vs(v.v_tmp(4), v.v_gtc_in(), v.v_gtc_inb_a(), s.s_dim_b(), v.v_tmp(), s.s_tmp()))
