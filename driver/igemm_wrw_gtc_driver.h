@@ -335,7 +335,7 @@ public:
 
         // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int gemm_m = k / group;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
         int gemm_k = n * ho * wo;
 
         int grid_size;
@@ -573,7 +573,7 @@ public:
         int gemm_k_global_split      = tunable->gemm_k_global_split;
 
         int gemm_m = k / group ;
-        int gemm_n = (c / group) * y * x;
+        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
         size_t cur_grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
 

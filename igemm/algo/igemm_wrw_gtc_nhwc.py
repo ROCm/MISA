@@ -673,7 +673,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_in_gld.length_d0 = 1
             ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_in_gld.length_d0 = 1
+            ctrl_in_gld.length_d1 = 1
 
         if ctrl_in_gld.length_d1 // ctrl_in_gld.vector_d1 > 1:
             ctrl_in_gld.dim_conti_flag = 1
@@ -685,7 +686,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_out_gld.length_d0 = 1
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
         else:
-            assert False
+            ctrl_out_gld.length_d0 = 1
+            ctrl_out_gld.length_d1 = 1
 
         if ctrl_out_gld.length_d1 // ctrl_out_gld.vector_d1 > 1:
             ctrl_out_gld.dim_conti_flag = 1
