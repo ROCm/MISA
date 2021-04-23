@@ -1028,20 +1028,17 @@ class macro_igemm_2d_shared_store_t(macro_base_t):
                                         issue_cnt += ds_write2.get_issues()
                         else:
                             if ctrl.length_d0 == 2:    ## length_d0 is less than lds_gemm_k_pack 
-                                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 2, data_byte, ctrl.stride_d1)
-                                for i_d1 in range(ctrl.length_d1 // 2): 
-                                    i_offset = 2 * i_d1 * ctrl.stride_d1
-                                    self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1}', i_offset))
-                                    issue_cnt += ds_write2.get_issues()
+                                ds_write = inst_ds_write_t(lds_gemm_k_pack * ctrl.data_bytes)
+                                for i_d1 in range(ctrl.length_d1):
+                                    i_offset = i_d1 * ctrl.stride_d1
+                                    self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d1*ctrl.length_d0//2}', i_offset))
                             else:
-                                assert lds_gemm_k_pack == 4, "other gemm_k_pack not considered"
-                                ds_write2 = inst_ds_write2_likely_t(self.mc, 2, 4, data_byte, ctrl.stride_d1)
+                                ds_write = inst_ds_write_t(lds_gemm_k_pack * ctrl.data_bytes)
                                 for i_d0 in range(0, ctrl.length_d0, lds_gemm_k_pack):
-                                    for i_d1 in range(ctrl.length_d1 // 2):
-                                        i_offset = (i_d0 // lds_gemm_k_pack) * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1
-                                        ## ctrl.length_d0 // 2 indicates the number of vgprs per slice-row
-                                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2*i_d1*ctrl.length_d0//2+i_d0//2}', i_offset)) 
-                                        issue_cnt += ds_write2.get_issues()
+                                    for i_d1 in range(ctrl.length_d1):
+                                        i_offset = (i_d0 // lds_gemm_k_pack) * ctrl.stride_d0 + i_d1 * ctrl.stride_d1
+                                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d1*ctrl.length_d0+i_d0)//2}', i_offset))
+
                     else:
                         num_vector_d1 = ctrl.length_d1 // ctrl.vector_d1
                         ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_d1, data_byte, ctrl.stride_d1)
