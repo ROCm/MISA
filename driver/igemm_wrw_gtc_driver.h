@@ -132,10 +132,13 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
         int gemm_k_global_split      = tunable->gemm_k_global_split;
+        int block_size               = get_block_size(tunable);
+        int c_vec_min                = tunable->tensor_layout == "nchw" ? gemm_n_per_block : (gemm_n_per_block * gemm_k_per_block / block_size);
         int max_grid_size            = 1200;
 
-        int gemm_m = k / group ;
-        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
+        int gemm_m = k / group;
+        int c_padded = ((c / group) + c_vec_min - 1) / c_vec_min * c_vec_min;
+        int gemm_n = (c_padded * y * x  + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block;
         size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
 
@@ -306,7 +309,8 @@ public:
                                   const int gemm_m_per_block,
                                   const int gemm_n_per_block,
                                   const int gemm_k_per_block,
-                                  const int data_byte)
+                                  const int data_byte,
+                                  const std::string tensor_layout)
     {
         int gemm_k_global_split = 0;
         int hi = arg->get_int("in_h");
@@ -333,9 +337,11 @@ public:
         assert(splits != 0);
         n = n/splits;   // split batch size here
 
-        // int b      = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int gemm_m = k / group;
-        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
+        int block_size = 256;
+        int c_vec_min = tensor_layout == "nchw" ? gemm_n_per_block : (gemm_n_per_block * gemm_k_per_block / block_size);
+        int c_padded = ((c / group) + c_vec_min - 1) / c_vec_min * c_vec_min;
+        int gemm_n = (c_padded * y * x  + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block;
         int gemm_k = n * ho * wo;
 
         int grid_size;
@@ -392,6 +398,9 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
         int data_byte = utility_string_to_data_byte(tunables[0].precision);
+        std::string data_layout = tunables[0].tensor_layout;
+        if(data_layout == "nhwc")
+            return std::string("NONE");
         assert(c % group == 0 && k % group == 0);
 
         int gemm_m_per_block = 0;
@@ -469,7 +478,8 @@ public:
                                         gemm_m_per_block, 
                                         gemm_n_per_block,
                                         gemm_k_per_block,
-                                        data_byte);
+                                        data_byte,
+                                        data_layout);
 
                                     int tunable_index = find_tunable(tunables, gemm_m_per_block, gemm_n_per_block, gemm_k_per_block, gemm_k_global_split, nxb, nxe);
                                     if (tunable_index < 0 || tunable_index >= tunables.size())
@@ -570,10 +580,14 @@ public:
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
+        int block_size               = get_block_size(tunable);
+        int c_vec_min                = tunable->tensor_layout == "nchw" ? gemm_n_per_block : (gemm_n_per_block * gemm_k_per_block / block_size);
+
         int gemm_k_global_split      = tunable->gemm_k_global_split;
 
         int gemm_m = k / group ;
-        int gemm_n = (((c / group) + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block) * y * x;
+        int c_padded = ((c / group) + c_vec_min - 1) / c_vec_min * c_vec_min;
+        int gemm_n = (c_padded * y * x  + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block;
         size_t cur_grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                     utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
 
@@ -611,7 +625,7 @@ public:
 
         //printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
-        int block_size = get_block_size(tunable);
+        //int block_size = get_block_size(tunable);
         int grid_size = get_grid_size(arg, tunable);
 
         hipFunction_t kernel_func;
