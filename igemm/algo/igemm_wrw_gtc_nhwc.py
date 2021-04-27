@@ -35,7 +35,7 @@ from .xdlops_mapping import *
 from .coalescing_store import *
 from .mfma_main_loop import *
 
-IGEMM_WRW_GTC_DEBUG = 1
+IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
 
@@ -107,7 +107,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store = ctrl_coalescing_store_t()
             ctrl_coalescing_store.ctm = ctrl_thread_mapping
             ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
-            ctrl_coalescing_store.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+            ctrl_coalescing_store.precision = self.tunable.precision
 
             ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store.block_size = self.tunable.block_size
@@ -118,8 +118,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             def flatten(x):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
-            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k, 
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
+            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k, 
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
@@ -128,7 +128,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
             ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
-            ctrl_coalescing_store_xdlops.data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+            ctrl_coalescing_store_xdlops.precision = self.tunable.precision
 
             ctrl_coalescing_store_xdlops.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
@@ -500,7 +500,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 v_c_num                   = vseq()
             else:
                 v_c_resuable_num          = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
-                                            outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
+                                            outer.tunable.num_global_load_a + outer.tunable.num_global_load_b + \
                                             14       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num        = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed                = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -509,8 +509,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 self.v_c                  = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             self.v_a                      = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                      = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
-            self.v_gld_a                  = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
-            self.v_gld_b                  = sym_t("v_gld_b"        ,vseq(outer.tunable.num_vgpr_global_load_b))
+            self.v_gld_a                  = sym_t("v_gld_a"        ,vseq(outer.tunable.num_global_load_a))
+            self.v_gld_b                  = sym_t("v_gld_b"        ,vseq(outer.tunable.num_global_load_b))
             self.v_sst_a_os               = sym_t("v_sst_a_os"     ,vseq(1))
             self.v_sst_b_os               = sym_t("v_sst_b_os"     ,vseq(1))
             self.v_sld_a_os               = sym_t("v_sld_a_os"     ,vseq(1))
@@ -715,6 +715,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             out_sst_ctrl.length_d0 = 1
             out_sst_ctrl.length_d1 = int(ta_k / length_dp_a) # ta_k
             out_sst_ctrl.length_dp = length_dp_a # k_pack
+            out_sst_ctrl.vector_dp = length_dp_a
             out_sst_ctrl.stride_d0 = 1
             out_sst_ctrl.stride_d1 = length_dp_a * data_byte # k_pack * data_byte
 
@@ -724,6 +725,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.length_d0 = 1
             in_sst_ctrl.length_d1 = int(tb_c / length_dp_b) # tb_c1
             in_sst_ctrl.length_dp = length_dp_b # k_pack
+            in_sst_ctrl.vector_dp = length_dp_b
             in_sst_ctrl.stride_d0 = nb_ec * k_pack * data_byte
             in_sst_ctrl.stride_d1 = length_dp_b * data_byte # k_pack * data_byte
 
@@ -1314,9 +1316,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
-            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
+            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
-                                                                        self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
+                                                                        self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
+                                                                        self.tunable.precision)
             fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()

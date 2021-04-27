@@ -36,6 +36,8 @@ def igemm_host_driver(**options):
         return default_value
 
     arch = get_dict_with_default(options, 'arch', 'gfx908')
+    has_fp16_config = get_dict_with_default(options, 'has_fp16_config', False)
+    has_int8_config = get_dict_with_default(options, 'has_int8_config', False)
     out_dir = get_dict_with_default(options, 'out_dir', 'out')
     cpp_dir = get_dict_with_default(options, 'cpp_dir', 'driver')
     cpp_name = get_dict_with_default(options, 'cpp_name', 'conv_driver.cpp')
@@ -53,6 +55,10 @@ def igemm_host_driver(**options):
     builder = compile_host_t(arch_config, cpp_src, target_exe)
 
     host_cxxflags = ['-DIGEMM_CONFIG_FILE=\"{}\"'.format(config_file_name), '-DIGEMM_HSACO=\"{}\"'.format(hsaco_name)]
+    if has_fp16_config:
+        host_cxxflags += ['-DUSE_HALF']
+    if has_int8_config:
+        host_cxxflags += ['-DUSE_INT8']
     if use_gpu_reference_kernel:
         host_cxxflags += ['-DUSE_GPU_NAIVE_CONV']
     if len(cxxflags) != 0:

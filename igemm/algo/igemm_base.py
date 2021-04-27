@@ -29,7 +29,7 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_fp32
+from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
@@ -194,6 +194,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_m_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_m_unmerge_cluster', 0)
         self.gemm_n_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_n_unmerge_cluster', 0)
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
+        self.vector_store                       = utility_dict_with_default_t(tunable_dict)('vector_store', 0)
         self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
@@ -202,7 +203,7 @@ class igemm_gtc_tunable_parameter_t(object):
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
-        assert self.precision in ('fp32', 'fp16', 'bf16')
+        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8')
         if self.tensor_layout == "nchw":
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
@@ -279,20 +280,21 @@ class igemm_gtc_tunable_parameter_t(object):
             if (self.tensor_a_pass_through and self.wave_repeat_n == 2) or (self.tensor_b_pass_through and self.wave_repeat_m == 2):
                 self.local_prefetch_num         = 1
             # register for a,b,c buffer
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.wave_tile_k, 
+                    self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n, self.block_size // amdgpu_wave_size(tunable_dict['arch']), self.precision)
             self.num_agpr_accumulate_c          = xdlops_mapping.total_acc_c()
-            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size
+            assert self.num_agpr_accumulate_c == self.gemm_m_per_block * self.gemm_n_per_block // self.block_size, f"block_size:{self.block_size}, {self.gemm_m_per_block}x{self.gemm_n_per_block}x{self.gemm_k_per_block}"
             self.num_vgpr_accumulate_a          = self.wave_step_m * self.wave_repeat_m * xdlops_mapping.inst_mfma.num_v_a * self.local_prefetch_num
             self.num_vgpr_accumulate_b          = self.wave_step_n * self.wave_repeat_n * xdlops_mapping.inst_mfma.num_v_b * self.local_prefetch_num
 
         self.global_prefetch_a_num              = 2 if self.tensor_a_pass_through and not self.tensor_a_pass_through_interleave_gld else 1
         self.global_prefetch_b_num              = 2 if self.tensor_b_pass_through and not self.tensor_b_pass_through_interleave_gld else 1
 
-        self.num_vgpr_global_load_a             = igemm_flatten_list_product(self.tensor_a_thread_lengths)
-        self.num_vgpr_global_load_b             = igemm_flatten_list_product(self.tensor_b_thread_lengths)
+        self.num_global_load_a                  = igemm_flatten_list_product(self.tensor_a_thread_lengths)
+        self.num_global_load_b                  = igemm_flatten_list_product(self.tensor_b_thread_lengths)
 
-        assert self.num_vgpr_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block
-        assert self.num_vgpr_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block
+        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
+        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
         # LDS size
         self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
@@ -324,7 +326,8 @@ class igemm_gtc_tunable_parameter_t(object):
         shrinked_lds_buffer_num = self.lds_buffer_num
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # check on grouping
-            xdlops_mapping                      = get_ctrl_xdlops_mapping_fp32(self.gemm_m_per_block, self.gemm_n_per_block, self.block_size // amdgpu_wave_size(tunable_dict['arch']))
+            xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block, self.wave_tile_m, self.wave_tile_n, self.wave_tile_k, 
+                    self.wave_repeat_m, self.wave_repeat_n, self.wave_step_m, self.wave_step_n, self.block_size // amdgpu_wave_size(tunable_dict['arch']), self.precision)
             length_in_m =  xdlops_mapping.wave_repeat_m * xdlops_mapping.wave_step_m * xdlops_mapping.lanegroup_m_per_wave() * xdlops_mapping.lanegroup_m_per_block() # no need xdlops_mapping.lanegroup_m_per_thread()
             if length_in_m % self.coalescing_store_groups != 0:
                 # we still asume both value are power of 2
@@ -335,6 +338,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 shrinked_lds_buffer_num = shrinked_lds_buffer_num * shrink_in_co_group
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
+                assert length_in_m % self.coalescing_store_groups == 0
 
     def output(self):
         brace_left='   {'
@@ -398,6 +402,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['gemm_m_unmerge_cluster']          = self.gemm_m_unmerge_cluster
         tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
         tunable_dict['gemm_k_unmerge_cluster']          = self.gemm_k_unmerge_cluster
+        tunable_dict['vector_store']                    = self.vector_store
 
         return tunable_dict
 
@@ -457,6 +462,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.gemm_k_global_split:
             sstr += \
                 line_start + 'gemm_k_global_split        {} {}'.format(equal, self.gemm_k_global_split) + new_line
+        if self.vector_store:
+            sstr += \
+                line_start + 'vector_store               {} {}'.format(equal, self.vector_store) + new_line
         if extra_info:
             sstr += \
                 line_start + new_line + \
@@ -522,6 +530,9 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     if tunable.multihead:
         kernel_name += "_mh"
+
+    if tunable.vector_store:
+        kernel_name += f"_vs{tunable.vector_store}"
 
     if tunable.gemm_k_global_split:
         kernel_name += "_gkgs"

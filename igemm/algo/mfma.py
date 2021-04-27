@@ -33,6 +33,8 @@ def inst_mfma_data_type_to_string(data_type):
         return 'fp16'
     if data_type == AMDGPU_PRECISION_BF16:
         return 'bf16'
+    if data_type == AMDGPU_PRECISION_INT8:
+        return 'int8'
     assert False
 
 class inst_mfma_t(object):
@@ -53,7 +55,7 @@ class inst_mfma_t(object):
         # self.num_a_c_per_lanegroup = 4      # all xdlops instruction output agpr is 4 agpr per lanegroup.
         #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
 
-    def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
+    def name(self):
         def src_datatype_string(data_type_string):
             if data_type_string == 'fp32':
                 return 'f32'
@@ -61,11 +63,16 @@ class inst_mfma_t(object):
                 return 'f16'
             if data_type_string == 'bf16':
                 return 'bf16'
+            if data_type_string == 'int8':
+                return 'i8'
             assert False, f"unknow type :{data_type_string}"
-
-        mfma_acc_type = 'f32' # TODO: int8 mfma accumulate type is i32
+        mfma_acc_type = 'i32' if self.data_type == AMDGPU_PRECISION_INT8 else 'f32' # TODO: int8 mfma accumulate type is i32
         mfma_trait = f'{self.m}x{self.n}x{self.k}' + src_datatype_string(inst_mfma_data_type_to_string(self.data_type))
         mfma_inst = f'v_mfma_{mfma_acc_type}_{mfma_trait}'
+        return mfma_inst
+
+    def __call__(self, reg_d, reg_a, reg_b, reg_c, cbsz=0, abid=0, blgp=0):
+        mfma_inst = self.name()
         cbsz_str = f"cbsz:{cbsz}" if cbsz != 0 else ""
         abid_str = f"abid:{abid}" if abid != 0 else ""
         blgp_str = f"blgp:{blgp}" if blgp != 0 else ""
@@ -94,6 +101,12 @@ v_mfma_f32_16x16x2bf16  = inst_mfma_t(16, 16, 2,  AMDGPU_PRECISION_BF16,  32,   
 v_mfma_f32_16x16x8bf16  = inst_mfma_t(16, 16, 8,  AMDGPU_PRECISION_BF16,  32,   1,   1,  4,    1 )
 v_mfma_f32_32x32x2bf16  = inst_mfma_t(32, 32, 2,  AMDGPU_PRECISION_BF16,  64,   1,   1,  32,   2 )
 v_mfma_f32_32x32x4bf16  = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   1,   1,  16,   1 )
+
+v_mfma_i32_4x4x4i8      = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_INT8,   8,   1,   1,  4,    16)
+v_mfma_i32_16x16x4i8    = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_INT8,  32,   1,   1,  16,   4 )
+v_mfma_i32_16x16x16i8   = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_INT8,  32,   1,   1,  4,    1 )
+v_mfma_i32_32x32x4i8    = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_INT8,  64,   1,   1,  32,   2 )
+v_mfma_i32_32x32x8i8    = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_INT8,  64,   1,   1,  16,   1 )
 
 # class inst_composed_mfma_t(object):
 #     '''

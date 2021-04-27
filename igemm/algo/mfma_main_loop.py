@@ -40,7 +40,7 @@ class ctrl_mfma_main_loop_t(object):
 
         self.unroll_k                    = 0
         self.label_prefix                = ''                      # usually be kernel name of caller kernel
-        self.data_type                   = AMDGPU_PRECISION_FP32
+        self.precision                   = 'fp32'
 
         self.lds_single_size             = 0                    # in byte, should be power of 2
         self.lds_buffer_num              = 2
@@ -75,7 +75,7 @@ class ctrl_mfma_main_loop_t(object):
         self.s_kitr                      = None
         self.s_knum                      = None
 
-        # below is in unit of pixel, not considered data_type bytes
+        # below is in unit of pixel, not considered data bytes
         self.lds_k_pack                  = 1
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
@@ -136,7 +136,7 @@ class mfma_main_loop_t(mc_base_t):
         s_knum = ctrl.s_knum
         cxm = ctrl.cxm
 
-        data_byte = amdgpu_precision_data_byte(ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
 
         lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
         lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n
@@ -166,25 +166,37 @@ class mfma_main_loop_t(mc_base_t):
 
         p_interleave_gld = [ctrl.pass_through_a_interleave_gld, ctrl.pass_through_b_interleave_gld][p_idx]
 
-        assert wave_repeat_q == 2, "currently the side need LDS must have repeat 2, following limitation seems have BUG"
+        # assert wave_repeat_q == 2, "currently the side need LDS must have repeat 2, following limitation seems have BUG"
 
         v_pack_p        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][p_idx]
         v_pack_q        = [ctrl.pass_through_a_v_pack, ctrl.pass_through_b_v_pack][q_idx]
         assert v_pack_p == v_pack_q, "currently only support p, q the same"
 
-        assert unroll_k % (v_pack_p * k_per_inst) == 0
-        unroll_k_slot = unroll_k // (v_pack_p * k_per_inst)
+        v_pack_per_k    = 4 // data_byte        # how many pack along k dimension
+        assert v_pack_per_k * num_v_p == cxm.lanegroup_k_per_thread(), "this should always holds!"
+        
+        v_pack_p_per_kpt  = v_pack_p // cxm.lanegroup_k_per_thread()  # how many p dimension for each kpt (k_per_thread)
+        v_pack_q_per_kpt  = v_pack_q // cxm.lanegroup_k_per_thread()
+
+        # assert v_pack_p % v_pack_per_k == 0
+        # v_pack_p_per_k  = v_pack_p // v_pack_per_k  # how many p dimension for each k
+        # v_pack_q_per_k  = v_pack_q // v_pack_per_k
+
+        k_per_v_pack    = v_pack_p * cxm.block_k_per_wave()
+
+        assert unroll_k % k_per_v_pack == 0, f'unroll_k:{unroll_k}, k_per_v_pack:{k_per_v_pack}'
+        unroll_k_slot = unroll_k // k_per_v_pack
 
         def global_load_p():
             with self._deferred_context():
                 self._emit(f_gld_p())
             return self._get_deferred()
-        
+
         def global_load_q():
             with self._deferred_context():
                 self._emit(f_gld_q())
             return self._get_deferred()
-        
+
         def move_slice_window_pq():
             with self._deferred_context():
                 if f_move_slice_window_p:
@@ -192,10 +204,11 @@ class mfma_main_loop_t(mc_base_t):
                 if f_move_slice_window_q:
                     self._emit(f_move_slice_window_q())
             return self._get_deferred()
-        
+
         def move_slice_window_acc():
             with self._deferred_context():
-                self._emit(f_move_slice_window_acc())
+                if f_move_slice_window_acc:
+                    self._emit(f_move_slice_window_acc())
             return self._get_deferred()
 
         def call_mbb(mbb):
@@ -262,22 +275,27 @@ class mfma_main_loop_t(mc_base_t):
                                             i_step_p * num_agpr_per_issue
                         c_index_end = c_index + num_agpr_per_issue - 1
 
-                        p_index = i_k * wave_repeat_p * wave_step_p * v_pack_p * num_v_p + \
-                                    i_repeat_p * wave_step_p * v_pack_p * num_v_p + \
-                                    i_step_p * v_pack_p * num_v_p + \
+                        p_index = i_k * wave_repeat_p * wave_step_p * v_pack_p_per_kpt *  num_v_p + \
+                                    i_repeat_p * wave_step_p * v_pack_p_per_kpt *  num_v_p + \
+                                    i_step_p * v_pack_p_per_kpt *  num_v_p + \
                                     i_v * num_v_p
 
-                        q_index = i_local_buffer_q * wave_step_q * wave_repeat_q * v_pack_q * num_v_q + \
-                                    i_repeat_q * wave_step_q * v_pack_q * num_v_q + \
-                                    i_step_q * v_pack_q * num_v_q + \
+                        q_index = i_local_buffer_q * wave_step_q * wave_repeat_q * v_pack_q_per_kpt *  num_v_q + \
+                                    i_repeat_q * wave_step_q * v_pack_q_per_kpt *  num_v_q + \
+                                    i_step_q * v_pack_q_per_kpt *  num_v_q + \
                                     i_v * num_v_q
-                        self._emit(mfma(a_c((c_index, c_index_end)), v_gld_p(p_index), v_q(q_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_p}x{i_repeat_q}, step:{i_step_p}x{i_step_q}, k:{i_k}, v:{i_v}, num_a_c:{num_agpr_per_issue}")
+                        if num_v_p == 1 and num_v_q == 1:
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_gld_p(p_index), v_q(q_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_p}x{i_repeat_q}, step:{i_step_p}x{i_step_q}, k:{i_k}, v:{i_v}, num_a_c:{num_agpr_per_issue}")
+                        else:
+                            p_index_end = p_index + num_v_p - 1
+                            q_index_end = q_index + num_v_q - 1
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_gld_p((p_index, p_index_end)), v_q((q_index, q_index_end)), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_p}x{i_repeat_q}, step:{i_step_p}x{i_step_q}, k:{i_k}, v:{i_v}, num_a_c:{num_agpr_per_issue}")
             return self._get_deferred()
 
         def mfma_loop():
             mfma = cxm.inst_mfma
 
-            repeat_q_thread_offset = wave_step_q * num_v_q * v_pack_p
+            repeat_q_thread_offset = wave_step_q * num_v_q * v_pack_q_per_kpt
             local_buffer_q = wave_repeat_q * repeat_q_thread_offset
             mfma_v_pack_slot = unroll_k_slot * wave_repeat_p * wave_repeat_q    # TODO: not consider step
             cnt_mfma_v_pack_slot = 0
@@ -288,8 +306,7 @@ class mfma_main_loop_t(mc_base_t):
                     for i in range(wave_repeat_q):
                         self._emit(f_sld_q(v_q(i * repeat_q_thread_offset), v_sld_q_os(), lds_base_q + mi_q(0, i * (lds_width_q // 2))))
                     if ctrl.local_prefetch_num == 2:
-                        # always load a single piece of repeat
-                        self._emit(f_sld_q(v_q(wave_step_q * wave_repeat_q * v_pack_q * num_v_q), v_sld_q_os(), lds_base_q + mi_q(1 * v_pack_p * k_per_inst, 0)))
+                        self._emit(f_sld_q(v_q(wave_step_q * wave_repeat_q * v_pack_q_per_kpt * num_v_q), v_sld_q_os(), lds_base_q + mi_q(1 * v_pack_q_per_kpt * k_per_inst, 0)))
                 return self._get_deferred()
 
             mbb_first_sld = create_machine_basic_block(first_sld())
@@ -372,7 +389,7 @@ class mfma_main_loop_t(mc_base_t):
                             mbb_gld_p_per_k = mbb_gld_p if i_k == 0 else list()
                         mbb_gld_per_k = ((mbb_gld_p_per_k + mbb_msw_pq + mbb_msw_acc + mbb_gld_q) if p_interleave_gld else (mbb_gld_q + mbb_gld_p_per_k)) \
                             if i_k == 0 else mbb_gld_p_per_k
-                    num_gld_slot_per_k = wave_repeat_p * wave_repeat_q * v_pack_p
+                    num_gld_slot_per_k = wave_repeat_p * wave_repeat_q * v_pack_p_per_kpt
                     num_gld_per_slot = utility_next_mul(len(mbb_gld_per_k), num_gld_slot_per_k) // num_gld_slot_per_k
                     for i_gld in range(num_gld_per_slot):
                         current_gld = i_slot * num_gld_per_slot + i_gld
@@ -399,9 +416,11 @@ class mfma_main_loop_t(mc_base_t):
                     load_i_b = i_b_sequence[i_idx_mod]
                     load_i_k = i_idx_int * pref + load_i_b
 
-                    if i_v == (v_pack_p - 1) and load_i_k < unroll_k_slot:
+                    #if i_v == (v_pack_p - 1) and load_i_k < unroll_k_slot:
+                    if (i_v == (v_pack_q_per_kpt - 1) and load_i_k < unroll_k_slot):
                         the_str = f' ; i_r:{load_i_r}, i_b:{load_i_b}, i_k:{load_i_k}'
-                        self._emit(f_sld_q(v_q(load_i_b * local_buffer_q + load_i_r * repeat_q_thread_offset), v_sld_q_os(), lds_base_q + mi_q(load_i_k * v_pack_p * k_per_inst, load_i_r * (lds_width_q // 2) )) + the_str)
+                        self._emit(f_sld_q(v_q(load_i_b * local_buffer_q + load_i_r * repeat_q_thread_offset),
+                            v_sld_q_os(), lds_base_q + mi_q(load_i_k * v_pack_q_per_kpt * k_per_inst, load_i_r * (lds_width_q // 2) )) + the_str)
 
 
                 if i_k == 0:
@@ -450,10 +469,10 @@ class mfma_main_loop_t(mc_base_t):
                                 for i_pnum in range(v_gld_p_num):
                                     self._emit(f"v_mov_b32 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
 
-                        for i_v in range(v_pack_p):
+                        for i_v in range(v_pack_p_per_kpt):
                             self._emit(mfma_step_pxq_vk(i_k, i_rp, i_rq, i_v, i_local_buffer_q))
                             if MFMA_FEAT_SINGLE_PASS_THROUGH_EARLY_LAST_DS_WAIT and p_interleave_gld:
-                                if (i_mfma_v_pack_slot == mfma_v_pack_slot - 2) and (v_pack_p == 1 or i_v == (v_pack_p // 2) - 1):
+                                if (i_mfma_v_pack_slot == mfma_v_pack_slot - 2) and (v_pack_p_per_kpt == 1 or i_v == (v_pack_p_per_kpt // 2) - 1):
                                     assert i_rq == 0
                                     if not is_last_fma:
                                         self._emit(f's_waitcnt lgkmcnt(0) vmcnt({num_p_issue - gld_p_per_k})')
@@ -551,7 +570,7 @@ class mfma_main_loop_t(mc_base_t):
         s_knum = self.ctrl.s_knum
         cxm = self.ctrl.cxm
 
-        data_byte = amdgpu_precision_data_byte(self.ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(self.ctrl.precision)
 
         lds_width_m = data_byte * cxm.wave_tile_m * cxm.wave_step_m * cxm.waves_per_m() * cxm.wave_repeat_m
         lds_width_n = data_byte * cxm.wave_tile_n * cxm.wave_step_n * cxm.waves_per_n() * cxm.wave_repeat_n
@@ -600,7 +619,14 @@ class mfma_main_loop_t(mc_base_t):
                         b_index = i_local_buffer_n * local_buffer_n + \
                                     i_repeat_n * cxm.wave_step_n * mfma.num_v_b + \
                                     i_step_n * mfma.num_v_b
-                        self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        # self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        if mfma.num_v_a == 1 and mfma.num_v_b == 1:
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_a(a_index), v_b(b_index), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+                        elif mfma.num_v_a != 1 and mfma.num_v_b != 1:
+                            a_index_end = a_index + mfma.num_v_a - 1
+                            b_index_end = b_index + mfma.num_v_b - 1
+                            self._emit(mfma(a_c((c_index, c_index_end)), v_a((a_index, a_index_end)), v_b((b_index, b_index_end)), a_c((c_index, c_index_end))) + f"  ; repeat:{i_repeat_m}x{i_repeat_n}, step:{i_step_m}x{i_step_n}, num_a_c:{num_agpr_per_issue}")
+
             return self._get_deferred()
 
         def mfma_loop_repeat_1x1_lp2():
@@ -1119,6 +1145,41 @@ class mfma_main_loop_t(mc_base_t):
                         if i_k == unroll_k_sub - 1:
                             self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m((unroll_k // k_per_inst - 1) * k_per_inst, lds_width_m//2)) + f" ; load i_k:{unroll_k // k_per_inst - 1} into local buffer {1}, repeat {1}")
                         self._emit_empty_line()
+                    if unroll_k_sub == 0:
+                        self._emit(f"; k iteration : {0}")
+                        # 1st fma
+                        self._emit(f's_waitcnt lgkmcnt({2})')
+                        self._emit(mfma_step_mxn(0, 0, 0, 0))
+                        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + mi_m(k_per_inst)) + \
+                                                            f" ; load i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + mi_n(k_per_inst)) + \
+                                                            f" ; load i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit_empty_line()
+                        # 2nd fma
+                        self._emit(f's_waitcnt lgkmcnt({3})')
+                        self._emit(mfma_step_mxn(0, 1, 0, 0))
+                        self._emit(f_sld_b(v_b(local_buffer_n + repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(k_per_inst, lds_width_n // 2)) + \
+                                                            f" ; load i_k:{1} into local buffer {1}, repeat {1}")
+                        self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(k_per_inst, lds_width_m // 2)) + \
+                                                            f" ; load i_k:{1} into local buffer {1}, repeat {1}")
+                        self._emit_empty_line()
+                        # 3rd fma
+                        self._emit(f's_waitcnt lgkmcnt({4})')
+                        self._emit(mfma_step_mxn(1, 0, 0, 0))
+                        self._emit_empty_line()
+                        # 4th fma
+                        self._emit(mfma_step_mxn(1, 1, 0, 0))
+                        self._emit_empty_line()
+
+                        # 1st fma
+                        self._emit(f's_waitcnt lgkmcnt(2)')
+                        self._emit(mfma_step_mxn(0, 0, 1, 1))
+                        self._emit_empty_line()
+
+                        # 2nd fma
+                        self._emit(f's_waitcnt lgkmcnt(1)')
+                        self._emit(mfma_step_mxn(0, 1, 1, 1))
+                        self._emit_empty_line()
                 return self._get_deferred()
 
             def do_interleave_gload_and_move_slice_window():
@@ -1131,48 +1192,64 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
-                    self._emit(f"; k iteration : {unroll_k - 2}")
-                    # 1st fma
-                    # self._emit(f's_waitcnt lgkmcnt(6)')
-                    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    self._emit_empty_line()
+                    unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+                    if unroll_k_sub != 0:
+                        self._emit(f"; k iteration : {unroll_k - 2}")
+                        # 1st fma
+                        # self._emit(f's_waitcnt lgkmcnt(6)')
+                        self._emit(mfma_step_mxn(0, 0, 0, 0))
+                        self._emit_empty_line()
 
-                    # 2nd fma
-                    self._emit(mfma_step_mxn(0, 1, 0, 0))
+                        # 2nd fma
+                        self._emit(mfma_step_mxn(0, 1, 0, 0))
 
-                    self._emit_empty_line()
+                        self._emit_empty_line()
 
-                    # 3rd fma
-                    #self._emit(f's_waitcnt lgkmcnt(0)')
-                    self._emit(mfma_step_mxn(1, 0, 0, 0))
-                    self._emit_empty_line()
+                        # 3rd fma
+                        #self._emit(f's_waitcnt lgkmcnt(0)')
+                        self._emit(mfma_step_mxn(1, 0, 0, 0))
+                        self._emit_empty_line()
 
-                    # 4th fma
-                    self._emit(mfma_step_mxn(1, 1, 0, 0))
+                        # 4th fma
+                        self._emit(mfma_step_mxn(1, 1, 0, 0))
 
-                    self._emit(f"; k iteration : {unroll_k - 1}")
-                    # 1st fma
-                    self._emit(mfma_step_mxn(0, 0, 1, 1))
+                        self._emit(f"; k iteration : {unroll_k - 1}")
+                        # 1st fma
+                        self._emit(mfma_step_mxn(0, 0, 1, 1))
 
-                    self._emit_empty_line()
+                        self._emit_empty_line()
 
-                    # 2nd fma
-                    self._emit(mfma_step_mxn(0, 1, 1, 1))
-                    self._emit_empty_line()
-                    #       iteration--
-                    self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
-                    self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
-                    self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        # 2nd fma
+                        self._emit(mfma_step_mxn(0, 1, 1, 1))
+                        self._emit_empty_line()
+                        #       iteration--
+                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
 
-                    # 3rd fma
-                    self._emit(mfma_step_mxn(1, 0, 1, 1))
-                    self._emit_empty_line()
+                        # 3rd fma
+                        self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        self._emit_empty_line()
 
-                    # 4th fma
-                    self._emit(mfma_step_mxn(1, 1, 1, 1))
-                    self._emit(f"s_waitcnt lgkmcnt(0)")
-                    self._emit(f"s_barrier")
-                    self._emit(f"s_branch {label_mfma_body}")
+                        # 4th fma
+                        self._emit(mfma_step_mxn(1, 1, 1, 1))
+                        self._emit(f"s_waitcnt lgkmcnt(0)")
+                        self._emit(f"s_barrier")
+                        self._emit(f"s_branch {label_mfma_body}")
+                    else:
+                        #       iteration--
+                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        # 3rd fma
+                        self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        self._emit_empty_line()
+
+                        # 4th fma
+                        self._emit(mfma_step_mxn(1, 1, 1, 1))
+                        self._emit(f"s_waitcnt lgkmcnt(0)")
+                        self._emit(f"s_barrier")
+                        self._emit(f"s_branch {label_mfma_body}")
                 return self._get_deferred()
 
             def do_interleave_share_store():
@@ -1202,7 +1279,9 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
-            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+            #if (unroll_k // k_per_inst) // 2 - 1 != 0:
+            if True:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
                                 create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
                 se_sub = create_scheduler(self.mc, mbb_list_sub)
@@ -1247,35 +1326,36 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
             self._emit(do_interleave_unroll_k_sub())
 
-            self._emit(f"; k iteration : {unroll_k - 2}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(6)')
-            self._emit(mfma_step_mxn(0, 0, 0, 0))
-            self._emit_empty_line()
+            if unroll_k_sub > 0:
+                self._emit(f"; k iteration : {unroll_k - 2}")
+                # 1st fma
+                self._emit(f's_waitcnt lgkmcnt(6)')
+                self._emit(mfma_step_mxn(0, 0, 0, 0))
+                self._emit_empty_line()
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(5)')
-            self._emit(mfma_step_mxn(0, 1, 0, 0))
-            self._emit_empty_line()
+                # 2nd fma
+                self._emit(f's_waitcnt lgkmcnt(5)')
+                self._emit(mfma_step_mxn(0, 1, 0, 0))
+                self._emit_empty_line()
 
-            # 3rd fma
-            self._emit(f's_waitcnt lgkmcnt(4)')
-            self._emit(mfma_step_mxn(1, 0, 0, 0))
-            self._emit_empty_line()
+                # 3rd fma
+                self._emit(f's_waitcnt lgkmcnt(4)')
+                self._emit(mfma_step_mxn(1, 0, 0, 0))
+                self._emit_empty_line()
 
-            # 4th fma
-            self._emit(mfma_step_mxn(1, 1, 0, 0))
+                # 4th fma
+                self._emit(mfma_step_mxn(1, 1, 0, 0))
 
-            self._emit(f"; k iteration : {unroll_k - 1}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(2)')
-            self._emit(mfma_step_mxn(0, 0, 1, 1))
-            self._emit_empty_line()
+                self._emit(f"; k iteration : {unroll_k - 1}")
+                # 1st fma
+                self._emit(f's_waitcnt lgkmcnt(2)')
+                self._emit(mfma_step_mxn(0, 0, 1, 1))
+                self._emit_empty_line()
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(mfma_step_mxn(0, 1, 1, 1))
-            self._emit_empty_line()
+                # 2nd fma
+                self._emit(f's_waitcnt lgkmcnt(1)')
+                self._emit(mfma_step_mxn(0, 1, 1, 1))
+                self._emit_empty_line()
 
             # 3rd fma
             self._emit(f's_waitcnt lgkmcnt(0)')
@@ -1696,6 +1776,33 @@ class mfma_main_loop_t(mc_base_t):
                             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m((2*i_k+2) * k_per_inst, lds_width_m // 2))+ f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {1}")
                             self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + mi_n((2*i_k+3) * k_per_inst)) + f" ; load i_k:{2*i_k+3} into local buffer {1}, repeat {0}")
                         self._emit_empty_line()
+                    if unroll_k_sub == 0:
+                        # 1st fma
+                        self._emit(f's_waitcnt lgkmcnt({1})')
+                        self._emit(mfma_step_mxn(0, 0, 0, 0))
+                        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + mi_n(k_per_inst)) + \
+                                                        f" ; load i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + mi_m(k_per_inst)) + \
+                                                        f" ; load i_k:{1} into local buffer {1}, repeat {0}")
+                        self._emit_empty_line()
+
+                        # 2nd fma
+                        self._emit(f's_waitcnt lgkmcnt({2})')
+                        self._emit(mfma_step_mxn(1, 0, 0, 0))
+
+                        self._emit(f_sld_a(v_a(local_buffer_m + repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(k_per_inst,  lds_width_m // 2 )) + \
+                                                            f" ; load i_k:{1} into local buffer {1}, repeat {1}")
+                        #self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n + mi_n(2 * k_per_inst)) + f" ; load i_k:{2} into local buffer {0}, repeat {0}")
+                        self._emit_empty_line()
+
+                        # 1st fma
+                        self._emit(f's_waitcnt lgkmcnt({1})')
+                        self._emit(mfma_step_mxn(0, 0, 1, 1))
+
+                        #self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m + mi_m((2*i_k+2) * k_per_inst)) + f" ; load i_k:{2*i_k+2} into local buffer {0}, repeat {0}")
+                        self._emit_empty_line()
+
+
                 return self._get_deferred()
 
             def do_interleave_gload_and_move_slice_window():
@@ -1708,35 +1815,48 @@ class mfma_main_loop_t(mc_base_t):
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
-                    self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
-                    # 1st fma
-                    #self._emit(f's_waitcnt lgkmcnt(4)')
-                    self._emit(mfma_step_mxn(0, 0, 0, 0))
-                    self._emit_empty_line()
+                    unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+                    if unroll_k_sub != 0:
+                        self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
+                        # 1st fma
+                        #self._emit(f's_waitcnt lgkmcnt(4)')
+                        self._emit(mfma_step_mxn(0, 0, 0, 0))
+                        self._emit_empty_line()
 
-                    # 2nd fma
-                    #self._emit(f's_waitcnt lgkmcnt(0)')
-                    self._emit(f"s_barrier")
-                    # self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
-                    self._emit(mfma_step_mxn(1, 0, 0, 0))
-                    self._emit_empty_line()
+                        # 2nd fma
+                        #self._emit(f's_waitcnt lgkmcnt(0)')
+                        self._emit(f"s_barrier")
+                        # self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
+                        self._emit(mfma_step_mxn(1, 0, 0, 0))
+                        self._emit_empty_line()
 
-                    # 1st fma
-                    #self._emit(f"s_waitcnt vmcnt(0)")
-                    self._emit(f"; k iteration : {unroll_k - 1 * k_per_inst}")
-                    self._emit(mfma_step_mxn(0, 0, 1, 1))
+                        # 1st fma
+                        #self._emit(f"s_waitcnt vmcnt(0)")
+                        self._emit(f"; k iteration : {unroll_k - 1 * k_per_inst}")
+                        self._emit(mfma_step_mxn(0, 0, 1, 1))
 
-                    self._emit_empty_line()
-                    #       iteration--
-                    self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
-                    self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
-                    self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        self._emit_empty_line()
+                        #       iteration--
+                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
 
-                    # 2nd fma
-                    self._emit(mfma_step_mxn(1, 0, 1, 1))
-                    self._emit(f"s_waitcnt lgkmcnt(0)")
-                    self._emit(f"s_barrier")
-                    self._emit(f"s_branch {label_mfma_body}")
+                        # 2nd fma
+                        self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        self._emit(f"s_waitcnt lgkmcnt(0)")
+                        self._emit(f"s_barrier")
+                        self._emit(f"s_branch {label_mfma_body}")
+                    else:
+                        #       iteration--
+                        self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
+                        self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
+                        self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+
+                        # 2nd fma
+                        self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        self._emit(f"s_waitcnt lgkmcnt(0)")
+                        self._emit(f"s_barrier")
+                        self._emit(f"s_branch {label_mfma_body}")
                 return self._get_deferred()
 
             def do_interleave_share_store():
@@ -1765,7 +1885,9 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2 )))
 
-            if (unroll_k // k_per_inst) // 2 - 1 != 0:
+            unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
+            #if (unroll_k // k_per_inst) // 2 - 1 != 0:
+            if True:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
                                 create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
 
@@ -1778,7 +1900,7 @@ class mfma_main_loop_t(mc_base_t):
                 self._emit(se_sub.lower(interleave_pattern=INTERLEAVE_PTN_0))
                 if f_move_slice_window_acc != None:
                     self._emit(f_move_slice_window_acc())
-                mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
+                mbb_0_mfma_cnt_after_branch_to_start = (2 * cxm.wave_step_m * cxm.wave_step_n - 1) if unroll_k_sub != 0 else 0 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1, mbb_0_mfma_cnt_after_branch_to_start=mbb_0_mfma_cnt_after_branch_to_start))
             else:
                 mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
@@ -1804,22 +1926,25 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
             self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2 )))
             self._emit(do_interleave_unroll_k_sub())
-            self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(4)')
-            self._emit(mfma_step_mxn(0, 0, 0, 0))
-            self._emit_empty_line()
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(3)')
-            self._emit(mfma_step_mxn(1, 0, 0, 0))
-            self._emit_empty_line()
+            
+            if unroll_k_sub > 0:
+                self._emit(f"; k iteration : {unroll_k - 2 * k_per_inst}")
+                # 1st fma
+                self._emit(f's_waitcnt lgkmcnt(4)')
+                self._emit(mfma_step_mxn(0, 0, 0, 0))
+                self._emit_empty_line()
 
-            self._emit(f"; k iteration : {unroll_k - 1 * k_per_inst}")
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(mfma_step_mxn(0, 0, 1, 1))
-            self._emit_empty_line()
+                # 2nd fma
+                self._emit(f's_waitcnt lgkmcnt(3)')
+                self._emit(mfma_step_mxn(1, 0, 0, 0))
+                self._emit_empty_line()
+
+                self._emit(f"; k iteration : {unroll_k - 1 * k_per_inst}")
+                # 1st fma
+                self._emit(f's_waitcnt lgkmcnt(1)')
+                self._emit(mfma_step_mxn(0, 0, 1, 1))
+                self._emit_empty_line()
 
             # 2nd fma
             self._emit(f's_waitcnt lgkmcnt(0)')

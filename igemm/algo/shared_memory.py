@@ -662,6 +662,10 @@ class inst_ds_read_t(object):
     def get_offset(self, offset):
         return '' if offset == 0 else 'offset:{}'.format(offset)
     def __call__(self, vdst, vaddr, offset):
+        if self.bytes == 1:
+            return 'ds_read_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+        if self.bytes == 2:
+            return 'ds_read_u16 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
         if self.bytes == 4:
             return 'ds_read_b32 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
         if self.bytes == 8:
@@ -670,7 +674,7 @@ class inst_ds_read_t(object):
             return 'ds_read_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
-        assert False
+        assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1
 
@@ -686,6 +690,10 @@ class inst_ds_write_t(object):
         assert False
 
     def __call__(self, vaddr, vdata, offset = 0):
+        if self.bytes == 1:
+            return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+        if self.bytes == 2:
+            return 'ds_write_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 4:
             return 'ds_write_b32 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 8:
@@ -853,6 +861,7 @@ class ctrl_3d_shared_store_t(object):
         self.length_d0 = 1        # is d0 is 1, it is indeed 1d access
         self.length_d1 = 1
         self.length_dp = 1
+        self.vector_dp = 1
         self.stride_d0 = 1        # stride
         self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
@@ -861,7 +870,7 @@ class ctrl_3d_shared_store_t(object):
         self.v_tmp = None   # used when order is 1 and consider shuffle
 
     def serialize(self):
-        return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, length_dp:{self.length_dp}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
+        return f"length_d0:{self.length_d0}, length_d1:{self.length_d1}, length_dp:{self.length_dp}, vector_dp:{self.vector_dp}, stride_d0:{self.stride_d0}, stride_d1:{self.stride_d1}, precision:{self.precision}, src_order:{self.src_order}"
 
 class macro_igemm_3d_shared_store_t(macro_base_t):
     '''
@@ -886,36 +895,42 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         else:
             assert False
 
-        return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}x{ctrl.length_dp}_{bits_str}" + \
+        return f".v_sst_so{ctrl.src_order}_{ctrl.length_d0}x{ctrl.length_d1}x{ctrl.length_dp}x{ctrl.vector_dp}_{bits_str}" + \
                 f"_st{ctrl.stride_d0}x{ctrl.stride_d1}"
 
     def expr(self):
         ctrl = self.ctrl
-        assert ctrl.precision == 'fp32', "TO BE supported"
+        # assert ctrl.precision == 'fp32', "TO BE supported"
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
-
+        pixel_per_vgpr = 4 // data_byte
+        vgpr_per_vector = (ctrl.vector_dp + pixel_per_vgpr - 1) // pixel_per_vgpr
+        assert ctrl.length_dp % ctrl.vector_dp == 0
+        num_dp = ctrl.length_dp // ctrl.vector_dp
         if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
             # this is indeed a 2d case.
-            ds_write = inst_ds_write_t(ctrl.length_dp * data_byte)
+            ds_write = inst_ds_write_t(ctrl.vector_dp * data_byte)
             if ctrl.length_d0 == 1 and ctrl.length_d1 == 1:
                 # further, 1d case
-                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}'))
-                issue_cnt += ds_write.get_issues()
+                for i_p in range(num_dp):
+                    self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_p*vgpr_per_vector}', i_p * ctrl.vector_dp * data_byte))
+                    issue_cnt += ds_write.get_issues()
 
             else:
                 length_d = ctrl.length_d0 if ctrl.length_d0 != 1 else ctrl.length_d1
                 stride_d = ctrl.stride_d0 if ctrl.length_d0 != 1 else ctrl.stride_d1
-                if length_d % 2 == 0 and data_byte == 4 and ctrl.length_dp in (1, 2):
-                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.length_dp * data_byte, stride_d)
+                if length_d % 2 == 0 and data_byte == 4 and ctrl.vector_dp in (1, 2):
+                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_dp * data_byte, stride_d)
                     for i_d in range(length_d // 2):
-                        self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{2 * i_d*ctrl.length_dp}', 2 * i_d * stride_d))
-                        issue_cnt += ds_write2.get_issues(2 * i_d * stride_d)
+                        for i_p in range(num_dp):
+                            self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{(2 * i_d * num_dp + i_p)*vgpr_per_vector}', 2 * i_d * stride_d + i_p * ctrl.vector_dp * data_byte))
+                            issue_cnt += ds_write2.get_issues(2 * i_d * stride_d + i_p * ctrl.vector_dp * data_byte)
                 else:
                     # nhwc almost all case goes here
                     for i_d in range(length_d):
-                        self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{i_d*ctrl.length_dp}', i_d * stride_d))
-                        issue_cnt += ds_write.get_issues()
+                        for i_p in range(num_dp):
+                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d * num_dp + i_p)*vgpr_per_vector}', i_d * stride_d + i_p * ctrl.vector_dp * data_byte))
+                            issue_cnt += ds_write.get_issues()
         else:
             assert False, "un implemented yet"
 

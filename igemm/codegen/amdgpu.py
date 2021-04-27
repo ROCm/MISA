@@ -31,6 +31,7 @@ from .mc import *
 AMDGPU_PRECISION_FP32   = (0 << 20)
 AMDGPU_PRECISION_FP16   = (1 << 20)
 AMDGPU_PRECISION_BF16   = (2 << 20)
+AMDGPU_PRECISION_INT8   = (3 << 20)
 
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
@@ -97,6 +98,8 @@ def amdgpu_precision_to_string(amdgpu_precision):
         return 'fp16'
     if amdgpu_precision == AMDGPU_PRECISION_BF16:
         return 'bf16'
+    if amdgpu_precision == AMDGPU_PRECISION_INT8:
+        return 'int8'
     assert False
 
 def amdgpu_string_to_precision(amdgpu_precision_string):
@@ -106,6 +109,8 @@ def amdgpu_string_to_precision(amdgpu_precision_string):
         return AMDGPU_PRECISION_FP16
     if amdgpu_precision_string == 'bf16':
         return AMDGPU_PRECISION_BF16
+    if amdgpu_precision_string == 'int8':
+        return AMDGPU_PRECISION_INT8
     assert False
 
 def amdgpu_precision_data_byte(precision):
@@ -119,6 +124,8 @@ def amdgpu_precision_data_byte(precision):
         return 2
     if p == AMDGPU_PRECISION_BF16:
         return 2
+    if p == AMDGPU_PRECISION_INT8:
+        return 1
     assert False
 
 def amdgpu_wave_size(arch):

@@ -453,8 +453,8 @@ class igemm_fwd_gtc_t(mc_base_t):
             def flatten(x):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
-            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
+            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
@@ -796,7 +796,7 @@ class igemm_fwd_gtc_t(mc_base_t):
                 v_c_num              = vseq()
             else:
                 v_c_resuable_num     = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
-                                        outer.tunable.num_vgpr_global_load_a + outer.tunable.num_vgpr_global_load_b + \
+                                        outer.tunable.num_global_load_a + outer.tunable.num_global_load_b + \
                                         16       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num   = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed           = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -806,8 +806,8 @@ class igemm_fwd_gtc_t(mc_base_t):
 
             self.v_a                 = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                 = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
-            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_vgpr_global_load_a))
-            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_vgpr_global_load_b))
+            self.v_gld_a             = sym_t("v_gld_a"        ,vseq(outer.tunable.num_global_load_a))
+            self.v_gld_b             = sym_t("v_gld_b"        ,vseq(outer.tunable.num_global_load_b))
             self.v_sst_a_os          = sym_t("v_sst_a_os"     ,vseq(1))
             self.v_sst_b_os          = sym_t("v_sst_b_os"     ,vseq(1))
             self.v_sld_a_os          = sym_t("v_sld_a_os"     ,vseq(1))
@@ -2137,10 +2137,11 @@ class igemm_fwd_gtc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
-            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile_fp32(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
+            ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
-                                                                        self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE)
+                                                                        self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
+                                                                        self.tunable.precision)
             fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()

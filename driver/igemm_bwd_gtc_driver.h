@@ -40,9 +40,9 @@
 // #define IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL 1
 
 typedef struct {
-    float *p_in;
-    float *p_wei;
-    float *p_out;
+    void *p_in;
+    void *p_wei;
+    void *p_out;
     int hi;
     int wi;
     int n;
@@ -163,14 +163,13 @@ static void dump_bwd_karg(igemm_bwd_gtc_karg_t * karg){
     std::cout<<std::endl;
 }
 
-class igemm_bwd_gtc_t {
+class igemm_bwd_gtc_t : public igemm_driver_base_t{
 public:
-    igemm_bwd_gtc_t(){}
+    igemm_bwd_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
+        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_bwd_gtc_t(){}
-    std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
-        return igemm_gtc_encode_kernel_name(tunable);
-    }
-    int get_block_size(const igemm_gtc_tunable_t *tunable) {
+
+    size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
         if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
@@ -179,10 +178,9 @@ public:
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
-       
     }
-    int get_grid_size(const args_t *arg,
-                      const igemm_gtc_tunable_t *tunable) {
+    size_t get_grid_size(const args_t *arg,
+                      const igemm_gtc_tunable_t *tunable) override {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -254,7 +252,7 @@ public:
     }
 
     bool tunable_is_valid(const args_t *arg,
-                          const igemm_gtc_tunable_t *tunable)
+                          const igemm_gtc_tunable_t *tunable) override
     {
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
@@ -363,8 +361,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 hipModule_t module, float *p_in, float *p_wei, float *p_out,
-                 int warmup, int repeat) {
+                 void *p_in, void *p_wei, void *p_out) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -498,8 +495,8 @@ public:
         if(y < stride_h || x < stride_w || dilation_h != 1 || dilation_w != 1)
             need_set_zero = true;
 
-        int block_size = get_block_size(tunable);
-        int grid_size = get_grid_size(arg, tunable);
+        size_t block_size = get_block_size(tunable);
+        size_t grid_size = get_grid_size(arg, tunable);
 
 #ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         igemm_upsampling_clear_karg_t ukarg;
@@ -547,36 +544,16 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 #endif
+        result_t result;
+        result.kernel_name = kernel_name;
 
-        auto launch_bwd = [&]() -> float{
-            float ms_total = .0;
-            if(need_set_zero){
-                float ms = .0;
-                hipEvent_t start;
-                hipEvent_t stop;
-                hipEventCreate(&start);
-                hipEventCreate(&stop);
-#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
-                                            u_block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-#else
-                HIP_CALL(hipDeviceSynchronize());
-                HIP_CALL(hipEventRecord( start, NULL ));
-                hipMemset(p_in, 0, n*c*hi*wi*sizeof(float));
-                HIP_CALL(hipEventRecord( stop, NULL ));
-#endif
-                hipEventSynchronize(stop);
-                hipEventElapsedTime(&ms, start, stop);
-                hipEventDestroy(start);
-                hipEventDestroy(stop);
-
-                ms_total += ms;
-            }
-
+        if(tunable->multihead){
+            // TODO:
+        }else{
+            std::vector<igemm_launch_kernel_t> kernels;
+            std::vector<igemm_bwd_gtc_karg_t>  kargs;
+            kargs.reserve(num_of_gemm);     // CAUSION! we do not want this vector to be reallocated and move to other place
+            int valid_kernel_index = 0;
             for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
                 int i_y_tilda = gemm_id / x_tilda;
                 int i_x_tilda = gemm_id % x_tilda;
@@ -585,154 +562,46 @@ public:
 
                 int gemm_k = (k / group) * y_dot_slice * x_dot_slice;
                 bool is_gemm_not_empty = gemm_k > 0 && y_dot_slice > 0 && x_dot_slice > 0;
-
-                karg.dtile_iy = i_y_tilda;
-                karg.dtile_ix = i_x_tilda;
-                karg.dslice_y = y_dot_slice;
-                karg.dslice_x = x_dot_slice;
-#if USE_MAGIC_DIV
-                magic_div_u32_t mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
-                magic_div_u32_t mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
-                karg.magic_0        = mdiv_0.magic;
-                karg.magic_1        = mdiv_1.magic;
-
-                karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-                karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
-#endif
-                // printf("start launch id:%d(%d), block:%d, grid:%d\n", gemm_id, is_gemm_not_empty?1:0, block_size, grid_size);
-                // dump_bwd_karg(&karg);
-
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
-                          HIP_LAUNCH_PARAM_END};
-                float ms = .0;
-
                 if(is_gemm_not_empty){
-#if USE_EXT_MODULE_LAUNCH
-                    hipEvent_t start;
-                    hipEvent_t stop;
-                    hipEventCreate(&start);
-                    hipEventCreate(&stop);
-                    // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-                    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
-                                            block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-                    hipEventSynchronize(stop);
-                    hipEventElapsedTime(&ms, start, stop);
-                    hipEventDestroy(start);
-                    hipEventDestroy(stop);
-#else
-                    gpu_timer_t timer(NULL);
-                    timer.start();
-                    HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                             block_size, 1, 1, 0, 0, NULL,
-                                             (void **)&config));
-                    timer.stop();
-                    ms = timer.duration();
+                    kargs.push_back(karg);
+                    kargs[valid_kernel_index].dtile_iy = i_y_tilda;
+                    kargs[valid_kernel_index].dtile_ix = i_x_tilda;
+                    kargs[valid_kernel_index].dslice_y = y_dot_slice;
+                    kargs[valid_kernel_index].dslice_x = x_dot_slice;
+#if USE_MAGIC_DIV
+                    magic_div_u32_t mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
+                    magic_div_u32_t mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
+                    kargs[valid_kernel_index].magic_0        = mdiv_0.magic;
+                    kargs[valid_kernel_index].magic_1        = mdiv_1.magic;
+
+                    kargs[valid_kernel_index].shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+                    kargs[valid_kernel_index].shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
 #endif
+                    // printf("start launch id:%d(%d), block:%d, grid:%d\n", gemm_id, is_gemm_not_empty?1:0, block_size, grid_size);
+                    // dump_bwd_karg(&kargs[valid_kernel_index]);
+
+                    kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index], karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+
+                    valid_kernel_index++;
                 }
-                ms_total += ms;
             }
-            return ms_total;
-        };
 
-        auto launch_bwd_multihead = [&]() -> float{
-            float ms_total = .0;
-            if(need_set_zero){
-                float ms = .0;
-                hipEvent_t start;
-                hipEvent_t stop;
-                hipEventCreate(&start);
-                hipEventCreate(&stop);
-#ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
-                                            u_block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-#else
-                HIP_CALL(hipDeviceSynchronize());
-                HIP_CALL(hipEventRecord( start, NULL ));
-                hipMemset(p_in, 0, n*c*hi*wi*sizeof(float));
-                HIP_CALL(hipEventRecord( stop, NULL ));
-#endif
-                hipEventSynchronize(stop);
-                hipEventElapsedTime(&ms, start, stop);
-                hipEventDestroy(start);
-                hipEventDestroy(stop);
+            assert(kernels.size() == valid_kernel_index && kargs.size() == valid_kernel_index);
+            auto bwd_prolog = need_set_zero ? 
+                std::function<float()>{[&]() -> float{
+                    hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                    return .0;
+                }} : 
+                std::function<float()>{[&]() -> float{
+                    return .0;
+                }};
+            float ms = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
 
-                ms_total += ms;
-            }
-            // if 1x1 and stride/dilation > 1, will have empty gemms which will waste launch grid. better ignore that case at runtime
-            int origin_grid_size = grid_size/num_of_gemm;
-            karg.dtile_iy = origin_grid_size;
-            karg.dtile_ix = x_dot | (y_dot<<16);
-            karg.dslice_y = y % y_dot;
-            karg.dslice_x = x % x_dot;
-            // printf("start launch id:%d(%d), block:%d, grid:%d\n", gemm_id, is_gemm_not_empty?1:0, block_size, grid_size);
-            // dump_bwd_karg(&karg);
-
-            void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
-                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
-                        HIP_LAUNCH_PARAM_END};
-            float ms = .0;
-#if USE_EXT_MODULE_LAUNCH
-            hipEvent_t start;
-            hipEvent_t stop;
-            hipEventCreate(&start);
-            hipEventCreate(&stop);
-            // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
-                                    block_size, 1, 1, 0, 0, NULL,
-                                    (void **)&config, start, stop));
-            hipEventSynchronize(stop);
-            hipEventElapsedTime(&ms, start, stop);
-            hipEventDestroy(start);
-            hipEventDestroy(stop);
-#else
-            gpu_timer_t timer(NULL);
-            timer.start();
-            HIP_CALL(hipModuleLaunchKernel(kernel_func, grid_size, 1, 1,
-                                        block_size, 1, 1, 0, 0, NULL,
-                                        (void **)&config));
-            timer.stop();
-            ms = timer.duration();
-#endif
-            ms_total += ms;
-            return ms_total;
-        };
-
-        auto launch_bwd_driver = [&](){
-            if(tunable->multihead)
-                return launch_bwd_multihead();
-            else
-                return launch_bwd();
-        };
-
-        for (int i = 0; i < warmup; i++) {
-            launch_bwd_driver();
+            result.return_code = 0;
+            result.duration_ms = ms;
         }
-        std::vector<float> duration_list;
-        for (int i = 0; i < repeat; i++) {
-            float d = launch_bwd_driver();
-            duration_list.push_back(d);
-        }
-
-        // remove min and max from list, then do average
-        auto imin = std::min_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imin);
-        auto imax = std::max_element(begin(duration_list), end(duration_list));
-        duration_list.erase(imax);
-        assert(duration_list.size() == (repeat - 2));
-        float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
         usleep(1000 * 5);
-
-        result_t result;
-        result.return_code = 0;
-        result.duration_ms = avg_duration;
-        result.kernel_name = kernel_name;
         return result;
     }
 };
