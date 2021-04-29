@@ -756,7 +756,43 @@ public:
         result.kernel_name = kernel_name;
 
         if(tunable->multihead){
-            // TODO:
+            std::vector<igemm_launch_kernel_t> kernels;
+
+            if(tunable->tensor_layout == "nhwc"){
+                int gemm_m = n * h_tilda_slice * w_tilda_slice;
+                int gemm_n = c / group;
+
+                igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]);
+                magic_div_u32_t mdiv_x_tilda = magic_div_u32_gen(x_tilda);
+                magic_div_u32_t mdiv_y_tilda = magic_div_u32_gen(y_tilda);
+                magic_div_u32_t mdiv_group_mn = magic_div_u32_gen(group * utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block));
+                karg->dtile_iy = num_of_gemm > 1 ? mdiv_x_tilda.magic : 0;
+                karg->dtile_ix = num_of_gemm > 1 ? mdiv_x_tilda.shift : 0;
+                karg->dslice_y = num_of_gemm > 1 ? mdiv_y_tilda.magic : y;
+                karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
+                karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
+                karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
+
+                kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+
+            }
+
+            // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]));
+
+            auto bwd_prolog = need_set_zero ? 
+                std::function<float()>{[&]() -> float{
+                    hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                    return .0;
+                }} : 
+                std::function<float()>{[&]() -> float{
+                    return .0;
+                }};
+            float ms = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
+
+            result.return_code = 0;
+            result.duration_ms = ms;
+
+
         }else{
             std::vector<igemm_launch_kernel_t> kernels;
             uint8_t * kargs = num_of_gemm != 0 ? (uint8_t*)malloc(num_of_gemm * karg_size) : NULL;

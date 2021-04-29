@@ -240,7 +240,8 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_m_unmerge_cluster   = sec.count("gemm_m_unmerge_cluster") > 0 ? sec.at("gemm_m_unmerge_cluster").get_int() : 0;
             tunable.gemm_n_unmerge_cluster   = sec.count("gemm_n_unmerge_cluster") > 0 ? sec.at("gemm_n_unmerge_cluster").get_int() : 0;
             tunable.gemm_k_unmerge_cluster   = sec.count("gemm_k_unmerge_cluster") > 0 ? sec.at("gemm_k_unmerge_cluster").get_int() : 0;
-            tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : 0;
+            int default_mh                   = tunable.direction == "bwd" && tunable.tensor_layout == "nhwc" && tunable.nxe != 0 ? 1 : 0;
+            tunable.multihead                = sec.count("multihead") > 0 ? sec.at("multihead").get_int() : default_mh;
             int default_source_access_order  = tunable.direction == "fwd" ? 1 : 0;
             tunable.source_access_order      = sec.count("source_access_order") > 0 ? sec.at("source_access_order").get_int() : default_source_access_order;
             tunable.vector_store             = sec.count("vector_store") > 0 ? sec.at("vector_store").get_int() : 0;

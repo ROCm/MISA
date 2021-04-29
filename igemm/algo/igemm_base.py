@@ -182,7 +182,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.precision                          = tunable_dict['precision']
         self.nxb                                = tunable_dict['nxb']           # multiplier of b
         self.nxe                                = tunable_dict['nxe']           # muptiplier of e. here if 0, means x=y=1
-        self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', 0)
+        default_mh                              = 1 if (self.direction == 'bwd' and self.tensor_layout == "nhwc" and self.nxe != 0) else 0
+        self.multihead                          = utility_dict_with_default_t(tunable_dict)('multihead', default_mh)
         self.gemm_k_global_split                = get_igemm_gtc_gemm_k_global_split(tunable_dict)
         self.allow_lds_reorder                  = utility_dict_with_default_t(tunable_dict)('allow_lds_reorder', IGEMM_GTC_FEAT_ALLOW_LDS_REORDER)
         self.precache_soffset                   = utility_dict_with_default_t(tunable_dict)('precache_soffset', IGEMM_GTC_FEAT_PRECACHE_SOFFSET)
