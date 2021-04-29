@@ -246,10 +246,17 @@ class igemm_gtc_tunable_parameter_t(object):
             else:
                 assert False
         elif self.direction == 'bwd':
-            assert self.gemm_n_per_block % self.nxb == 0
-            self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
-            self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
-            self.unmerge_sub_c = 1                             # not used
+            if self.tensor_layout == 'nchw':
+                assert self.gemm_n_per_block % self.nxb == 0
+                self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
+                self.unmerge_sub_k = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
+                self.unmerge_sub_c = 1                             # not used
+            elif self.tensor_layout == 'nhwc':
+                self.unmerge_sub_n = 1                          # not used
+                self.unmerge_sub_k = 1                          # not used
+                self.unmerge_sub_c = 1                          # not used
+            else:
+                assert False
         else:
             assert self.gemm_k_per_block % self.nxb == 0
             self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)

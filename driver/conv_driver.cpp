@@ -38,6 +38,8 @@
 #include <vector>
 #include <float.h>
 #include <cmath>
+#include <algorithm>
+#include <limits>
 
 #ifndef USE_EXT_MODULE_LAUNCH
 #define USE_EXT_MODULE_LAUNCH 1
@@ -59,6 +61,10 @@
 #else
 #   define NAIVE_CONV_THREADED
 #   include "naive_conv.h"
+#endif
+
+#ifndef USE_MIOPEN_NRMS
+#define USE_MIOPEN_NRMS 1
 #endif
 
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
@@ -362,7 +368,47 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
             printf("[%zu] ref:%lf, pred:0x%08x\n", i, ref[i], ((uint32_t*)pred)[i]);
         }
     }
+#if USE_MIOPEN_NRMS
+    double square_difference = .0;
+    double mag1 = .0;
+    double mag2 = .0;
+    for (size_t i = 0; i < n; ++i) {
+        if(igemm_valid_float)
+            if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
+                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+                return false;
+            }
+        
 
+        double ri = (double)ref[i];
+        double pi = (double)pred[i];
+        double d = ri - pi;
+
+        if(igemm_per_pixel_check){
+            double delta = ABS(ABS(ri - pi) / ri);      // TODO: this is just a reference compare
+            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            if (delta > 3e-5) {
+                if(igemm_per_pixel_check_print){
+                    if (pp_err < 100)
+                        printf("diff at %zu, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
+                            pi, *(uint32_t*)(&pred[i]), delta);
+                }
+                pp_err++;
+            }
+        }
+
+        square_difference += d * d;
+        if(ABS(mag1) < ABS(ri)) mag1 = ri;
+        if(ABS(mag2) < ABS(pi)) mag2 = pi;
+    }
+    double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
+    double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
+    return (computed_nrms < nrms)
+#ifdef PER_PIXEL_CHECK
+           && (pp_err == 0)
+#endif
+        ;
+#else
     for (size_t i = 0; i < n; ++i) {
         if(igemm_valid_float)
             if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
@@ -390,12 +436,13 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         }
     }
-    //printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
+    // printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
 #endif
         ;
+#endif
 }
 
 template<>
@@ -428,44 +475,6 @@ bool valid_vector<int8_t>(const float *ref, const int8_t *pred, size_t n,
     return pp_err == 0;
 }
 
-#if 0
-static inline double get_fwd_nrms(driverDataType_t driver_data_type)
-{
-#ifdef USE_XDNN
-    double nrms = 5e-5;
-#else
-    double nrms = 1.5e-6;
-#endif
-}
-static inline double get_bwd_nrms(driverDataType_t driver_data_type)
-{
-#ifdef USE_XDNN
-    double nrms = 5e-5;
-#else
-    double nrms = 1.5e-6;
-#endif
-}
-static inline double get_wrw_nrms(driverDataType_t driver_data_type)
-{
-#ifdef USE_XDNN
-    double nrms = 1e-4;
-#else
-    double nrms = 1e-4;
-#endif
-}
-
-static inline double get_nrms(std::string direction, driverDataType_t driver_data_type)
-{
-    if(direction == "fwd")
-        return get_fwd_nrms();
-    if(direction == "bwd")
-        return get_bwd_nrms();
-    if(direction == "wrw")
-        return get_wrw_nrms();
-    assert(0);
-}
-#endif
-
 static inline double get_nrms(std::string direction, driverDataType_t driver_data_type){
     auto basic_tolerance = [=]() -> double{
         if (driver_data_type == driverFloat){
@@ -484,6 +493,9 @@ static inline double get_nrms(std::string direction, driverDataType_t driver_dat
         }
     };
     double nrms = basic_tolerance();
+    if (direction == "bwd"){
+        // nrms *= 10;
+    }
     // wrw has a high tolerance
     if (direction == "wrw"){
         nrms *= 2;

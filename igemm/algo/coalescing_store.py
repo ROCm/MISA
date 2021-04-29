@@ -430,6 +430,11 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.gemm_m_m0_m1 = []
         self.gemm_k_global_split = False
         self.feat_vgpr_collapse = True
+        self.co_m_update_os_functor = None  # update offset based on current i_m. otherwise use sgpr to update offset
+
+        self.feat_co_m_flag_check = False   # custom flag check, not using internal check
+        self.co_m_flag_check_start_functor = None
+        self.co_m_flag_check_reset_functor = None
 
     def adjust_optimal_coalescing_groups(self):
         '''
@@ -1310,45 +1315,48 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         else:
                             vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
 
-                def emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1):
+                def emit_calculate_out_offset_itr_m(i_m, i_m0, i_m1):
                     # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")
                     comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1})"
-                    if s_gemm_m0_stride is not None:
-                        self._emit(f"s_mul_i32 s[{s_tmp6(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
-                        self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
-                        self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(2)}], s[{s_tmp6(3)}]" + comments)
-                        if not no_s_out_offset:
-                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_out_offset}], s[{s_out_offset_itr()}] ")
+                    if ctrl.co_m_update_os_functor:
+                        self._emit(ctrl.co_m_update_os_functor(i_m, i_m0, i_m1))        # TODO: better sigture
                     else:
-                        '''
-                        no m0_stride, which indicate m0, m1 is continuous, no need to deal with m0, m1 seperately
-                        '''
-                        if i_m == 0:
-                            if no_s_out_offset:
-                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
-                                if s_k is not None:
-                                    self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
-                                    self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
-                            else:
-                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
-                        elif i_m == 1:
-                            if no_s_out_offset:
-                                self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
-                                if s_k is not None:
-                                    self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
-                            else:
-                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
+                        if s_gemm_m0_stride is not None:
+                            self._emit(f"s_mul_i32 s[{s_tmp6(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
+                            self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
+                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(2)}], s[{s_tmp6(3)}]" + comments)
+                            if not no_s_out_offset:
+                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_out_offset}], s[{s_out_offset_itr()}] ")
                         else:
-                            if no_s_out_offset:
-                                self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
-                                if s_k is not None:
-                                    self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                            '''
+                            no m0_stride, which indicate m0, m1 is continuous, no need to deal with m0, m1 seperately
+                            '''
+                            if i_m == 0:
+                                if no_s_out_offset:
+                                    self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
+                                    if s_k is not None:
+                                        self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
+                                else:
+                                    self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
+                            elif i_m == 1:
+                                if no_s_out_offset:
+                                    self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
+                                    if s_k is not None:
+                                        self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
+                                else:
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                             else:
-                                self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
-                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
+                                if no_s_out_offset:
+                                    self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
+                                    if s_k is not None:
+                                        self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                                else:
+                                    self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
+                                    self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
 
                 # emit first calculation before wait for store
-                emit_calculate_s_out_offset_itr(m_index_start_per_group, m0_index_start_per_group, m1_index_start_per_group)
+                emit_calculate_out_offset_itr_m(m_index_start_per_group, m0_index_start_per_group, m1_index_start_per_group)
 
                 issue_list = []
                 num_sld_total_dword = ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
@@ -1383,7 +1391,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             sld_offset = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
                             self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
-                    if v_store_flag is not None and type(v_store_flag) is str:
+                    if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
                         self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
 
                     self._emit(f";   store to global, m index start from {m_index_start_per_group}, m0:{m0_index_start_per_group}, m1:{m1_index_start_per_group}")
@@ -1398,14 +1406,18 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                 i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
-                        if s_k is not None:
+                        if not ctrl.feat_co_m_flag_check and (s_k is not None):
                             self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
+                        elif ctrl.feat_co_m_flag_check:
+                            self._emit(ctrl.co_m_flag_check_start_functor())
                         cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
                         lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and ctrl.vector_write_out == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
-                        if s_k is not None:
+                        if not ctrl.feat_co_m_flag_check and (s_k is not None):
                             self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
+                        elif ctrl.feat_co_m_flag_check:
+                            self._emit(ctrl.co_m_flag_check_reset_functor())
                         if ctrl.precision == 'int8' and ctrl.vector_write_out == 1:
                             if i_gst_flat % 4 != 3:
                                 self._emit(f"v_lshrrev_b32 v[{v_c(cur_vgpr_gst)}], 8, v[{v_c(cur_vgpr_gst)}]")
@@ -1414,8 +1426,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             i_m = m_index_per_group[i_group][0][(i_gst_flat)+1]
                             # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")
                             i_m0, i_m1 = ctrl.get_m0_m1_index(i_m)
-                            emit_calculate_s_out_offset_itr(i_m, i_m0, i_m1)
-                    if v_store_flag is not None and type(v_store_flag) is str:
+                            emit_calculate_out_offset_itr_m(i_m, i_m0, i_m1)
+                    if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
                         self._emit(f"s_mov_b64 exec, -1")
 
                 if ctrl.feat_vgpr_collapse:

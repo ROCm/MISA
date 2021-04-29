@@ -540,6 +540,67 @@ class inst_ds_write2_likely_t(mc_base_t):
         return self.vec_count
 '''
 
+class inst_ds_write2_oneshot_t(mc_base_t):
+    '''
+    single issue a ds_write2. if can't use ds_write2, simply change to 2 ds_write
+    '''
+    def name(self):
+        return ''
+    def __init__(self, mc, vec_byte):
+        mc_base_t.__init__(self, mc)
+        assert vec_byte in (4, 8)
+        self.vec_byte = vec_byte
+
+    def _valid_range_div(self, num, div, upper):
+        return True if num % div == 0 and num // div < upper else False
+
+    def can_write2(self, offset0 , offset1):
+        vrd = self._valid_range_div
+        if self.vec_byte == 4:
+            return True if vrd(offset0, 4, 256) and vrd(offset1, 4, 256) else False
+        elif self.vec_byte == 8:
+            return True if vrd(offset0, 8, 256) and vrd(offset1, 8, 256) else False
+        else:
+            assert False
+
+    def can_write2st64(self, offset0 , offset1):
+        vrd = self._valid_range_div
+        if self.vec_byte == 4:
+            return True if vrd(offset0, 4 * 64, 256) and vrd(offset1, 4 * 64, 256) else False
+        elif self.vec_byte == 8:
+            return True if vrd(offset0, 8 * 64, 256) and vrd(offset1, 8 * 64, 256) else False
+        else:
+            assert False
+
+    def __call__(self, v_addr, v_src0, v_src1, offset0, offset1):
+        with self._deferred_context():
+            if self.vec_byte == 4:
+                if self.can_write2(offset0, offset1):
+                    if self.can_write2st64(offset0, offset1):
+                        self._emit(f'ds_write2st64_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // (4*64)}, offset1:{offset1 // (4*64)}')
+                    else:
+                        self._emit(f'ds_write2_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // 4}, offset1:{offset1 // 4}')
+                else:
+                    self._emit(f'ds_write_b32 v[{v_addr}], v[{v_src0}], offset:{offset0}')
+                    self._emit(f'ds_write_b32 v[{v_addr}], v[{v_src1}], offset:{offset1}')
+            elif self.vec_byte == 8:
+                if self.can_write2(offset0, offset1):
+                    if self.can_write2st64(offset0, offset1):
+                        self._emit(f'ds_write2st64_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // (8*64)}, offset1:{offset1 // (8*64)}')
+                    else:
+                        self._emit(f'ds_write2_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // 8}, offset1:{offset1 // 8}')
+                else:
+                    self._emit(f'ds_write_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1] offset:{offset0}')
+                    self._emit(f'ds_write_b64 v[{v_addr}], v[{v_src1}:{v_src1}+1] offset:{offset1}')
+            else:
+                assert False
+        return self._get_deferred()
+
+    def get_issues(self, offset0, offset1):
+        if self.can_write2(offset0, offset1):
+            return 1
+        return 2
+
 class inst_ds_write2_likely_t(mc_base_t):   
     def name(self):
         return ''
@@ -907,9 +968,9 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         vgpr_per_vector = (ctrl.vector_dp + pixel_per_vgpr - 1) // pixel_per_vgpr
         assert ctrl.length_dp % ctrl.vector_dp == 0
         num_dp = ctrl.length_dp // ctrl.vector_dp
+        ds_write = inst_ds_write_t(ctrl.vector_dp * data_byte)
         if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
             # this is indeed a 2d case.
-            ds_write = inst_ds_write_t(ctrl.vector_dp * data_byte)
             if ctrl.length_d0 == 1 and ctrl.length_d1 == 1:
                 # further, 1d case
                 for i_p in range(num_dp):
@@ -932,7 +993,20 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                             self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d * num_dp + i_p)*vgpr_per_vector}', i_d * stride_d + i_p * ctrl.vector_dp * data_byte))
                             issue_cnt += ds_write.get_issues()
         else:
-            assert False, "un implemented yet"
+            for i_d0 in range(ctrl.length_d0):
+                if ctrl.length_d1 % 2 == 0 and data_byte == 4 and ctrl.vector_dp in (1, 2):
+                    ds_write2 = inst_ds_write2_likely_t(self.mc, 2, ctrl.vector_dp * data_byte, ctrl.stride_d1)
+                    for i_d1 in range(ctrl.length_d1 // 2):
+                        for i_p in range(num_dp):
+                            self._emit(ds_write2(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d0 * ctrl.length_d1 * num_dp + 2 * i_d1 * num_dp + i_p)*vgpr_per_vector}',
+                                    i_d0 * ctrl.stride_d0 + 2 * i_d1 * ctrl.stride_d1 + i_p * ctrl.vector_dp * data_byte))
+                            issue_cnt += ds_write2.get_issues(i_d0 * ctrl.stride_d0 + 2 * i_d * stride_d + i_p * ctrl.vector_dp * data_byte)
+                else:
+                    for i_d1 in range(ctrl.length_d1):
+                        for i_p in range(num_dp):
+                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d0 * ctrl.length_d1 * num_dp + i_d1 * num_dp + i_p)*vgpr_per_vector}',
+                                    i_d0 * ctrl.stride_d0 + i_d1 * ctrl.stride_d1 + i_p * ctrl.vector_dp * data_byte))
+                            issue_cnt += ds_write.get_issues()
 
         self.issue_cnt = issue_cnt
 
