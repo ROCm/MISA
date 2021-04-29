@@ -357,8 +357,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.declare_arg("s_out_offset")     # use this as c itr, since other dimension of input is voffset
             #if tunable.gemm_k_global_split or is_pad_k:
             self.declare_arg("v_wei_os")
-            self.declare_arg("s_wei_os_diff_acc_x_rst_k")      # dtile_x * s_wei_stride_x - gemm_k * s_wei_stride_k
-            self.declare_arg("s_wei_os_diff_acc_y_rst_kx")     # dtile_y * s_wei_stride_y - (dslice_x - 1) * s_wei_stride_x - gemm_k * s_wei_stride_k
+            self.declare_arg("s_wei_os_diff_acc_x_rst_k")      # dtile_x * s_wei_stride_x - k * s_wei_stride_k
+            self.declare_arg("s_wei_os_diff_acc_y_rst_kx")     # dtile_y * s_wei_stride_y - (dslice_x - 1) * dtile_x * s_wei_stride_x - k * s_wei_stride_k
             self.declare_arg("v_out_os")
             self.declare_arg("v_out_iho_list")
             self.declare_arg("v_out_iwo_list")
@@ -1933,17 +1933,18 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
         if self.tunable.nxe != 0:
             '''
-                dtile_x * s_wei_stride_x - gemm_k * s_wei_stride_k
-                dtile_y * s_wei_stride_y - (dslice_x - 1) * s_wei_stride_x - gemm_k * s_wei_stride_k
+                s_wei_os_diff_acc_x_rst_k  : dtile_x * s_wei_stride_x - k * s_wei_stride_k
+                s_wei_os_diff_acc_y_rst_kx : dtile_y * s_wei_stride_y - (dslice_x - 1) * dtile_x * s_wei_stride_x - k * s_wei_stride_k
             '''
             self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_k_padded() if self.is_pad_k() else s.s_k()}], s[{s.s_wei_stride_k()}]")
             if s.s_wei_stride_k.label not in self.dict_shifted_stride:
-                self._emit(f"s_lshl_b32 s[{s.s_tmp(0)}], s[{s.s_tmp(0)}], {igemm_log2(data_byte)}")     # gemm_k * s_wei_stride_k
+                self._emit(f"s_lshl_b32 s[{s.s_tmp(0)}], s[{s.s_tmp(0)}], {igemm_log2(data_byte)}")     # k * s_wei_stride_k
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_c()}], {igemm_log2(data_byte)}")    # wei_stride_x
             self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dtile_x()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_sub_i32 s[{s.s_wei_os_diff_acc_x_rst_k()}], s[{s.s_tmp(1)}], s[{s.s_tmp(0)}]")
             self._emit(f"s_sub_i32 s[{s.s_tmp(2)}], s[{s.s_dslice_x()}], 1")
             self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], s[{s.s_tmp(3)}]")  # (dslice_x - 1) * s_wei_stride_x 
+            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], s[{s.s_dtile_x()}]")
             self._emit(f"s_mul_i32 s[{s.s_tmp(3)}], s[{s.s_x()}], s[{s.s_tmp(3)}]")     # s_wei_stride_y
             self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dtile_y()}], s[{s.s_tmp(3)}]")
             self._emit(f"s_sub_i32 s[{s.s_tmp(1)}], s[{s.s_tmp(1)}], s[{s.s_tmp(2)}]")
