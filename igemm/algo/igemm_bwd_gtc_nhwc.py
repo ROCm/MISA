@@ -774,8 +774,11 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 v_c_num                 = vseq()
             else:
                 v_c_resuable_num        = num_vgpr_acc_a + num_vgpr_acc_b + \
-                                            num_vgpr_global_load_a + num_vgpr_global_load_b + \
-                                            3 * nb_per_thread + 6      # from v_sst_a_os to v_co_sst
+                                            num_vgpr_global_load_a * outer.tunable.global_prefetch_a_num + \
+                                            num_vgpr_global_load_b * outer.tunable.global_prefetch_b_num + \
+                                            2 if not outer.tunable.tensor_a_pass_through else 0 + \
+                                            2 if not outer.tunable.tensor_b_pass_through else 0 + \
+                                            3 * nb_per_thread + 6      # till v_wei_ik
                 #v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_coalescing_num      = outer.coalescing_store.ctrl.get_vgpr_usage()
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -820,12 +823,31 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.v_wei_ic               = sym_t("v_wei_ic"          ,vseq(1))
             self.v_wei_ik               = sym_t("v_wei_ik"          ,vseq(1))
 
-            self.v_in_os                = sym_t("v_in_os"           ,vseq(1))
-            self.v_in_in                = sym_t("v_in_in"           ,vseq(1))
-            self.v_in_ihi               = sym_t("v_in_ihi"          ,vseq(1))
-            self.v_in_iwi               = sym_t("v_in_iwi"          ,vseq(1))
-            self.v_in_flag              = sym_t("v_in_flag"         ,self.v_wei_ic.value)
-            self.v_in_flag_c            = sym_t("v_in_flag_c"       ,vseq(1))       # TODO: better alloc this
+
+            class co_reusable_t(object):
+                def __init__(self, outer):
+                    self.outer = outer
+                    self.start = outer.v_c.value + (v_c_num if is_vgpr_acc_c else v_c_coalescing_num)
+                    self.num_co_reusable = self.outer.v_out_ik.value - self.start
+                    self.itr = 0
+                def __call__(self):
+                    rtn = 0
+                    if self.num_co_reusable > 0:
+                        rtn = self.start + self.itr
+                        self.num_co_reusable = self.num_co_reusable - 1
+                        self.itr = self.itr + 1
+                    else:
+                        rtn = vseq(1)
+                    return rtn
+            co_reusable = co_reusable_t(self)
+
+            # TODO: careful check following reusable alloc
+            self.v_in_os                = sym_t("v_in_os"           ,co_reusable() if outer.tunable.nxe != 0 else vseq(1))
+            self.v_in_in                = sym_t("v_in_in"           ,co_reusable())
+            self.v_in_ihi               = sym_t("v_in_ihi"          ,co_reusable())
+            self.v_in_iwi               = sym_t("v_in_iwi"          ,co_reusable())
+            self.v_in_flag              = sym_t("v_in_flag"         ,co_reusable())
+            self.v_in_flag_c            = sym_t("v_in_flag_c"       ,self.v_wei_ic.value)       # TODO: better alloc this
             self.v_in_inb               = sym_t("v_in_inb"          ,self.v_out_inb.value)
 
             self.v_co_sst               = sym_t("v_co_sst"          ,self.v_out_in.value)
