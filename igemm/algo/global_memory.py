@@ -802,7 +802,10 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
 
         assert not (exec_slot_d0_up and exec_slot_d0_d1 and exec_slot_d1_dw), "should not happen"
 
-        if ctrl.src_order == 0 and ctrl.dst_order == 0:
+        if ctrl.dst_order == 1:
+            assert ctrl.vector_d1 == 1, "currently can't have vector d1 when reorder"
+
+        if ctrl.src_order == 0:
             if exec_slot_d0_up:
                 try_exec_flag_start(0)
             i_dst = 0
@@ -813,7 +816,8 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
                     if exec_slot_d1_dw:
                         try_exec_flag_start(i_d1)
                     # print(f"get_ioffset(i_d0, i_d1):{get_ioffset(i_d0, i_d1)}")
-                    self._emit(buffer_load_dword(f"{self.v_dst(i_dst*vgpr_per_vector)}", f"{get_voffset(i_d0, i_d1)}", f"{self.s_ptr()}", get_soffset(i_d0, i_d1), get_ioffset(i_d0, i_d1)))
+                    dst_idx = i_dst * vgpr_per_vector if ctrl.dst_order == 0 else i_d1 * ctrl.length_d0 + i_d0
+                    self._emit(buffer_load_dword(f"{self.v_dst(dst_idx)}", f"{get_voffset(i_d0, i_d1)}", f"{self.s_ptr()}", get_soffset(i_d0, i_d1), get_ioffset(i_d0, i_d1)))
                     i_dst = i_dst + 1
                     if exec_slot_d1_dw:
                         try_exec_flag_finish()
