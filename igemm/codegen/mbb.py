@@ -130,6 +130,13 @@ class machine_basic_block_t(object):
     def __call__(self):
         return '\n'.join([inst() for inst in self.mc_inst_list])
 
+    def count(self, inst_str):
+        cnt = 0
+        for mc_inst in self.mc_inst_list:
+            if inst_str in mc_inst.inst_str:
+                cnt = cnt + 1
+        return cnt
+
     def dump(self):
         print(f'mbb len:{self.length()}, content:')
         print(self())
@@ -159,6 +166,8 @@ def create_machine_basic_block(multi_line_inst_str, **option):
     option:
     group_mbb_by_end_of_inst_op    :   str,  group several mc_inst into mbb, each mbb is by end of this value
     merge_mbb                      :   int,  do not split into multiple mbb
+    dup_inst_per_mbb               ;   str,  each mbb shold contains multiple instructions.
+                                             should have format: "xxxx,n" where "xxxx" is instruction need to duplicate, "n" is number of duplication
     '''
     class parse_mbb_list_t(object):
         STATE_NORMAL = 0
@@ -239,8 +248,9 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                     return dictionary[key]
                 else:
                     return default_value
-            
+
             merge_mbb = get_dict_with_default(option, "merge_mbb", 0)
+            dup_inst_per_mbb = get_dict_with_default(option, "dup_inst_per_mbb", "off")
 
             group_mbb_by_end_of_inst_op = get_dict_with_default(option, "group_mbb_by_end_of_inst_op", "")
             def match_group_mbb_by_end_of_inst_op(inst_op):
@@ -334,10 +344,70 @@ def create_machine_basic_block(multi_line_inst_str, **option):
                 #print('<*****************>')
                 mbbs.append(machine_basic_block_t(copy.copy(mc_inst_buffer)))
                 mc_inst_buffer.clear()
-            assert len(mbbs) != 0, f"nonthing parsed from input inst: {multi_line_inst_str}"
+            #assert len(mbbs) != 0, f"nonthing parsed from input inst: {multi_line_inst_str}"
+            if len(mbbs) == 0:
+                return list()   # silently return empty list
             #for y in mbbs:
             #    y.dump()
             #print('++++++++++++++++++++++++++++')
+            if dup_inst_per_mbb != "off":
+                _dup_str = dup_inst_per_mbb.split(',')
+                assert len(_dup_str) == 2
+                dup_i = str(_dup_str[0].strip())
+                dup_n = int(_dup_str[1].strip())
+                new_mbbs = list()
+                dup_state = self.STATE_NORMAL
+                buf_mbb = None
+                buf_n = 0
+                for itm in mbbs:
+                    if dup_state == self.STATE_NORMAL:
+                        current_dup_n = itm.count(dup_i)
+                        if current_dup_n != 0 and dup_n - current_dup_n > 0:
+                            buf_mbb = copy.copy(itm)
+                            buf_n = dup_n - current_dup_n
+                            dup_state = self.STATE_PARSING_MBB
+                        else:
+                            new_mbbs.append(copy.copy(itm))
+                    elif dup_state == self.STATE_PARSING_MBB:
+                        if buf_n != 0:
+                            buf_mbb.mc_inst_list += itm.mc_inst_list
+                            current_dup_n = itm.count(dup_i)
+                            if current_dup_n != 0:
+                                buf_n -= current_dup_n
+                            if buf_n <= 0:
+                                new_mbbs.append(copy.copy(buf_mbb))
+                                buf_mbb = None
+                                dup_state = self.STATE_NORMAL
+                        else:
+                            assert False, "should not happen"
+                    else:
+                        assert False
+                if buf_mbb != None:
+                    new_mbbs.append(copy.copy(buf_mbb))
+                return new_mbbs
+
             return mbbs
     parser = parse_mbb_list_t()
     return parser.parse(multi_line_inst_str, **option)
+
+def emit_machine_basic_blocks(mc, mbb_lists):
+    class simple_mbb_emit_t(mc_base_t):
+        def __init__(self, mc, mbb_lists):
+            mc_base_t.__init__(self, mc)
+            self.mbb_lists = mbb_lists
+
+        def call_mbb(self, mbb):
+            mbb_lines = mbb().split('\n')
+            with self._deferred_context():
+                for line in mbb_lines:
+                    self._emit(line)
+            return self._get_deferred()
+        
+        def emit(self):
+            with self._deferred_context():
+                for mbb in mbb_lists:
+                    self._emit(call_mbb(mbb))
+            return self._get_deferred()
+
+    assert type(mbb_lists) is list
+    return simple_mbb_emit_t(mc, mbb_lists).emit()

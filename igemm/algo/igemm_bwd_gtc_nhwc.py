@@ -489,7 +489,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             m_wei_2d_global_load, m_out_2d_global_load = self.outer.get_macro_global_load()
             with self._deferred_context():
                 self._emit(f"; load output, nxe:{self.outer.tunable.nxe}")
-                self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
+                #self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
                 self._emit(m_out_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(),
                     s.s_p_out(), v.v_out_os(),
                     *(None, None, None, None) if tunable.tensor_a_pass_through else (s.s_out_offset(), None, None, None),
@@ -915,6 +915,24 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
         pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
+
+    # def get_num_global_load_b_per_mbb(self):
+    #     ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
+    #     tb_nc_per_thread = tb_c0 if tb_c0 != 1 else tb_c1 // utility_gcd(tb_c1, 4 * (4 // data_byte))
+    #     tb_nk_per_thread = tb_k
+    #     tb_per_thread = tb_nc_per_thread * tb_nk_per_thread
+    #     if tb_c1 == 1:
+    #         '''
+    #         tb_per_thread    per_mbb
+    #         1               1
+    #         2               1
+    #         4               1
+    #         8               2
+    #         16              4
+    #         '''
+    #         print(f"tb_per_thread:{tb_per_thread}, {(tb_per_thread + 3) // 4}")
+    #         return (tb_per_thread + 3) // 4
+    #     return 1
 
     def get_thread_lengths(self):
         t_ta = self.tunable.tensor_a_thread_lengths
