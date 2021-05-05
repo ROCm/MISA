@@ -674,8 +674,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.s_magic_1              = sym_t("s_magic_1"                ,self.s_p_in.value + 3)
                 self.s_magic_2              = sym_t("s_magic_2"                ,sseq(1))        # TODO: make sure this is reusable and pad to 2x
                 self.s_magic_3              = sym_t("s_magic_3"                ,sseq(1))
-                self.s_shift_m2             = sym_t("s_shift_m2"               ,self.s_dtile_h.value)
-                self.s_shift_m3             = sym_t("s_shift_m3"               ,self.s_dtile_w.value)
+                self.s_shift_m2             = sym_t("s_shift_m2"               ,self.s_dtile_h.value if outer.tunable.nxe != 0 else sseq(1))
+                self.s_shift_m3             = sym_t("s_shift_m3"               ,self.s_dtile_w.value if outer.tunable.nxe != 0 else sseq(1))
 
             self.s_out_stride_wo            = sym_t('s_out_stride_wo'           , sseq(1))
             self.s_out_stride_n             = sym_t('s_out_stride_n'            , sseq(1))
@@ -848,10 +848,11 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             # TODO: careful check following reusable alloc
             self.v_in_os                = sym_t("v_in_os"           ,co_reusable() if outer.tunable.nxe != 0 else vseq(1))
-            self.v_in_in                = sym_t("v_in_in"           ,co_reusable())
-            self.v_in_ihi               = sym_t("v_in_ihi"          ,co_reusable())
-            self.v_in_iwi               = sym_t("v_in_iwi"          ,co_reusable())
-            self.v_in_flag              = sym_t("v_in_flag"         ,co_reusable())
+            if outer.tunable.nxe != 0:
+                self.v_in_in            = sym_t("v_in_in"           ,co_reusable())
+                self.v_in_ihi           = sym_t("v_in_ihi"          ,co_reusable())
+                self.v_in_iwi           = sym_t("v_in_iwi"          ,co_reusable())
+                self.v_in_flag          = sym_t("v_in_flag"         ,co_reusable())
             self.v_in_flag_c            = sym_t("v_in_flag_c"       ,self.v_wei_ic.value)       # TODO: better alloc this
             self.v_in_inb               = sym_t("v_in_inb"          ,self.v_out_inb.value)
 
@@ -1778,21 +1779,26 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             i_x = dtile_x * dslice_ix + dtile_ix
             '''
             self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_ic()}], v[{v.v_wei_ic()}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dtile_iy()}], s[{s.s_x()}] ")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dtile_iy()}], s[{s.s_x()}] ")
             if self.tunable.gemm_k_global_split:
                 self._emit(f"v_add_u32 v[{v.v_wei_ik()}], v[{v.v_wei_ik()}], s[{s.s_block_gtc_ik()}]")
             self._emit(f"v_mul_lo_u32 v[{v.v_tmp(4)}], s[{s.s_wei_stride_k()}], v[{v.v_wei_ik()}]")
-            self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_dtile_ix()}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_dtile_ix()}]")
             self._emit(f"v_add_lshl_u32 v[{v.v_wei_os()}], v[{v.v_tmp(4)}], v[{v.v_tmp(5)}], {igemm_log2(data_byte)}")
-            self._emit(f"s_lshl_b32 s[{s.s_tmp(1)}] s[{s.s_c()}], {igemm_log2(data_byte)}")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_lshl_b32 s[{s.s_tmp(1)}] s[{s.s_c()}], {igemm_log2(data_byte)}")
 
             # wei flag
             self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_tmp(5)}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_tmp(1)}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_tmp(1)}]")
             self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, 1, vcc")
             self._emit(f"v_mov_b32 v[{v.v_wei_tmp_pack()}], v[{v.v_wei_flag()}]")
 
-            self._emit(f"v_add_u32 v[{v.v_wei_os()}], s[{s.s_tmp()}], v[{v.v_wei_os()}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"v_add_u32 v[{v.v_wei_os()}], s[{s.s_tmp()}], v[{v.v_wei_os()}]")
 
             for i in range(1, tb_nc_per_thread):
                 if i == 1:
@@ -2331,7 +2337,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             a = self.agpr
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
                      None, s.s_in_stride_wi(),
-                     s.s_tmp(), v.v_in_flag() if self.tunable.nxe != 0 else v.v_in_flag(), s.s_dim_mr(), v.v_in_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
+                     s.s_tmp(), v.v_in_flag() if self.tunable.nxe != 0 else v.v_in_flag_c(), s.s_dim_mr(), v.v_in_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
 
         self._emit_front(f"{self.label_out}:")
 
