@@ -1083,6 +1083,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
                     ctrl_wei_gld.length_d1 = 1
             else:
+                ctrl_wei_gld.flag_on_d1 = 1
                 ctrl_wei_gld.length_d0 = 1
                 ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
 
@@ -1110,6 +1111,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 ctrl_out_gld.length_d0 = 1
                 ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
             else:
+                ctrl_out_gld.flag_on_d1 = 1
                 ctrl_out_gld.length_d0 = 1
                 ctrl_out_gld.length_d1 = out_thread_copy_dims[-1]
 
