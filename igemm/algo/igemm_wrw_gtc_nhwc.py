@@ -35,7 +35,7 @@ from .xdlops_mapping import *
 from .coalescing_store import *
 from .mfma_main_loop import *
 
-IGEMM_WRW_GTC_DEBUG = 0
+IGEMM_WRW_GTC_DEBUG = 1
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
 
@@ -297,7 +297,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             with self._deferred_context():
                 self._emit(f"; load input")
                 if self.outer.tunable.nxe != 0:
-                    self._emit(f".v_clear_nc {v.v_gld_b()}, {m_in_2d_global_load.ctrl.length_d0 * m_in_2d_global_load.ctrl.length_d1}")
+                    self._emit(f".v_clear_nc {v.v_gld_b()}, {self.outer.get_num_vgpr_global_load_a()}")
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
@@ -495,12 +495,14 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
             self.outer                    = outer
+            num_vgpr_global_load_a        = outer.get_num_vgpr_global_load_a()
+            num_vgpr_global_load_b        = outer.get_num_vgpr_global_load_b()
             if is_vgpr_acc_c:
                 self.v_c                  = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
                 v_c_num                   = vseq()
             else:
                 v_c_resuable_num          = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
-                                            outer.tunable.num_global_load_a + outer.tunable.num_global_load_b + \
+                                            num_vgpr_global_load_a + num_vgpr_global_load_b + \
                                             14       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num        = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed                = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
@@ -509,8 +511,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 self.v_c                  = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             self.v_a                      = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                      = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
-            self.v_gld_a                  = sym_t("v_gld_a"        ,vseq(outer.tunable.num_global_load_a))
-            self.v_gld_b                  = sym_t("v_gld_b"        ,vseq(outer.tunable.num_global_load_b))
+            self.v_gld_a                  = sym_t("v_gld_a"        ,vseq(num_vgpr_global_load_a))
+            self.v_gld_b                  = sym_t("v_gld_b"        ,vseq(num_vgpr_global_load_b))
             self.v_sst_a_os               = sym_t("v_sst_a_os"     ,vseq(1))
             self.v_sst_b_os               = sym_t("v_sst_b_os"     ,vseq(1))
             self.v_sld_a_os               = sym_t("v_sld_a_os"     ,vseq(1))
@@ -600,6 +602,16 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 if k.startswith('a_'):
                     self._emit(v.declare())
 
+    def get_num_vgpr_global_load_a(self):
+        _, _, _, tb_c = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c != 1 else 1
+        return self.tunable.num_global_load_a // pack_factor
+    
+    def get_num_vgpr_global_load_b(self):
+        ta_k, _, _, _ = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k != 1 else 1
+        return self.tunable.num_global_load_b // pack_factor
+
     def get_thread_lengths(self):
         t_ta = self.tunable.tensor_a_thread_lengths
         t_tb = self.tunable.tensor_b_thread_lengths
@@ -652,7 +664,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         _, ta_nb, tb_nb, _ = self.get_thread_lengths()
         assert ta_nb == tb_nb
         # It will be 1 for the first step
-        return igemm_gcd(ta_nb, 4)
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread()
+        return igemm_gcd(ta_nb, 4) * k_pack_lanegroup
 
     def get_macro_global_load(self):
         inline = True if self.tunable.fma_interleave else False
@@ -663,8 +676,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         ctrl_in_gld  = ctrl_2d_global_load_t()
         ctrl_out_gld = ctrl_2d_global_load_t()
 
-        ctrl_in_gld.vector_d1  = igemm_gcd(tb_c, 4)
-        ctrl_out_gld.vector_d1 = igemm_gcd(ta_k, 4)
+        data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+        ctrl_in_gld.precision = self.tunable.precision
+        ctrl_out_gld.precision  = self.tunable.precision
+
+        ctrl_in_gld.vector_d1  = igemm_gcd(tb_c, 4 * (4 // data_byte))
+        ctrl_out_gld.vector_d1 = igemm_gcd(ta_k, 4 * (4 // data_byte))
 
         if self.in_thread_copy_ndim == 2:
             ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
@@ -706,28 +723,51 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         ta_k, _, _, tb_c  = self.get_thread_lengths()
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
         k_pack = self.get_gemmk_pack()
-        length_dp_a = igemm_gcd(ta_k, 4)
-        length_dp_b = igemm_gcd(tb_c, 4)
+        
+        if k_pack > 1:
+            length_dp_a = 1
+            length_dp_b = 1
+            vector_dp_a = 1
+            vector_dp_b = 1
+        else:
+            length_dp_a = igemm_gcd(ta_k, 4)
+            length_dp_b = igemm_gcd(tb_c, 4)
+            vector_dp_a = length_dp_a
+            vector_dp_b = length_dp_b
 
         if not self.tunable.tensor_a_pass_through:
             # out is gemm_k * gemm_n * k_pack
             out_sst_ctrl = ctrl_3d_shared_store_t()
+            out_sst_ctrl.precision = self.tunable.precision
             out_sst_ctrl.length_d0 = 1
-            out_sst_ctrl.length_d1 = int(ta_k / length_dp_a) # ta_k
-            out_sst_ctrl.length_dp = length_dp_a # k_pack
-            out_sst_ctrl.vector_dp = length_dp_a
+            out_sst_ctrl.length_d1 = int(ta_k / length_dp_a)
+            out_sst_ctrl.length_dp = length_dp_a
+            out_sst_ctrl.vector_dp = vector_dp_a
+            out_sst_ctrl.length_dv = 2
+            out_sst_ctrl.vector_dv = 1
             out_sst_ctrl.stride_d0 = 1
-            out_sst_ctrl.stride_d1 = length_dp_a * data_byte # k_pack * data_byte
+            out_sst_ctrl.stride_d1 = vector_dp_a * data_byte * k_pack
 
         if not self.tunable.tensor_b_pass_through:
             # input is gemm_k * gemm_m * k_pack
             in_sst_ctrl = ctrl_3d_shared_store_t()
+            in_sst_ctrl.precision = self.tunable.precision
             in_sst_ctrl.length_d0 = 1
-            in_sst_ctrl.length_d1 = int(tb_c / length_dp_b) # tb_c1
-            in_sst_ctrl.length_dp = length_dp_b # k_pack
-            in_sst_ctrl.vector_dp = length_dp_b
-            in_sst_ctrl.stride_d0 = nb_ec * k_pack * data_byte
-            in_sst_ctrl.stride_d1 = length_dp_b * data_byte # k_pack * data_byte
+            in_sst_ctrl.length_d1 = int(tb_c / length_dp_b)
+            in_sst_ctrl.length_dp = length_dp_b
+            in_sst_ctrl.vector_dp = vector_dp_b
+            in_sst_ctrl.length_dv = 2
+            in_sst_ctrl.vector_dv = 1
+            in_sst_ctrl.stride_d0 = 1
+            in_sst_ctrl.stride_d1 = vector_dp_a * data_byte * k_pack
+
+        print(f"out: length_d0={out_sst_ctrl.length_d0}, length_d1={out_sst_ctrl.length_d1}")
+        print(f"out: length_dp={out_sst_ctrl.length_dp}, vector_dp={out_sst_ctrl.vector_dp}")
+        print(f"out: stride_d0={out_sst_ctrl.stride_d0}, stride_d1={out_sst_ctrl.stride_d1}")
+
+        print(f"in: length_d0={in_sst_ctrl.length_d0}, length_d1={in_sst_ctrl.length_d1}")
+        print(f"in: length_dp={in_sst_ctrl.length_dp}, vector_dp={in_sst_ctrl.vector_dp}")
+        print(f"in: stride_d0={in_sst_ctrl.stride_d0}, stride_d1={in_sst_ctrl.stride_d1}")
 
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_3d_shared_store_t(self.mc, out_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
@@ -1119,7 +1159,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_out_stride_n()}], s[{s.s_block_gtc_in()}]")
         self._emit(f"v_add_lshl_u32 v[{v.v_out_os_base()}], v[{v.v_cur_k()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], s[{s.s_out_stride_wo()}]")
-        self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], 2, v[{v.v_out_os_base()}]")
+        self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_out_os_base()}]")
         self._emit_empty_line()
 
         if self.out_thread_copy_ndim != 1:
@@ -1316,6 +1356,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         else:
             a = self.agpr
             fctrl                             = ctrl_mfma_main_loop_t()
+            k_pack = self.get_gemmk_pack()
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
                                                                         self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
@@ -1333,17 +1374,22 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.global_load_b_functor       = self.global_load_in
             fctrl.shared_store_a_functor      = self.shared_store_out
             fctrl.shared_store_b_functor      = self.shared_store_in
+
+            fctrl.lds_k_pack                  = k_pack
+            share_load_packed                 = k_pack
+
+
             if ctrl_xdlops_mapping.wave_step_m == 1:
-                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+                fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
-                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte)   # xdlops load from LDS always single load
+                fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte, ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
+                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 
@@ -1359,6 +1405,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.v_sst_b_os                  = v.v_sst_b_os
             fctrl.s_kitr                      = s.s_kitr
             fctrl.s_knum                      = s.s_knum
+
+            fctrl.precision                   = self.tunable.precision
 
             mfma_main_loop = mfma_main_loop_t(self.mc, fctrl)
             mfma_main_loop.emit()
