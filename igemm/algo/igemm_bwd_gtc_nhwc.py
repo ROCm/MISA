@@ -732,7 +732,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.s_in_wi_sshift         = sym_t("s_in_wi_sshift"           ,sseq(1))
 
             if outer.tunable.gemm_k_global_split:
-                self.s_block_gtc_ik         = sym_t("s_block_gtc_ik"           ,sseq(1)) # add c split
+                self.s_block_gtc_ik         = sym_t("s_block_gtc_ik"           ,sseq(1)) # add k split
                 self.s_gemmk_split          = sym_t("s_gemmk_split"            ,sseq(1))
                 self.s_sub_k                = sym_t("s_sub_k"                  ,sseq(1))
             self.s_tmp                      = sym_t("s_tmp"                    ,sseq(6, 2))
@@ -1800,8 +1800,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if self.tunable.nxe != 0:
                 self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_dtile_iy()}], s[{s.s_x()}] ")
             if self.tunable.gemm_k_global_split:
-                self._emit(f"v_add_u32 v[{v.v_wei_ik()}], v[{v.v_wei_ik()}], s[{s.s_block_gtc_ik()}]")
-            self._emit(f"v_mul_lo_u32 v[{v.v_tmp(4)}], s[{s.s_wei_stride_k()}], v[{v.v_wei_ik()}]")
+                self._emit(f"v_add_u32 v[{v.v_tmp()}], v[{v.v_wei_ik()}], s[{s.s_block_gtc_ik()}]")
+            self._emit(f"v_mul_lo_u32 v[{v.v_tmp(4)}], s[{s.s_wei_stride_k()}], v[{v.v_tmp() if self.tunable.gemm_k_global_split else v.v_wei_ik()}]")
             if self.tunable.nxe != 0:
                 self._emit(f"s_add_u32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_dtile_ix()}]")
             self._emit(f"v_add_lshl_u32 v[{v.v_wei_os()}], v[{v.v_tmp(4)}], v[{v.v_tmp(5)}], {igemm_log2(data_byte)}")
@@ -2011,20 +2011,27 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"s_lshl_b32 s[{s.s_gemm_k_num_k()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
             else:
                 self._emit(f"s_lshl_b32 s[{s.s_gemm_k_num_k()}], s[{s.s_sub_k()}], {igemm_log2(data_byte)}")
-            # self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_c()}], {igemm_log2(data_byte)}")
-            # self._emit(f"s_sub_u32  s[{s.s_wei_os_diff_acc_x_rst_k()}],  s[{s.s_tmp()}], s[{s.s_gemm_k_num_k()}]")
+
         else:
             self._emit(f"s_lshl_b32 s[{s.s_gemm_k_num_k()}], s[{s.s_k_padded() if self.is_pad_k() else s.s_k()}], {igemm_log2(data_byte)}")
-            # if self.is_pad_k():
-            #     self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_k()}], {igemm_log2(data_byte)}")
-            #     self._emit(f"s_sub_u32  s[{s.s_wei_os_diff_acc_x_rst_k()}],  s[{s.s_tmp()}], s[{s.s_gemm_k_num_k()}]")
 
         if self.tunable.nxe != 0:
             '''
                 s_wei_os_diff_acc_x_rst_k  : dtile_x * s_wei_stride_x - k * s_wei_stride_k
                 s_wei_os_diff_acc_y_rst_kx : dtile_y * s_wei_stride_y - (dslice_x - 1) * dtile_x * s_wei_stride_x - k * s_wei_stride_k
             '''
-            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_k_padded() if self.is_pad_k() else s.s_k()}], s[{s.s_wei_stride_k()}]")
+            if self.tunable.gemm_k_global_split:
+                if self.is_pad_k():
+                    k_symbol = s.s_tmp
+                else:
+                    k_symbol = s.s_sub_k
+            else:
+                if self.is_pad_k():
+                    k_symbol = s.s_k_padded
+                else:
+                    k_symbol = s.s_k
+
+            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{k_symbol()}], s[{s.s_wei_stride_k()}]")
             if s.s_wei_stride_k.label not in self.dict_shifted_stride:
                 self._emit(f"s_lshl_b32 s[{s.s_tmp(0)}], s[{s.s_tmp(0)}], {igemm_log2(data_byte)}")     # k * s_wei_stride_k
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_c()}], {igemm_log2(data_byte)}")    # wei_stride_x

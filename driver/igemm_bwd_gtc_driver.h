@@ -38,6 +38,7 @@
 #include <numeric>
 
 // #define IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL 1
+#define MAX_GEMM_K_SPLITS_BWD 8
 
 typedef struct {
     void *p_in;
@@ -704,7 +705,6 @@ public:
             need_set_zero = true;
 
         size_t block_size = get_block_size(tunable);
-        size_t grid_size = get_grid_size(arg, tunable);
 
 #ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         igemm_upsampling_clear_karg_t ukarg;
@@ -752,109 +752,124 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 #endif
+
+        auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
+            std::function<float()>{[&]() -> float{
+                hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                return .0;
+            }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
+
         result_t result;
         result.kernel_name = kernel_name;
 
-        if(tunable->multihead){
-            std::vector<igemm_launch_kernel_t> kernels;
+        if(this->driver_mode == driver_mode_normal){
+            float min_duration = FLT_MAX;
+            float duration = .0;
+            int selected_gks = 0;
+            int max_split_num = tunable->gemm_k_global_split == 0 ?
+                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
+            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
+            for(int gks = start_gks; gks <= max_split_num; gks++){
+                size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
 
-            if(tunable->tensor_layout == "nhwc"){
-                int gemm_m = n * h_tilda_slice * w_tilda_slice;
-                int gemm_n = c / group;
+                if(tunable->multihead){
+                    std::vector<igemm_launch_kernel_t> kernels;
 
-                igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]);
-                magic_div_u32_t mdiv_x_tilda = magic_div_u32_gen(x_tilda);
-                magic_div_u32_t mdiv_y_tilda = magic_div_u32_gen(y_tilda);
-                magic_div_u32_t mdiv_group_mn = magic_div_u32_gen(group * utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block));
-                karg->dtile_iy = num_of_gemm > 1 ? mdiv_x_tilda.magic : 0;
-                karg->dtile_ix = num_of_gemm > 1 ? mdiv_x_tilda.shift : 0;
-                karg->dslice_y = num_of_gemm > 1 ? mdiv_y_tilda.magic : y;
-                karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
-                karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
-                karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
+                    if(tunable->tensor_layout == "nhwc"){
+                        int gemm_m = n * h_tilda_slice * w_tilda_slice;
+                        int gemm_n = c / group;
 
-                kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                        igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]);
+                        magic_div_u32_t mdiv_x_tilda = magic_div_u32_gen(x_tilda);
+                        magic_div_u32_t mdiv_y_tilda = magic_div_u32_gen(y_tilda);
+                        magic_div_u32_t mdiv_group_mn = magic_div_u32_gen(group * utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block));
+                        karg->dtile_iy = num_of_gemm > 1 ? mdiv_x_tilda.magic : 0;
+                        karg->dtile_ix = num_of_gemm > 1 ? mdiv_x_tilda.shift : 0;
+                        karg->dslice_y = num_of_gemm > 1 ? mdiv_y_tilda.magic : y;
+                        karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
+                        karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
+                        karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
+                        karg->ks       = gks;
 
-            }
-
-            // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]));
-
-            auto bwd_prolog = need_set_zero ? 
-                std::function<float()>{[&]() -> float{
-                    hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
-                    return .0;
-                }} : 
-                std::function<float()>{[&]() -> float{
-                    return .0;
-                }};
-            float ms = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
-
-            result.return_code = 0;
-            result.duration_ms = ms;
-
-
-        }else{
-            std::vector<igemm_launch_kernel_t> kernels;
-            uint8_t * kargs = num_of_gemm != 0 ? (uint8_t*)malloc(num_of_gemm * karg_size) : NULL;
-            int valid_kernel_index = 0;
-            for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
-                int i_y_tilda = gemm_id / x_tilda;
-                int i_x_tilda = gemm_id % x_tilda;
-                int y_dot_slice = utility_integer_divide_ceil(y - i_y_tilda,  y_tilda);
-                int x_dot_slice = utility_integer_divide_ceil(x - i_x_tilda,  x_tilda);
-
-                int gemm_k = (k / group) * y_dot_slice * x_dot_slice;
-                bool is_gemm_not_empty = gemm_k > 0 && y_dot_slice > 0 && x_dot_slice > 0;
-                if(is_gemm_not_empty){
-                    if(tunable->tensor_layout == "nchw"){
-                        igemm_bwd_gtc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_karg_t*>(&kargs[valid_kernel_index * karg_size]);
-                        memcpy(karg, karg_buffer, karg_size);
-                        karg->dtile_iy = i_y_tilda;
-                        karg->dtile_ix = i_x_tilda;
-                        karg->dslice_y = y_dot_slice;
-                        karg->dslice_x = x_dot_slice;
-#if USE_MAGIC_DIV
-                        mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
-                        mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
-                        karg->magic_0        = mdiv_0.magic;
-                        karg->magic_1        = mdiv_1.magic;
-
-                        karg->shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-                        karg->shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
-#endif
-                    }else if(tunable->tensor_layout == "nhwc"){
-                        igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[valid_kernel_index * karg_size]);
-                        memcpy(karg, karg_buffer, karg_size);
-                        karg->dtile_iy = i_y_tilda;
-                        karg->dtile_ix = i_x_tilda;
-                        karg->dslice_y = y_dot_slice;
-                        karg->dslice_x = x_dot_slice;
+                        kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                    }else{
+                        assert(0);
                     }
 
-                    kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                    // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]));
+                    duration = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
 
-                    valid_kernel_index++;
+                    if(min_duration > duration){
+                        min_duration = duration;
+                        selected_gks = gks;
+                    }
+                }else{
+                    std::vector<igemm_launch_kernel_t> kernels;
+                    uint8_t * kargs = num_of_gemm != 0 ? (uint8_t*)malloc(num_of_gemm * karg_size) : NULL;
+                    int valid_kernel_index = 0;
+                    for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
+                        int i_y_tilda = gemm_id / x_tilda;
+                        int i_x_tilda = gemm_id % x_tilda;
+                        int y_dot_slice = utility_integer_divide_ceil(y - i_y_tilda,  y_tilda);
+                        int x_dot_slice = utility_integer_divide_ceil(x - i_x_tilda,  x_tilda);
+
+                        int gemm_k = (k / group) * y_dot_slice * x_dot_slice;
+                        bool is_gemm_not_empty = gemm_k > 0 && y_dot_slice > 0 && x_dot_slice > 0;
+                        if(is_gemm_not_empty){
+                            if(tunable->tensor_layout == "nchw"){
+                                igemm_bwd_gtc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_karg_t*>(&kargs[valid_kernel_index * karg_size]);
+                                memcpy(karg, karg_buffer, karg_size);
+                                karg->dtile_iy = i_y_tilda;
+                                karg->dtile_ix = i_x_tilda;
+                                karg->dslice_y = y_dot_slice;
+                                karg->dslice_x = x_dot_slice;
+    #if USE_MAGIC_DIV
+                                mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
+                                mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
+                                karg->magic_0        = mdiv_0.magic;
+                                karg->magic_1        = mdiv_1.magic;
+
+                                karg->shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+                                karg->shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
+    #endif
+                            }else if(tunable->tensor_layout == "nhwc"){
+                                igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[valid_kernel_index * karg_size]);
+                                memcpy(karg, karg_buffer, karg_size);
+                                karg->dtile_iy = i_y_tilda;
+                                karg->dtile_ix = i_x_tilda;
+                                karg->dslice_y = y_dot_slice;
+                                karg->dslice_x = x_dot_slice;
+                                karg->ks       = gks;
+                            }
+
+                            kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+
+                            valid_kernel_index++;
+                        }
+                    }
+
+                    // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[0]));
+
+                    assert(kernels.size() == valid_kernel_index);
+                    
+                    duration = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
+
+                    if(min_duration > duration){
+                        min_duration = duration;
+                        selected_gks = gks;
+                    }
+                    if(kargs)
+                        free(kargs);
                 }
             }
-
-            // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[0]));
-
-            assert(kernels.size() == valid_kernel_index);
-            auto bwd_prolog = need_set_zero ? 
-                std::function<float()>{[&]() -> float{
-                    hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
-                    return .0;
-                }} : 
-                std::function<float()>{[&]() -> float{
-                    return .0;
-                }};
-            float ms = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
-
             result.return_code = 0;
-            result.duration_ms = ms;
-
-            if(kargs)
-                free(kargs);
+            result.duration_ms = min_duration;
+            result.gks         = selected_gks;
+        }else if(this->driver_mode == driver_mode_heuristic){
+            assert(0);
         }
 
         usleep(1000 * 5);
