@@ -612,8 +612,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.k_gload_in_k_stride    = sym_t('k_gload_in_k_stride', \
                         data_byte * utility_gcd(ta_k, 4 * (4 // data_byte)) * (ca_k if outer.tunable.tensor_a_pass_through else 1))
             self.k_gload_wei_c_stride   = sym_t('k_gload_wei_c_stride', \
-                        data_byte * nb_c1 if tb_c0 != 1 else \
-                        data_byte * utility_gcd(tb_c1, 4 * (4 // data_byte)))
+                        data_byte * nb_c1 if tb_c0 != 1 else (          \
+                        data_byte * utility_gcd(tb_c1, 4 * (4 // data_byte)) if tb_c1 != 1 else \
+                        0 ))        # last condition should never be used
 
         def get_count(self):
             return self.k_end.value
@@ -1072,11 +1073,14 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 if tb_c0 * tb_c1 != 1:
                     ctrl_wei_gld.flag_on_d0 = 0
                     ctrl_wei_gld.flag_on_d1 = 1
+                    ctrl_wei_gld.length_d0 = 1
+                    ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
                 else:
-                    ctrl_wei_gld.flag_on_d0 = 1
-                    ctrl_wei_gld.flag_on_d1 = 0
-                ctrl_wei_gld.length_d0 = 1
-                ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                    ctrl_wei_gld.flag_on_d0 = 0
+                    ctrl_wei_gld.flag_on_d1 = 1         # we do not reorder d0, d1, and must set merge flag.
+                    ctrl_wei_gld.flag_merge_v = 1
+                    ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
+                    ctrl_wei_gld.length_d1 = 1
             else:
                 ctrl_wei_gld.length_d0 = 1
                 ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
