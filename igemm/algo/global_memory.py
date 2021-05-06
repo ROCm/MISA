@@ -378,7 +378,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                         if ctrl.use_flag and self.v_flag != None:
                             self._emit(f"s_mov_b64 exec, -1")
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, i_d1 * vgpr_per_vector * (4 if ctrl.precision == 'fp32' else 2)))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, i_d1 * vgpr_per_vector * 4))
                     i_dst = i_dst + 1
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
