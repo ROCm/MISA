@@ -261,13 +261,13 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_add_u32 v[{self.v_wei_ik_itr()}], {unroll_k}, v[{self.v_wei_ik_itr()}]")
                 self._emit(f"v_add_u32 v[{self.v_out_ik_itr()}], {unroll_k}, v[{self.v_out_ik_itr()}]")
                 self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_wei_ik_itr()}]")
-                self._emit(f"v_cndmask_b32 v[{self.v_tmp()}], 0, 1, vcc")
+                self._emit(f"v_cndmask_b32 v[{self.v_tmp(4)}], 0, 1, vcc")
                 for i in range(tb_nc_per_thread):
-                    self._emit(f"v_and_b32 v[{self.v_wei_flag(i)}], v[{self.v_tmp()}], v[{self.v_wei_flag(i)}]")
+                    self._emit(f"v_and_b32 v[{self.v_wei_flag(i)}], v[{self.v_tmp(4)}], v[{self.v_wei_flag(i)}]")
                 self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_out_ik_itr()}]")
-                self._emit(f"v_cndmask_b32 v[{self.v_tmp()}], 0, 1, vcc")
+                self._emit(f"v_cndmask_b32 v[{self.v_tmp(4)}], 0, 1, vcc")
                 for i in range(ta_nb_per_thread):
-                    self._emit(f"v_and_b32 v[{self.v_out_flag(i)}], v[{self.v_tmp()}], v[{self.v_out_flag(i)}]")
+                    self._emit(f"v_and_b32 v[{self.v_out_flag(i)}], v[{self.v_tmp(4)}], v[{self.v_out_flag(i)}]")
             self._emit_empty_line()
 
     class macro_move_slice_window_block_wise_t(macro_base_t):
@@ -324,13 +324,13 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_add_u32 v[{self.v_wei_ik_itr()}], {unroll_k}, v[{self.v_wei_ik_itr()}]")
                 self._emit(f"v_add_u32 v[{self.v_out_ik_itr()}], {unroll_k}, v[{self.v_out_ik_itr()}]")
                 self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_wei_ik_itr()}]")
-                self._emit(f"v_cndmask_b32 v[{self.v_tmp()}], 0, 1, vcc")
+                self._emit(f"v_cndmask_b32 v[{self.v_tmp(4)}], 0, 1, vcc")
                 for i in range(tb_nc_per_thread):
-                    self._emit(f"v_and_b32 v[{self.v_wei_flag(i)}], v[{self.v_tmp()}], v[{self.v_wei_flag(i)}]")
+                    self._emit(f"v_and_b32 v[{self.v_wei_flag(i)}], v[{self.v_tmp(4)}], v[{self.v_wei_flag(i)}]")
                 self._emit(f"v_cmp_gt_u32 vcc, s[{self.s_k()}], v[{self.v_out_ik_itr()}]")
-                self._emit(f"v_cndmask_b32 v[{self.v_tmp()}], 0, 1, vcc")
+                self._emit(f"v_cndmask_b32 v[{self.v_tmp(4)}], 0, 1, vcc")
                 for i in range(ta_nb_per_thread):
-                    self._emit(f"v_and_b32 v[{self.v_out_flag(i)}], v[{self.v_tmp()}], v[{self.v_out_flag(i)}]")
+                    self._emit(f"v_and_b32 v[{self.v_out_flag(i)}], v[{self.v_tmp(4)}], v[{self.v_out_flag(i)}]")
             if self.tunable.tensor_a_pass_through:
                 self._emit(f"s_add_u32 s[{self.s_out_k_itr()}],  s[{self.s_move_slice_out_stride_k()}], s[{self.s_out_k_itr()}]")
                 self._emit(f"s_cmp_le_u32 s[{self.s_gemm_k_num_k()}], s[{self.s_out_k_itr()}]")
@@ -371,7 +371,6 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.declare_arg("v_wei_ik_itr")
                 self.declare_arg("v_wei_ik")
                 self.declare_arg("v_wei_flag")
-                self.declare_arg("v_wei_tmp_pack")
             self.declare_arg("s_flag_need_acc_yx")
             self.declare_arg("s_move_slice_k_ix")
             self.declare_arg("s_dslice_x")
@@ -457,6 +456,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             # now set flags
             for i in range(ta_nb_per_thread):
                 if IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG:
+                    assert False, "TODO: currently no support this, due to v_tmp allocation"
                     self._emit(f"v_bfe_u32 v[{self.v_tmp(1)}], v[{self.v_out_flag()}], {16 + i}, 1   ; extract flag_n")
                     self._emit(f"v_and_b32 v[{self.v_out_flag()}], {0xffffffff ^ (1<<i)}, v[{self.v_out_flag()}]")   # reset current flag
                     self._emit(m_set_flag_nhw(self.v_tmp(0), self.v_tmp(1), self.v_out_iho_list(i), self.v_out_iwo_list(i), self.s_ho(), self.s_wo()))
@@ -465,9 +465,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     self._emit(f"v_bfe_u32 v[{self.v_tmp(5)}], v[{self.v_out_flag_n()}], {i}, 1   ; extract flag_n")
                     self._emit(m_set_flag_nhw(self.v_out_flag(i), self.v_tmp(5), self.v_out_iho_list(i), self.v_out_iwo_list(i), self.s_ho(), self.s_wo()))
 
-            if is_pad_k:
-                for i in range(tb_nc_per_thread):
-                    self._emit(f"v_bfe_u32 v[{self.v_wei_flag(i)}], v[{self.v_wei_tmp_pack()}], {i}, 1")
+            # if is_pad_k:
+            #     for i in range(tb_nc_per_thread):
+            #         self._emit(f"v_bfe_u32 v[{self.v_wei_flag(i)}], v[{self.v_wei_tmp_pack()}], {i}, 1")
 
             self._emit_front(f"{label_acc_yx_end}:")
             self._emit_empty_line()
@@ -865,8 +865,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.v_co_sub_n_index       = sym_t("v_co_sub_n_index"  ,self.v_gemm_in.value)
 
             self.v_tmp                  = sym_t("v_tmp"             ,vseq(6, 2))
-            self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,vseq(1) if outer.is_pad_k() else \
-                                                        (self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1)))
+            self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1))
             if tb_nc_per_thread <= 4 and IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
                 self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value)
             else:
@@ -2158,7 +2157,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                             v.v_out_iwo_list(),
                             v.v_out_flag(),
                             *(v.v_out_flag_n(),) if not IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG else (),
-                            *(v.v_out_ik_itr(), v.v_out_ik(), v.v_wei_ik_itr(), v.v_wei_ik(), v.v_wei_flag(), v.v_wei_tmp_pack()) if self.is_pad_k() else (),
+                            *(v.v_out_ik_itr(), v.v_out_ik(), v.v_wei_ik_itr(), v.v_wei_ik(), v.v_wei_flag()) if self.is_pad_k() else (),
                             s.s_flag_need_acc_yx(),
                             s.s_move_slice_k_ix(),
                             s.s_dslice_x(),
