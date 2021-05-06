@@ -489,7 +489,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             m_wei_2d_global_load, m_out_2d_global_load = self.outer.get_macro_global_load()
             with self._deferred_context():
                 self._emit(f"; load output, nxe:{self.outer.tunable.nxe}")
-                #self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
+                self._emit(f".v_clear_nc {v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf()}, {self.outer.get_num_vgpr_global_load_a()}")
                 self._emit(m_out_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(),
                     s.s_p_out(), v.v_out_os(),
                     *(None, None, None, None) if tunable.tensor_a_pass_through else (s.s_out_offset(), None, None, None),
@@ -1029,7 +1029,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         this is also true for int8
         '''
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
-        if ta_k == 1 and tb_k == 1:
+        if ta_k == 1:
+            '''
+            only output need to check if k is one. for wei, since k is in higher dimension, so no such assumption
+            '''
             assert self.tunable.vector_store == 0
             return True
         return False
@@ -1827,8 +1830,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_cndmask_b32 v[{v.v_wei_flag(i)}], 0, 1, vcc")
                 if self.is_pad_k():
                     self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_wei_ik()}]")
-                    self._emit(f"v_cndmask_b32 v[{v.v_tmp(5)}], 0, 1, vcc")
-                    self._emit(f"v_and_b32 v[{v.v_wei_flag(i)}], v[{v.v_wei_flag(i)}], v[{v.v_tmp(5)}]")
+                    self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
+                    self._emit(f"v_and_b32 v[{v.v_wei_flag(i)}], v[{v.v_wei_flag(i)}], v[{v.v_tmp()}]")
                 self._emit(f"v_lshl_or_b32 v[{v.v_wei_tmp_pack()}], v[{v.v_wei_flag(i)}], {i}, v[{v.v_wei_tmp_pack()}]")
 
             self._emit_empty_line()

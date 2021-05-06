@@ -458,8 +458,8 @@ public:
                 return false;
             }
         } else if (tunable->tensor_layout == "nhwc"){
-            if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
-                ;   // if both 1, indicate padded c support
+            if(tunable->tensor_a_thread_lengths[1] == 1){
+                ;   // if output k 1, indicate padded k support
             }
             else{
                 if(((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
@@ -471,8 +471,8 @@ public:
 
             if(tunable->precision == "fp16"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
-                    ;   // if both 1, k is also write out one by one
+                if(tunable->tensor_a_thread_lengths[1] == 1){
+                    ;   // if output k 1, c is also write out one by one
                 }
                 else{
                     if(tunable->gemm_k_global_split){
@@ -488,8 +488,8 @@ public:
 
             if(tunable->precision == "int8"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
-                    ;   // if both 1, k is also write out one by one
+                if(tunable->tensor_a_thread_lengths[1] == 1){
+                    ;   // if both 1, c is also write out one by one
                 }
                 else{
                     if(tunable->gemm_k_global_split){
@@ -826,7 +826,7 @@ public:
                                 karg->dtile_ix = i_x_tilda;
                                 karg->dslice_y = y_dot_slice;
                                 karg->dslice_x = x_dot_slice;
-    #if USE_MAGIC_DIV
+#if USE_MAGIC_DIV
                                 mdiv_0  = is_gemm_not_empty ? magic_div_u32_gen(y_dot_slice * x_dot_slice) : magic_div_u32_t({0, 0});
                                 mdiv_1  = is_gemm_not_empty ? magic_div_u32_gen(x_dot_slice) : magic_div_u32_t({0, 0});
                                 karg->magic_0        = mdiv_0.magic;
@@ -834,7 +834,7 @@ public:
 
                                 karg->shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
                                 karg->shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, 0);
-    #endif
+#endif
                             }else if(tunable->tensor_layout == "nhwc"){
                                 igemm_bwd_gtc_nhwc_karg_t * karg = reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[valid_kernel_index * karg_size]);
                                 memcpy(karg, karg_buffer, karg_size);
