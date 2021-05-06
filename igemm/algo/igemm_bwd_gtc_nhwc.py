@@ -371,6 +371,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.declare_arg("v_wei_ik_itr")
                 self.declare_arg("v_wei_ik")
                 self.declare_arg("v_wei_flag")
+                self.declare_arg("v_wei_tmp_pack")
             self.declare_arg("s_flag_need_acc_yx")
             self.declare_arg("s_move_slice_k_ix")
             self.declare_arg("s_dslice_x")
@@ -465,9 +466,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     self._emit(f"v_bfe_u32 v[{self.v_tmp(5)}], v[{self.v_out_flag_n()}], {i}, 1   ; extract flag_n")
                     self._emit(m_set_flag_nhw(self.v_out_flag(i), self.v_tmp(5), self.v_out_iho_list(i), self.v_out_iwo_list(i), self.s_ho(), self.s_wo()))
 
-            # if is_pad_k:
-            #     for i in range(tb_nc_per_thread):
-            #         self._emit(f"v_bfe_u32 v[{self.v_wei_flag(i)}], v[{self.v_wei_tmp_pack()}], {i}, 1")
+            if is_pad_k:
+                for i in range(tb_nc_per_thread):
+                    self._emit(f"v_bfe_u32 v[{self.v_wei_flag(i)}], v[{self.v_wei_tmp_pack()}], {i}, 1")
 
             self._emit_front(f"{label_acc_yx_end}:")
             self._emit_empty_line()
@@ -493,7 +494,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(m_out_2d_global_load(v.v_gld_a() if tunable.global_prefetch_a_num == 1 else v.v_gld_a_gpf(),
                     s.s_p_out(), v.v_out_os(),
                     *(None, None, None, None) if tunable.tensor_a_pass_through else (s.s_out_offset(), None, None, None),
-                    v.v_out_flag(), v.v_tmp(), None, k.k_gload_in_k_stride))
+                    v.v_out_flag(), v.v_tmp(), None, k.k_gload_out_k_stride))
 
             return self._get_deferred()
 
@@ -609,7 +610,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             na_nb0, na_nb1, na_e, na_k, nb_e, nb_k, nb_c0, nb_c1 = outer.get_dims_lengths()
             data_byte = amdgpu_precision_data_byte(outer.tunable.precision)
 
-            self.k_gload_in_k_stride    = sym_t('k_gload_in_k_stride', \
+            self.k_gload_out_k_stride   = sym_t('k_gload_out_k_stride', \
                         data_byte * utility_gcd(ta_k, 4 * (4 // data_byte)) * (ca_k if outer.tunable.tensor_a_pass_through else 1))
             self.k_gload_wei_c_stride   = sym_t('k_gload_wei_c_stride', \
                         data_byte * nb_c1 if tb_c0 != 1 else (          \
@@ -697,7 +698,6 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.s_k_padded             = sym_t("s_k_padded"                , sseq(1))
             self.s_knum                     = sym_t("s_knum"                    , 3)
             self.s_gemm_k_num_k             = sym_t("s_gemm_k_num_k"            , sseq(1))
-            # if outer.is_pad_k() or outer.tunable.gemm_k_global_split:
             
             self.s_dim_br                   = sym_t("s_dim_br"                  , sseq(1))
             self.s_dim_mp                   = sym_t("s_dim_mp"                  , sseq(1))
@@ -866,7 +866,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.v_co_sub_n_index       = sym_t("v_co_sub_n_index"  ,self.v_gemm_in.value)
 
             self.v_tmp                  = sym_t("v_tmp"             ,vseq(6, 2))
-            self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1))
+            self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,vseq(1) if outer.is_pad_k() else \
+                                                                    (self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1)))
             if tb_nc_per_thread <= 4 and IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
                 self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value)
             else:
@@ -1819,6 +1820,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if self.tunable.nxe != 0:
                 self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_tmp()}], s[{s.s_tmp(1)}]")
             self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, 1, vcc")
+            if self.is_pad_k():
+                self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_wei_ik()}]")
+                self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
+                self._emit(f"v_and_b32 v[{v.v_wei_flag()}], v[{v.v_wei_flag()}], v[{v.v_tmp()}]")
             self._emit(f"v_mov_b32 v[{v.v_wei_tmp_pack()}], v[{v.v_wei_flag()}]")
 
             if self.tunable.nxe != 0:
@@ -2161,7 +2166,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                             v.v_out_iwo_list(),
                             v.v_out_flag(),
                             *(v.v_out_flag_n(),) if not IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG else (),
-                            *(v.v_out_ik_itr(), v.v_out_ik(), v.v_wei_ik_itr(), v.v_wei_ik(), v.v_wei_flag()) if self.is_pad_k() else (),
+                            *(v.v_out_ik_itr(), v.v_out_ik(), v.v_wei_ik_itr(), v.v_wei_ik(), v.v_wei_flag(), v.v_wei_tmp_pack()) if self.is_pad_k() else (),
                             s.s_flag_need_acc_yx(),
                             s.s_move_slice_k_ix(),
                             s.s_dslice_x(),
