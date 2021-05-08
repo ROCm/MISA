@@ -293,9 +293,10 @@ public:
         // support pad to modulo, hence only check when nxe is 0
         if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
             return false;
-
-        // if(gemm_k % gemm_k_per_block != 0)
-            // return false;
+        if(tunable->tensor_a_thread_lengths[1] > 1){
+            if(gemm_k % gemm_k_per_block != 0)
+                return false;
+        }
 
         if(gemm_n_per_block % tunable->nxb != 0){
             //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
