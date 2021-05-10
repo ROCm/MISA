@@ -177,6 +177,7 @@ typedef struct {
     int source_access_order;
     int vector_store;
     int gemm_k_global_split;
+    int merge_e;
 } igemm_gtc_tunable_t;
 
 static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const config_section_t &sec){
@@ -246,6 +247,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.source_access_order      = sec.count("source_access_order") > 0 ? sec.at("source_access_order").get_int() : default_source_access_order;
             tunable.vector_store             = sec.count("vector_store") > 0 ? sec.at("vector_store").get_int() : 0;
             tunable.gemm_k_global_split      = sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
+            tunable.merge_e                  = sec.count("merge_e") > 0 ? sec.at("merge_e").get_int() : 0;
             tunables.push_back(tunable);
         }
     }
@@ -282,6 +284,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     auto multihead                = tunable->multihead;
     auto vector_store             = tunable->vector_store;
     auto gemm_k_global_split      = tunable->gemm_k_global_split;
+    auto merge_e                  = tunable->merge_e;
 
     std::string kernel_name = std::string("igemm_") + direction + "_";
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
@@ -354,6 +357,8 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         kernel_name += std::string("_kc");
     if(multihead)
         kernel_name += std::string("_mh");
+    if(merge_e)
+        kernel_name += std::string("_me");
     // when split in gemmk, we need call atomic add function
     if(vector_store)
         kernel_name += std::string("_vs") + std::to_string(vector_store);

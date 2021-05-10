@@ -197,6 +197,7 @@ class igemm_gtc_tunable_parameter_t(object):
         self.gemm_k_unmerge_cluster             = utility_dict_with_default_t(tunable_dict)('gemm_k_unmerge_cluster', 0)     # maybe no need support for 1
         self.vector_store                       = utility_dict_with_default_t(tunable_dict)('vector_store', 0)
         self.gemm_k_global_split                = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
+        self.merge_e                            = utility_dict_with_default_t(tunable_dict)('merge_e', 0)   # indicate if merge c*y*x for gemm_k (fwd), useful in nhwc fwd
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
@@ -393,6 +394,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['nxe']                             = self.nxe
         tunable_dict['source_access_order']             = self.source_access_order
         tunable_dict['gemm_k_global_split']             = self.gemm_k_global_split
+        tunable_dict['merge_e']                         = self.merge_e
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
@@ -465,6 +467,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.gemm_k_global_split:
             sstr += \
                 line_start + 'gemm_k_global_split        {} {}'.format(equal, self.gemm_k_global_split) + new_line
+        if self.merge_e:
+            sstr += \
+                line_start + 'merge_e                    {} {}'.format(equal, self.merge_e) + new_line
         if self.vector_store:
             sstr += \
                 line_start + 'vector_store               {} {}'.format(equal, self.vector_store) + new_line
@@ -533,6 +538,9 @@ def igemm_gtc_encode_kernel_name(tunable):
 
     if tunable.multihead:
         kernel_name += "_mh"
+
+    if tunable.merge_e:
+        kernel_name += "_me"
 
     if tunable.vector_store:
         kernel_name += f"_vs{tunable.vector_store}"
