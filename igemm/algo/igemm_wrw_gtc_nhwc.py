@@ -761,13 +761,13 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.stride_d0 = 1
             in_sst_ctrl.stride_d1 = vector_dp_a * data_byte * k_pack
 
-        print(f"out: length_d0={out_sst_ctrl.length_d0}, length_d1={out_sst_ctrl.length_d1}")
-        print(f"out: length_dp={out_sst_ctrl.length_dp}, vector_dp={out_sst_ctrl.vector_dp}")
-        print(f"out: stride_d0={out_sst_ctrl.stride_d0}, stride_d1={out_sst_ctrl.stride_d1}")
+        # print(f"out: length_d0={out_sst_ctrl.length_d0}, length_d1={out_sst_ctrl.length_d1}")
+        # print(f"out: length_dp={out_sst_ctrl.length_dp}, vector_dp={out_sst_ctrl.vector_dp}")
+        # print(f"out: stride_d0={out_sst_ctrl.stride_d0}, stride_d1={out_sst_ctrl.stride_d1}")
 
-        print(f"in: length_d0={in_sst_ctrl.length_d0}, length_d1={in_sst_ctrl.length_d1}")
-        print(f"in: length_dp={in_sst_ctrl.length_dp}, vector_dp={in_sst_ctrl.vector_dp}")
-        print(f"in: stride_d0={in_sst_ctrl.stride_d0}, stride_d1={in_sst_ctrl.stride_d1}")
+        # print(f"in: length_d0={in_sst_ctrl.length_d0}, length_d1={in_sst_ctrl.length_d1}")
+        # print(f"in: length_dp={in_sst_ctrl.length_dp}, vector_dp={in_sst_ctrl.vector_dp}")
+        # print(f"in: stride_d0={in_sst_ctrl.stride_d0}, stride_d1={in_sst_ctrl.stride_d1}")
 
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_3d_shared_store_t(self.mc, out_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
@@ -949,6 +949,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         m_int_div_rem_vs = macro_int_div_rem_vs_t(self.mc)
         m_int_div_rem_ss = macro_int_div_rem_ss_t(self.mc)
         s_dummy = sym_t("s_dummy")
+
+        k_pack_src_mat = self.get_gemmk_pack()
 
         self._emit(f"s_load_dwordx2  s[{s.s_p_in((0,1))}],       s[{s.s_ka((0, 1))}],    0+{k.k_p_in()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_wei((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_wei()}")
@@ -1188,22 +1190,34 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(self.xdlops_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
 
         self._emit(f"; LDS store, in: 1,nb,1,ec: {1}x{tb_nb}x{1}x{tb_c}, {1}x{cb_nb}x{1}x{cb_ec}")
-        self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(nb_ec)}, v[{v.v_gtc_iec()}]")
+        if k_pack_src_mat != 1:
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_iec()}]")
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_inb_a()}]")
+            self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_ec*k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+            self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_gtc_inb_a()}]")
+            self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+        else:
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(nb_ec)}, v[{v.v_gtc_iec()}]")
 
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
         self._emit_empty_line()
 
         self._emit(f"; LDS store, out: 1,nb,1,k: {1}x{ta_nb}x{1}x{ta_k}, {1}x{ca_nb}x{1}x{ca_k}")
-        self._emit(f"v_mov_b32 v[{v.v_tmp()}], v[{v.v_gtc_ik()}]")
-        if ca_nb != 1:
-            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(na_k)}, v[{v.v_tmp()}]")
+        if k_pack_src_mat != 1:
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_ik()}]")
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_inb_a()}]")
+            self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_k*k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+            self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_gtc_inb_a()}]")
+            self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+        else:
+            self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(na_k)}, v[{v.v_gtc_ik()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
 
         self._emit(f"; LDS load")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}]")
-        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte*k_pack_src_mat)}, v[{v.v_gemm_in()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte*k_pack_src_mat)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
 

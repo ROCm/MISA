@@ -378,7 +378,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            //printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -1033,7 +1033,7 @@ int main(int argc, char **argv) {
                 HIP_CALL(hipMemcpy(device_input_to_host, device_input,
                                    static_cast<size_t>(n) * c * hi * wi * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_input, device_input_to_host,
+                bool is_valid = valid_vector<float>(host_input, device_input_to_host,
                                             static_cast<size_t>(n) * c * hi * wi, nrms);
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -1047,7 +1047,7 @@ int main(int argc, char **argv) {
     }
 
     if (need_wrw){
-        float *device_weight_to_host = NULL;
+        void *device_weight_to_host = NULL;
         if (need_verify) {
             // gen rand
             if(!igemm_rand_int){
@@ -1057,8 +1057,14 @@ int main(int argc, char **argv) {
                 gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
                 gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -5, 5);
             }
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, -2, 2);
+            gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -2, 2);
+            if(driver_data_type == driverHalf){
+                tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
+            }
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
@@ -1092,14 +1098,25 @@ int main(int argc, char **argv) {
             else
                 assert(0);
 #endif
-            device_weight_to_host = (float *)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
-            // printf("len:%d\n", k * c * y * x * sizeof(float));
+            if(driver_data_type == driverHalf){
+                device_weight_to_host = malloc((static_cast<size_t>(k) * c * y * x * data_byte + 3) / 4 * 4);
+            }
+            else{
+                device_weight_to_host = malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
+            }
         }
 
-        HIP_CALL(hipMemcpy(device_input, host_input,
+        if(driver_data_type == driverFloat){
+            HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
-        HIP_CALL(hipMemcpy(device_output, host_output,
+            HIP_CALL(hipMemcpy(device_output, host_output,
                        static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+        }else{
+            HIP_CALL(hipMemcpy(device_input_dtype, host_input_dtype,
+                        static_cast<size_t>(n) * c * hi * wi * data_byte, hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_output_dtype, host_output_dtype,
+                        static_cast<size_t>(n) * k * ho * wo * data_byte, hipMemcpyHostToDevice));
+        }
 
 #if 0
         printf("input\r\n");
@@ -1136,17 +1153,30 @@ int main(int argc, char **argv) {
         auto wrw_post = [&](){
             if (need_verify) {
                 double nrms = get_nrms("wrw", driver_data_type);
-                HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
+                bool is_valid;
+                if(driver_data_type == driverFloat){
+                    HIP_CALL(hipMemcpy(device_weight_to_host, device_weight,
                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * sizeof(float),
                                    hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector(host_weight, device_weight_to_host,
-                                            static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
+                    is_valid = valid_vector<float>(host_weight, static_cast<float*>(device_weight_to_host),
+                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
+                }else{
+                    HIP_CALL(hipMemcpy(device_weight_to_host, device_weight_dtype,
+                                   static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x * data_byte,
+                                   hipMemcpyDeviceToHost));
+                    if(driver_data_type == driverHalf)
+                        is_valid = valid_vector<float16>(host_weight, static_cast<float16*>(device_weight_to_host),
+                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
+                }
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
             }
         };
 
-        launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw",  driver_data_type, p_bcsv, device_input, device_weight, device_output, wrw_pre, wrw_post);
+        if(driver_data_type == driverFloat)
+            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input, device_weight, device_output, wrw_pre, wrw_post);
+        else
+            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, wrw_pre, wrw_post);
 
         if (need_verify) 
             free(device_weight_to_host);

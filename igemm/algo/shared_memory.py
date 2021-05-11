@@ -943,7 +943,7 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                         if num_dv > 1:
                             for i_v in range(num_dv):
                                 lo_hi = i_v % 2
-                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d * num_dp)*vgpr_per_vector}', (i_d + i_v) * stride_d, lo_hi))
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d // num_dv)*vgpr_per_vector}', (i_d + i_v) * stride_d, lo_hi))
                                 issue_cnt += ds_write.get_issues()
         else:
             assert False, "un implemented yet"
