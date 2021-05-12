@@ -372,6 +372,11 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int forw = arg->get_int("forw");
+
+        int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
+        if(need_bwd == 0)
+            return false;
 
         assert(c % group == 0 && k % group == 0);
 

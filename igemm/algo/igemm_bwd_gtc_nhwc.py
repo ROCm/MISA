@@ -145,7 +145,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             def get_vector_write_out():
                 vector_write = 1
-                config_vs = self.tunable.vector_store
+                config_vs = self.tunable.vector_store       # this is useful in int8. but since bwd we may not have int8....
                 if self.tunable.precision == 'fp32':
                     assert config_vs == 0
                     vector_write = 1                        # fp32 vector seems not much perf improvement
@@ -159,6 +159,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                             vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
                 elif self.tunable.precision == 'int8':
+                    assert False, "currently bwd not need int8"
                     if self.is_pad_k():
                         vector_write = 1
                     else:
@@ -550,7 +551,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
-                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os()))
+                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -808,6 +809,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if not outer.tunable.tensor_b_pass_through:
                 self.v_sst_b_os         = sym_t("v_sst_b_os"        ,vseq(1))
                 self.v_sld_b_os         = sym_t("v_sld_b_os"        ,vseq(1))
+            if data_byte == 2:
+                self.v_pack_k_tmp       = sym_t("v_pack_k_tmp"      ,vseq(tb_k // 2))
 
             self.v_out_os               = sym_t("v_out_os"           ,vseq(ta_nb_per_thread))
             self.v_out_iho_list         = sym_t("v_out_iho_list"     ,vseq(ta_nb_per_thread))
@@ -1040,7 +1043,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
     def get_macro_global_load(self):
         '''
-        NOTICE: output/wei always load gemm_k (e*k) first. indeed always load k, and do vector load if possible
+        NOTICE: output always load gemm_k (e*k) first. indeed always load k, and do vector load if possible
+                wei is continus in gemm_n (c), so little different
         '''
         inline = True if self.tunable.fma_interleave else False
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
@@ -1160,6 +1164,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.issue_cnt = 0
                 self.declare_arg("v_src")
                 self.declare_arg("v_sst_os")
+                if data_byte == 2:
+                    self.declare_arg("v_pack_k_tmp")    # need tb_k // 2
+
             def name(self):
                 return ''
 
@@ -1168,7 +1175,32 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 num_tb_k, num_tb_c = tb_k, tb_c0 * tb_c1
                 stride_dc = k_pack_src_mat * data_byte
                 stride_dk = nb_c0 * nb_c1 * k_pack_src_mat * data_byte
+                if data_byte == 2:
+                    assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
+                    # fp16 order is different from fp32. we do emit here
+                    dwords_per_c = num_tb_c // 2
+                    if tb_c1 == 1:
+                        pass
+                    else:
+                        if tb_k % 2 != 0:
+                            pass
+                        else:
+                            packed_k_dword = tb_k // 2
+                            assert packed_k_dword <= 4, "currently other size not used yet"
+                            ds_write = inst_ds_write_t(packed_k_dword * 4)
+                            for i_c in range(num_tb_c):
+                                for i_pk in range(packed_k_dword):
+                                    idx_0 = 2 * i_pk * dwords_per_c + i_c // 2
+                                    idx_1 = 2 * i_pk * dwords_per_c + i_c // 2 + dwords_per_c
+                                    op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
+                                    # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                                self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_c * stride_dc))
+                                self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_c * stride_dc)
+
+                    return
                 if tb_c1 == 1:
+                    assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
                     ds_write = inst_ds_write_t(data_byte * num_tb_k)
                     for i_c in range(num_tb_c):
                         self._emit(ds_write(self.v_sst_os(), self.v_src(i_c * num_tb_k), i_c * stride_dc * nb_c1))
