@@ -809,8 +809,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if not outer.tunable.tensor_b_pass_through:
                 self.v_sst_b_os         = sym_t("v_sst_b_os"        ,vseq(1))
                 self.v_sld_b_os         = sym_t("v_sld_b_os"        ,vseq(1))
-            if data_byte == 2:
-                self.v_pack_k_tmp       = sym_t("v_pack_k_tmp"      ,vseq(tb_k // 2))
+            # if data_byte == 2:
+            #     self.v_pack_k_tmp       = sym_t("v_pack_k_tmp"      ,vseq(tb_k // 2))
 
             self.v_out_os               = sym_t("v_out_os"           ,vseq(ta_nb_per_thread))
             self.v_out_iho_list         = sym_t("v_out_iho_list"     ,vseq(ta_nb_per_thread))
@@ -871,10 +871,33 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.v_tmp                  = sym_t("v_tmp"             ,vseq(6, 2))
             self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,vseq(1) if outer.is_pad_k() else \
                                                                     (self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1)))
-            if tb_nc_per_thread <= 4 and IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
-                self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value)
+            if IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
+                if data_byte == 2:
+                    tb_num_pack_k_tmp = tb_k // 2
+                    def possible_assign_tmp(num_a, num_b, balance = 4):
+                        if num_a <= num_b:
+                            if num_b <= 4:
+                                return vseq(num_a), self.v_tmp.value    # a <= b <= 4
+                            elif num_a <= 4:
+                                return self.v_tmp.value, vseq(num_b)    # a <= 4 <= b
+                            else:
+                                return vseq(num_a), vseq(num_b)         # 4 <= a <= b
+                        else:
+                            if num_a <= 4:
+                                return self.v_tmp.value, vseq(num_b)
+                            elif num_b <= 4:
+                                return vseq(num_a), self.v_tmp.value
+                            else:
+                                return vseq(num_a), vseq(num_b)
+                    num_v_wei_flag, num_v_pack_k_tmp = possible_assign_tmp(tb_nc_per_thread, tb_num_pack_k_tmp)
+                    self.v_wei_flag             = sym_t("v_wei_flag"        ,num_v_wei_flag)
+                    self.v_pack_k_tmp           = sym_t("v_pack_k_tmp"      ,num_v_pack_k_tmp)
+
+                else:
+                    self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value if tb_nc_per_thread <= 4 else vseq(tb_nc_per_thread))
+
             else:
-                self.v_wei_flag         = sym_t("v_wei_flag"        ,vseq(tb_nc_per_thread))
+                assert False, "not supported now"
 
             if outer.tunable.nxe != 0:
                 self.v_in_hi_sshift     = sym_t("v_in_hi_sshift"    ,self.v_tmp.value + 4)
@@ -1900,7 +1923,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     # TODO: need multiple load of pass through side
                     self._emit(machine_basic_block_call(self, i_mbb))
             else:
-                self._emit(self.global_load_wei())
+                pass_gload_wei = pass_global_mem_merge_dup_flag_t(self.mc)
+                self._emit(pass_gload_wei.lower(create_machine_basic_block(self.global_load_wei())))
             self._emit_empty_line()
 
         # do load
