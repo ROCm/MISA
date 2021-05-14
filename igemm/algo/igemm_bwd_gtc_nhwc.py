@@ -940,7 +940,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
     
     def get_num_vgpr_global_load_b(self):
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
+        if self.tunable.precision == 'fp32':
+            pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
+        elif self.tunable.precision == 'fp16':
+            pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c1 != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
     # def get_num_global_load_b_per_mbb(self):
@@ -1201,25 +1204,23 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 if data_byte == 2:
                     assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
                     # fp16 order is different from fp32. we do emit here
-                    dwords_per_c = num_tb_c // 2
-                    if tb_c1 == 1:
-                        pass
+                    dwords_per_c = num_tb_c // (2 if tb_c1 != 1 else 1)
+
+                    if tb_k % 2 != 0:
+                        assert False
                     else:
-                        if tb_k % 2 != 0:
-                            pass
-                        else:
-                            packed_k_dword = tb_k // 2
-                            assert packed_k_dword <= 4, "currently other size not used yet"
-                            ds_write = inst_ds_write_t(packed_k_dword * 4)
-                            for i_c in range(num_tb_c):
-                                for i_pk in range(packed_k_dword):
-                                    idx_0 = 2 * i_pk * dwords_per_c + i_c // 2
-                                    idx_1 = 2 * i_pk * dwords_per_c + i_c // 2 + dwords_per_c
-                                    op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
-                                    # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
-                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
-                                self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_c * stride_dc))
-                                self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_c * stride_dc)
+                        packed_k_dword = tb_k // 2
+                        assert packed_k_dword <= 4, "currently other size not used yet"
+                        ds_write = inst_ds_write_t(packed_k_dword * 4)
+                        for i_c in range(num_tb_c):
+                            for i_pk in range(packed_k_dword):
+                                idx_0 = 2 * i_pk * dwords_per_c + i_c // 2
+                                idx_1 = 2 * i_pk * dwords_per_c + i_c // 2 + dwords_per_c
+                                op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
+                                # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                            self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_c * stride_dc))
+                            self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_c * stride_dc)
 
                     return
                 if tb_c1 == 1:

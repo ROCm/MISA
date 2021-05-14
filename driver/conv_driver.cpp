@@ -1034,7 +1034,7 @@ int main(int argc, char **argv) {
                 assert(0);
 #endif
             if(driver_data_type == driverHalf || driver_data_type == driverInt8){
-                device_input_to_host = malloc((static_cast<size_t>(n) * k * ho * wo * data_byte + 3) / 4 * 4 );
+                device_input_to_host = malloc((static_cast<size_t>(n) * c * hi * wi * data_byte + 3) / 4 * 4 );
             }
             else{
                 device_input_to_host = malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
