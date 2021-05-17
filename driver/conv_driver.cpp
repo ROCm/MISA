@@ -37,6 +37,8 @@
 #include <time.h>
 #include <vector>
 #include <float.h>
+#include <utility> 
+#include <algorithm>  
 #include <cmath>
 
 #ifndef USE_EXT_MODULE_LAUNCH
@@ -378,6 +380,333 @@ void dump_arg(const args_t *arg) {
            n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
            pad_h, pad_w, ho, wo);
 }
+/////////// DPG
+bool sortcol( const std::vector<int>& v1, 
+               const std::vector<int>& v2, int idx ) { 
+ return v1[idx] < v2[idx]; 
+} 
+void dump_kernel(const igemm_gtc_tunable_t *tunable) {
+    auto tensor_layout            = tunable->tensor_layout;
+    auto gemm_m_per_block         = tunable->gemm_m_per_block;
+    auto gemm_n_per_block         = tunable->gemm_n_per_block;
+    auto gemm_k_per_block         = tunable->gemm_k_per_block;
+    auto fma_type                 = tunable->fma_type;
+    // auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
+    // auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
+    // auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
+    // auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
+    // auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
+    // auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
+    auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
+    auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
+    auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
+    auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
+    auto direction                = tunable->direction;
+    auto precision                = tunable->precision;
+    auto nxb                      = tunable->nxb;
+    auto nxe                      = tunable->nxe;
+    auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
+    auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
+    auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
+    auto source_access_order      = tunable->source_access_order;
+    auto multihead                = tunable->multihead;
+    auto gemm_k_global_split      = tunable->gemm_k_global_split;
+     
+    // Grab optimum kernel parameters 
+    
+    
+    printf("gemm_m_per_block=%d, gemm_n_per_block=%d, gemm_k_per_block=%d \n", gemm_m_per_block, gemm_n_per_block, gemm_k_per_block);
+    
+    
+    for (int i = 0; i < tensor_a_thread_lengths.size(); i++)
+    {
+       printf(" %d ", tensor_a_thread_lengths[i]); 
+    }
+    for (int i = 0; i < tensor_a_cluster_lengths.size(); i++)
+    {
+       printf(" %d ", tensor_a_cluster_lengths[i]); 
+    }
+    for (int i = 0; i < tensor_b_thread_lengths.size(); i++)
+    {
+       printf(" %d ", tensor_b_thread_lengths[i]); 
+    }
+    for (int i = 0; i < tensor_b_cluster_lengths.size(); i++)
+    {
+       printf(" %d ", tensor_b_cluster_lengths[i]); 
+    }
+    
+    
+    printf("wave_tile_m = %d ", tunable->wave_tile_m);
+    printf("wave_tile_n = %d ", tunable->wave_tile_n);
+    printf("wave_tile_k = %d ", tunable->wave_tile_k);
+    printf("wave_step_m = %d ", tunable->wave_step_m);
+    printf("wave_step_n = %d ", tunable->wave_step_n);
+    printf("wave_repeat_m = %d ", tunable->wave_repeat_m);
+    printf("wave_repeat_n = %d ", tunable->wave_repeat_n);
+
+    printf("nxb = %d ", nxb);
+    printf("nxe = %d ", nxe);   
+}
+
+std::vector<int> dump_vector(std::string record, const args_t *arg, const igemm_gtc_tunable_t *tunable, float elapsed_time)
+{
+    int hi = arg->get_int("in_h");
+    int wi = arg->get_int("in_w");
+    int n = arg->get_int("batchsize");
+    int k = arg->get_int("out_channels");
+    int c = arg->get_int("in_channels");
+
+    int stride_h = arg->get_int("conv_stride_h");
+    int stride_w = arg->get_int("conv_stride_w");
+    int dilation_h = arg->get_int("dilation_h");
+    int dilation_w = arg->get_int("dilation_w");
+    int pad_h = arg->get_int("pad_h");
+    int pad_w = arg->get_int("pad_w");
+    int y = arg->get_int("fil_h");
+    int x = arg->get_int("fil_w");
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+    auto tensor_layout            = tunable->tensor_layout;
+    auto gemm_m_per_block         = tunable->gemm_m_per_block;
+    auto gemm_n_per_block         = tunable->gemm_n_per_block;
+    auto gemm_k_per_block         = tunable->gemm_k_per_block;
+    auto fma_type                 = tunable->fma_type;
+    // auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
+    // auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
+    // auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
+    // auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
+    // auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
+    // auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
+    auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
+    auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
+    auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
+    auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
+    auto direction                = tunable->direction;
+    auto precision                = tunable->precision;
+    auto nxb                      = tunable->nxb;
+    auto nxe                      = tunable->nxe;
+    auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
+    auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
+    auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
+    auto source_access_order      = tunable->source_access_order;
+    auto multihead                = tunable->multihead;
+    auto gemm_k_global_split      = tunable->gemm_k_global_split;
+    auto wave_tile_m = tunable->wave_tile_m;
+    auto wave_tile_n = tunable->wave_tile_n;
+    auto wave_tile_k = tunable->wave_tile_k;
+    auto wave_step_m = tunable->wave_step_m;
+    auto wave_step_n = tunable->wave_step_n;
+    auto wave_repeat_m = tunable->wave_repeat_m;
+    auto wave_repeat_n = tunable->wave_repeat_n;
+
+    std::vector<int> optimum_kernel_parameters(28);
+    FILE *ofp = NULL;
+     
+    ofp=fopen(record.c_str(), "a");
+   
+
+    fprintf(ofp,"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d",
+           n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
+           pad_h, pad_w, ho, wo);
+
+    fprintf(ofp,";%d:%d:%d:%d:%d:%d:%d:%d:%d:%d",
+           gemm_m_per_block,gemm_n_per_block,gemm_k_per_block,wave_tile_m,wave_tile_n,wave_tile_k,
+           wave_step_m,wave_step_n,wave_repeat_m,wave_repeat_n);
+
+    optimum_kernel_parameters[0] = tunable->gemm_m_per_block;
+    optimum_kernel_parameters[1] = tunable->gemm_n_per_block;
+    optimum_kernel_parameters[2] = tunable->gemm_k_per_block;
+    optimum_kernel_parameters[3] = tunable->wave_tile_m;
+    optimum_kernel_parameters[4] = tunable->wave_tile_n;
+    optimum_kernel_parameters[5] = tunable->wave_tile_k;
+    optimum_kernel_parameters[6] = tunable->wave_step_m;
+    optimum_kernel_parameters[7] = tunable->wave_step_n;
+    optimum_kernel_parameters[8] = tunable->wave_repeat_m;
+    optimum_kernel_parameters[9] = tunable->wave_repeat_n;
+
+    for (int i = 0; i < tensor_a_thread_lengths.size(); i++)
+    {
+       fprintf(ofp,",%d", tensor_a_thread_lengths[i]); 
+       optimum_kernel_parameters[10+i] = tensor_a_thread_lengths[i];
+    }
+    for (int i = 0; i < tensor_a_cluster_lengths.size(); i++)
+    {
+       fprintf(ofp,",%d", tensor_a_cluster_lengths[i]); 
+       optimum_kernel_parameters[14+i] = tensor_a_cluster_lengths[i];
+    }
+    for (int i = 0; i < tensor_b_thread_lengths.size(); i++)
+    {
+       fprintf(ofp,",%d", tensor_b_thread_lengths[i]); 
+       optimum_kernel_parameters[18+i] = tensor_b_thread_lengths[i];
+    }
+    for (int i = 0; i < tensor_b_cluster_lengths.size(); i++)
+    {
+       fprintf(ofp,",%d", tensor_b_cluster_lengths[i]); 
+       optimum_kernel_parameters[22+i] = tensor_b_cluster_lengths[i];
+    }
+    optimum_kernel_parameters[26] = nxb;
+    optimum_kernel_parameters[27] = nxe;
+    fprintf(ofp,",%d", nxb);
+    fprintf(ofp,",%d", nxe);
+    fprintf(ofp,",%d\n",(int) (1000 * elapsed_time)); 
+    fclose(ofp);
+   
+    return(optimum_kernel_parameters);
+}
+
+
+std::vector<int> get_kernel_vector(const args_t *arg, const igemm_gtc_tunable_t *tunable)
+{
+    int hi = arg->get_int("in_h");
+    int wi = arg->get_int("in_w");
+    int n = arg->get_int("batchsize");
+    int k = arg->get_int("out_channels");
+    int c = arg->get_int("in_channels");
+
+    int stride_h = arg->get_int("conv_stride_h");
+    int stride_w = arg->get_int("conv_stride_w");
+    int dilation_h = arg->get_int("dilation_h");
+    int dilation_w = arg->get_int("dilation_w");
+    int pad_h = arg->get_int("pad_h");
+    int pad_w = arg->get_int("pad_w");
+    int y = arg->get_int("fil_h");
+    int x = arg->get_int("fil_w");
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+    auto tensor_layout            = tunable->tensor_layout;
+    auto gemm_m_per_block         = tunable->gemm_m_per_block;
+    auto gemm_n_per_block         = tunable->gemm_n_per_block;
+    auto gemm_k_per_block         = tunable->gemm_k_per_block;
+    auto fma_type                 = tunable->fma_type;
+    // auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
+    // auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
+    // auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
+    // auto gemm_n_per_thread        = tunable->gemm_n_per_thread;
+    // auto gemm_n_level0_cluster    = tunable->gemm_n_level0_cluster;
+    // auto gemm_n_level1_cluster    = tunable->gemm_n_level1_cluster;
+    auto tensor_a_thread_lengths  = tunable->tensor_a_thread_lengths;
+    auto tensor_a_cluster_lengths = tunable->tensor_a_cluster_lengths;
+    auto tensor_b_thread_lengths  = tunable->tensor_b_thread_lengths;
+    auto tensor_b_cluster_lengths = tunable->tensor_b_cluster_lengths;
+    auto direction                = tunable->direction;
+    auto precision                = tunable->precision;
+    auto nxb                      = tunable->nxb;
+    auto nxe                      = tunable->nxe;
+    auto gemm_m_unmerge_cluster   = tunable->gemm_m_unmerge_cluster;
+    auto gemm_n_unmerge_cluster   = tunable->gemm_n_unmerge_cluster;
+    auto gemm_k_unmerge_cluster   = tunable->gemm_k_unmerge_cluster;
+    auto source_access_order      = tunable->source_access_order;
+    auto multihead                = tunable->multihead;
+    auto gemm_k_global_split      = tunable->gemm_k_global_split;
+    auto wave_tile_m = tunable->wave_tile_m;
+    auto wave_tile_n = tunable->wave_tile_n;
+    auto wave_tile_k = tunable->wave_tile_k;
+    auto wave_step_m = tunable->wave_step_m;
+    auto wave_step_n = tunable->wave_step_n;
+    auto wave_repeat_m = tunable->wave_repeat_m;
+    auto wave_repeat_n = tunable->wave_repeat_n;
+
+    std::vector<int> optimum_kernel_parameters(28);
+   
+
+    optimum_kernel_parameters[0] = tunable->gemm_m_per_block;
+    optimum_kernel_parameters[1] = tunable->gemm_n_per_block;
+    optimum_kernel_parameters[2] = tunable->gemm_k_per_block;
+    optimum_kernel_parameters[3] = tunable->wave_tile_m;
+    optimum_kernel_parameters[4] = tunable->wave_tile_n;
+    optimum_kernel_parameters[5] = tunable->wave_tile_k;
+    optimum_kernel_parameters[6] = tunable->wave_step_m;
+    optimum_kernel_parameters[7] = tunable->wave_step_n;
+    optimum_kernel_parameters[8] = tunable->wave_repeat_m;
+    optimum_kernel_parameters[9] = tunable->wave_repeat_n;
+
+    for (int i = 0; i < tensor_a_thread_lengths.size(); i++)
+    {
+       optimum_kernel_parameters[10+i] = tensor_a_thread_lengths[i];
+    }
+    for (int i = 0; i < tensor_a_cluster_lengths.size(); i++)
+    {
+       optimum_kernel_parameters[14+i] = tensor_a_cluster_lengths[i];
+    }
+    for (int i = 0; i < tensor_b_thread_lengths.size(); i++)
+    {
+       optimum_kernel_parameters[18+i] = tensor_b_thread_lengths[i];
+    }
+    for (int i = 0; i < tensor_b_cluster_lengths.size(); i++)
+    {
+       optimum_kernel_parameters[22+i] = tensor_b_cluster_lengths[i];
+    }
+    optimum_kernel_parameters[26] = nxb;
+    optimum_kernel_parameters[27] = nxe;
+   
+    return(optimum_kernel_parameters);
+}
+void adjust_prediction_time(std::vector<int>  runtime_kernel_parameters, std::vector<std::vector<int>> & kernel_predictions, float elapsed_time)
+{
+    int no_of_candidates = kernel_predictions.size();
+    int number_of_kernel_parameters = kernel_predictions[0].size();
+    
+    printf("Elapsed time %f\n",elapsed_time);
+    for (int k = 0; k < no_of_candidates; k++)
+    {
+        int diff = 0;
+        for (int j = 0; j < number_of_kernel_parameters - 1; j++)
+        {
+            diff += abs(runtime_kernel_parameters[j] - kernel_predictions[k][j]);
+        }
+        //printf("diff = %d \n", diff);
+        if ((diff == 0) && (kernel_predictions[k][number_of_kernel_parameters - 1] == -1))// adjust elapsed time 
+        {
+            //printf("diff = %d \n", diff);
+            kernel_predictions[k][number_of_kernel_parameters - 1] = (int) (1000. * elapsed_time);
+        }
+    }
+    return;
+}
+
+int verify_predictions(std::string predictions, int no_of_candidates, std::vector<int> optimum_kernel_parameters, std::vector<std::vector<int>> & kernel_predictions )
+{
+    std::vector<std::string> result;
+    std::stringstream s_stream(predictions); //create string stream from the string
+    int count = 0;
+    while (s_stream.good()) {
+        std::string substr;
+        getline(s_stream, substr, ':'); //get first string delimited by comma
+        count++;
+        result.push_back(substr);
+    }
+    int number_of_kernel_parameters = (count) / no_of_candidates;
+    //printf("number_of_kernel_parameters=%d\n", number_of_kernel_parameters);
+
+    count = 0;
+    for (int k = 0; k < no_of_candidates; k++)
+    {
+        int diff = 0;
+        std::vector<int> buffer;
+        for (int j = 0; j < number_of_kernel_parameters; j++)
+        {
+            buffer.push_back(atoi(result[count].c_str()));
+            count++;
+        }
+        kernel_predictions.push_back(buffer);
+    }
+
+    for (int k = 0; k < no_of_candidates; k++)
+    {
+        int diff = 0;
+        for (int j = 0; j < number_of_kernel_parameters - 1; j++)
+        {
+            //int val =  kernel_predictions[k][j];
+            //printf("optimum_kernel_parameters[%d] = %d,   kernel_predictions[%d][%d] = %d\n",j,optimum_kernel_parameters[j],k,j,val);
+            diff += abs(optimum_kernel_parameters[j] - kernel_predictions[k][j]);
+        }
+        if (diff == 0)
+        {
+            return(k);
+        }
+    }
+    return(-1);
+}
 
 int main(int argc, char **argv) {
     char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
@@ -455,6 +784,13 @@ int main(int argc, char **argv) {
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
     int forw = conv_args.get_int("forw");
+//////////// DPG
+    std::string predictions = conv_args.get_str("predictions");
+    std::string record = conv_args.get_str("record");
+    std::ofstream scope;
+    int number_of_predictors = conv_args.get_int("number_of_predictors");
+    scope.open("elapsed_time.txt", std::ios_base::app);
+/////////////    
 
     int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
     int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
@@ -529,6 +865,8 @@ int main(int argc, char **argv) {
     double nrms = get_nrms(forw, driver_data_type);
 
     if (need_fwd){
+        /// DPG
+        std::vector<std::pair<int,float>> store_elapsed_time;
         result_t fastest_result_fwd;
         fastest_result_fwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
@@ -671,6 +1009,11 @@ int main(int argc, char **argv) {
                 printf("\n"); 
 		        break; 
             }; 
+            /// DPG store convolution results
+            std::pair<int,float> elapsed_i; 
+            elapsed_i.first = i;
+            elapsed_i.second= result.duration_ms;
+            store_elapsed_time.push_back(elapsed_i);
             if(result.duration_ms < fastest_result_fwd.duration_ms){
                 fastest_result_fwd = result;
                 fastest_result_fwd.gflops = (float)gflops;
@@ -679,16 +1022,60 @@ int main(int argc, char **argv) {
             }
         }
         if(log_fastest_config && !run_first_applicable){
-            dump_arg(&conv_args);
+ //         dump_arg(&conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
             else
+            {
                 printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
                     fastest_result_fwd.kernel_name.c_str(),
                     fastest_result_fwd.duration_ms,
                     fastest_result_fwd.gflops / 1000,
                     fastest_result_fwd.efficiency);
+//////////// DPG
+                if (predictions.empty())
+                {
+                    std::vector<int> optimum_kernel_parameters = dump_vector(record, &conv_args, &tunables[fastest_id],fastest_result_fwd.duration_ms);
+                }
+                else
+                {
+                  std::vector<std::vector<int>> kernel_predictions;
+                  std::vector<int> optimum_kernel_parameters = get_kernel_vector(&conv_args, &tunables[fastest_id]);
+                
+                 int best_prediction =  verify_predictions(predictions,number_of_predictors,optimum_kernel_parameters,kernel_predictions);
+                
+                 if ( best_prediction == -1) // no match between prediction list and best execution
+                 {
+                   printf("NOPREDICTION\n");
+                   for (int k = 0; k < store_elapsed_time.size(); k++)
+                   {
+                       int runtime_id = store_elapsed_time[k].first;
+                       std::vector<int> runtime_kernel_parameters = get_kernel_vector(&conv_args, &tunables[runtime_id]);
+                       adjust_prediction_time(runtime_kernel_parameters,kernel_predictions,store_elapsed_time[k].second);              
+                   }
+                   int elapsed_id=  kernel_predictions[0].size() - 1;
+                   if (kernel_predictions.size() > 1)
+                     std::sort(kernel_predictions.begin(), kernel_predictions.end(),[](const std::vector<int>& a, const std::vector<int>& b) {return a[28] < b[28];});
+
+                   scope << (int) (1000 * fastest_result_fwd.duration_ms) << ' ' <<  (kernel_predictions[0][elapsed_id]) << std::endl;
+                   scope.close();
+                 }
+                 else 
+                 { 
+                   printf("PREDICTION(MATCH)= %d \n", best_prediction);
+                   printf("kernel dimensions = %d\n", kernel_predictions[best_prediction].size());
+                   for (int i = 0; i < kernel_predictions[best_prediction].size()-1; i++)
+                   {
+                      printf("%d ", kernel_predictions[best_prediction][i]); 
+                   }
+                   scope << (int) (1000 * fastest_result_fwd.duration_ms) << ' ' <<  (int) (1000 * fastest_result_fwd.duration_ms)  << std::endl;
+                   scope.close();
+                   printf("\n");
+                 }
+                }
+            }
+
         }
         if (need_verify){
             free(device_output_to_host);
@@ -696,6 +1083,8 @@ int main(int argc, char **argv) {
     }
 
     if (need_bwd){
+        /// DPG
+        std::vector<std::pair<int,float>> store_elapsed_time;
         float *device_input_to_host = NULL;
         result_t fastest_result_bwd;
         fastest_result_bwd.duration_ms = FLT_MAX;
@@ -776,6 +1165,11 @@ int main(int argc, char **argv) {
                 // }
             }
             printf("\n");
+            /// DPG store convolution results
+            std::pair<int,float> elapsed_i; 
+            elapsed_i.first = i;
+            elapsed_i.second= result.duration_ms;
+            store_elapsed_time.push_back(elapsed_i);
             if(result.duration_ms < fastest_result_bwd.duration_ms){
                 fastest_result_bwd = result;
                 fastest_result_bwd.gflops = (float)gflops;
@@ -784,16 +1178,59 @@ int main(int argc, char **argv) {
             }
         }
         if(log_fastest_config){
-            dump_arg(&conv_args);
+         //   dump_arg(&conv_args);
             if(fastest_id == -1)
                 printf("  fastest: no suitable kernel\n");
             else
+            {
                 printf("  fastest: [%d]%s, cost:%.3fms, tflops:%.3f(%.2f%%)\n",
                     fastest_id,
                     fastest_result_bwd.kernel_name.c_str(),
                     fastest_result_bwd.duration_ms,
                     fastest_result_bwd.gflops / 1000,
                     fastest_result_bwd.efficiency);
+            //////////// DPG
+                if (predictions.empty())
+                {
+                    std::vector<int> optimum_kernel_parameters = dump_vector(record, &conv_args, &tunables[fastest_id],fastest_result_bwd.duration_ms);
+                }
+                else
+                {
+                  std::vector<std::vector<int>> kernel_predictions;
+                  std::vector<int> optimum_kernel_parameters = get_kernel_vector(&conv_args, &tunables[fastest_id]);
+                
+                 int best_prediction =  verify_predictions(predictions,number_of_predictors,optimum_kernel_parameters,kernel_predictions);
+                
+                 if ( best_prediction == -1) // no match between prediction list and best execution
+                 {
+                   printf("NOPREDICTION\n");
+                   for (int k = 0; k < store_elapsed_time.size(); k++)
+                   {
+                       int runtime_id = store_elapsed_time[k].first;
+                       std::vector<int> runtime_kernel_parameters = get_kernel_vector(&conv_args, &tunables[runtime_id]);
+                       adjust_prediction_time(runtime_kernel_parameters,kernel_predictions,store_elapsed_time[k].second);              
+                   }
+                   int elapsed_id=  kernel_predictions[0].size() - 1;
+                   if (kernel_predictions.size() > 1)
+                     std::sort(kernel_predictions.begin(), kernel_predictions.end(),[](const std::vector<int>& a, const std::vector<int>& b) {return a[28] < b[28];});
+
+                   scope << (int) (1000 * fastest_result_bwd.duration_ms) << ' ' <<  (kernel_predictions[0][elapsed_id]) << std::endl;
+                   scope.close();
+                 }
+                 else 
+                 { 
+                   printf("PREDICTION(MATCH)= %d \n", best_prediction);
+                   printf("kernel dimensions = %d\n", kernel_predictions[best_prediction].size());
+                   for (int i = 0; i < kernel_predictions[best_prediction].size()-1; i++)
+                   {
+                      printf("%d ", kernel_predictions[best_prediction][i]); 
+                   }
+                   scope << (int) (1000 * fastest_result_bwd.duration_ms) << ' ' <<  (int) (1000 * fastest_result_bwd.duration_ms)  << std::endl;
+                   scope.close();
+                   printf("\n");
+                 }
+                }
+            }
         }
         if (need_verify) 
             free(device_input_to_host);

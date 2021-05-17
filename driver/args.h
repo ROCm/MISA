@@ -230,6 +230,11 @@ static inline args_t create_conv_args(int argc, char *argv[]) {
                     "string");
     args.insert_arg("weights", 'e', "", "Input weights filename (Default=)",
                     "string");
+    //////////////// DPG
+    args.insert_arg("number_of_predictors", 'N', "10", "Number of Predictors", "int");
+    args.insert_arg("predictions", 'A', "", "Kernel Predictors", "string");
+    args.insert_arg("record", 'B', "record.csv", "File Name", "string");
+
     args.insert_arg("bias", 'b', "", "Use Bias (Default=0)", "int");
     args.insert_arg("mode", 'm', "conv",
                     "Convolution Mode (conv, trans) (Default=conv)", "str");
