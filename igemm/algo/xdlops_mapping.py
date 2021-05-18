@@ -413,6 +413,7 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16,  4, 4,  2,  2,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16, 16, 4,  2,  2,  1,  1,  v_mfma_f32_16x16x16f16),
         ctrl_xdlops_mapping_t( 64 , 64 ,  16,  16, 16, 4,  1,  1,  2,  2,  v_mfma_f32_16x16x16f16),
+        ctrl_xdlops_mapping_t( 64 , 64 ,  32,  32,  4, 2,  1,  2,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 128, 16 ,  64,  16,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 16 , 128,  16,  64,  4, 2,  1,  1,  1,  1,  v_mfma_f32_16x16x4f16),
         ctrl_xdlops_mapping_t( 64 , 32 ,  32,  8 ,  4, 4,  1,  1,  1,  2,  v_mfma_f32_4x4x4f16),
