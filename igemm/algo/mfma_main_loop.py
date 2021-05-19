@@ -534,7 +534,16 @@ class mfma_main_loop_t(mc_base_t):
         nop(cxm.inst_mfma.get_nop_count_mfma_acc_raw())   # solve dependency 
 
 
-    def emit(self):
+    def emit(self, **option):
+        def get_dict_with_default(dictionary, key, default_value):
+                if key in dictionary:
+                    return dictionary[key]
+                else:
+                    return default_value
+            
+        num_gld_a_per_mbb = get_dict_with_default(option, "num_gld_a_per_mbb", 1)
+        num_gld_b_per_mbb = get_dict_with_default(option, "num_gld_b_per_mbb", 1)
+
         if self.ctrl.pass_through_a ^ self.ctrl.pass_through_b:
             return self.emit_single_pass_through()
 
@@ -741,14 +750,15 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m  + mi_m((2*i_k+3) * k_per_inst)))  # (2*i_k+3) * k_per_inst * lds_width_m
                         self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n  + mi_n((2*i_k+3) * k_per_inst)))  # (2*i_k+3) * k_per_inst * lds_width_n
                 return self._get_deferred()
-
-            def do_interleave_gload_and_move_slice_window():
-                with self._deferred_context():
-                    self._emit(f_gld_b())
-                    self._emit(f_gld_a())
-                    self._emit(f_move_slice_window_b())
-                    self._emit(f_move_slice_window_a())
-                return self._get_deferred()
+           
+            def get_interleave_gload_and_move_slice_window_mbbs():
+                dup_inst_per_mbb_gld_b = f"buffer_load,{num_gld_b_per_mbb}" if num_gld_b_per_mbb != 1 else "off"
+                dup_inst_per_mbb_gld_a = f"buffer_load,{num_gld_a_per_mbb}" if num_gld_a_per_mbb != 1 else "off"
+                mbbs_gld_b = create_machine_basic_block(f_gld_b(), dup_inst_per_mbb=dup_inst_per_mbb_gld_b)
+                mbbs_gld_a = create_machine_basic_block(f_gld_a(), dup_inst_per_mbb=dup_inst_per_mbb_gld_a)
+                mbbs_msw_b = create_machine_basic_block(f_move_slice_window_b())
+                mbbs_msw_a = create_machine_basic_block(f_move_slice_window_a())
+                return mbbs_gld_b + mbbs_gld_a + mbbs_msw_b + mbbs_msw_a
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
@@ -802,7 +812,7 @@ class mfma_main_loop_t(mc_base_t):
 
             if (unroll_k // k_per_inst) // 2 - 1 != 0:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                                get_interleave_gload_and_move_slice_window_mbbs()]
                 se_sub = create_scheduler(self.mc, mbb_list_sub)
                 mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
                                 create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
@@ -818,7 +828,7 @@ class mfma_main_loop_t(mc_base_t):
                                 create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
+                self._emit(emit_machine_basic_blocks(get_interleave_gload_and_move_slice_window_mbbs()))
                 if f_move_slice_window_acc != None:
                     self._emit(f_move_slice_window_acc())
                 self._emit(se_last.lower(interleave_pattern=INTERLEAVE_PTN_1))
@@ -1182,13 +1192,14 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit_empty_line()
                 return self._get_deferred()
 
-            def do_interleave_gload_and_move_slice_window():
-                with self._deferred_context():
-                    self._emit(f_gld_b())
-                    self._emit(f_gld_a())
-                    self._emit(f_move_slice_window_b())
-                    self._emit(f_move_slice_window_a())
-                return self._get_deferred()
+            def get_interleave_gload_and_move_slice_window_mbbs():
+                dup_inst_per_mbb_gld_b = f"buffer_load,{num_gld_b_per_mbb}" if num_gld_b_per_mbb != 1 else "off"
+                dup_inst_per_mbb_gld_a = f"buffer_load,{num_gld_a_per_mbb}" if num_gld_a_per_mbb != 1 else "off"
+                mbbs_gld_b = create_machine_basic_block(f_gld_b(), dup_inst_per_mbb=dup_inst_per_mbb_gld_b)
+                mbbs_gld_a = create_machine_basic_block(f_gld_a(), dup_inst_per_mbb=dup_inst_per_mbb_gld_a)
+                mbbs_msw_b = create_machine_basic_block(f_move_slice_window_b())
+                mbbs_msw_a = create_machine_basic_block(f_move_slice_window_a())
+                return mbbs_gld_b + mbbs_gld_a + mbbs_msw_b + mbbs_msw_a
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
@@ -1283,7 +1294,7 @@ class mfma_main_loop_t(mc_base_t):
             #if (unroll_k // k_per_inst) // 2 - 1 != 0:
             if True:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                                get_interleave_gload_and_move_slice_window_mbbs()]
                 se_sub = create_scheduler(self.mc, mbb_list_sub)
 
                 mbb_list_last = [create_machine_basic_block(do_interleave_unroll_k_last(), group_mbb_by_end_of_inst_op="v_mfma"),
@@ -1300,7 +1311,7 @@ class mfma_main_loop_t(mc_base_t):
                                 create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
+                self._emit(emit_machine_basic_blocks(get_interleave_gload_and_move_slice_window_mbbs()))
                 if f_move_slice_window_acc != None:
                     self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
@@ -1805,13 +1816,14 @@ class mfma_main_loop_t(mc_base_t):
 
                 return self._get_deferred()
 
-            def do_interleave_gload_and_move_slice_window():
-                with self._deferred_context():
-                    self._emit(f_gld_b())
-                    self._emit(f_gld_a())
-                    self._emit(f_move_slice_window_b())
-                    self._emit(f_move_slice_window_a())
-                return self._get_deferred()
+            def get_interleave_gload_and_move_slice_window_mbbs():
+                dup_inst_per_mbb_gld_b = f"buffer_load,{num_gld_b_per_mbb}" if num_gld_b_per_mbb != 1 else "off"
+                dup_inst_per_mbb_gld_a = f"buffer_load,{num_gld_a_per_mbb}" if num_gld_a_per_mbb != 1 else "off"
+                mbbs_gld_b = create_machine_basic_block(f_gld_b(), dup_inst_per_mbb=dup_inst_per_mbb_gld_b)
+                mbbs_gld_a = create_machine_basic_block(f_gld_a(), dup_inst_per_mbb=dup_inst_per_mbb_gld_a)
+                mbbs_msw_b = create_machine_basic_block(f_move_slice_window_b())
+                mbbs_msw_a = create_machine_basic_block(f_move_slice_window_a())
+                return mbbs_gld_b + mbbs_gld_a + mbbs_msw_b + mbbs_msw_a
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
@@ -1889,7 +1901,7 @@ class mfma_main_loop_t(mc_base_t):
             #if (unroll_k // k_per_inst) // 2 - 1 != 0:
             if True:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                                get_interleave_gload_and_move_slice_window_mbbs()]
 
                 se_sub = create_scheduler(self.mc, mbb_list_sub)
 
@@ -1907,7 +1919,7 @@ class mfma_main_loop_t(mc_base_t):
                                 create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
+                self._emit(emit_machine_basic_blocks(get_interleave_gload_and_move_slice_window_mbbs()))
                 if f_move_slice_window_acc != None:
                     self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma
@@ -2187,13 +2199,14 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit_empty_line()
                 return self._get_deferred()
 
-            def do_interleave_gload_and_move_slice_window():
-                with self._deferred_context():
-                    self._emit(f_gld_b())
-                    self._emit(f_gld_a())
-                    self._emit(f_move_slice_window_b())
-                    self._emit(f_move_slice_window_a())
-                return self._get_deferred()
+            def get_interleave_gload_and_move_slice_window_mbbs():
+                dup_inst_per_mbb_gld_b = f"buffer_load,{num_gld_b_per_mbb}" if num_gld_b_per_mbb != 1 else "off"
+                dup_inst_per_mbb_gld_a = f"buffer_load,{num_gld_a_per_mbb}" if num_gld_a_per_mbb != 1 else "off"
+                mbbs_gld_b = create_machine_basic_block(f_gld_b(), dup_inst_per_mbb=dup_inst_per_mbb_gld_b)
+                mbbs_gld_a = create_machine_basic_block(f_gld_a(), dup_inst_per_mbb=dup_inst_per_mbb_gld_a)
+                mbbs_msw_b = create_machine_basic_block(f_move_slice_window_b())
+                mbbs_msw_a = create_machine_basic_block(f_move_slice_window_a())
+                return mbbs_gld_b + mbbs_gld_a + mbbs_msw_b + mbbs_msw_a
 
             def do_interleave_unroll_k_last():
                 with self._deferred_context():
@@ -2254,7 +2267,7 @@ class mfma_main_loop_t(mc_base_t):
 
             if (unroll_k // k_per_inst) // 2 - 1 != 0:
                 mbb_list_sub = [create_machine_basic_block(do_interleave_unroll_k_sub(), group_mbb_by_end_of_inst_op="v_mfma"),
-                                create_machine_basic_block(do_interleave_gload_and_move_slice_window())]
+                                get_interleave_gload_and_move_slice_window_mbbs()]
 
                 se_sub = create_scheduler(self.mc, mbb_list_sub)
 
@@ -2272,7 +2285,7 @@ class mfma_main_loop_t(mc_base_t):
                                 create_machine_basic_block(do_interleave_share_store(), group_mbb_by_end_of_inst_op="ds_write")]
 
                 se_last = create_scheduler(self.mc, mbb_list_last)
-                self._emit(do_interleave_gload_and_move_slice_window())
+                self._emit(emit_machine_basic_blocks(get_interleave_gload_and_move_slice_window_mbbs()))
                 if f_move_slice_window_acc != None:
                     self._emit(f_move_slice_window_acc())
                 mbb_0_mfma_cnt_after_branch_to_start = 2 * cxm.wave_step_m * cxm.wave_step_n - 1 # number of mfma not count into share store interleave slot, check do_interleave_unroll_k_last for last 2 mfma

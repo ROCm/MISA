@@ -100,8 +100,12 @@ typedef struct {
     uint32_t magic_1;                       // denom: ho*wo
     uint32_t magic_2;                       // denom: wo
     uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
+    uint32_t magic_4;                       // denom: x*c
+    uint32_t magic_5;                       // denom: c
     uint32_t shift_pack_0;
+    uint32_t shift_pack_1;
     uint32_t ks;
+    uint32_t __pack_0;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_nhwc_karg_t;
 
@@ -166,7 +170,10 @@ static void dump_fwd_karg(igemm_fwd_gtc_nhwc_karg_t * karg){
     std::cout<<"magic_1:"      <<karg->magic_1<<",";
     std::cout<<"magic_2:"      <<karg->magic_2<<",";
     std::cout<<"magic_3:"      <<karg->magic_3<<",";
+    std::cout<<"magic_4:"      <<karg->magic_4<<",";
+    std::cout<<"magic_5:"      <<karg->magic_5<<",";
     std::cout<<"shift_pack_0:" <<karg->shift_pack_0<<",";
+    std::cout<<"shift_pack_1:" <<karg->shift_pack_1<<",";
 #endif
     std::cout<<"ks:"           <<karg->ks;
     std::cout<<std::endl;
@@ -344,6 +351,15 @@ public:
             //{
             //    return false;
             //}
+            if(tunable->merge_e){
+                uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / ( x * (c / group))) % y;
+                uint32_t s_move_slice_k_x = (tunable->gemm_k_per_block /  (c / group)) % x;
+                uint32_t s_move_slice_k_c = tunable->gemm_k_per_block %  (c / group);
+                if((c / group) >= 0xffffff || y >= 0xffffff || x >= 0xffffff)   // 24 bit
+                    return false;
+                if(s_move_slice_k_y >= 256 || s_move_slice_k_x >= 256 || s_move_slice_k_c >= 256)   // 8 bit
+                    return false;
+            }
 
             if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
                 ;   // if both 1, indicate padded c support
@@ -551,6 +567,14 @@ public:
             karg.y             = y;
             karg.x             = x;
             karg.group         = group;
+            if(tunable->merge_e){
+                uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / ( x * (c / group))) % y;
+                uint32_t s_move_slice_k_x = (tunable->gemm_k_per_block /  (c / group)) % x;
+                uint32_t s_move_slice_k_c = tunable->gemm_k_per_block %  (c / group);
+                karg.y = (s_move_slice_k_y << 24) | karg.y;
+                karg.x = (s_move_slice_k_x << 24) | karg.x;
+                karg.c = (s_move_slice_k_c << 24) | karg.c;
+            }
 #if USE_MAGIC_DIV
             int gemm_m = n * ho * wo;
             int gemm_n = k / group;
@@ -564,6 +588,13 @@ public:
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+            if(tunable->merge_e){
+                magic_div_u32_t mdiv_4 = magic_div_u32_gen(x*(c / group));
+                magic_div_u32_t mdiv_5 = magic_div_u32_gen(c / group);
+                karg.magic_4           = mdiv_4.magic;
+                karg.magic_5           = mdiv_5.magic;
+                karg.shift_pack_1      = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
+            }
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);

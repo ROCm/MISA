@@ -289,7 +289,7 @@ public:
                                                        const int& gemm_k_per_block)
     {
         int log2_gemm_k_global_splits = 0;
-        for(int gs = 0; gs < 9; gs++)
+        for(int gs = 0; gs < 7; gs++)
         {
             if((grid_size << gs) > max_grid_size)
                 break;
@@ -629,7 +629,7 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //dump_wrw_karg(&karg);
-        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
         HIP_CALL(
             hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 
@@ -660,6 +660,7 @@ public:
         if(gemm_k_global_split > 0){
             printf("copy workspace\n");
             //hipMemcpy(gemmc_host_check, p_wei_workspace, (1 << gemm_k_global_split) * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+            hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float16), hipMemcpyDeviceToHost);
         }
         else{
             printf("copy weight\n");
@@ -677,17 +678,6 @@ public:
         printf("s_p_in=%x\n", p_in);
         printf("workspace debug end \r\n");
         free(gemmc_host_check);
-#if 0
-        printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        hipMemcpy(gemmc_host_check, p_wei, k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
-        for (int i_check = 0; i_check < (0+block_size); i_check++)
-        {
-            printf("[%d]th var to monitor:[%f, %d, %x]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check]);
-        }
-        printf("s_p_in=%x\n", p_in);
-        printf("workspace debug end \r\n");
-#endif
 #endif
         return result;
     }

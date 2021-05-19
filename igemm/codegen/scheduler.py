@@ -117,7 +117,7 @@ class simple_interleave_scheduler_t(mc_base_t):
             interleave_slot += 1
 
         interleave_space = (len(self.mbb_lists[1]) + interleave_slot - 1) // interleave_slot
-        assert interleave_space <= max_interleave_space
+        #assert interleave_space <= max_interleave_space, f"interleave_space:{interleave_space}, max_interleave_space:{max_interleave_space}"
 
         mbb_0 = self.mbb_lists[0]
         mbb_1 = self.mbb_lists[1]
