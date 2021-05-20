@@ -48,13 +48,15 @@ def igemm_host_driver(**options):
     cxxflags = get_dict_with_default(options, "cxxflags", list())
     use_gpu_reference_kernel = get_dict_with_default(options, "use_gpu_reference_kernel", IGEMM_HOST_USE_GPU_NAIVE_CONV)
 
-    cpp_src = os.path.join(cpp_dir, cpp_name)
+    #cpp_src = os.path.join(cpp_dir, cpp_name)
+    cpp_src = [os.path.join(cpp_dir, 'conv_driver.cpp'), os.path.join(cpp_dir, 'perf', 'gmap.cpp')]
     target_exe = os.path.join(out_dir, target_name)
     arch_config = amdgpu_arch_config_t({
         'arch'          :   amdgpu_string_to_arch(arch)})
     builder = compile_host_t(arch_config, cpp_src, target_exe)
 
     host_cxxflags = ['-DIGEMM_CONFIG_FILE=\"{}\"'.format(config_file_name), '-DIGEMM_HSACO=\"{}\"'.format(hsaco_name)]
+    host_cxxflags += ['-I{}'.format(cpp_dir)]
     if has_fp16_config:
         host_cxxflags += ['-DUSE_HALF']
     if has_int8_config:

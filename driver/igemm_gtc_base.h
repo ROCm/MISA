@@ -34,7 +34,8 @@ using float16 = half_float::half;
 #else
 using float16 = int16_t;
 #endif
-
+#include <hip/hip_ext.h>
+#include <hip/hip_runtime.h>
 #include "config_parser.h"
 #include "utility.h"
 #include <string>
@@ -44,6 +45,7 @@ using float16 = int16_t;
 #include <math.h>
 #include <functional>
 #include <stdint.h>
+#include <numeric>
 
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_MAC              "mac"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
