@@ -37,6 +37,7 @@
 #include <tuple>
 #include <algorithm>
 #include <iterator>
+#include <functional>
 
 using index_t = uint64_t;
 
@@ -44,20 +45,24 @@ typedef struct {
     index_t tid;
     index_t data_byte;      // 1, 2, 4
     index_t vector;         // x1, x2, x4...
-    index_t offset;      // start offset of this request, in byte
-    bool valid;          // if this request is valid, aka, within tensor range
+    index_t offset;         // start offset of this request, in byte
+    bool valid;             // if this request is valid, aka, within tensor range
 } req_t;
 
 typedef struct {
-    index_t bid;
     index_t block_size;
     index_t req_idx;            // requst index, a counter for the request
-    std::vector<req_t> req; // request of each thread
+    std::vector<index_t> bid;   // for A/B matrix there maybe multiple block loading the same address
+    std::vector<req_t> req;     // request of each thread
 } block_req_t;
 
 void serialize_block_req(const block_req_t * block_req, FILE* fp, std::vector<bool> * record)
 {
-    fprintf(fp, "[b:%d,r:%d] ", block_req->bid, block_req->req_idx);
+    //fprintf(fp, "[b:%d,r:%d]\n", block_req->bid, block_req->req_idx);
+    fprintf(fp, "[b:");
+    for(auto b : block_req->bid)
+        fprintf(fp, "%zu,", b);
+    fprintf(fp, " r:%zu]\n", block_req->req_idx);
     assert(block_req->block_size == block_req->req.size());
     for(int i=0; i<block_req->req.size(); i++){
         const auto & thread_req = block_req->req[i];
@@ -66,31 +71,29 @@ void serialize_block_req(const block_req_t * block_req, FILE* fp, std::vector<bo
         for(int v=0; v<thread_req.vector; v++){
             index_t offset = thread_req.offset + v * thread_req.data_byte;
             index_t ipixel = offset / thread_req.data_byte;
-            if(record){
-                if((*record)[ipixel]){
-                    printf("have already visited this pixel:%zu, offset:%zu\n",ipixel,offset);
-                    assert(0);
-                }
+            // printf("bid:%zu, rid:%zu, tid:%zu, pixel:%zu, %s\n", block_req->bid, block_req->req_idx, i, ipixel, thread_req.valid ? "y":"n");
+            if(record && thread_req.valid){
                 (*record)[ipixel] = true;
             }
             fprintf(fp, "0x%zx", offset);
             if(v != (thread_req.vector - 1))
                 fprintf(fp, ",");
         }
-        fprintf(fp, "(%s) ", thread_req.valid ? "y":"n");
+        fprintf(fp, "(%s)\t", thread_req.valid ? "y":"n");
+        if((i + 1) % 4 == 0)
+            fprintf(fp, "\n");
     }
-    fprintf(fp, "\n");
+    fprintf(fp, "----------------------------------------------------------------\n");
     fflush(fp);
 }
-
-
 
 class linear_tensor_t{
 public:
     linear_tensor_t(std::initializer_list<index_t> _dims):dims(_dims){}
 
     // get nd indices from a linear index
-    std::vector<index_t> get(index_t linear_index){
+    std::vector<index_t> get(index_t linear_index) const
+    {
         std::vector<index_t> nd_index(dims.size(), (index_t)0);
         index_t len = 1;
         auto  rind_itr = std::rbegin(nd_index);
@@ -104,7 +107,7 @@ public:
         return nd_index;
     }
     // get offset from nd indices
-    index_t offset(std::initializer_list<index_t> indices)
+    index_t offset(std::initializer_list<index_t> indices) const
     {
         assert(indices.size() == dims.size());
         index_t stride = 1;
@@ -120,7 +123,7 @@ public:
     }
 
     // nd range check
-    bool range_check(std::initializer_list<index_t> indices)
+    bool range_check(std::initializer_list<index_t> indices) const
     {
         assert(indices.size() == dims.size());
         bool valid = true;
@@ -131,6 +134,10 @@ public:
             valid &= *rind_itr < *rdim_itr;
         }
         return valid;
+    }
+    index_t size() const
+    {
+        return std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<index_t>());
     }
 private:
     std::vector<index_t> dims;
@@ -202,9 +209,9 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     index_t cb_k0   = tunable->tensor_b_cluster_lengths[2];
     index_t cb_k1   = tunable->tensor_b_cluster_lengths[3];
 
-    printf("ta%dx%dx%dx%d_%dx%dx%dx%d, tb%dx%dx%dx%d_%dx%dx%dx%d\n",
-                ta_e, ta_c, ta_nb0, ta_nb1, ca_e, ca_c, ca_nb0, ca_nb1,
-                tb_e, tb_c, tb_k0 , tb_k1 , cb_e, cb_c, cb_k0 , cb_k1 );
+    // printf("ta%dx%dx%dx%d_%dx%dx%dx%d, tb%dx%dx%dx%d_%dx%dx%dx%d\n",
+    //             ta_e, ta_c, ta_nb0, ta_nb1, ca_e, ca_c, ca_nb0, ca_nb1,
+    //             tb_e, tb_c, tb_k0 , tb_k1 , cb_e, cb_c, cb_k0 , cb_k1 );
 
     index_t block_size = ca_e * ca_c * ca_nb0 * ca_nb1;
     assert(block_size == (cb_e * cb_c * cb_k0 * cb_k1));
@@ -232,56 +239,69 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     
     std::vector<index_t> ta_block_req_idx(grid_size, 0);
     std::vector<index_t> tb_block_req_idx(grid_size, 0);
-    auto cur_block = [&](index_t bid, index_t cur_group, index_t cur_gemm_m, index_t cur_gemm_n, index_t cur_gemm_k){
-        std::vector<block_req_t> inp_block_req;
-        inp_block_req.resize(ta_nb_per_thread * ta_nc_per_thread);
+    std::vector<block_req_t> inp_block_req;
+    linear_tensor_t inp_block_req_desc({gemm_m / gemm_m_per_block, gemm_k / gemm_k_per_block, ta_nb_per_thread, ta_nc_per_thread});
+    inp_block_req.resize(inp_block_req_desc.size());
 
+    auto cur_block_ab = [&](index_t bid, index_t cur_group, index_t cur_gemm_m, index_t cur_gemm_n, index_t cur_gemm_k){
         // inp
-        for(index_t t_inb = 0; t_inb < ta_nb_per_thread; t_inb++){
-            for(index_t t_ic = 0; t_ic < ta_nc_per_thread; t_ic++){
-                index_t i_req = t_inb * ta_nc_per_thread + t_ic;
-                block_req_t & b_req = inp_block_req[i_req];
-                b_req.block_size = block_size;
-                b_req.bid = bid;
-                b_req.req_idx = ta_block_req_idx[bid];
+        auto cur_block_inp = [&](){
+            for(index_t t_inb = 0; t_inb < ta_nb_per_thread; t_inb++){
+                for(index_t t_ic = 0; t_ic < ta_nc_per_thread; t_ic++){
+                    index_t i_b_req = inp_block_req_desc.offset({cur_gemm_m / gemm_m_per_block, cur_gemm_k / gemm_k_per_block, t_inb, t_ic});
+                    block_req_t & b_req = inp_block_req[i_b_req];
+                    b_req.block_size = block_size;
+                    b_req.bid.push_back(bid);
+                    b_req.req_idx = ta_block_req_idx[bid];
+                    ta_block_req_idx[bid]++;
 
-                for(index_t tid = 0; tid < block_size; tid++){
-                    index_t in_inb, in_ic;
-                    index_t in_in, in_iho, in_iwo, in_ihi, in_iwi;
-                    if(tunable->tensor_a_pass_through){
+                    // printf("bid:%zu, i_req:%zu(%zu,%zu), m:%zu, ta_nb_per_thread:%zu, ta_nc_per_thread:%zu\n",
+                    //     bid, i_req,t_inb,t_ic, cur_gemm_m / gemm_m_per_block, ta_nb_per_thread, ta_nc_per_thread);
 
-                    }else{
-                        in_ic   = (tid % ca_c) * ta_c;
-                        in_inb  = (tid / ca_c) * ta_nb1;
+                    if(cur_gemm_n == 0){
+                        for(index_t tid = 0; tid < block_size; tid++){
+                            
+                            index_t in_inb, in_ic;
+                            index_t in_in, in_iho, in_iwo, in_ihi, in_iwi;
+                            if(tunable->tensor_a_pass_through){
+
+                            }else{
+                                in_ic   = (tid % ca_c) * ta_c;
+                                in_inb  = (tid / ca_c) * ta_nb1;
+                            }
+                            index_t cur_in_inb = cur_gemm_m + in_inb + t_inb * ta_nb_thread_stride;
+
+                            auto in_gemm_m_trans = gemm_m_transform.get(cur_in_inb);
+                            auto in_gemm_k_trans = gemm_k_transform.get(cur_gemm_k);
+
+                            index_t cur_in_iy = in_gemm_k_trans[0];
+                            index_t cur_in_ix = in_gemm_k_trans[1];
+                            index_t cur_in_ic = in_gemm_k_trans[2] + in_ic + t_ic * ta_vector_c;
+
+                            index_t cur_in_in = in_gemm_m_trans[0];
+                            index_t cur_in_iho = in_gemm_m_trans[1];
+                            index_t cur_in_iwo = in_gemm_m_trans[2];
+
+                            // ihi = iho * s_stride_h + iy * s_dilation_h - s_pad_h
+                            // iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w
+                            index_t cur_in_ihi = cur_in_iho * stride_h + cur_in_iy * dilation_h - pad_h;
+                            index_t cur_in_iwi = cur_in_iwo * stride_w + cur_in_ix * dilation_w - pad_w;
+
+                            auto cur_in_idx = {cur_in_in, cur_in_ihi, cur_in_iwi, cur_in_ic};
+                            bool cur_in_valid = tensor_inp.range_check(cur_in_idx);
+                            index_t cur_in_offset = tensor_inp.offset(cur_in_idx) * data_byte;
+                            b_req.req.emplace_back(req_t({tid, data_byte, ta_vector_c, cur_in_offset, cur_in_valid}));
+                        }
                     }
-                    index_t cur_in_inb = cur_gemm_m + in_inb + t_inb * ta_nb_thread_stride;
-
-                    auto in_gemm_m_trans = gemm_m_transform.get(cur_in_inb);
-                    auto in_gemm_k_trans = gemm_k_transform.get(cur_gemm_k);
-
-                    index_t cur_in_iy = in_gemm_k_trans[0];
-                    index_t cur_in_ix = in_gemm_k_trans[1];
-                    index_t cur_in_ic = in_gemm_k_trans[2] + cur_gemm_n + in_ic + t_ic * ta_vector_c;
-
-                    index_t cur_in_in = in_gemm_m_trans[0];
-                    index_t cur_in_iho = in_gemm_m_trans[1];
-                    index_t cur_in_iwo = in_gemm_m_trans[2];
-
-                    // ihi = iho * s_stride_h + iy * s_dilation_h - s_pad_h
-                    // iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w
-                    index_t cur_in_ihi = cur_in_iho * stride_h + cur_in_iy * dilation_h - pad_h;
-                    index_t cur_in_iwi = cur_in_iwo * stride_w + cur_in_ix * dilation_w - pad_w;
-
-                    auto cur_in_idx = {cur_in_in, cur_in_ihi, cur_in_iwi, cur_in_ic};
-                    bool cur_in_valid = tensor_inp.range_check(cur_in_idx);
-                    index_t cur_in_offset = tensor_inp.offset(cur_in_idx) * data_byte;
-                    b_req.req.emplace_back(req_t({tid, data_byte, ta_vector_c, cur_in_offset, cur_in_valid}));
                 }
-                ta_block_req_idx[bid]++;
             }
-        }
-        for(auto itr_ibr = inp_block_req.begin(); itr_ibr != inp_block_req.end(); itr_ibr++)
-            serialize_block_req(&(*itr_ibr), fp_inp, &record_inp);
+        };
+        cur_block_wei = [&](){
+
+        };
+
+        cur_block_inp();
+        cur_block_wei();
     };
 
     for(index_t bid = 0; bid < grid_size; bid++){
@@ -290,10 +310,69 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
         auto cur_gemm_m = cur_block_position[1] * gemm_m_per_block;
         auto cur_gemm_n = cur_block_position[2] * gemm_n_per_block;
         for(index_t cur_gemm_k = 0; cur_gemm_k < gemm_k; cur_gemm_k += gemm_k_per_block){
-            cur_block(bid, cur_group, cur_gemm_m, cur_gemm_n, cur_gemm_k);
+            cur_block_ab(bid, cur_group, cur_gemm_m, cur_gemm_n, cur_gemm_k);
         }
     }
 
+    // serialize block request
+    for(auto itr_ibr = inp_block_req.begin(); itr_ibr != inp_block_req.end(); itr_ibr++)
+        serialize_block_req(&(*itr_ibr), fp_inp, &record_inp);
+
+    // valid all record
+    for(auto it = record_inp.begin(); it != record_inp.end(); it++){
+        if(!(*it)){
+            index_t idx = std::distance(record_inp.begin(), it);
+            printf("warning! not touched pixel at %zu\n", idx);
+        }
+    }
+}
+
+void gmap_dump_banner(const args_t *conv_args, const igemm_gtc_tunable_t * tunable, FILE *fp_inp, FILE *fp_wei, FILE *fp_out)
+{
+    index_t hi = conv_args->get_int("in_h");
+    index_t wi = conv_args->get_int("in_w");
+    index_t n = conv_args->get_int("batchsize");
+    index_t k = conv_args->get_int("out_channels");
+    index_t c = conv_args->get_int("in_channels");
+
+    index_t stride_h = conv_args->get_int("conv_stride_h");
+    index_t stride_w = conv_args->get_int("conv_stride_w");
+    index_t dilation_h = conv_args->get_int("dilation_h");
+    index_t dilation_w = conv_args->get_int("dilation_w");
+    index_t pad_h = conv_args->get_int("pad_h");
+    index_t pad_w = conv_args->get_int("pad_w");
+    index_t y = conv_args->get_int("fil_h");
+    index_t x = conv_args->get_int("fil_w");
+    index_t ho = gmap_conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    index_t wo = gmap_conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+    index_t group = conv_args->get_int("group_count");
+
+    std::string precision = tunable->precision;
+    index_t data_byte = utility_string_to_data_byte(tunable->precision);
+
+    // input
+    fprintf(fp_inp, "[inp] %s, %s, ", tunable->tensor_layout.c_str(), tunable->precision.c_str());
+    if(tunable->tensor_layout == "nchw")
+        fprintf(fp_inp, "n:%zu, c:%zu, h:%zu, w:%zu, g:%zu", n, c, hi, wi, group);
+    else if(tunable->tensor_layout == "nhwc")
+        fprintf(fp_inp, "n:%zu, h:%zu, w:%zu, c:%zu, g:%zu", n, hi, wi, c, group);
+    fprintf(fp_inp, "\n");
+
+    // wei
+    fprintf(fp_wei, "[wei] %s, %s, ", tunable->tensor_layout.c_str(), tunable->precision.c_str());
+    if(tunable->tensor_layout == "nchw")
+        fprintf(fp_wei, "k:%zu, c:%zu, y:%zu, x:%zu, g:%zu", k, c, y, x, group);
+    else if(tunable->tensor_layout == "nhwc")
+        fprintf(fp_wei, "k:%zu, y:%zu, x:%zu, c:%zu, g:%zu", k, y, x, c, group);
+    fprintf(fp_wei, "\n");
+
+    // out
+    fprintf(fp_out, "[inp] %s, %s, ", tunable->tensor_layout.c_str(), tunable->precision.c_str());
+    if(tunable->tensor_layout == "nchw")
+        fprintf(fp_out, "n:%zu, k:%zu, h:%zu, w:%zu, g:%zu", n, k, ho, wo, group);
+    else if(tunable->tensor_layout == "nhwc")
+        fprintf(fp_out, "n:%zu, h:%zu, w:%zu, k:%zu, g:%zu", n, ho, wo, k, group);
+    fprintf(fp_out, "\n");
 }
 
 // global memory access pattern
@@ -332,6 +411,7 @@ void gmap_dump(const args_t *conv_args, const igemm_gtc_tunable_t * tunable)
         return ;
     }
 
+    gmap_dump_banner(conv_args, tunable, fp_inp, fp_wei, fp_out);
 
     std::string tensor_layout = tunable->tensor_layout;
     std::string precision = tunable->precision;
