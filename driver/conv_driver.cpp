@@ -597,7 +597,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
 
         if(dump_gmap)
-            gmap_dump(conv_args, tunable);
+            gmap_dump(conv_args, tunable, result.gks);
         return result;
     };
 

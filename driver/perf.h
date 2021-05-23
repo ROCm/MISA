@@ -30,7 +30,7 @@
 #include "args.h"
 #include "igemm_gtc_base.h"
 
-void gmap_dump(const args_t *conv_args, const igemm_gtc_tunable_t * tunable);
+void gmap_dump(const args_t *conv_args, const igemm_gtc_tunable_t * tunable, int gks);
 
 
 #endif
