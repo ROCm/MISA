@@ -24,12 +24,9 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#include "args.h"
-#include "config_parser.h"
 #include <chrono>
 #include <functional>
-#include <hip/hip_ext.h>
-#include <hip/hip_runtime.h>
+
 #include <random>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,68 +64,10 @@
 #define USE_MIOPEN_NRMS 1
 #endif
 
-static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
-                                   size_t ksize, size_t stride) {
-    return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
-}
-class gpu_timer_t {
-  public:
-    gpu_timer_t(hipStream_t stream_) {
-        stream = stream_;
-        hipEventCreate(&evt_0);
-        hipEventCreate(&evt_1);
-    }
-    ~gpu_timer_t() {
-        hipEventDestroy(evt_0);
-        hipEventDestroy(evt_1);
-    }
-    void start() {
-        // hipDeviceSynchronize();
-        hipEventRecord(evt_0, stream);
-    }
-    void stop() {
-        hipEventRecord(evt_1, stream);
-        hipEventSynchronize(evt_1);
-        // hipDeviceSynchronize();
-    }
-    float duration() {
-        float ms;
-        hipEventElapsedTime(&ms, evt_0, evt_1);
-        return ms;
-    }
-
-  private:
-    hipEvent_t evt_0, evt_1;
-    hipStream_t stream;
-};
-static int next_pow2(int n) {
-    if (n == 0)
-        return 1;
-    if ((n & (n - 1)) == 0)
-        return n;
-    while ((n & (n - 1)) > 0)
-        n &= (n - 1);
-    return n << 1;
-}
-typedef struct {
-    int return_code     {-1};
-    int gks             {0};  // this is to store the gks value after benchmarked.
-    float duration_ms   {FLT_MAX};
-    float gflops        {0};
-    float efficiency    {0};
-    std::string kernel_name;
-} result_t;
-
-#define HIP_CALL(call)                                                         \
-    do {                                                                       \
-        hipError_t err = call;                                                 \
-        if (err != hipSuccess) {                                               \
-            printf("[hiperror](%d) fail to call %s,(%s)", (int)err, #call,     \
-                   hipGetErrorString(err));                                    \
-            exit(1);                                                           \
-        }                                                                      \
-    } while (0)
-
+#include "common.h"
+#include "args.h"
+#include "config_parser.h"
+#include "perf.h"
 #include "igemm_gtc_base.h"
 #include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
@@ -617,6 +556,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     std::string run_only_kernel = env_get_str("IGEMM_RUN_ONLY_KERNEL", IGEMM_RUN_ONLY_KERNEL_DEFAULT);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
+    int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -655,6 +595,9 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         printf("\n");
         result.gflops = gflops;
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
+
+        if(dump_gmap)
+            gmap_dump(conv_args, tunable, result.gks);
         return result;
     };
 
