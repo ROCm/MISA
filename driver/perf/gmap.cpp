@@ -40,6 +40,7 @@
 #include <functional>
 #include <thread>
 #include <sstream>
+#include <unordered_map>
 
 #define DO_SERIALIZE_TO_FILE
 
@@ -420,6 +421,10 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     std::vector<block_req_t> wei_block_req;
     std::vector<block_req_t> inp_block_req;
 
+    std::unordered_map<std::string, index_t> out_dup_req_map;   // TODO: this is ugly, try find better solution
+    std::unordered_map<std::string, index_t> wei_dup_req_map;
+    std::unordered_map<std::string, index_t> inp_dup_req_map;
+
     auto cur_block = [&](index_t bid, index_t cur_gks, index_t cur_gemm_id, index_t cur_group, index_t cur_gemm_m, index_t cur_gemm_n, index_t cur_gemm_k){
         index_t i_y_tilda = cur_gemm_id / x_tilda;
         index_t i_x_tilda = cur_gemm_id % x_tilda;
@@ -455,6 +460,8 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                     b_req.bid.push_back(bid);
                     b_req.req_idx = ta_block_req_idx[bid];
                     ta_block_req_idx[bid]++;
+                    std::string dup_req_key = std::to_string(cur_gks) + "x" + std::to_string(cur_gemm_id) + "x" + std::to_string(cur_gemm_m) + "x" + std::to_string(cur_gemm_k)
+                                             + "x" + std::to_string(t_inb) + "x" + std::to_string(t_ik);
 
                     if(cur_gemm_n == 0){
                         for(index_t tid = 0; tid < block_size; tid++){
@@ -496,7 +503,12 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                             index_t cur_out_offset = tensor_out.offset(cur_out_idx) * data_byte;
                             b_req.req.emplace_back(req_t({tid, data_byte, ta_vector_k, cur_out_offset, cur_out_valid}));
                         }
+                        assert(out_dup_req_map.count(dup_req_key) == 0);
+                        out_dup_req_map[dup_req_key] = out_block_req.size();
                         out_block_req.push_back(b_req);
+                    }else{
+                        assert(out_dup_req_map.count(dup_req_key) == 1);
+                        out_block_req[out_dup_req_map[dup_req_key]].bid.push_back(bid);
                     }
                 }
             }
@@ -511,6 +523,8 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                     b_req.bid.push_back(bid);
                     b_req.req_idx = tb_block_req_idx[bid];
                     tb_block_req_idx[bid]++;
+                    std::string dup_req_key = std::to_string(cur_gks) + "x" + std::to_string(cur_gemm_id) + "x" + std::to_string(cur_gemm_n) + "x" + std::to_string(cur_gemm_k)
+                                             + "x" + std::to_string(t_ik) + "x" + std::to_string(t_ic);
 
                     if(cur_gemm_m == 0){
                         for(index_t tid = 0; tid < block_size; tid++){
@@ -538,7 +552,12 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                             index_t cur_wei_offset = tensor_wei.offset(cur_wei_idx) * data_byte;
                             b_req.req.emplace_back(req_t({tid, data_byte, tb_vector_c, cur_wei_offset, cur_wei_valid}));
                         }
+                        assert(wei_dup_req_map.count(dup_req_key) == 0);
+                        wei_dup_req_map[dup_req_key] = wei_block_req.size();
                         wei_block_req.push_back(b_req);
+                    }else{
+                        assert(wei_dup_req_map.count(dup_req_key) == 1);
+                        wei_block_req[wei_dup_req_map[dup_req_key]].bid.push_back(bid);
                     }
                 }
             }
@@ -553,6 +572,8 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                     b_req.bid.push_back(bid);
                     b_req.req_idx = tc_block_req_idx[bid];
                     tc_block_req_idx[bid]++;
+                    std::string dup_req_key = std::to_string(cur_gemm_id) + "x" + std::to_string(cur_gemm_m) + "x" + std::to_string(cur_gemm_n)
+                                             + "x" + std::to_string(t_inb);
 
                     if(cur_gks == 0){
                         for(index_t tid = 0; tid < block_size; tid++){
@@ -580,7 +601,12 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
                             index_t cur_in_offset = tensor_inp.offset(cur_in_idx) * data_byte;
                             b_req.req.emplace_back(req_t({tid, data_byte, tc_vector_c, cur_in_offset, cur_in_valid}));
                         }
+                        assert(inp_dup_req_map.count(dup_req_key) == 0);
+                        inp_dup_req_map[dup_req_key] = inp_block_req.size();
                         inp_block_req.push_back(b_req);
+                    }else{
+                        assert(inp_dup_req_map.count(dup_req_key) == 1);
+                        inp_block_req[inp_dup_req_map[dup_req_key]].bid.push_back(bid);
                     }
                 }
             }
