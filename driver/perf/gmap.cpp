@@ -941,7 +941,7 @@ void gmap_dump_banner(const args_t *conv_args, const igemm_gtc_tunable_t * tunab
     fprintf(fp_wei, "\n");
 
     // out
-    fprintf(fp_out, "[inp] %s, %s, ", tunable->tensor_layout.c_str(), tunable->precision.c_str());
+    fprintf(fp_out, "[out] %s, %s, ", tunable->tensor_layout.c_str(), tunable->precision.c_str());
     if(tunable->tensor_layout == "nchw")
         fprintf(fp_out, "n:%zu, k:%zu, h:%zu, w:%zu, g:%zu", n, k, ho, wo, group);
     else if(tunable->tensor_layout == "nhwc")
