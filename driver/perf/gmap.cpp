@@ -74,7 +74,9 @@ void serialize_block_req(const block_req_t * block_req, FILE* fp, std::vector<bo
     index_t num_pixel_valid = 0;
     for(int i=0; i<block_req->req.size(); i++){
         const auto & thread_req = block_req->req[i];
-        assert(thread_req.tid == i);
+        //assert(thread_req.tid == i);
+        if(thread_req.tid != i)
+            printf("tid:%zu, i:%zu, %s\n",thread_req.tid, i, thread_req.tid == i?"yyy":"nnn");
         ss<<"t"<<i<<":";
         for(int v=0; v<thread_req.vector; v++){
             index_t offset = thread_req.offset + v * thread_req.data_byte;
@@ -365,9 +367,9 @@ void gmap_dump_bwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     linear_tensor_t tensor_inp({n, hi, wi, group, c/group});
     linear_tensor_t tensor_wei({group, k/group, y, x, c/group});
     linear_tensor_t tensor_out({n, ho, wo, group, k/group});
-    std::vector<bool> record_inp(n*hi*wi*(c/group), false);
+    std::vector<bool> record_inp(n*hi*wi*group*(c/group), false);
     std::vector<bool> record_wei(group*(k/group)*y*x*(c/group), false);
-    std::vector<bool> record_out(n*ho*wo*(k/group), false);
+    std::vector<bool> record_out(n*ho*wo*group*(k/group), false);
 
 
     index_t ta_nb_per_thread = ta_nb0 != 1 ? ta_nb0 : ta_nb1;
@@ -689,9 +691,9 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     linear_tensor_t tensor_inp({n, hi, wi, group, c/group});
     linear_tensor_t tensor_wei({group, k/group, y, x, c/group});
     linear_tensor_t tensor_out({n, ho, wo, group, k/group});
-    std::vector<bool> record_inp(n*hi*wi*(c/group), false);
+    std::vector<bool> record_inp(n*hi*wi*group*(c/group), false);
     std::vector<bool> record_wei(group*(k/group)*y*x*(c/group), false);
-    std::vector<bool> record_out(n*ho*wo*(k/group), false);
+    std::vector<bool> record_out(n*ho*wo*group*(k/group), false);
 
     index_t ta_nb_per_thread = ta_nb0 != 1 ? ta_nb0 : ta_nb1;
     index_t ta_vector_c = utility_gcd(ta_c, 4 * (4 / data_byte));
@@ -737,15 +739,15 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
     std::vector<index_t> tc_block_req_idx(grid_size, 0);
 
     std::vector<block_req_t> inp_block_req;
-    linear_tensor_t inp_block_req_desc({num_global_splits, gemm_m / gemm_m_per_block, gemm_k / gemm_k_per_block, ta_nb_per_thread, ta_nc_per_thread});
+    linear_tensor_t inp_block_req_desc({num_global_splits, group, gemm_m / gemm_m_per_block, gemm_k / gemm_k_per_block, ta_nb_per_thread, ta_nc_per_thread});
     inp_block_req.resize(inp_block_req_desc.size());
 
     std::vector<block_req_t> wei_block_req;
-    linear_tensor_t wei_block_req_desc({num_global_splits, gemm_n / gemm_n_per_block, gemm_k / gemm_k_per_block, tb_nk_per_thread, tb_nc_per_thread});
+    linear_tensor_t wei_block_req_desc({num_global_splits, group, gemm_n / gemm_n_per_block, gemm_k / gemm_k_per_block, tb_nk_per_thread, tb_nc_per_thread});
     wei_block_req.resize(wei_block_req_desc.size());
 
     std::vector<block_req_t> out_block_req;
-    linear_tensor_t out_block_req_desc({gemm_m / gemm_m_per_block, gemm_n / gemm_n_per_block, tc_nb_per_thread});
+    linear_tensor_t out_block_req_desc({group, gemm_m / gemm_m_per_block, gemm_n / gemm_n_per_block, tc_nb_per_thread});
     out_block_req.resize(out_block_req_desc.size());
 
     auto cur_block = [&](index_t bid, index_t cur_gks, index_t cur_group, index_t cur_gemm_m, index_t cur_gemm_n, index_t cur_gemm_k){
@@ -753,7 +755,7 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
         auto cur_block_inp = [&](){
             for(index_t t_inb = 0; t_inb < ta_nb_per_thread; t_inb++){
                 for(index_t t_ic = 0; t_ic < ta_nc_per_thread; t_ic++){
-                    index_t i_b_req = inp_block_req_desc.offset({cur_gks, cur_gemm_m / gemm_m_per_block, cur_gemm_k / gemm_k_per_block, t_inb, t_ic});
+                    index_t i_b_req = inp_block_req_desc.offset({cur_gks, cur_group, cur_gemm_m / gemm_m_per_block, cur_gemm_k / gemm_k_per_block, t_inb, t_ic});
                     block_req_t & b_req = inp_block_req[i_b_req];
                     b_req.block_size = block_size;
                     b_req.bid.push_back(bid);
@@ -807,7 +809,7 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
         auto cur_block_wei = [&](){
             for(index_t t_ik = 0; t_ik < tb_nk_per_thread; t_ik++){
                 for(index_t t_ic = 0; t_ic < tb_nc_per_thread; t_ic++){
-                    index_t i_b_req = wei_block_req_desc.offset({cur_gks, cur_gemm_n / gemm_n_per_block, cur_gemm_k / gemm_k_per_block, t_ik, t_ic});
+                    index_t i_b_req = wei_block_req_desc.offset({cur_gks, cur_group, cur_gemm_n / gemm_n_per_block, cur_gemm_k / gemm_k_per_block, t_ik, t_ic});
                     block_req_t & b_req = wei_block_req[i_b_req];
                     b_req.block_size = block_size;
                     b_req.bid.push_back(bid);
@@ -846,7 +848,7 @@ void gmap_dump_fwd_nhwc(const args_t *conv_args, const igemm_gtc_tunable_t * tun
         auto cur_block_out = [&](){
             if(cur_gemm_k == 0){
                 for(index_t t_inb = 0 ; t_inb < tc_nb_per_thread; t_inb++){
-                    index_t i_b_req = out_block_req_desc.offset({cur_gemm_m / gemm_m_per_block, cur_gemm_n / gemm_n_per_block, t_inb});
+                    index_t i_b_req = out_block_req_desc.offset({cur_group, cur_gemm_m / gemm_m_per_block, cur_gemm_n / gemm_n_per_block, t_inb});
                     block_req_t & b_req = out_block_req[i_b_req];
                     b_req.block_size = block_size;
                     b_req.bid.push_back(bid);
