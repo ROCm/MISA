@@ -550,35 +550,25 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
-        //printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
-        
-        hipFunction_t upsampling_clear_kernel_func;
-        std::string upsampling_clear_kernel_name = std::string("igemm_upsampling_clear_") + tunable->tensor_layout + "_" + tunable->precision;
-        HIP_CALL(
-            hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
+        // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
+        HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
+
+        // hipFunction_t upsampling_clear_kernel_func;
+        // std::string upsampling_clear_kernel_name = std::string("igemm_upsampling_clear_") + tunable->tensor_layout + "_" + tunable->precision;
+        // HIP_CALL(
+        //     hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 
         auto launch_bwd = [&]() -> float{
             float ms_total = .0;
             if(need_set_zero){
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
-                float ms = .0;
-                hipEvent_t start;
-                hipEvent_t stop;
-                hipEventCreate(&start);
-                hipEventCreate(&stop);
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
-                                            u_block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-                hipEventSynchronize(stop);
-                hipEventElapsedTime(&ms, start, stop);
-                hipEventDestroy(start);
-                hipEventDestroy(stop);
-
-                ms_total += ms;
+                hipMemset(p_in, 0, static_cast<size_t>(n)*c*hi*wi*utility_string_to_data_byte(tunable->precision));
             }
 
             for(int gemm_id = 0; gemm_id < num_of_gemm; gemm_id++){
@@ -643,23 +633,7 @@ public:
         auto launch_bwd_multihead = [&]() -> float{
             float ms_total = .0;
             if(need_set_zero){
-                void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &ukarg,
-                          HIP_LAUNCH_PARAM_BUFFER_SIZE, &ukarg_size,
-                          HIP_LAUNCH_PARAM_END};
-                float ms = .0;
-                hipEvent_t start;
-                hipEvent_t stop;
-                hipEventCreate(&start);
-                hipEventCreate(&stop);
-                HIP_CALL(hipHccModuleLaunchKernel(upsampling_clear_kernel_func, u_grid_size * u_block_size, 1, 1,
-                                            u_block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, start, stop));
-                hipEventSynchronize(stop);
-                hipEventElapsedTime(&ms, start, stop);
-                hipEventDestroy(start);
-                hipEventDestroy(stop);
-
-                ms_total += ms;
+                hipMemset(p_in, 0, static_cast<size_t>(n)*c*hi*wi*utility_string_to_data_byte(tunable->precision));
             }
             // if 1x1 and stride/dilation > 1, will have empty gemms which will waste launch grid. better ignore that case at runtime
             int origin_grid_size = grid_size/num_of_gemm;
@@ -724,12 +698,15 @@ public:
         assert(duration_list.size() == (repeat - 2));
         float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
 
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
+#endif
         usleep(1000 * 5);
 
         result_t result;
         result.return_code = 0;
         result.duration_ms = avg_duration;
-        result.kernel_name = kernel_name;
+        result.kernel_name = kernel_name;   
         return result;
     }
 };

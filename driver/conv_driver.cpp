@@ -439,7 +439,9 @@ int main(int argc, char **argv) {
     std::cout << "HSACO: " << hsaco << " CONFIG: " << config_file << std::endl; 
 
     hipModule_t module;
+#ifndef IGEMM_SPLIT_KERNEL
     HIP_CALL(hipModuleLoad(&module, hsaco));
+#endif
 
     // base arg might be "conv" or "convfp16" now;
     std::string base_arg = ParseBaseArg(argc, argv);
