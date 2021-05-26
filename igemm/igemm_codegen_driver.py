@@ -32,10 +32,8 @@ import os
 import copy
 import multiprocessing as mp
 
-IGEMM_EMIT_KERNEL_PER_INC_FILE = 0
-IGEMM_EMIT_KERNEL_PER_S_FILE = 1
+IGEMM_EMIT_KERNEL_PER_INC_FILE = 1
 IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE = 0     # it seems fail to find symbol if seperate metadata of different kernel using multiple .amdgpu_metadata
-IGEMM_EMIT_KERNEL_METADATA_PER_S_FILE = 1
 
 class igemm_codegen_driver_t(mc_base_t):
     def __init__(self, mc, tunable_dicts):
@@ -143,27 +141,30 @@ class igemm_codegen_driver_t(mc_base_t):
                     self.mc.insert_unique(macro.name(), macro)
         self.mc.emit_all_unique()
 
+    def get_kernel_per_inc_file_name(self, ker, origin_file_name):
+        if type(ker) is igemm_upsampling_clear_t:
+            return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.inc")
+        root_file_name = os.path.splitext(origin_file_name)[0]
+        return root_file_name + f"_{ker.tunable.gemm_m_per_block:03}x{ker.tunable.gemm_n_per_block:03}x{ker.tunable.gemm_k_per_block:03}" + ".inc"
+
+    def get_kernel_per_s_file_name(self, ker, origin_file_name):
+        if type(ker) is igemm_upsampling_clear_t:
+            return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.s")
+        root_file_name = os.path.dirname(origin_file_name)
+        return root_file_name + '/' + ker.name() + '.s'
+
     def emit_igemm_kernel(self, **options):
         is_multiprocess = True if "emit_kernel_mp" in options and options["emit_kernel_mp"] == True else False
-        def get_kernel_per_inc_file_name(ker, origin_file_name):
-            if type(ker) is igemm_upsampling_clear_t:
-                return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.inc")
-            root_file_name = os.path.splitext(origin_file_name)[0]
-            return root_file_name + f"_{ker.tunable.gemm_m_per_block:03}x{ker.tunable.gemm_n_per_block:03}x{ker.tunable.gemm_k_per_block:03}" + ".inc"
-
-        def get_kernel_per_s_file_name(ker, origin_file_name):
-            if type(ker) is igemm_upsampling_clear_t:
-                return os.path.join(os.path.dirname(origin_file_name), f"{ker.name()}.s")
-            root_file_name = os.path.dirname(origin_file_name)
-            return root_file_name + '/' + ker.name() + '.s'
+        emit_kernel_per_s = options["split_kernel"]
+        emit_kernel_per_inc = IGEMM_EMIT_KERNEL_PER_INC_FILE if not emit_kernel_per_s else False
 
         # emit the kernel
         #emit_v4r1_dynamic_kernel(self.mc, self.tunable_dicts)
-        if IGEMM_EMIT_KERNEL_PER_INC_FILE or IGEMM_EMIT_KERNEL_PER_S_FILE:
+        if emit_kernel_per_inc or emit_kernel_per_s:
             origin_emitter = self.mc.emitter
             assert type(origin_emitter) is mc_emit_to_file_t
             emitter_per_inc_dict = dict()
-            if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE or IGEMM_EMIT_KERNEL_METADATA_PER_S_FILE:
+            if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE or emit_kernel_per_s:
                 kinfo_per_inc_dict = dict()
             self._emit_empty_line()
             self._emit(f";---------------------------------------------------")
@@ -171,8 +172,8 @@ class igemm_codegen_driver_t(mc_base_t):
         if is_multiprocess:
             kernel_per_inc_dict = dict()
             for kernel in self.kernel_list:
-                if IGEMM_EMIT_KERNEL_PER_INC_FILE:
-                    kpi_file_name = get_kernel_per_inc_file_name(kernel, origin_emitter.file_name)
+                if emit_kernel_per_inc:
+                    kpi_file_name = self.get_kernel_per_inc_file_name(kernel, origin_emitter.file_name)
                     if kpi_file_name not in emitter_per_inc_dict:
                         origin_emitter.emit(f".include \"{os.path.basename(kpi_file_name)}\"")
 
@@ -227,8 +228,8 @@ class igemm_codegen_driver_t(mc_base_t):
 
         else:
             for kernel in self.kernel_list:
-                if IGEMM_EMIT_KERNEL_PER_INC_FILE:
-                    kpi_file_name = get_kernel_per_inc_file_name(kernel, origin_emitter.file_name)
+                if emit_kernel_per_inc:
+                    kpi_file_name = self.get_kernel_per_inc_file_name(kernel, origin_emitter.file_name)
                     if kpi_file_name not in emitter_per_inc_dict:
                         origin_emitter.emit(f".include \"{os.path.basename(kpi_file_name)}\"")
 
@@ -245,8 +246,8 @@ class igemm_codegen_driver_t(mc_base_t):
                         if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                             kinfo_per_inc_dict[kpi_file_name].append(kernel.get_kernel_info())
 
-                elif IGEMM_EMIT_KERNEL_PER_S_FILE:
-                    kps_file_name = get_kernel_per_s_file_name(kernel, origin_emitter.file_name)
+                elif emit_kernel_per_s:
+                    kps_file_name = self.get_kernel_per_s_file_name(kernel, origin_emitter.file_name)
                     if kps_file_name not in emitter_per_inc_dict:
 
                         kps_emitter = mc_emit_to_file_t(kps_file_name, copy.copy(origin_emitter.indent))
@@ -256,12 +257,10 @@ class igemm_codegen_driver_t(mc_base_t):
                         self.emit_global_macro_per_s_file(kernel.mc)
 
                         emitter_per_inc_dict[kps_file_name] = kps_emitter
-                        if IGEMM_EMIT_KERNEL_METADATA_PER_S_FILE:
-                            kinfo_per_inc_dict[kps_file_name] = [kernel.get_kernel_info()]
+                        kinfo_per_inc_dict[kps_file_name] = [kernel.get_kernel_info()]
                     else:
                         kernel.mc.emitter = emitter_per_inc_dict[kps_file_name]
-                        if IGEMM_EMIT_KERNEL_METADATA_PER_S_FILE:
-                            kinfo_per_inc_dict[kps_file_name].append(kernel.get_kernel_info())
+                        kinfo_per_inc_dict[kps_file_name].append(kernel.get_kernel_info())
 
                 if type(kernel) is not igemm_upsampling_clear_t:
                     kernel._emit(';----------------------------------------------------------')
@@ -280,7 +279,7 @@ class igemm_codegen_driver_t(mc_base_t):
                     kernel.emit_kernel_amd_kernel_code_t()
                 kernel.emit_kernel_footer()
 
-        if IGEMM_EMIT_KERNEL_PER_INC_FILE:
+        if emit_kernel_per_inc:
             for k, v in emitter_per_inc_dict.items():
                 if IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE:
                     self.mc.emitter = emitter_per_inc_dict[k]
@@ -290,7 +289,7 @@ class igemm_codegen_driver_t(mc_base_t):
             self.mc.emitter = origin_emitter
             self._emit(f";---------------------------------------------------")
             self._emit_empty_line()
-        elif IGEMM_EMIT_KERNEL_PER_S_FILE:
+        elif emit_kernel_per_s:
             for k, v in emitter_per_inc_dict.items():
                 self.mc.emitter = emitter_per_inc_dict[k]
                 amdgpu_metadata_t(self.mc, kinfo_per_inc_dict[k]).emit()
@@ -312,17 +311,26 @@ class igemm_codegen_driver_t(mc_base_t):
             self.emit_metadata()
 
     def do_compile(self, **options):
-        ass = compile_asm_t(self.mc, self.mc.emitter.file_name)
-        rtn = ass.compile()
-        if not rtn:
-            assert False
-
-        is_skip_disass = True if "compile_skip_disass" in options and options["compile_skip_disass"] == True else False
-        if not is_skip_disass:
-            disass = compile_disass_t(self.mc, ass.target_hsaco)
-            rtn = disass.compile()
+        emit_kernel_per_s = options["split_kernel"]
+        if emit_kernel_per_s:
+            for kernel in self.kernel_list:
+                file_name = self.get_kernel_per_s_file_name(kernel, self.mc.emitter.file_name)
+                ass = compile_asm_t(self.mc, file_name)
+                rtn = ass.compile()
+                if not rtn:
+                    assert False
+        else:
+            ass = compile_asm_t(self.mc, self.mc.emitter.file_name)
+            rtn = ass.compile()
             if not rtn:
                 assert False
+
+            is_skip_disass = True if "compile_skip_disass" in options and options["compile_skip_disass"] == True else False
+            if not is_skip_disass:
+                disass = compile_disass_t(self.mc, ass.target_hsaco)
+                rtn = disass.compile()
+                if not rtn:
+                    assert False
 
     def __call__(self, **options):
         self.do_emit(**options)
