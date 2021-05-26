@@ -694,7 +694,9 @@ int main(int argc, char **argv) {
     // printf("tunables:%d, hsaco:%s\n", tunables.size(), hsaco);
 
     hipModule_t module;
+#ifndef IGEMM_SPLIT_KERNEL
     HIP_CALL(hipModuleLoad(&module, hsaco));
+#endif
 
     std::string base_arg = create_base_args(argc, argv);
     args_t conv_args = create_conv_args(argc, argv);

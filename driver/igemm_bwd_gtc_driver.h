@@ -751,8 +751,14 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
+        HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
 
 #ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         hipFunction_t upsampling_clear_kernel_func;
@@ -880,6 +886,9 @@ public:
             assert(0);
         }
 
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
+#endif
         usleep(1000 * 5);
         return result;
     }

@@ -573,7 +573,7 @@ public:
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
     virtual int heuristic_select_gks(const args_t *arg, const igemm_gtc_tunable_t *tunable) {return 0; }
 
-    hipModule_t         module;
+    hipModule_t         module;         // not used in IGEMM_SPLIT_KERNEL case
     driver_mode_t       driver_mode;
     driverDataType_t    data_type;
     int                 warmup;
