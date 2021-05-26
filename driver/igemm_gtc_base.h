@@ -330,4 +330,182 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     return kernel_name;
 }
 
+static inline float igemm_launch_kernel_single(hipFunction_t kernel_func, void* args, size_t arg_size, std::vector<size_t> grid_size, std::vector<size_t> block_size)
+{
+    void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, args,
+                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &arg_size,
+                        HIP_LAUNCH_PARAM_END};
+    float ms = .0;
+
+    hipEvent_t start;
+    hipEvent_t stop;
+    hipEventCreate(&start);
+    hipEventCreate(&stop);
+
+    // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
+    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size[0], grid_size[1], grid_size[2],
+                                        block_size[0], block_size[1], block_size[2], 0, 0, NULL,
+                                        (void **)&config, start, stop));
+
+
+    hipEventSynchronize(stop);
+    hipEventElapsedTime(&ms, start, stop);
+    hipEventDestroy(start);
+    hipEventDestroy(stop);
+
+    return ms;
+}
+
+static inline float igemm_launch_kernel(hipFunction_t kernel_func, void* args, size_t arg_size, std::vector<size_t> grid_size, std::vector<size_t> block_size, int warmup, int repeat)
+{
+    assert(repeat > 2);
+    std::vector<float> duration_list;
+    for (int i = 0; i < warmup; i++) {
+        igemm_launch_kernel_single(kernel_func, args, arg_size, grid_size, block_size);
+    }
+
+    for (int i = 0; i < repeat; i++) {
+        float d = igemm_launch_kernel_single(kernel_func, args, arg_size, grid_size, block_size);
+        duration_list.push_back(d);
+    }
+    // remove min and max from list, then do average
+    auto imin = std::min_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imin);
+    auto imax = std::max_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imax);
+
+    assert(duration_list.size() == (repeat - 2));
+    float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
+    return avg_duration;
+}
+
+typedef struct{
+    hipFunction_t           kernel_func;
+    void *                  args;
+    size_t                  arg_size;
+    std::vector<size_t>     grid_size;
+    std::vector<size_t>     block_size;
+}igemm_launch_kernel_t;
+static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t> & kernels, int warmup, int repeat)
+{
+    auto launch_kernels = [&]() -> float{
+        float ms = .0;
+        for(const auto ker :  kernels)
+            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+        return ms;
+    };
+
+    assert(repeat > 2);
+    std::vector<float> duration_list;
+    for (int i = 0; i < warmup; i++) {
+        launch_kernels();
+    }
+
+    for (int i = 0; i < repeat; i++) {
+        float d = launch_kernels();
+        duration_list.push_back(d);
+    }
+    // remove min and max from list, then do average
+    auto imin = std::min_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imin);
+    auto imax = std::max_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imax);
+
+    assert(duration_list.size() == (repeat - 2));
+    float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
+    return avg_duration;
+}
+template<typename prolog_kernel_t>
+static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, int warmup, int repeat)
+{
+    auto launch_kernels = [&]() -> float{
+        float ms = .0;
+        ms += prolog_kernel();
+        for(const auto & ker :  kernels)
+            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+        return ms;
+    };
+
+    assert(repeat > 2);
+    std::vector<float> duration_list;
+    for (int i = 0; i < warmup; i++) {
+        launch_kernels();
+    }
+
+    for (int i = 0; i < repeat; i++) {
+        float d = launch_kernels();
+        duration_list.push_back(d);
+    }
+    // remove min and max from list, then do average
+    auto imin = std::min_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imin);
+    auto imax = std::max_element(begin(duration_list), end(duration_list));
+    duration_list.erase(imax);
+
+    assert(duration_list.size() == (repeat - 2));
+    float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
+    return avg_duration;
+}
+
+static inline int igemm_get_max_gks(int gemm_k, int gemm_k_per_block, int max_log2_splits)
+{
+    if(gemm_k % gemm_k_per_block != 0)
+        return 0;
+    int rem = gemm_k / gemm_k_per_block;
+    // to find the highest power of 2 value that can divide rem
+    // https://www.geeksforgeeks.org/highest-power-of-two-that-divides-a-given-number/
+    int rem_pow2 = rem & (~(rem - 1));
+    int gks = (int)log2(rem_pow2);
+    if(gks > max_log2_splits)
+        gks = max_log2_splits;
+    return gks;
+}
+
+// this is to support big tensor > 4G. need to decide how many splits needed
+// return the number of splits
+static inline size_t igemm_split_batch_size(const args_t *arg, int data_byte)
+{
+    int hi = arg->get_int("in_h");
+    int wi = arg->get_int("in_w");
+    int n = arg->get_int("batchsize");
+    int k = arg->get_int("out_channels");
+    int c = arg->get_int("in_channels");
+
+    int stride_h = arg->get_int("conv_stride_h");
+    int stride_w = arg->get_int("conv_stride_w");
+    int dilation_h = arg->get_int("dilation_h");
+    int dilation_w = arg->get_int("dilation_w");
+    int pad_h = arg->get_int("pad_h");
+    int pad_w = arg->get_int("pad_w");
+    int y = arg->get_int("fil_h");
+    int x = arg->get_int("fil_w");
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+    // int data_byte = utility_string_to_data_byte(tunable->precision);
+    size_t image_size_input = static_cast<size_t>(c) * hi * wi * data_byte;
+    size_t image_size_output = static_cast<size_t>(k) * ho * wo * data_byte;
+    size_t size_4g = 0xffffffffUL;
+    if(image_size_input >= size_4g || image_size_output >= size_4g)
+        return 0;
+
+    size_t image_size = image_size_input >= image_size_output ? image_size_input : image_size_output;
+    size_t splited_n = size_4g / image_size;
+
+    // round up splits, we must match
+    // 1. splited_n * image_size < size_4g
+    // 2. n % splited_n == 0
+    // if(splited_n >= n)
+    //     return 1;
+    assert(splited_n != 0);
+    while(splited_n >= 1){
+        // printf("n:%d, splited_n:%d\n", n, splited_n);
+        if(n % splited_n == 0 && splited_n * image_size < size_4g)
+            break;
+        splited_n--;
+    }
+    assert(splited_n * image_size < size_4g && n % splited_n == 0);
+    return static_cast<size_t>(n) / splited_n;
+}
+
 #endif

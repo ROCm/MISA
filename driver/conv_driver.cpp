@@ -407,7 +407,9 @@ int main(int argc, char **argv) {
     // printf("tunables:%d\n", tunables.size());
 
     hipModule_t module;
+#ifndef IGEMM_SPLIT_KERNEL
     HIP_CALL(hipModuleLoad(&module, hsaco));
+#endif
 
     // base arg might be "conv" or "convfp16" now;
     std::string base_arg = ParseBaseArg(argc, argv);
