@@ -172,11 +172,11 @@ measured_fp32_conv_gflops(double time_ms, size_t n, size_t c, size_t hi,
 #endif
 
 #ifndef IGEMM_REDUCTION_HSACO
-#define IGEMM_REDUCTION_HSACO "out/igemm_gtc_reduction.hsaco"
+#define IGEMM_REDUCTION_HSACO "igemm_gtc_reduction.hsaco"
 #endif
 
 #ifndef IGEMM_TENSOR_CAST_HSACO
-#define IGEMM_TENSOR_CAST_HSACO "out/igemm_gtc_tensor_cast.hsaco"
+#define IGEMM_TENSOR_CAST_HSACO "igemm_gtc_tensor_cast.hsaco"
 #endif
 
 #ifndef IGEMM_CONFIG_FILE
@@ -415,7 +415,9 @@ int main(int argc, char **argv) {
     // printf("tunables:%d\n", tunables.size());
 
     hipModule_t module;
+#ifndef IGEMM_SPLIT_KERNEL
     HIP_CALL(hipModuleLoad(&module, hsaco));
+#endif
 
     hipModule_t module_reduction;
     char *hsaco_reduction = env_get_str("IGEMM_REDUCTION_HSACO", IGEMM_REDUCTION_HSACO);
