@@ -403,6 +403,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     }
     double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
     double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
+    printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
     return (computed_nrms < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -1069,10 +1070,10 @@ int main(int argc, char **argv) {
                 gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
                 gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -5, 5);
             }
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * k * hi * wi, -2, 2);
-            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -2, 2);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
+            gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -2, 2);
             if(driver_data_type == driverHalf){
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
@@ -1204,4 +1205,14 @@ int main(int argc, char **argv) {
     hipFree(device_input);
     hipFree(device_weight);
     hipFree(device_output);
+
+#if defined(USE_HALF) || defined(USE_INT8)
+    free(host_input_dtype);
+    free(host_weight_dtype);
+    free(host_output_dtype);
+
+    hipFree(device_input_dtype);
+    hipFree(device_weight_dtype);
+    hipFree(device_output_dtype);
+#endif
 }

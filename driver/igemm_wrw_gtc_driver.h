@@ -149,11 +149,15 @@ public:
         }
         n = n/splits;   // split batch size here
 
+        int min_n_per_block = 1;
+        if(tunable->tensor_layout == "nhwc")
+            min_n_per_block = tunable->tensor_a_thread_lengths[1];
+
         int b = ho * wo;
         if(tunable->tensor_layout == "nchw")
             b = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
 
-        int log2_gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(grid_size, max_grid_size, n, b, gemm_k_per_block)
+        int log2_gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(grid_size, max_grid_size, n / min_n_per_block, b, gemm_k_per_block)
                                                                  : 0;
 
         int num_of_gemm = 1 << log2_gemm_k_global_splits;
@@ -593,7 +597,10 @@ public:
         if(tunable->tensor_layout == "nchw")
             b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int max_grid_size = 1200;
-        int log2_gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(cur_grid_size, max_grid_size, n, b, gemm_k_per_block)
+        int min_n_per_block = 1;
+        if(tunable->tensor_layout == "nhwc")
+            min_n_per_block = tunable->tensor_a_thread_lengths[1];
+        int log2_gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(cur_grid_size, max_grid_size, n / min_n_per_block, b, gemm_k_per_block)
                                                                  : 0;
         int num_of_gemm = 1 << log2_gemm_k_global_splits;
 
@@ -654,9 +661,10 @@ public:
         result.gks         = log2_gemm_k_global_splits;
         result.kernel_name = kernel_name;
 		// debug section of code
-#if 1
+#if 0
         printf("workspace debug \r\n");
         float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
+        printf("gemmc_host_check size=%d\n", (1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
         if(gemm_k_global_split > 0){
             printf("copy workspace\n");
             //hipMemcpy(gemmc_host_check, p_wei_workspace, (1 << gemm_k_global_split) * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);

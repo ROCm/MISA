@@ -130,7 +130,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
 
-            ctrl_coalescing_store_xdlops.vector_write_out = 2                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store_xdlops.vector_write_out = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3]) if self.tunable.precision == 'fp16' else 1
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
 
             na_k, _, _, _ = self.get_dims_lengths()
@@ -300,7 +300,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             with self._deferred_context():
                 self._emit(f"; load input")
                 if self.outer.tunable.nxe != 0:
-                    self._emit(f".v_clear_nc {v.v_gld_b()}, {self.outer.get_num_vgpr_global_load_a()}")
+                    self._emit(f".v_clear_nc {v.v_gld_b()}, {self.outer.get_num_vgpr_global_load_b()}")
                     self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v.v_in_flag()}]")
                 if self.outer.tunable.precache_soffset:
                     self._emit(m_in_2d_global_load(v.v_gld_b(), s.s_p_in(), v.v_in_os(), s_in_stride_d0(), s_in_stride_d1(), s.s_in_offset()))
@@ -610,13 +610,13 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                     self._emit(v.declare())
 
     def get_num_vgpr_global_load_a(self):
-        _, _, _, tb_c = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c != 1 else 1
+        ta_k, _, _, _ = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k != 1 else 1
         return self.tunable.num_global_load_a // pack_factor
     
     def get_num_vgpr_global_load_b(self):
-        ta_k, _, _, _ = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k != 1 else 1
+        _, _, _, tb_c = self.get_thread_lengths()
+        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
     def get_thread_lengths(self):
@@ -697,8 +697,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
             ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
         elif self.in_thread_copy_ndim == 1:
-            ctrl_in_gld.length_d0 = 1
-            ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
+            if in_thread_copy_index == 1:
+                ctrl_in_gld.length_d0 = 1
+                ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
+            else:
+                ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
+                ctrl_in_gld.length_d1 = 1
         else:
             ctrl_in_gld.length_d0 = 1
             ctrl_in_gld.length_d1 = 1
@@ -710,8 +714,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
         elif self.out_thread_copy_ndim == 1:
-            ctrl_out_gld.length_d0 = 1
-            ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            if out_thread_copy_index == 1:
+                ctrl_out_gld.length_d0 = 1
+                ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
+            else:
+                ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
+                ctrl_out_gld.length_d1 = 1
         else:
             ctrl_out_gld.length_d0 = 1
             ctrl_out_gld.length_d1 = 1
@@ -765,7 +773,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 num_t_gemmk, num_t_mn = tb_n, self.t_mn
                 stride_d_mn = k_pack * data_byte
                 if data_byte == 2:
-                    dwords_per_mn = num_t_mn // 2 
+                    dwords_per_mn = num_t_mn // 2 if num_t_mn > 1 else 1
                     if tb_n % 2 != 0:
                         assert False
                     else:
@@ -860,8 +868,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             s_in_stride_d0 = in_stride_gprs[in_thread_copy_index[0]]
             s_in_stride_d1 = in_stride_gprs[in_thread_copy_index[1]]
         elif self.in_thread_copy_ndim == 1:
-            s_in_stride_d0 = s_dummy
-            s_in_stride_d1 = in_stride_gprs[in_thread_copy_index[0]]
+            if in_thread_copy_index == 1:
+                s_in_stride_d0 = s_dummy
+                s_in_stride_d1 = in_stride_gprs[in_thread_copy_index[0]]
+            else:
+                s_in_stride_d0 = in_stride_gprs[in_thread_copy_index[0]]
+                s_in_stride_d1 = s_dummy
         else:
             s_in_stride_d0 = s_dummy
             s_in_stride_d1 = in_stride_gprs[-1]
@@ -870,8 +882,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
             s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[1]]
         elif self.out_thread_copy_ndim == 1:
-            s_out_stride_d0 = s_dummy
-            s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[0]]
+            if out_thread_copy_index == 1:
+                s_out_stride_d0 = s_dummy
+                s_out_stride_d1 = out_stride_gprs[out_thread_copy_index[0]]
+            else:
+                s_out_stride_d0 = out_stride_gprs[out_thread_copy_index[0]]
+                s_out_stride_d1 = s_dummy
         else:
             s_out_stride_d0 = s_dummy
             s_out_stride_d1 = s_dummy
@@ -1188,10 +1204,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         
         self._emit_empty_line()
 
-        if self.in_thread_copy_ndim != 1:
-            if s_in_stride_d0 != s_dummy:
-                #self._emit(f"s_lshl_b32 s[{s_out_stride_d0()}], s[{s_out_stride_d0()}], {igemm_log2(data_byte)}")
-                self._emit(self.try_shift_stride(s_in_stride_d0, igemm_log2(data_byte)))
+        if s_in_stride_d0 != s_dummy:
+            #self._emit(f"s_lshl_b32 s[{s_out_stride_d0()}], s[{s_out_stride_d0()}], {igemm_log2(data_byte)}")
+            self._emit(self.try_shift_stride(s_in_stride_d0, igemm_log2(data_byte)))
         if s_in_stride_d1 != s_dummy:
             #self._emit(f"s_lshl_b32 s[{s_out_stride_d1()}], s[{s_out_stride_d1()}], {igemm_log2(data_byte)}")
             self._emit(self.try_shift_stride(s_in_stride_d1, igemm_log2(data_byte)))
@@ -1217,10 +1232,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_out_os_base()}]")
         self._emit_empty_line()
 
-        if self.out_thread_copy_ndim != 1:
-            if s_out_stride_d0 != s_dummy:
-                #self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
-                self._emit(self.try_shift_stride(s_out_stride_d0, igemm_log2(data_byte)))
+        if s_out_stride_d0 != s_dummy:
+            #self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
+            self._emit(self.try_shift_stride(s_out_stride_d0, igemm_log2(data_byte)))
         if s_out_stride_d1 != s_dummy:
             #self._emit(f"s_lshl_b32 s[{s_wei_stride_d1()}], s[{s_wei_stride_d1()}], {igemm_log2(data_byte)}")
             self._emit(self.try_shift_stride(s_out_stride_d1, igemm_log2(data_byte)))
@@ -1246,7 +1260,6 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"; LDS store, in: 1,nb,1,ec: {1}x{tb_n}x{1}x{tb_c}, {1}x{cb_nb}x{1}x{cb_ec}")
         if k_pack_src_mat != 1:
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_gtc_iec()}]")
-            print(f"k_pack_src_mat={k_pack_src_mat}, tb_n={tb_n}")
             self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat//tb_n)},  v[{v.v_gtc_inb_a()}]")
             self._emit(f"v_lshl_add_u32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_ec*k_pack_src_mat)}, v[{v.v_tmp(2)}]")
             self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat//tb_n - 1}, v[{v.v_gtc_inb_a()}]")
