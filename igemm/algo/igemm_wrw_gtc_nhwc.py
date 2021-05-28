@@ -133,6 +133,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.vector_write_out = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3]) if self.tunable.precision == 'fp16' else 1
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
 
+            if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+                ctrl_coalescing_store_xdlops.precision = 'fp32'
+                #ctrl_coalescing_store_xdlops.coalescing_groups *= 2 
+
             na_k, _, _, _ = self.get_dims_lengths()
             ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [1, na_k]
             ctrl_coalescing_store_xdlops.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
@@ -1298,6 +1302,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; weight offset")
+        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+            # s_block_gtc_ig = ig*2, but for wei workspace, s_block_gtc_ig need to be ig*4, so here we give it a (*2)
+            self._emit(f"s_mul_i32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], 2")
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
@@ -1305,7 +1312,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
 
         self._emit_empty_line()
-        self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
+        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], 2")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_wei_stride_k()}], s[{s.s_tmp(3)}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_wei_stride_k()}], s[{s.s_tmp(3)}]")
         self._emit(f"s_add_u32 s[{s.s_p_wei()}], s[{s.s_p_wei()}], s[{s.s_tmp()}]")
@@ -1338,7 +1348,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"; add i_k")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_co_sub_m_index()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp()}]")
-        self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
+        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+            self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {2}, v[{v.v_wei_os()}]")
+        else:
+            self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
 
         self._emit(f"; move slice step for output tensor")
         self._emit(f"s_lshl_b32 s[{s.s_out_move_step()}], s[{s.s_k()}], {igemm_log2(data_byte * ca_nb)}")
@@ -1362,7 +1375,11 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_mul_i32 s[{s.s_in_stride_n_n()}], s[{s.s_move_slice_n()}], s[{s.s_in_stride_n()}]")
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_move_n()}], s[{s.s_in_stride_n()}], {igemm_log2(ta_n)}")
             self._emit(f"s_mul_i32 s[{s.s_out_stride_move_n()}], s[{s.s_out_stride_n()}], {ta_n - 1}")
-        self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
+
+        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+            self._emit(self.try_shift_stride(s.s_wei_stride_k, 2)) # as we use atomic add fp32 type
+        else:
+            self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
 
         self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_dim_b()}], s[{s.s_sub_n()}]")
         self._emit(f"s_add_i32 s[{s.s_knum()}], s[{s.s_knum()}], {self.tunable.gemm_k_per_block - 1}")

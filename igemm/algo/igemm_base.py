@@ -326,7 +326,11 @@ class igemm_gtc_tunable_parameter_t(object):
         # number of loops at least needed for final coalescing store, dicided by LDS size
         # self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
         #         (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
-        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // amdgpu_precision_data_byte(self.precision))
+        if self.tensor_b_thread_lengths[3] == 1 and self.gemm_k_global_split == 1 and self.precision == 'fp16':
+            use_fp32_atomic_add = 1
+        else:
+            use_fp32_atomic_add = 0
+        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if use_fp32_atomic_add == 0 else 4))
         
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok

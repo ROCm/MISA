@@ -232,6 +232,10 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 #define IGEMM_HSACO "igemm_gtc.hsaco"
 #endif
 
+#ifndef IGEMM_TENSOR_CAST_HSACO
+#define IGEMM_TENSOR_CAST_HSACO "out/igemm_gtc_tensor_cast.hsaco"
+#endif
+
 #ifndef IGEMM_CONFIG_FILE
 #define IGEMM_CONFIG_FILE "igemm_gtc.config"
 #endif
@@ -1061,6 +1065,12 @@ int main(int argc, char **argv) {
 
     if (need_wrw){
         void *device_weight_to_host = NULL;
+        // launch tensor cast module
+        hipModule_t module_tensor_cast;
+        char *hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
+        HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast));
+
+        // begin wrw
         if (need_verify) {
             // gen rand
             if(!igemm_rand_int){
@@ -1072,8 +1082,8 @@ int main(int argc, char **argv) {
             }
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, 1, 1);
-            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
-            gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -2, 2);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
+            //gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo, -2, 2);
             if(driver_data_type == driverHalf){
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
@@ -1156,7 +1166,7 @@ int main(int argc, char **argv) {
 #endif   
 
 
-        igemm_wrw_gtc_t conv_wrw_driver(module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        igemm_wrw_gtc_t conv_wrw_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
         
         auto wrw_pre = [&](){
             if (need_verify)
