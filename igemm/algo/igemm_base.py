@@ -344,12 +344,35 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
 
+    def igemmgen_to_miopen_precision(self):
+        '''
+        return miopen's precision enum:
+        typedef enum {
+            miopenHalf     = 0, /*!< 16-bit floating point (Fully supported) */
+            miopenFloat    = 1, /*!< 32-bit floating point (Fully supported) */
+            miopenInt32    = 2, /*!< 32-bit int point (Partially supported) */
+            miopenInt8     = 3, /*!< 8-bit int point (Partially supported) */
+            miopenInt8x4   = 4, /*!< Pack of four 8-bit int points in NCHW_VECT_C format (Partially supported) */
+            miopenBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)(Partially supported) */
+        } miopenDataType_t;
+        For now, igemm only have 0 and 1.
+        '''
+        miopen_precision = ''
+        if self.precision == 'fp32':
+            miopen_precision = 'miopenFloat'
+        elif self.precision == 'fp16':
+            miopen_precision = 'miopenHalf'
+        else:
+            assert False, f"Igemmgen does not support this kind of precision-{self.precision}"
+
+        return miopen_precision
+
     def output(self):
         brace_left='   {'
         brace_right='}'
         direction = "\"" + self.direction + "\""
-        precision = "\"" + self.precision + "\""
-        out_str = (f"\t\t{'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+        precision = self.igemmgen_to_miopen_precision()
+        out_str = (f"        {'{':2}{direction}{',':2}{precision},{self.nxb:4},{self.nxe:4},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
         out_str += (f"{self.wave_tile_m:4},{self.wave_tile_n:4},{self.wave_tile_k:4},{self.wave_step_m:4},{self.wave_step_n:4},{self.wave_repeat_m:4},{self.wave_repeat_n:4},")
         out_str += (f"{brace_left}{self.tensor_a_thread_lengths[0]},{self.tensor_a_thread_lengths[1]:4},{self.tensor_a_thread_lengths[2]:4},{self.tensor_a_thread_lengths[3]:4}{brace_right},")
         out_str += (f"{brace_left}{self.tensor_a_cluster_lengths[0]},{self.tensor_a_cluster_lengths[1]:4},{self.tensor_a_cluster_lengths[2]:4},{self.tensor_a_cluster_lengths[3]:4}{brace_right},")
