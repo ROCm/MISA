@@ -380,7 +380,7 @@ class igemm_gtc_tunable_parameter_t(object):
         out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right},")
         out_str += (f"{self.gemm_k_global_split:4}{brace_right},")
         return out_str
-    
+
     def to_dict(self):
         tunable_dict = {}
         tunable_dict['tensor_layout']                   = self.tensor_layout

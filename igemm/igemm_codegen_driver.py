@@ -297,6 +297,8 @@ class igemm_codegen_driver_t(mc_base_t):
                 v.close()
                 self._emit(f";---------------------------------------------------")
                 self._emit_empty_line()
+            origin_emitter.close()
+            os.remove(origin_emitter.file_name)
 
     def emit_metadata(self):
         kernel_info_list = [kernel.get_kernel_info() for kernel in self.kernel_list]
