@@ -159,7 +159,7 @@ public:
         n = n/splits;   // split batch size here
 
         int min_n_per_block = 1;
-        if(tunable->tensor_layout == "nhwc")
+        if(tunable->tensor_layout == "nhwc" && tunable->nxe == 1)
             min_n_per_block = tunable->tensor_a_thread_lengths[1];
 
         int b = ho * wo;
@@ -309,7 +309,7 @@ public:
                                                        const int& gemm_k_per_block)
     {
         int log2_gemm_k_global_splits = 0;
-        for(int gs = 0; gs < 7; gs++)
+        for(int gs = 0; gs < 9; gs++)
         {
             if((grid_size << gs) > max_grid_size)
                 break;
@@ -614,7 +614,7 @@ public:
             b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
         int max_grid_size = 1200;
         int min_n_per_block = 1;
-        if(tunable->tensor_layout == "nhwc")
+        if(tunable->tensor_layout == "nhwc" && tunable->nxe == 1)
             min_n_per_block = tunable->tensor_a_thread_lengths[1];
         int log2_gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(cur_grid_size, max_grid_size, n / min_n_per_block, b, gemm_k_per_block)
                                                                  : 0;

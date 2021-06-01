@@ -311,8 +311,17 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2         = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2         = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
         self.lds_single        = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        self.lds_buffer_num    = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        self.lds_buffer_num    = 2 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
         self.lds_total         = self.lds_buffer_num * self.lds_single
+
+        # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
+        # TODO: need to make some compromise in occupancy and lds double buffer
+        if self.is_occupancy_decreased():
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
+        if self.lds_total > 32 * 1024:
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
@@ -352,6 +361,37 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+
+    def is_occupancy_decreased(self):
+        is_decreased = False
+        is_lds_decreased = False
+        is_agpr_decreased = False
+        is_vgpr_decreased = False
+        if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024:
+            is_lds_decreased = True
+
+        if self.num_agpr_accumulate_c < 128:
+            is_agpr_decreased = True
+
+        a_data_per_vgpr = 1 
+        if self.direction == 'fwd':
+            return True
+
+        elif self.direction == "wrw":
+            if self.precision == "fp32":
+                return True
+            elif self.tensor_a_thread_lengths[3] > 1:
+                a_data_per_vgpr = 2
+            else:
+                a_data_per_vgpr = 1
+        else:
+            return True
+
+        if self.num_global_load_a // a_data_per_vgpr <= 8:
+            is_vgpr_decreased = True
+
+        is_decreased = is_lds_decreased and is_agpr_decreased and is_vgpr_decreased
+        return is_decreased
 
     def output(self):
         brace_left='   {'
