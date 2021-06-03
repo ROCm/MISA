@@ -113,6 +113,7 @@ static int next_pow2(int n) {
 typedef struct {
     int return_code     {-1};
     int gks             {0};  // this is to store the gks value after benchmarked.
+    int grid_size       {0};
     float duration_ms   {FLT_MAX};
     float gflops        {0};
     float efficiency    {0};
@@ -712,8 +713,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 
     if(p_bcsv){
         //          time tflops efficiency kernel
-        fprintf(p_bcsv, "%.3f,%.3f,%.2f%%,%s,",
-            fastest_result.duration_ms, fastest_result.gflops/1000, fastest_result.efficiency, fastest_result.kernel_name.c_str());
+        fprintf(p_bcsv, "%.3f,%.3f,%.2f%%,%s[%d]-grid[%d],",
+            fastest_result.duration_ms, fastest_result.gflops/1000, fastest_result.efficiency, fastest_result.kernel_name.c_str(), fastest_result.gks, fastest_result.grid_size);
         std::string conv_cmd = log_cmd(conv_args, driver_data_type, direction);
         fprintf(p_bcsv, "%s\n", conv_cmd.c_str());
         fflush(p_bcsv);

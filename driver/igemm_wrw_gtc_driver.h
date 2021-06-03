@@ -705,6 +705,7 @@ public:
         result.duration_ms = duration;
         result.gks         = log2_gemm_k_global_splits;
         result.kernel_name = kernel_name;
+        result.grid_size   = grid_size;
 		// debug section of code
 #if 0
         printf("workspace debug \r\n");
