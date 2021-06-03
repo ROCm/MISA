@@ -85,7 +85,7 @@ if [ 0 = 1 ] ; then
     #exit 1
 fi
 
-if [ 0 = 1 ]; then
+if [ 1 = 1 ]; then
 ./out/conv_driver.exe ${CONV} -n 128 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe ${CONV} -n 128 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe ${CONV} -n 128 -c 1024 -H 14 -W 14 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
