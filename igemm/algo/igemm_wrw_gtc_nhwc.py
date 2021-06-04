@@ -514,7 +514,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             else:
                 v_c_resuable_num          = outer.tunable.num_vgpr_accumulate_a + outer.tunable.num_vgpr_accumulate_b + \
                                             num_vgpr_global_load_a + num_vgpr_global_load_b + \
-                                            (16 if outer.tunable.nxe == 1 else 9)       # from v_sst_a_os to v_co_sst
+                                            (14 if outer.tunable.nxe == 1 else 9)       # from v_sst_a_os to v_co_sst
                 v_c_coalescing_num        = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed                = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
@@ -540,16 +540,17 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 self.v_in_iwi_max             = sym_t("v_in_iwi_max"   ,vseq(1))
             self.v_gtc_in                 = sym_t("v_gtc_in"       ,vseq(1))
             self.v_out_os                 = sym_t("v_out_os"       ,vseq(1))
-            self.v_out_os_base            = sym_t("v_out_os_base"  ,vseq(1))
+            if outer.tunable.nxe == 0:
+                self.v_out_os_base            = sym_t("v_out_os_base"  ,vseq(1))
             if outer.tunable.nxe != 0:
                 self.v_in_flag            = sym_t("v_in_flag"      ,vseq(1))
             self.v_co_sst                 = sym_t("v_co_sst"       ,vseq(1))
             self.v_co_sld                 = sym_t("v_co_sld"       ,vseq(1))
             self.v_wei_os                 = sym_t("v_wei_os"       ,vseq(1))
 
-            if outer.tunable.nxe != 0:
-                self.v_wei_iy                 = sym_t("v_wei_iy"        ,vseq(1))
-                self.v_wei_ix                 = sym_t("v_wei_ix"        ,vseq(1))
+            #if outer.tunable.nxe != 0:
+            #    self.v_wei_iy                 = sym_t("v_wei_iy"        ,vseq(1))
+            #    self.v_wei_ix                 = sym_t("v_wei_ix"        ,vseq(1))
             self.v_wei_c_flag             = sym_t("v_wei_c_flag"    ,vseq(1))
 
             self.v_gtc_iec                = sym_t("v_gtc_iec"       ,v_c_num - 1  if is_vgpr_acc_c else vseq(1))
@@ -1171,24 +1172,25 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"; ec transform")
             self._emit(f"v_add_u32 v[{v.v_tmp(5)}], s[{s.s_block_gtc_iec()}], v[{v.v_gtc_iec()}]")
             self._emit(m_int_div_rem_vs(v.v_gtc_ic(), v.v_gtc_ie(), v.v_tmp(5), s.s_c_padded(), v.v_tmp(), s.s_tmp()))
-            self._emit(m_int_div_rem_vs(v.v_wei_ix(), v.v_wei_iy(), v.v_gtc_ie(), s.s_x(), v.v_tmp(), s.s_tmp()))
+            self._emit(m_int_div_rem_vs(v.v_tmp(5), v.v_tmp(6), v.v_gtc_ie(), s.s_x(), v.v_tmp(), s.s_tmp()))
+            self._emit(f"; v_tmp_5: v_wei_ix, v_tmp_6: v_wei_iy")
             self._emit_empty_line()
 
             # ihi = iho * s_stride_h + iy * s_dilation_h - s_pad_h,   here make sure iy <- iy * s_dilation_h - s_pad_h before hand
             # iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w,   here make sure ix <- ix * s_dilation_w - s_pad_w before hand
-            self._emit(f"v_mul_u32_u24 v[{v.v_tmp()}], s[{s.s_dilation_h()}], v[{v.v_wei_iy()}]")
-            self._emit(f"v_mul_u32_u24 v[{v.v_tmp(1)}], s[{s.s_dilation_w()}], v[{v.v_wei_ix()}]")
-            self._emit(f"v_sub_i32 v[{v.v_wei_iy()}], v[{v.v_tmp()}], s[{s.s_pad_h()}]")
-            self._emit(f"v_sub_i32 v[{v.v_wei_ix()}], v[{v.v_tmp(1)}], s[{s.s_pad_w()}]")
+            self._emit(f"v_mul_u32_u24 v[{v.v_tmp()}], s[{s.s_dilation_h()}], v[{v.v_tmp(6)}]")
+            self._emit(f"v_mul_u32_u24 v[{v.v_tmp(1)}], s[{s.s_dilation_w()}], v[{v.v_tmp(5)}]")
+            self._emit(f"v_sub_i32 v[{v.v_tmp(6)}], v[{v.v_tmp()}], s[{s.s_pad_h()}]")
+            self._emit(f"v_sub_i32 v[{v.v_tmp(5)}], v[{v.v_tmp(1)}], s[{s.s_pad_w()}]")
 
             # move by wi and hi, compute new boundary
             self._emit(f"s_mul_i32 s[{s.s_ho_x_stride_h()}], s[{s.s_ho()}], s[{s.s_stride_h()}]")
             self._emit(f"s_mul_i32 s[{s.s_wo_x_stride_w()}], s[{s.s_wo()}], s[{s.s_stride_w()}]")
-            self._emit(f"v_add_i32 v[{v.v_in_ihi_max()}], v[{v.v_wei_iy()}], s[{s.s_ho_x_stride_h()}]")
-            self._emit(f"v_add_i32 v[{v.v_in_iwi_max()}], v[{v.v_wei_ix()}], s[{s.s_wo_x_stride_w()}]")
+            self._emit(f"v_add_i32 v[{v.v_in_ihi_max()}], v[{v.v_tmp(6)}], s[{s.s_ho_x_stride_h()}]")
+            self._emit(f"v_add_i32 v[{v.v_in_iwi_max()}], v[{v.v_tmp(5)}], s[{s.s_wo_x_stride_w()}]")
 
             m_in_update_hw   = self.get_macro_in_update_hw()
-            self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_wei_iy(), v.v_wei_ix(), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
+            self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_tmp(6), v.v_tmp(5), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
         else:
             self._emit(f"v_add_u32 v[{v.v_gtc_ic()}], s[{s.s_block_gtc_iec()}], v[{v.v_gtc_iec()}]")
 
@@ -1237,9 +1239,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"v_add_u32 v[{v.v_cur_k()}], s[{s.s_block_gtc_ik()}], v[{v.v_gtc_ik()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_out_stride_n()}], s[{s.s_block_gtc_in()}]")
-        self._emit(f"v_add_lshl_u32 v[{v.v_out_os_base()}], v[{v.v_cur_k()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
+        self._emit(f"v_add_lshl_u32 v[{v.v_tmp(1)}], v[{v.v_cur_k()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], s[{s.s_out_stride_wo()}]")
-        self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_out_os_base()}]")
+        self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_tmp(1)}]")
         self._emit_empty_line()
 
         if s_out_stride_d0 != s_dummy:
