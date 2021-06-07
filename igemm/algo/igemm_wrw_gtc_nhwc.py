@@ -1169,7 +1169,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit("; config for output and input range")
-        self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], -1")
+        self._emit(f"s_mul_i32 s[{s.s_p_out(2)}], s[{s.s_n()}], s[{s.s_out_stride_n()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], {igemm_log2(data_byte)}")
+        #self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], -1")
         self._emit(f"s_mov_b32 s[{s.s_p_in(2)}], -1")
         
         if self.tunable.nxe == 1:

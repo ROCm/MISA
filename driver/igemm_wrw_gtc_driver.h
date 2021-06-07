@@ -308,7 +308,7 @@ public:
                                                        const int& b,
                                                        const int& gemm_k_per_block)
     {
-        int gemm_k_global_splits = 49;
+        int gemm_k_global_splits = 360/9;
         
         return gemm_k_global_splits;
     }
@@ -645,7 +645,14 @@ public:
         karg.x             = x;
         karg.gemm_k_global_split = gemm_k_global_splits;
         karg.group         = group;
-        karg.gemm_k_per_wg = (n / min_n_per_block) * b / gemm_k_global_splits;
+        karg.gemm_k_per_wg = (int)(ceil((n / min_n_per_block) * b / (float)gemm_k_global_splits));
+        karg.gemm_k_per_wg = (karg.gemm_k_per_wg + tunable->tensor_a_cluster_lengths[1] - 1) / tunable->tensor_a_cluster_lengths[1] * tunable->tensor_a_cluster_lengths[1];
+
+        std::cout << std::endl;
+
+        std::cout << "gemm_k_per_wg: " << karg.gemm_k_per_wg << std::endl;
+
+        //exit(0);
 
         // tensor cast kernel args
         size_t cast_per_thread = 8;
