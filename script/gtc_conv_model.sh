@@ -63,13 +63,17 @@ else
     exit 1
 fi
 
-./out/conv_driver.exe ${CONV} -n 256 -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
+#./out/conv_driver.exe ${CONV} -n 256 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
+
+#./out/conv_driver.exe ${CONV} -n 256 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
+
+#./out/conv_driver.exe ${CONV} -n 256 -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 
 
 #./out/conv_driver.exe ${CONV} -n 16 -c 4096 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 #./out/conv_driver.exe ${CONV} -n 256 -c 4096 -H 14 -W 14 -k 8192 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 
-exit 1
+#exit 1
 # only forward support gemm_k_padding
 #if [ $FORW = 1 ]
 if [ 0 = 1 ] ; then

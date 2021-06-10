@@ -35,7 +35,7 @@ from .xdlops_mapping import *
 from .coalescing_store import *
 from .mfma_main_loop import *
 
-IGEMM_WRW_GTC_DEBUG = 1
+IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
 
@@ -831,7 +831,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             in_sst_ctrl.length_dv = 1 if data_byte == 4 else (2 // igemm_gcd(2, vector_dp_b))
             in_sst_ctrl.vector_dv = 1
             in_sst_ctrl.stride_d0 = 1
-            in_sst_ctrl.stride_d1 = vector_dp_a * data_byte if k_pack == 1 else k_pack * data_byte
+            in_sst_ctrl.stride_d1 = vector_dp_b * data_byte if k_pack == 1 else k_pack * data_byte
 
         # print(f"out: length_d0={out_sst_ctrl.length_d0}, length_d1={out_sst_ctrl.length_d1}")
         # print(f"out: length_dp={out_sst_ctrl.length_dp}, vector_dp={out_sst_ctrl.vector_dp}")
@@ -1171,8 +1171,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit("; config for output and input range")
         self._emit(f"s_mul_i32 s[{s.s_p_out(2)}], s[{s.s_n()}], s[{s.s_out_stride_n()}]")
         self._emit(f"s_lshl_b32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], {igemm_log2(data_byte)}")
-        #self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], -1")
-        self._emit(f"s_mov_b32 s[{s.s_p_in(2)}], -1")
+        self._emit(f"s_mul_i32 s[{s.s_p_in(2)}], s[{s.s_n()}], s[{s.s_in_stride_n()}]")
+        self._emit(f"s_lshl_b32 s[{s.s_p_in(2)}], s[{s.s_p_in(2)}], {igemm_log2(data_byte)}")
         
         if self.tunable.nxe == 1:
             self._emit(f"; ec transform")
@@ -1215,10 +1215,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), s.s_in_stride_wi(), v.v_tmp()))
             self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
         else:
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_in_stride_n()}], s[{s.s_block_gtc_in()}]")
-            self._emit(f"v_add_lshl_u32 v[{v.v_in_os_base()}], v[{v.v_gtc_ic()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
             self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], s[{s.s_in_stride_wi()}]")
-            self._emit(f"v_lshl_add_u32 v[{v.v_in_os()}], v[{v.v_tmp()}], {igemm_log2(data_byte)}, v[{v.v_in_os_base()}]")
+            self._emit(f"v_add_lshl_u32 v[{v.v_in_os()}], v[{v.v_tmp()}], v[{v.v_gtc_ic()}], {igemm_log2(data_byte)}")
         
         self._emit_empty_line()
 
@@ -1250,11 +1248,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_add_lshl_u32 v[{v.v_out_os()}], v[{v.v_tmp()}], v[{v.v_cur_k()}], {igemm_log2(data_byte)}")
         self._emit_empty_line()
 
-        self._emit(f"; supplement for v_gtc_in")
-        self._emit(f"v_lshrrev_b32 v[{v.v_gtc_in()}], {igemm_log2(tb_n)}, v[{v.v_gtc_in()}]")
-        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_gtc_in()}], {(tb_n-1)*data_byte}")
-        self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], s[{s.s_out_stride_n()}]")
-        self._emit(f"v_add_i32 v[{v.v_out_os()}], v[{v.v_out_os()}], v[{v.v_tmp()}]")
+        if self.tunable.nxe == 1:
+            self._emit(f"; supplement for v_gtc_in")
+            self._emit(f"v_lshrrev_b32 v[{v.v_gtc_in()}], {igemm_log2(tb_n)}, v[{v.v_gtc_in()}]")
+            self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_gtc_in()}], {(tb_n-1)*data_byte}")
+            self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_tmp()}], s[{s.s_out_stride_n()}]")
+            self._emit(f"v_add_i32 v[{v.v_out_os()}], v[{v.v_out_os()}], v[{v.v_tmp()}]")
 
         if s_out_stride_d0 != s_dummy:
             #self._emit(f"s_lshl_b32 s[{s_wei_stride_d0()}], s[{s_wei_stride_d0()}], {igemm_log2(data_byte)}")
@@ -1409,9 +1408,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(self.try_shift_stride(s.s_wei_stride_k, 2)) # as we use atomic add fp32 type
         else:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
-
-        self._emit(f"s_lshl_b32 s[{s.s_knum()}], s[{s.s_gemmk_per_wg()}], {igemm_log2(ta_n)}")
-        self._emit(f"s_add_i32 s[{s.s_knum()}], s[{s.s_knum()}], {self.tunable.gemm_k_per_block - 1}")
+        
+        if self.tunable.nxe == 0:
+            self._emit(f"s_add_i32 s[{s.s_knum()}], s[{s.s_gemmk_per_wg()}], {self.tunable.gemm_k_per_block - 1}")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_knum()}], s[{s.s_gemmk_per_wg()}], {igemm_log2(ta_n)}")
+            self._emit(f"s_add_i32 s[{s.s_knum()}], s[{s.s_knum()}], {self.tunable.gemm_k_per_block - 1}")
         self._emit(f"s_lshr_b32 s[{s.s_knum()}], s[{s.s_knum()}], {igemm_log2(self.tunable.gemm_k_per_block)}")
         self._emit(f"s_lshl_b32 s[{s.s_knum()}], s[{s.s_knum()}], {igemm_log2(self.tunable.gemm_k_per_block)}")
         self._emit_empty_line()
