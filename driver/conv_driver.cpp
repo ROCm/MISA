@@ -24,12 +24,9 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#include "args.h"
-#include "config_parser.h"
 #include <chrono>
 #include <functional>
-#include <hip/hip_ext.h>
-#include <hip/hip_runtime.h>
+
 #include <random>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,69 +64,10 @@
 #define USE_MIOPEN_NRMS 1
 #endif
 
-static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
-                                   size_t ksize, size_t stride) {
-    return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
-}
-class gpu_timer_t {
-  public:
-    gpu_timer_t(hipStream_t stream_) {
-        stream = stream_;
-        hipEventCreate(&evt_0);
-        hipEventCreate(&evt_1);
-    }
-    ~gpu_timer_t() {
-        hipEventDestroy(evt_0);
-        hipEventDestroy(evt_1);
-    }
-    void start() {
-        // hipDeviceSynchronize();
-        hipEventRecord(evt_0, stream);
-    }
-    void stop() {
-        hipEventRecord(evt_1, stream);
-        hipEventSynchronize(evt_1);
-        // hipDeviceSynchronize();
-    }
-    float duration() {
-        float ms;
-        hipEventElapsedTime(&ms, evt_0, evt_1);
-        return ms;
-    }
-
-  private:
-    hipEvent_t evt_0, evt_1;
-    hipStream_t stream;
-};
-static int next_pow2(int n) {
-    if (n == 0)
-        return 1;
-    if ((n & (n - 1)) == 0)
-        return n;
-    while ((n & (n - 1)) > 0)
-        n &= (n - 1);
-    return n << 1;
-}
-typedef struct {
-    int return_code     {-1};
-    int gks             {0};  // this is to store the gks value after benchmarked.
-    int grid_size       {0};
-    float duration_ms   {FLT_MAX};
-    float gflops        {0};
-    float efficiency    {0};
-    std::string kernel_name;
-} result_t;
-
-#define HIP_CALL(call)                                                         \
-    do {                                                                       \
-        hipError_t err = call;                                                 \
-        if (err != hipSuccess) {                                               \
-            printf("[hiperror](%d) fail to call %s,(%s)", (int)err, #call,     \
-                   hipGetErrorString(err));                                    \
-            exit(1);                                                           \
-        }                                                                      \
-    } while (0)
-
+#include "common.h"
+#include "args.h"
+#include "config_parser.h"
+#include "perf.h"
 #include "igemm_gtc_base.h"
 #include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
@@ -623,6 +561,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     std::string run_only_kernel = env_get_str("IGEMM_RUN_ONLY_KERNEL", IGEMM_RUN_ONLY_KERNEL_DEFAULT);
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
+    int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -661,6 +600,9 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         printf("\n");
         result.gflops = gflops;
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
+
+        if(dump_gmap)
+            gmap_dump(conv_args, tunable, result.gks);
         return result;
     };
 
@@ -757,7 +699,9 @@ int main(int argc, char **argv) {
     // printf("tunables:%d, hsaco:%s\n", tunables.size(), hsaco);
 
     hipModule_t module;
+#ifndef IGEMM_SPLIT_KERNEL
     HIP_CALL(hipModuleLoad(&module, hsaco));
+#endif
 
     std::string base_arg = create_base_args(argc, argv);
     args_t conv_args = create_conv_args(argc, argv);
@@ -979,7 +923,7 @@ int main(int argc, char **argv) {
     }
 
     if (need_bwd){
-        float *device_input_to_host = NULL;
+        void *device_input_to_host = NULL;
         result_t fastest_result_bwd;
         fastest_result_bwd.duration_ms = FLT_MAX;
         int fastest_id = -1;
@@ -996,6 +940,16 @@ int main(int argc, char **argv) {
             gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 999999., 9999999.);  // manually input value to a very large number
             // gen_rand_vector<float, int>(host_output, static_cast<size_t>(n) * k * ho * wo,1, 1);
             // gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
+
+            if(driver_data_type == driverHalf){
+                tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
+                tensor_copy<float16, float>(static_cast<float16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
+            else if(driver_data_type == driverInt8){
+                tensor_copy<int8_t, float>(static_cast<int8_t*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
+                tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
+
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_output, host_output,
                        static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
@@ -1029,36 +983,64 @@ int main(int argc, char **argv) {
             else
                 assert(0);
 #endif
-            device_input_to_host = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
+            if(driver_data_type == driverHalf || driver_data_type == driverInt8){
+                device_input_to_host = malloc((static_cast<size_t>(n) * c * hi * wi * data_byte + 3) / 4 * 4 );
+            }
+            else{
+                device_input_to_host = malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
+            }
             // printf("len:%d\n", n * c * hi * wi * sizeof(float) );
         }
 
-        HIP_CALL(hipMemcpy(device_output, host_output,
-                       static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
-        HIP_CALL(hipMemcpy(device_weight, host_weight,
-                       static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+        if(driver_data_type == driverFloat){
+            HIP_CALL(hipMemcpy(device_output, host_output,
+                        static_cast<size_t>(n) * k * ho * wo * data_byte, hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight, host_weight,
+                        static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
+        }else{
+            HIP_CALL(hipMemcpy(device_output_dtype, host_output_dtype,
+                        static_cast<size_t>(n) * k * ho * wo * data_byte, hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_dtype, host_weight_dtype,
+                        static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
+        }
 
         igemm_bwd_gtc_t conv_bwd_driver(module, driver_mode, driver_data_type, warmup, repeat, verbose);
 
         auto bwd_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0x7f, static_cast<size_t>(n) * c * hi * wi * sizeof(float))); // 0x7f7f7f7f ~= 7.41e+28, a very large number
+                HIP_CALL(hipMemset(device_input, 0x7f, static_cast<size_t>(n) * c * hi * wi * data_byte)); // 0x7f7f7f7f ~= 7.41e+28, a very large number
         };
 
         auto bwd_post = [&](){
             if (need_verify) {
                 double nrms = get_nrms("bwd", driver_data_type);
-                HIP_CALL(hipMemcpy(device_input_to_host, device_input,
-                                   static_cast<size_t>(n) * c * hi * wi * sizeof(float),
-                                   hipMemcpyDeviceToHost));
-                bool is_valid = valid_vector<float>(host_input, device_input_to_host,
-                                            static_cast<size_t>(n) * c * hi * wi, nrms);
+                bool is_valid = false;
+                if(driver_data_type == driverFloat){
+                    HIP_CALL(hipMemcpy(device_input_to_host, device_input,
+                                    static_cast<size_t>(n) * c * hi * wi * data_byte,
+                                    hipMemcpyDeviceToHost));
+                    is_valid = valid_vector<float>(host_input, static_cast<float*>(device_input_to_host),
+                                                static_cast<size_t>(n) * c * hi * wi, nrms);
+                } else {
+                    HIP_CALL(hipMemcpy(device_input_to_host, device_input_dtype,
+                                    static_cast<size_t>(n) * c * hi * wi * data_byte,
+                                    hipMemcpyDeviceToHost));
+                    if(driver_data_type == driverHalf)
+                        is_valid = valid_vector<float16>(host_input, static_cast<float16*>(device_input_to_host),
+                                                static_cast<size_t>(n) * c * hi * wi, nrms);
+                    else if (driver_data_type == driverInt8)
+                        is_valid = valid_vector<int8_t>(host_input, static_cast<int8_t*>(device_input_to_host),
+                                                static_cast<size_t>(n) * c * hi * wi, nrms);
+                }
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
             }
         };
 
-        launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input, device_weight, device_output, bwd_pre, bwd_post);
+        if(driver_data_type == driverFloat)
+            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input, device_weight, device_output, bwd_pre, bwd_post);
+        else
+            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, bwd_pre, bwd_post);
 
         if (need_verify) 
             free(device_input_to_host);

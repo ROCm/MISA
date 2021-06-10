@@ -267,6 +267,11 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int forw = arg->get_int("forw");
+
+        int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
+        if(need_fwd == 0)
+            return false;
 
         assert(c % group == 0 && k % group == 0);
 
@@ -606,7 +611,15 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
+
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
 
         // TODO: use kernel to pre-clear when atomic
         auto fwd_prolog = tunable->gemm_k_global_split ? 
@@ -663,6 +676,9 @@ public:
             assert(0);
         }
 
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
+#endif
         usleep(1000 * 5);
         return result;
     }

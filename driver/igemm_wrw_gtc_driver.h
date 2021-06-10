@@ -204,6 +204,12 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+		int forw = arg->get_int("forw");
+
+        int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
+        if(need_wrw == 0)
+            return false;
+
         int nxb = tunable->nxb == 0 ? 1 : tunable->nxb;
         int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int data_byte = utility_string_to_data_byte(tunable->precision);
@@ -566,7 +572,7 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
-            std::cout << "not valid tunable config." << std::endl;
+            // std::cout << "not valid tunable config." << std::endl;
             return result;
         }
         
@@ -673,8 +679,16 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //dump_wrw_karg(&karg);
-        printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
 
         hipFunction_t tensor_cast_func;
         HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
@@ -732,6 +746,9 @@ public:
         printf("s_p_in=%x\n", p_in);
         printf("workspace debug end \r\n");
         free(gemmc_host_check);
+#endif
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
         return result;
     }

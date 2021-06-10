@@ -34,7 +34,8 @@ using float16 = half_float::half;
 #else
 using float16 = int16_t;
 #endif
-
+#include <hip/hip_ext.h>
+#include <hip/hip_runtime.h>
 #include "config_parser.h"
 #include "utility.h"
 #include <string>
@@ -44,6 +45,7 @@ using float16 = int16_t;
 #include <math.h>
 #include <functional>
 #include <stdint.h>
+#include <numeric>
 
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_MAC              "mac"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
@@ -571,7 +573,7 @@ public:
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
     virtual int heuristic_select_gks(const args_t *arg, const igemm_gtc_tunable_t *tunable) {return 0; }
 
-    hipModule_t         module;
+    hipModule_t         module;         // not used in IGEMM_SPLIT_KERNEL case
     driver_mode_t       driver_mode;
     driverDataType_t    data_type;
     int                 warmup;
