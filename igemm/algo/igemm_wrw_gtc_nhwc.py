@@ -796,9 +796,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                         for i_gemmk in range(num_ds_write):
                             for i_ds_write_pack in range(num_ds_write_pack):
                                 for i_pk in range(packed_gemmk_dword):
-                                    idx_0 = 2 * i_pk * dwords_per_mn + i_gemmk + i_ds_write_pack // 2
-                                    idx_1 = 2 * i_pk * dwords_per_mn + i_gemmk + i_ds_write_pack // 2 + dwords_per_mn
-                                    op_sel = '' if i_ds_write_pack % 2 == 0 else ' op_sel:[1, 1]'
+                                    idx_0 = 2 * i_pk * dwords_per_mn + (i_gemmk * num_ds_write_pack + i_ds_write_pack) // 2
+                                    idx_1 = 2 * i_pk * dwords_per_mn + (i_gemmk * num_ds_write_pack + i_ds_write_pack) // 2 + dwords_per_mn
+                                    op_sel = '' if (i_gemmk * num_ds_write_pack + i_ds_write_pack) % 2 == 0 else ' op_sel:[1, 1]'
                                     # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
                                     self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
                             self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_gemmk * stride_d_mn))
