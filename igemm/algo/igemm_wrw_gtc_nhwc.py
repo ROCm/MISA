@@ -781,22 +781,26 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             def expr(self):
                 self.issue_cnt = 0
                 num_t_gemmk, num_t_mn = tb_n, self.t_mn
-                stride_d_mn = k_pack * data_byte
                 if data_byte == 2:
                     dwords_per_mn = num_t_mn // 2 if num_t_mn > 1 else 1
                     if tb_n % 2 != 0:
                         assert False
                     else:
                         packed_gemmk_dword = num_t_gemmk // 2
+                        ds_write_dword = igemm_gcd(packed_gemmk_dword * num_t_mn, 4)
                         assert packed_gemmk_dword <= 4, "currently other size not used yet"
-                        ds_write = inst_ds_write_t(packed_gemmk_dword * 4)
-                        for i_gemmk in range(num_t_mn):
-                            for i_pk in range(packed_gemmk_dword):
-                                idx_0 = 2 * i_pk * dwords_per_mn + i_gemmk // 2
-                                idx_1 = 2 * i_pk * dwords_per_mn + i_gemmk // 2 + dwords_per_mn
-                                op_sel = '' if i_gemmk % 2 == 0 else ' op_sel:[1, 1]'
-                                # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
-                                self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                        ds_write = inst_ds_write_t(ds_write_dword * 4)
+                        num_ds_write_pack = ds_write_dword // (num_t_gemmk // 2)
+                        num_ds_write = num_t_mn // num_ds_write_pack
+                        stride_d_mn = k_pack * data_byte * num_ds_write_pack
+                        for i_gemmk in range(num_ds_write):
+                            for i_ds_write_pack in range(num_ds_write_pack):
+                                for i_pk in range(packed_gemmk_dword):
+                                    idx_0 = 2 * i_pk * dwords_per_mn + i_gemmk + i_ds_write_pack // 2
+                                    idx_1 = 2 * i_pk * dwords_per_mn + i_gemmk + i_ds_write_pack // 2 + dwords_per_mn
+                                    op_sel = '' if i_ds_write_pack % 2 == 0 else ' op_sel:[1, 1]'
+                                    # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
                             self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_gemmk * stride_d_mn))
                             self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_gemmk * stride_d_mn)
 
