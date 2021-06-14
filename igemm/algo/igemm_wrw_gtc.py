@@ -2352,8 +2352,13 @@ class igemm_wrw_gtc_t(mc_base_t):
                         self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
                             s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), v.v_wei_flag()))
                 else:
-                    self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
-                        s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
+                    if self.do_k_padding:
+                        self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
+                            s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None,
+                            s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                    else:
+                        self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
+                            s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None))
             else:
                 self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_wei(), v.v_wei_os(), None,
                     s.s_wei_stride_k0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_wei_stride_k(), s.s_tmp(), None, s.s_k(), v.v_cur_k(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))

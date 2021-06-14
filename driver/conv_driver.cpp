@@ -982,6 +982,7 @@ int main(int argc, char **argv) {
         double gflops = measured_fp32_conv_gflops(
                 min_duration, n, c, hi, wi, k, y, x, stride_h, stride_w,
                 dilation_h, dilation_w, pad_h, pad_w, ngroups);
+        dump_arg(&conv_args);
         printf("min cost:%.3fms, tflops:%.3f(%.2f%%),  min grid:%d\r\n", min_duration,
                    gflops / 1000 , (gflops / fp32_gflops) * 100, min_grid);
         std::cout << "min name:" << kernel_name << std::endl;
