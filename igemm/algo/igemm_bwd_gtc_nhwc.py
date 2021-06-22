@@ -145,7 +145,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             def get_vector_write_out():
                 vector_write = 1
-                config_vs = self.tunable.vector_store
+                config_vs = self.tunable.vector_store       # this is useful in int8. but since bwd we may not have int8....
                 if self.tunable.precision == 'fp32':
                     assert config_vs == 0
                     vector_write = 1                        # fp32 vector seems not much perf improvement
@@ -159,6 +159,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                             vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
                 elif self.tunable.precision == 'int8':
+                    assert False, "currently bwd not need int8"
                     if self.is_pad_k():
                         vector_write = 1
                     else:
@@ -550,7 +551,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
-                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os()))
+                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -808,6 +809,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if not outer.tunable.tensor_b_pass_through:
                 self.v_sst_b_os         = sym_t("v_sst_b_os"        ,vseq(1))
                 self.v_sld_b_os         = sym_t("v_sld_b_os"        ,vseq(1))
+            # if data_byte == 2:
+            #     self.v_pack_k_tmp       = sym_t("v_pack_k_tmp"      ,vseq(tb_k // 2))
 
             self.v_out_os               = sym_t("v_out_os"           ,vseq(ta_nb_per_thread))
             self.v_out_iho_list         = sym_t("v_out_iho_list"     ,vseq(ta_nb_per_thread))
@@ -868,10 +871,33 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.v_tmp                  = sym_t("v_tmp"             ,vseq(6, 2))
             self.v_wei_tmp_pack         = sym_t("v_wei_tmp_pack"    ,vseq(1) if outer.is_pad_k() else \
                                                                     (self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1)))
-            if tb_nc_per_thread <= 4 and IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
-                self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value)
+            if IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
+                if data_byte == 2:
+                    tb_num_pack_k_tmp = tb_k // 2
+                    def possible_assign_tmp(num_a, num_b, balance = 4):
+                        if num_a <= num_b:
+                            if num_b <= 4:
+                                return vseq(num_a), self.v_tmp.value    # a <= b <= 4
+                            elif num_a <= 4:
+                                return self.v_tmp.value, vseq(num_b)    # a <= 4 <= b
+                            else:
+                                return vseq(num_a), vseq(num_b)         # 4 <= a <= b
+                        else:
+                            if num_a <= 4:
+                                return self.v_tmp.value, vseq(num_b)
+                            elif num_b <= 4:
+                                return vseq(num_a), self.v_tmp.value
+                            else:
+                                return vseq(num_a), vseq(num_b)
+                    num_v_wei_flag, num_v_pack_k_tmp = possible_assign_tmp(tb_nc_per_thread, tb_num_pack_k_tmp)
+                    self.v_wei_flag             = sym_t("v_wei_flag"        ,num_v_wei_flag)
+                    self.v_pack_k_tmp           = sym_t("v_pack_k_tmp"      ,num_v_pack_k_tmp)
+
+                else:
+                    self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value if tb_nc_per_thread <= 4 else vseq(tb_nc_per_thread))
+
             else:
-                self.v_wei_flag         = sym_t("v_wei_flag"        ,vseq(tb_nc_per_thread))
+                assert False, "not supported now"
 
             if outer.tunable.nxe != 0:
                 self.v_in_hi_sshift     = sym_t("v_in_hi_sshift"    ,self.v_tmp.value + 4)
@@ -914,7 +940,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
     
     def get_num_vgpr_global_load_b(self):
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
+        if self.tunable.precision == 'fp32':
+            pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
+        elif self.tunable.precision == 'fp16':
+            pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c1 != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
     # def get_num_global_load_b_per_mbb(self):
@@ -1040,7 +1069,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
     def get_macro_global_load(self):
         '''
-        NOTICE: output/wei always load gemm_k (e*k) first. indeed always load k, and do vector load if possible
+        NOTICE: output always load gemm_k (e*k) first. indeed always load k, and do vector load if possible
+                wei is continus in gemm_n (c), so little different
         '''
         inline = True if self.tunable.fma_interleave else False
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
@@ -1160,6 +1190,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.issue_cnt = 0
                 self.declare_arg("v_src")
                 self.declare_arg("v_sst_os")
+                if data_byte == 2:
+                    self.declare_arg("v_pack_k_tmp")    # need tb_k // 2
+
             def name(self):
                 return ''
 
@@ -1168,7 +1201,30 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 num_tb_k, num_tb_c = tb_k, tb_c0 * tb_c1
                 stride_dc = k_pack_src_mat * data_byte
                 stride_dk = nb_c0 * nb_c1 * k_pack_src_mat * data_byte
+                if data_byte == 2:
+                    assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
+                    # fp16 order is different from fp32. we do emit here
+                    dwords_per_c = num_tb_c // (2 if tb_c1 != 1 else 1)
+
+                    if tb_k % 2 != 0:
+                        assert False
+                    else:
+                        packed_k_dword = tb_k // 2
+                        assert packed_k_dword <= 4, "currently other size not used yet"
+                        ds_write = inst_ds_write_t(packed_k_dword * 4)
+                        for i_c in range(num_tb_c):
+                            for i_pk in range(packed_k_dword):
+                                idx_0 = 2 * i_pk * dwords_per_c + i_c // 2
+                                idx_1 = 2 * i_pk * dwords_per_c + i_c // 2 + dwords_per_c
+                                op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
+                                # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                            self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_c * stride_dc))
+                            self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_c * stride_dc)
+
+                    return
                 if tb_c1 == 1:
+                    assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
                     ds_write = inst_ds_write_t(data_byte * num_tb_k)
                     for i_c in range(num_tb_c):
                         self._emit(ds_write(self.v_sst_os(), self.v_src(i_c * num_tb_k), i_c * stride_dc * nb_c1))
@@ -1868,7 +1924,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     # TODO: need multiple load of pass through side
                     self._emit(machine_basic_block_call(self, i_mbb))
             else:
-                self._emit(self.global_load_wei())
+                pass_gload_wei = pass_global_mem_merge_dup_flag_t(self.mc)
+                self._emit(pass_gload_wei.lower(create_machine_basic_block(self.global_load_wei())))
             self._emit_empty_line()
 
         # do load

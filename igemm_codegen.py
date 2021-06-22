@@ -47,7 +47,7 @@ def igemm_flatten(args, config_content):
     for td in tunable_dicts:
         td['arch'] = sec_root['arch']       # append arch to each section
 
-    igemm_codegen_driver_t(mc, tunable_dicts)()
+    igemm_codegen_driver_t(mc, tunable_dicts)(split_kernel = args.split_kernel)
 
     # os.chmod(asm_target, 0x777)
 
@@ -82,6 +82,7 @@ if __name__ == '__main__':
     parser.add_argument("config_file", help="config file as input")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
     parser.add_argument("-output", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
+    parser.add_argument("-s", "--split_kernel", action="store_true")
     args = parser.parse_args()
 
     config_parser = config_parser_t(args.config_file)
@@ -101,7 +102,10 @@ if __name__ == '__main__':
         if os.path.exists(args.dir):
             shutil.rmtree(args.dir)
         os.mkdir(args.dir)
-        igemm_host_driver(arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config)
+        cxxflags = []
+        if args.split_kernel:
+            cxxflags += ["-DIGEMM_SPLIT_KERNEL"]
+        igemm_host_driver(cxxflags=cxxflags, arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):

@@ -707,7 +707,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
             ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
         elif self.in_thread_copy_ndim == 1:
-            if in_thread_copy_index == 1:
+            if in_thread_copy_index[0] == 1:
                 ctrl_in_gld.length_d0 = 1
                 ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
             else:
@@ -724,7 +724,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_out_gld.length_d0 = out_thread_copy_dims[out_thread_copy_index[0]]
             ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[1]]
         elif self.out_thread_copy_ndim == 1:
-            if out_thread_copy_index == 1:
+            if out_thread_copy_index[0] == 1:
                 ctrl_out_gld.length_d0 = 1
                 ctrl_out_gld.length_d1 = out_thread_copy_dims[out_thread_copy_index[0]]
             else:

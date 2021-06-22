@@ -208,6 +208,12 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+		int forw = arg->get_int("forw");
+
+        int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
+        if(need_wrw == 0)
+            return false;
+
         int nxb = tunable->nxb == 0 ? 1 : tunable->nxb;
         int b  = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + nxb - 1) / nxb) * nxb;   // pad to nxb modulo when nxe != 0
         int data_byte = utility_string_to_data_byte(tunable->precision);
@@ -228,7 +234,7 @@ public:
         int gemmk_blocks             = 1 << gemm_k_global_split;
         
         if (n % gemmk_blocks != 0){
-            return false;
+            //return false;
         }
 
         int n_per_block = n >> gemm_k_global_split;
@@ -580,10 +586,10 @@ public:
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
-            std::cout << "not valid tunable config." << std::endl;
+            // std::cout << "not valid tunable config." << std::endl;
             return result;
         }
-
+        
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -702,8 +708,16 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         //dump_wrw_karg(&karg);
-        printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        //printf("kernel:%s\n, block:%d, grid:%d, gemm_k_global_split:%d\n", kernel_name.c_str(), block_size, grid_size, gemm_k_global_split);
+        
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
 
         hipFunction_t tensor_cast_func;
         HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
@@ -725,7 +739,7 @@ public:
         int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
         float min_duration = FLT_MAX;
         int selected_gkgs = 0;
-        //max_split_num = 2;
+        max_split_num = 2;
         for(int gkgs = 0; gkgs < max_split_num; gkgs++){
             std::vector<igemm_launch_kernel_t> kernel_launchers;
 
@@ -735,13 +749,13 @@ public:
                 if(gemm_k_global_splits == 0){
                     gemm_k_global_splits = 1;
                 }
-                int tmp_gemm_k_per_wg = (int)(ceil((n / min_n_per_block) * b / (float)gemm_k_global_splits));
+                int tmp_gemm_k_per_wg = (int)(ceil(ceil(n / (float)min_n_per_block) * b / (float)gemm_k_global_splits));
                 tmp_gemm_k_per_wg = (tmp_gemm_k_per_wg + nb_per_block - 1) / nb_per_block * nb_per_block;
-                gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(tmp_gemm_k_per_wg)));
+                gemm_k_global_splits = (int)(ceil(ceil(n / (float)min_n_per_block) * b / (float)(tmp_gemm_k_per_wg)));
                 karg.gemm_k_global_split = gemm_k_global_splits;
                 karg.gemm_k_per_wg = tmp_gemm_k_per_wg;
-                //printf("gemm_k_global_splits=%d, tmp_gemm_k_per_wg=%d\n", gemm_k_global_splits, tmp_gemm_k_per_wg);
-                //fflush(stdout);
+                printf("gemm_k_global_splits=%d, tmp_gemm_k_per_wg=%d\n", gemm_k_global_splits, tmp_gemm_k_per_wg);
+                fflush(stdout);
             }
 
             kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
@@ -755,8 +769,8 @@ public:
                 min_duration = duration;
                 selected_gkgs = gemm_k_global_splits;
             }
-            //printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
-            //fflush(stdout);
+            printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
+            fflush(stdout);
         }
 
         result.return_code = 0;
@@ -790,6 +804,9 @@ public:
         printf("s_p_in=%x\n", p_in);
         printf("workspace debug end \r\n");
         free(gemmc_host_check);
+#endif
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
         return result;
     }

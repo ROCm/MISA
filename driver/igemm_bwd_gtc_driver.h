@@ -372,6 +372,11 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int forw = arg->get_int("forw");
+
+        int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
+        if(need_bwd == 0)
+            return false;
 
         assert(c % group == 0 && k % group == 0);
 
@@ -417,6 +422,9 @@ public:
                 // printf("tunable_is_valid false:: gemm_n is %d, gemm_n_per_block is %d, gemm_m is %d, gemm_m_per_block is %d\n", gemm_n,gemm_n_per_block,gemm_m,gemm_m_per_block);
                 return false;
             }
+            if((tunable->tensor_a_thread_lengths[0] != 1 || tunable->tensor_a_thread_lengths[1] != 1 ||
+                tunable->tensor_b_thread_lengths[0] != 1 || tunable->tensor_b_thread_lengths[1] != 1) && (k / group) % gemm_k_per_block != 0)
+                return false;
 
             if(gemm_n_per_block%tunable->nxb!=0){
                 // printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
@@ -743,8 +751,14 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
         // printf("kernel:%s\n, block:%d, grid:%d\n", kernel_name.c_str(), block_size, grid_size);
-        HIP_CALL(
-            hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#ifdef IGEMM_SPLIT_KERNEL
+        hipModule_t cur_kernel_module;
+        std::string cur_kernel_hsaco = kernel_name + ".hsaco";
+        HIP_CALL(hipModuleLoad(&cur_kernel_module, cur_kernel_hsaco.c_str()));
+        HIP_CALL(hipModuleGetFunction(&kernel_func, cur_kernel_module, kernel_name.c_str()));
+#else
+        HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
+#endif
 
 #ifdef IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL
         hipFunction_t upsampling_clear_kernel_func;
@@ -872,6 +886,9 @@ public:
             assert(0);
         }
 
+#ifdef IGEMM_SPLIT_KERNEL
+        HIP_CALL(hipModuleUnload(cur_kernel_module));
+#endif
         usleep(1000 * 5);
         return result;
     }
