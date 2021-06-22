@@ -751,6 +751,7 @@ class igemm_wrw_gtc_t(mc_base_t):
             sseq                           = gpr_sequencer_t(30 + 1)
             self.s_gemmk_split             = sym_t("s_gemmk_split"           ,sseq(1))
             self.s_group                   = sym_t("s_group"                 ,sseq(1))
+            self.s_ho_padded               = sym_t("s_ho_padded"             ,sseq(1))
             self.s_out_stride_k            = sym_t("s_out_stride_k"           ,sseq(1))
             if n_k0 > 1:
                 self.s_out_stride_k0           = sym_t("s_out_stride_k0"          ,sseq(1))
@@ -1522,7 +1523,7 @@ class igemm_wrw_gtc_t(mc_base_t):
         self._emit(f"s_load_dwordx2  s[{s.s_p_wei((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_wei()}")
         self._emit(f"s_load_dwordx2  s[{s.s_p_out((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_p_out()}")
         self._emit(f"s_load_dwordx16 s[{s.s_hi((0,15))}],        s[{s.s_ka((0, 1))}],    0+{k.k_hi()}")
-        self._emit(f"s_load_dword s[{s.s_group()}],         s[{s.s_ka((0, 1))}],    0+{k.k_group()}")
+        self._emit(f"s_load_dwordx2  s[{s.s_group((0,1))}],      s[{s.s_ka((0, 1))}],    0+{k.k_group()}")
 
         # self._emit("; clear vector r")
         # self._emit(".v_clear_nc v_c+1, v_end-1")
@@ -2185,7 +2186,7 @@ class igemm_wrw_gtc_t(mc_base_t):
                 with self._deferred_context():
                     if self.tunable.nxe != 0:
                         m_move_slice_window   = self.get_macro_move_slice_window_check_last_dim()
-                        self._emit(m_move_slice_window(v.v_move_slice_n_in1(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_gemm_k_num_n1(), s.s_ho(), s.s_wo(),
+                        self._emit(m_move_slice_window(v.v_move_slice_n_in1(), v.v_move_slice_n_idsho(), v.v_move_slice_n_idswo(), s.s_gemm_k_num_n1(), s.s_ho_padded(), s.s_wo(),
                             s.s_move_slice_n_n1(), s.s_move_slice_n_dsho(), s.s_move_slice_n_dswo(), v.v_in_os_base(), v.v_out_os_base(),
                             s.s_in_stride_n(), s.s_out_stride_n(), s.s_in_stride_n_n1(), s.s_out_stride_n_n1(), s.s_in_stride_n_n0_n1_diff() if n_n0 > 1 else None, 
                             s.s_out_stride_n_n0_n1_diff() if n_n0 > 1 else None, v.v_move_slice_n_in0(), v.v_tmp(), s.s_sub_n(), v.v_flag_n()))

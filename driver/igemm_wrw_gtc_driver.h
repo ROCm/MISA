@@ -732,6 +732,9 @@ public:
         karg.gemm_k_global_split  = gemm_k_global_split;
         karg.group         = group;
 
+        int dim_b          = (ho * wo + tunable->nxb - 1) / tunable->nxb * tunable->nxb;
+        karg.__pack_0      = utility_integer_divide_ceil(dim_b, wo);
+
         // printf("gemmk split is %d\r\n", 1 << gemm_k_global_split);
 
         // reduction kernel args
