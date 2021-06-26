@@ -37,7 +37,7 @@
 #include <algorithm>
 #include <numeric>
 
-#define WRW_MAX_GEMM_K_SPLITS 30
+#define WRW_MAX_GEMM_K_SPLITS 10
 
 typedef struct {
     void* output;
@@ -652,7 +652,7 @@ public:
 
         int use_workspace = 0;
 
-        if(gemm_k_global_split == 1 && data_byte == 2 && tunable->tensor_b_thread_lengths[3] == 1)
+        if(gemm_k_global_split == 1 && data_byte == 2 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
             use_workspace = 1;
         else
             use_workspace = 0;
@@ -739,7 +739,7 @@ public:
         int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
         float min_duration = FLT_MAX;
         int selected_gkgs = 0;
-        max_split_num = 2;
+        //max_split_num = 1;
         for(int gkgs = 0; gkgs < max_split_num; gkgs++){
             std::vector<igemm_launch_kernel_t> kernel_launchers;
 

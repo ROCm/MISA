@@ -130,7 +130,27 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
 
-            ctrl_coalescing_store_xdlops.vector_write_out = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3]) if self.tunable.precision == 'fp16' else 1
+            def get_vector_write_out():
+                vector_write = 1
+                config_vs = self.tunable.vector_store
+                if self.tunable.precision == 'fp32':
+                    assert config_vs == 0
+                    vector_write = 1                        # fp32 vector seems not much perf improvement
+                elif self.tunable.precision == 'fp16':
+                    if self.tunable.gemm_k_global_split == 0:
+                        vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])
+                    else:
+                        if config_vs == 0:
+                            vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])
+                        else:
+                            assert self.tunable.tensor_b_thread_lengths[3] % config_vs == 0
+                            vector_write = igemm_gcd(2, config_vs)
+                else:
+                    assert False
+
+                return vector_write
+
+            ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
 
             if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
@@ -262,6 +282,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self.declare_arg("v_in_os_base")
             self.declare_arg("s_in_stride_move_n")
             self.declare_arg("s_in_stride_n_n")
+            self.declare_arg("s_out_stride_n_n")
             self.declare_arg("s_stride_h")
             self.declare_arg("s_ho_line")
             self.declare_arg("s_wo_line")
@@ -286,6 +307,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_mov_b64 exec, -1")
             self._emit_empty_line()
             self._emit(f"v_add_u32 v[{self.v_in_os_base()}], s[{self.s_in_stride_n_n()}], v[{self.v_in_os_base()}]")
+            self._emit(f"v_add_u32 v[{self.v_out_os()}], s[{self.s_out_stride_n_n()}], v[{self.v_out_os()}]")
 
     class global_load_in_t(mc_base_t):
         def __init__(self, mc, outer):
@@ -452,6 +474,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
             self.s_ec_padded               = sym_t("s_ec_padded"              ,sseq(1))
             self.s_in_stride_n_n           = sym_t("s_in_stride_n_n"          ,sseq(1))
+            self.s_out_stride_n_n          = sym_t("s_out_stride_n_n"         ,sseq(1))
 
             self.s_move_slice_n            = sym_t("s_move_slice_n"           ,sseq(1))
 
@@ -788,6 +811,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                     else:
                         packed_gemmk_dword = num_t_gemmk // 2
                         ds_write_dword = igemm_gcd(packed_gemmk_dword * num_t_mn, 4)
+                        if packed_gemmk_dword == 1:
+                            ds_write_dword = 1
                         assert packed_gemmk_dword <= 4, "currently other size not used yet"
                         ds_write = inst_ds_write_t(ds_write_dword * 4)
                         num_ds_write_pack = ds_write_dword // (num_t_gemmk // 2)
@@ -1332,7 +1357,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; weight offset")
-        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
             # s_block_gtc_ig = ig*2, but for wei workspace, s_block_gtc_ig need to be ig*4, so here we give it a (*2)
             self._emit(f"s_mul_i32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], 2")
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k()}]")
@@ -1342,7 +1367,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
 
         self._emit_empty_line()
-        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], 2")
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
@@ -1378,7 +1403,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"; add i_k")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_co_sub_m_index()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp()}]")
-        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {2}, v[{v.v_wei_os()}]")
         else:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
@@ -1388,7 +1413,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_lshl_b32 s[{s.s_out_move_step()}], s[{s.s_k()}], {igemm_log2(data_byte * na_nb)}")
             self._emit(f"s_lshl_b32 s[{s.s_in_move_step()}], s[{s.s_c()}], {igemm_log2(data_byte * nb_nb)}")
         else:
-            self._emit(f"s_lshl_b32 s[{s.s_out_move_step()}], s[{s.s_k()}], {igemm_log2(data_byte * ca_nb)}")
+            # for ex1 cases, it should be computed by move slice b, which will be computed later
+            pass
 
         self._emit(f"; move slice stride")
         assert na_nb == self.tunable.gemm_k_per_block
@@ -1396,6 +1422,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_mov_b32 s[0], {ca_nb}")
             self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_move_slice_n(), '0', s.s_dim_b(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
             self._emit(m_int_div_rem_ss(s.s_move_slice_n_dswo(), s.s_move_slice_n_dsho(), s.s_tmp(4), s.s_wo(), v.v_tmp(4), v.v_tmp(), s.s_tmp()))
+            self._emit_empty_line()
+            self._emit("; move slice step for output tensor")
+            self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_tmp(4)}], {igemm_log2(data_byte)}")
+            self._emit(f"s_mul_i32 s[{s.s_out_move_step()}], s[{s.s_k()}], s[{s.s_tmp()}]")
             self._emit_empty_line()
             self._emit(f"s_lshl_b32 s[{s.s_move_slice_n()}], s[{s.s_move_slice_n()}], {igemm_log2(ta_n)}")
             self._emit_empty_line()
@@ -1405,10 +1435,11 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
             self._emit(self.try_shift_stride(s.s_out_stride_n, igemm_log2(data_byte)))
             self._emit(f"s_mul_i32 s[{s.s_in_stride_n_n()}], s[{s.s_move_slice_n()}], s[{s.s_in_stride_n()}]")
+            self._emit(f"s_mul_i32 s[{s.s_out_stride_n_n()}], s[{s.s_move_slice_n()}], s[{s.s_out_stride_n()}]")
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_move_n()}], s[{s.s_in_stride_n()}], {igemm_log2(ta_n)}")
             self._emit(f"s_mul_i32 s[{s.s_out_stride_move_n()}], s[{s.s_out_stride_n()}], {ta_n - 1}")
 
-        if self.tunable.tensor_b_thread_lengths[3] == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
             self._emit(self.try_shift_stride(s.s_wei_stride_k, 2)) # as we use atomic add fp32 type
         else:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
@@ -1436,7 +1467,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                     m_move_slice_window   = self.get_macro_move_slice_window()
                     self._emit(m_move_slice_window(v.v_in_ihi(), v.v_in_iwi(), v.v_in_ihi_max(), v.v_in_iwi_max(), v.v_out_os(),
                         s.s_move_slice_n_dsho(), s.s_move_slice_n_dswo(), v.v_in_os_base(), s.s_in_stride_move_n(), 
-                        s.s_in_stride_n_n(), s.s_stride_h(), s.s_ho_x_stride_h(), s.s_wo_x_stride_w(), s.s_out_stride_move_n()))
+                        s.s_in_stride_n_n(), s.s_out_stride_n_n(), s.s_stride_h(), s.s_ho_x_stride_h(), s.s_wo_x_stride_w(), s.s_out_stride_move_n()))
                     #self._emit(m_in_update_hw(v.v_in_ihi(), v.v_in_iwi(), v.v_out_iho(), v.v_out_iwo(), s.s_stride_h(), s.s_stride_w(), v.v_wei_iy(), v.v_wei_ix(), s.s_dilation_h(), s.s_dilation_w(), s.s_pad_h(), s.s_pad_w(), v.v_tmp()))
                     self._emit(m_in_update_os(v.v_in_os(), v.v_in_os_base(), v.v_in_ihi(), v.v_in_iwi(), s.s_wi(), s.s_in_stride_wi(), v.v_tmp()))
                     self._emit(m_set_flag_hw(v.v_in_flag(), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
