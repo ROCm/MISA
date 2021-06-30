@@ -287,16 +287,21 @@ class macro_acc_c_clear_t(macro_base_t):
     '''
     def name(self):
         return '.v_clear_acc_c'
-    def __init__(self, mc):
+    def __init__(self, mc, **options):
         macro_base_t.__init__(self, mc)
+        self.options = options
     def __call__(self, a, num):
         return '{} {}, {}'.format(self.name(), a, num)
     def emit(self):
+        accvgpr_unified = True if 'accvgpr_unified' in self.options and self.options['accvgpr_unified'] else False
         with self._emit_macro_indented(".macro {} a, num".format(self.name())):
             self._emit("_a = \\a")
             self._emit(".rept \\num")
             with self._indent_context():
-                self._emit("v_accvgpr_write_b32 a[_a], 0")
+                if accvgpr_unified:
+                    self._emit("v_accvgpr_write_b32 a[_a], 0")
+                else:
+                    self._emit("v_accvgpr_write_b32 a[_a], 0")
                 self._emit("_a = _a + 1")
             self._emit(".endr")
 

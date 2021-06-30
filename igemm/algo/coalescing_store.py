@@ -426,6 +426,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.block_size = 256
         self.vector_write_out = 1
         self.precision = 'fp32'
+        self.accvgpr_unified = False        # agpr unified in gfx90a
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
         self.gemm_k_global_split = False
@@ -1147,6 +1148,12 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         v_co_sld = sym_t(v_co_sld)
         s_tmp6 = sym_t(s_tmp6)
 
+        def accvgpr(label):
+            if ctrl.accvgpr_unified:
+                return f'a[{label}]'
+            else:
+                return f'a[{label}]'
+
         if s_k is not None:
             s_k = sym_t(s_k)
             v_cur_k = sym_t(v_cur_k)
@@ -1255,10 +1262,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                      sst_n_offset * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) * data_byte
                         assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * data_byte < lds_size_per_group
 
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], {accvgpr(a_c(agpr_index + 0))}") ; agpr_consume_list.append(agpr_index + 0)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], {accvgpr(a_c(agpr_index + 1))}") ; agpr_consume_list.append(agpr_index + 1)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], {accvgpr(a_c(agpr_index + 2))}") ; agpr_consume_list.append(agpr_index + 2)
+                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], {accvgpr(a_c(agpr_index + 3))}") ; agpr_consume_list.append(agpr_index + 3)
                         # self._emit(f"s_nop 4")    # might consider nop to solve RAW
                         # for fp16 and bf16, vgpr need to be cast to 16 bits
                         if ctrl.precision == 'fp16':

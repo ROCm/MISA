@@ -29,7 +29,7 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile
+from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile, set_ctrl_xdlops_mapping_accvgpr_unified
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
@@ -118,16 +118,16 @@ def get_igemm_gtc_fma_type(tunable_dict):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
         if tunable_dict['arch'] == 'gfx906':
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
-        if tunable_dict['arch'] == 'gfx908':
+        if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
-        assert tunable_dict['arch'] == 'gfx908'
+        assert tunable_dict['arch'] in ('gfx908', 'gfx90a')
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
 def get_igemm_gtc_gemm_k_global_split(tunable_dict):
     assert type(tunable_dict) is dict
-    if tunable_dict['arch'] == 'gfx908':
+    if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
         gemm_k_global_split = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         if gemm_k_global_split > 0:
             return 1
@@ -200,6 +200,9 @@ class igemm_gtc_tunable_parameter_t(object):
         self.merge_e                            = utility_dict_with_default_t(tunable_dict)('merge_e', 0)   # indicate if merge c*y*x for gemm_k (fwd), useful in nhwc fwd
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
+
+        if tunable_dict['arch'] == 'gfx90a':
+            set_ctrl_xdlops_mapping_accvgpr_unified(True)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list

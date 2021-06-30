@@ -188,10 +188,10 @@ static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const 
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC;
         if(arch_string == "gfx906")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
-        if(arch_string == "gfx908")
+        if(arch_string == "gfx908" || arch_string == "gfx90a")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
     }else if(sec.count("wave_tile_m") > 0 && sec.count("wave_tile_n") > 0){
-        assert(arch_string == "gfx908");
+        assert(arch_string == "gfx908" || arch_string == "gfx90a");
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS;
     }
     return IGEMM_GTC_TUNABLE_FMA_TYPE_NA;

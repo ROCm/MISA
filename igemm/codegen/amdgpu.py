@@ -39,6 +39,7 @@ AMDGPU_CODEOBJECT_V3    = (1 << 28)
 AMDGPU_ARCH_GFX900      = 900
 AMDGPU_ARCH_GFX906      = 906
 AMDGPU_ARCH_GFX908      = 908
+AMDGPU_ARCH_GFX90A      = 910
 AMDGPU_ARCH_GFX1030     = 1030
 
 AMDGPU_WAVE_SIZE        = 64
@@ -62,6 +63,8 @@ def amdgpu_string_to_arch(amdgpu_arch_string):
         return AMDGPU_ARCH_GFX906
     if amdgpu_arch_string == 'gfx908':
         return AMDGPU_ARCH_GFX908
+    if amdgpu_arch_string == 'gfx90a':
+        return AMDGPU_ARCH_GFX90A
     if amdgpu_arch_string == 'gfx1030':
         return AMDGPU_ARCH_GFX1030
     assert False
@@ -73,6 +76,8 @@ def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
         return 'gfx906'
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX908:
         return 'gfx908'
+    if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX90A:
+        return 'gfx90a'
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX1030:
         return 'gfx1030'
     assert False
@@ -242,7 +247,7 @@ class amdgpu_arch_config_t(object):
         if self.arch == AMDGPU_ARCH_GFX906:
             self.use_dlops  = ad('use_dlops', True)
             self.use_xdlops = ad('use_xdlops', False)
-        elif self.arch == AMDGPU_ARCH_GFX908:
+        elif self.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A):
             self.use_dlops  = ad('use_dlops', False)
             self.use_xdlops = ad('use_xdlops', True)
 
@@ -354,6 +359,8 @@ class amdgpu_kernel_code_t(object):
         else:
             self.granulated_wavefront_sgpr_count    = self.cal_granulated_wavefront_sgpr_count()
         self.kernarg_segment_byte_size              = kc('kernarg_segment_byte_size', 0)
+        self.tg_split                               = kc('tg_split', 0)
+        self.accum_offset                           = kc('accum_offset', 0)
 
     def cal_user_sgpr_count(self):
         count = 0
@@ -374,6 +381,7 @@ class amdgpu_kernel_code_t(object):
     def cal_granulated_workitem_vgpr_count(self):
         '''
         (workitem_vgpr_count-1)/4
+        note for gfx90a, this value need be (workitem_vgpr_count-1)/8, but since this is used in cov2, so omit here
         '''
         return (self.workitem_vgpr_count - 1) // 4
 
@@ -471,6 +479,9 @@ class amd_kernel_code_t(mc_base_t):
 
                 self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
                 self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
+                if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                    self._emit('.amdhsa_tg_split {}'.format(                        self.ki.kernel_code.tg_split))
+                    self._emit('.amdhsa_accum_offset {}'.format(                    self.ki.kernel_code.accum_offset))
                 if self.mc.arch_config.arch >= 1000:
                     self._emit('.amdhsa_wavefront_size32 1')
                     self._emit('.amdhsa_workgroup_processor_mode 1')

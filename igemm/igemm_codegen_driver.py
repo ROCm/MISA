@@ -103,6 +103,8 @@ class igemm_codegen_driver_t(mc_base_t):
         # emit_write_4d_strided_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
+        elif self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and self.mc.arch_config.use_xdlops:
+            macro_acc_c_clear_t(self.mc, accvgpr_unified=True).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.use_dlops:
             self._emit_fma_macro()
@@ -126,6 +128,8 @@ class igemm_codegen_driver_t(mc_base_t):
         # emit_write_4d_strided_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
+        elif self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and self.mc.arch_config.use_xdlops:
+            macro_acc_c_clear_t(mc, accvgpr_unified=True).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.use_dlops:
             self._emit_fma_macro()
