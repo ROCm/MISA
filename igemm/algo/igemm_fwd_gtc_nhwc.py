@@ -37,6 +37,7 @@ from .mfma_main_loop import *
 
 IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG = 0
 # IGEMM_FWD_GTC_NHWC_P_INTERLEAVE_GLD = False     # p tensor interleave
+IGEMM_FWD_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -121,6 +122,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
             na_nb0, na_nb1, na_e, na_c, nb_e, nb_c, nb_k0, nb_k1 = self.get_dims_lengths()
             ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [na_nb0, na_nb1]
+            ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_FWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
 
             def get_vector_write_out():
                 vector_write = 1
@@ -172,7 +174,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self.agpr = self.kernel_agpr_t(mc, self)
 
     def name(self):
-        return igemm_gtc_encode_kernel_name(self.tunable)
+        return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
 
     def try_shift_stride(self, gpr, shifter):
         assert type(gpr) is sym_t
@@ -968,7 +970,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+            if IGEMM_FWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
                 vgpr = outer.kernel_vgpr_t(mc, outer)
                 aseq = gpr_sequencer_t(vgpr.get_accum_start())
             else:
@@ -2242,6 +2244,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
             fctrl.interleave                  = self.tunable.fma_interleave
+            fctrl.accvgpr_unified             = IGEMM_FWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
 
             # functor
             # fctrl.global_load_a_functor       = self.global_load_wei

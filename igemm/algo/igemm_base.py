@@ -201,9 +201,6 @@ class igemm_gtc_tunable_parameter_t(object):
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
-        if tunable_dict['arch'] == 'gfx90a':
-            set_ctrl_xdlops_mapping_accvgpr_unified(True)
-
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
@@ -514,7 +511,7 @@ class igemm_gtc_tunable_parameter_t(object):
     def serialize_as_section(self):
         return self.serialize(section_name=True, line_start='', equal='=', extra_info=False)
 
-def igemm_gtc_encode_kernel_name(tunable):
+def igemm_gtc_encode_kernel_name(tunable, arch):
     def lengths_str(lengths):
         assert type(lengths) is list
         return "x".join( [f"{x}" for x in lengths] )
@@ -522,13 +519,22 @@ def igemm_gtc_encode_kernel_name(tunable):
     assert type(tunable) is igemm_gtc_tunable_parameter_t
 
     kernel_name = f"igemm_{tunable.direction}_"
+    if type(arch) is not str:
+        arch_str = amdgpu_arch_to_string(arch)
+    else:
+        arch_str = arch
 
     if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
         kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
         kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-        kernel_name += 'gtcx_'                                  # generic tensor contraction with xdlops
+        if arch_str == 'gfx908':
+            kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops
+        elif arch_str == 'gfx90a':
+            kernel_name += 'gtcx2_'
+        else:
+            assert False
 
     kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
     if IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME:
