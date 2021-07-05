@@ -188,10 +188,10 @@ static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const 
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC;
         if(arch_string == "gfx906")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
-        if(arch_string == "gfx908")
+        if(arch_string == "gfx908" || arch_string == "gfx90a")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
     }else if(sec.count("wave_tile_m") > 0 && sec.count("wave_tile_n") > 0){
-        assert(arch_string == "gfx908");
+        assert(arch_string == "gfx908" || arch_string == "gfx90a");
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS;
     }
     return IGEMM_GTC_TUNABLE_FMA_TYPE_NA;
@@ -288,13 +288,26 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     auto gemm_k_global_split      = tunable->gemm_k_global_split;
     auto merge_e                  = tunable->merge_e;
 
+    static int gcn_arch = -1;
+    if(gcn_arch == -1){
+        hipDeviceProp_t dev_prop;
+        hipDevice_t dev;
+        HIP_CALL(hipGetDevice(&dev));
+        HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
+        gcn_arch = dev_prop.gcnArch;
+    }
+
     std::string kernel_name = std::string("igemm_") + direction + "_";
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
         kernel_name += "gtcm_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS)
         kernel_name += "gtc_";
-    else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS)
-        kernel_name += "gtcx_";
+    else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
+        if(gcn_arch == 908)
+            kernel_name += "gtcx_";
+        else if(gcn_arch == 910)
+            kernel_name += "gtcx2_";
+    }
 
     kernel_name += tensor_layout + std::string("_") + precision +
         std::string("_bx") + std::to_string(nxb) + 

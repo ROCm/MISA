@@ -29,7 +29,7 @@ import math
 from ..codegen import *
 from .utility import *
 from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile
+from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile, set_ctrl_xdlops_mapping_accvgpr_unified
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0
@@ -118,16 +118,16 @@ def get_igemm_gtc_fma_type(tunable_dict):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
         if tunable_dict['arch'] == 'gfx906':
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
-        if tunable_dict['arch'] == 'gfx908':
+        if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
-        assert tunable_dict['arch'] == 'gfx908'
+        assert tunable_dict['arch'] in ('gfx908', 'gfx90a')
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     assert False
 
 def get_igemm_gtc_gemm_k_global_split(tunable_dict):
     assert type(tunable_dict) is dict
-    if tunable_dict['arch'] == 'gfx908':
+    if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
         gemm_k_global_split = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         if gemm_k_global_split > 0:
             return 1
@@ -511,7 +511,7 @@ class igemm_gtc_tunable_parameter_t(object):
     def serialize_as_section(self):
         return self.serialize(section_name=True, line_start='', equal='=', extra_info=False)
 
-def igemm_gtc_encode_kernel_name(tunable):
+def igemm_gtc_encode_kernel_name(tunable, arch):
     def lengths_str(lengths):
         assert type(lengths) is list
         return "x".join( [f"{x}" for x in lengths] )
@@ -519,13 +519,22 @@ def igemm_gtc_encode_kernel_name(tunable):
     assert type(tunable) is igemm_gtc_tunable_parameter_t
 
     kernel_name = f"igemm_{tunable.direction}_"
+    if type(arch) is not str:
+        arch_str = amdgpu_arch_to_string(arch)
+    else:
+        arch_str = arch
 
     if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
         kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
         kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-        kernel_name += 'gtcx_'                                  # generic tensor contraction with xdlops
+        if arch_str == 'gfx908':
+            kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops
+        elif arch_str == 'gfx90a':
+            kernel_name += 'gtcx2_'
+        else:
+            assert False
 
     kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
     if IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME:

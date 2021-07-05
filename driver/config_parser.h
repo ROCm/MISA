@@ -42,6 +42,8 @@ static inline std::string &sltrim(std::string &s) {
     size_t startpos = s.find_first_not_of(" \t\r\n\v\f");
     if (std::string::npos != startpos) {
         s = s.substr(startpos);
+    }else{
+        s = "";
     }
     return s;
 }
@@ -50,6 +52,8 @@ static inline std::string &srtrim(std::string &s) {
     size_t endpos = s.find_last_not_of(" \t\r\n\v\f");
     if (std::string::npos != endpos) {
         s = s.substr(0, endpos + 1);
+    }else{
+        s = "";
     }
     return s;
 }

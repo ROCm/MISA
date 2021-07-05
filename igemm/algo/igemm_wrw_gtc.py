@@ -519,7 +519,7 @@ class igemm_wrw_gtc_t(mc_base_t):
 
 
     def name(self):
-        return igemm_gtc_encode_kernel_name(self.tunable)
+        return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
 
     def try_shift_stride(self, gpr, shifter):
         assert type(gpr) is sym_t

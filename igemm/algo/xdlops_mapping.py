@@ -532,6 +532,19 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
     # TODO: we may have multiple match, aka multipl wave mapping/mfma for single 
     return target_mfma_tiling[0]
 
+def set_ctrl_xdlops_mapping_accvgpr_unified(accvgpr_unified):
+    '''
+    be very careful, we override the mfma accvgpr_unified field
+    '''
+    if not hasattr(set_ctrl_xdlops_mapping_accvgpr_unified, "cached_accvgpr_unified"):
+        set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified = False
+    if set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified == accvgpr_unified:
+        return
+    set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified = accvgpr_unified
+    for ctrl in (ctrl_xdlops_mapping_fp32, ctrl_xdlops_mapping_fp16, ctrl_xdlops_mapping_int8):
+        for x in ctrl:
+            x.inst_mfma.accvgpr_unified = accvgpr_unified
+
 class igemm_xdlops_mapping_t(mc_base_t):
     '''
     used for mfma wave tile mapping

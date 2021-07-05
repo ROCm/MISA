@@ -46,6 +46,7 @@ class ctrl_mfma_main_loop_t(object):
         self.lds_buffer_num              = 2
         self.local_prefetch_num          = 1
         self.interleave                  = False
+        self.accvgpr_unified             = False        # if true, means using accvgpr unified mode, will use vgpr instead of agpr
 
         # functor
         self.global_load_a_functor       = None
@@ -514,7 +515,11 @@ class mfma_main_loop_t(mc_base_t):
         self._emit(f"; start MFMA loop, wave tile:{cxm.wave_tile_m}x{cxm.wave_tile_n}, repeat:{cxm.wave_repeat_m}x{cxm.wave_repeat_n}, step:{cxm.wave_step_m}x{cxm.wave_step_n}" +\
                 f", k_pack:{self.ctrl.lds_k_pack}, p_issue:{num_p_issue}, q_issue:{num_q_issue}, local_prefetch_num:{ctrl.local_prefetch_num}")
 
-        self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
+        if self.ctrl.accvgpr_unified:
+            self._emit(f".v_clear_nc {a_c()}, {cxm.total_acc_c()}")
+            set_ctrl_xdlops_mapping_accvgpr_unified(True)
+        else:
+            self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
         # self._emit(f"; make sure acc WAR harzard, at least 1 nop for src_c")
 
         self._emit(f"s_waitcnt vmcnt({f_gld_p.get_issues() - ((wave_repeat_p * wave_step_p) if p_interleave_gld else 0)})")
@@ -2337,7 +2342,11 @@ class mfma_main_loop_t(mc_base_t):
         self._emit(f_sst_a())
         self._emit_empty_line()
 
-        self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
+        if self.ctrl.accvgpr_unified:
+            self._emit(f".v_clear_nc {a_c()}, {cxm.total_acc_c()}")
+            set_ctrl_xdlops_mapping_accvgpr_unified(True)
+        else:
+            self._emit(f".v_clear_acc_c {a_c()}, {cxm.total_acc_c()}")
         self._emit(f"; make sure acc WAR harzard, at least 1 nop for src_c")
 
         # decrese k
