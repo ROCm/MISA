@@ -1233,7 +1233,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         # compute group distance
         self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], {igemm_log2(data_byte)}")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_c()}]")
-        self._emit(f";s_sub_u32 s[{s.s_p_in(2)}], s[{s.s_p_in(2)}], s[{s.s_tmp()}]")
+        self._emit(f"s_sub_u32 s[{s.s_p_in(2)}], s[{s.s_p_in(2)}], s[{s.s_tmp()}]")
         self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
         self._emit_empty_line()
 
@@ -1267,7 +1267,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
         self._emit(f"; calculate out offset")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_k()}]")
-        self._emit(f";s_sub_u32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], s[{s.s_tmp()}]")
+        self._emit(f"s_sub_u32 s[{s.s_p_out(2)}], s[{s.s_p_out(2)}], s[{s.s_tmp()}]")
         self._emit(f"s_add_u32 s[{s.s_p_out()}], s[{s.s_p_out()}], s[{s.s_tmp()}]")
         self._emit_empty_line()
         self._emit(f"v_add_u32 v[{v.v_cur_k()}], s[{s.s_block_gtc_ik()}], v[{v.v_gtc_ik()}]")
@@ -1410,8 +1410,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
         self._emit(f"; move slice step for output tensor")
         if self.tunable.nxe == 0:
-            self._emit(f"s_lshl_b32 s[{s.s_out_move_step()}], s[{s.s_k()}], {igemm_log2(data_byte * na_nb)}")
-            self._emit(f"s_lshl_b32 s[{s.s_in_move_step()}], s[{s.s_c()}], {igemm_log2(data_byte * nb_nb)}")
+            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_k()}], s[{s.s_group()}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_c()}], s[{s.s_group()}]")
+            self._emit(f"s_lshl_b32 s[{s.s_out_move_step()}], s[{s.s_tmp()}], {igemm_log2(data_byte * na_nb)}")
+            self._emit(f"s_lshl_b32 s[{s.s_in_move_step()}], s[{s.s_tmp(1)}], {igemm_log2(data_byte * nb_nb)}")
         else:
             # for ex1 cases, it should be computed by move slice b, which will be computed later
             pass
@@ -1426,6 +1428,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit("; move slice step for output tensor")
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_tmp(4)}], {igemm_log2(data_byte)}")
             self._emit(f"s_mul_i32 s[{s.s_out_move_step()}], s[{s.s_k()}], s[{s.s_tmp()}]")
+            self._emit(f"s_mul_i32 s[{s.s_out_move_step()}], s[{s.s_group()}], s[{s.s_out_move_step()}]")
             self._emit_empty_line()
             self._emit(f"s_lshl_b32 s[{s.s_move_slice_n()}], s[{s.s_move_slice_n()}], {igemm_log2(ta_n)}")
             self._emit_empty_line()

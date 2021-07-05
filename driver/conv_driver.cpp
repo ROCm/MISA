@@ -471,11 +471,12 @@ void dump_arg(const args_t *arg) {
     int x = arg->get_int("fil_w");
     int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
     int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+    int ngroups = arg->get_int("group_count");
 
     printf("n:%d, c:%d, h:%d, w:%d, k:%d, y:%d, x:%d, sy:%d, sx:%d, dy:%d, "
-           "dx:%d, py:%d, px:%d, ho:%d, wo:%d\n",
+           "dx:%d, py:%d, px:%d, ho:%d, wo:%d, group:%d\n",
            n, c, hi, wi, k, y, x, stride_h, stride_w, dilation_h, dilation_w,
-           pad_h, pad_w, ho, wo);
+           pad_h, pad_w, ho, wo, ngroups);
 }
 
 int string_to_dir(std::string direction)
