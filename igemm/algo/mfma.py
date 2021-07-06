@@ -52,6 +52,7 @@ class inst_mfma_t(object):
         self.num_v_b = num_v_b
         self.num_a_c = num_a_c
         self.num_blocks = num_blocks
+        self.accvgpr_unified = False
         # self.num_a_c_per_lanegroup = 4      # all xdlops instruction output agpr is 4 agpr per lanegroup.
         #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
 
@@ -76,7 +77,10 @@ class inst_mfma_t(object):
         cbsz_str = f"cbsz:{cbsz}" if cbsz != 0 else ""
         abid_str = f"abid:{abid}" if abid != 0 else ""
         blgp_str = f"blgp:{blgp}" if blgp != 0 else ""
-        return  f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] {cbsz_str} {abid_str} {blgp_str}"
+        if self.accvgpr_unified:
+            return  f"{mfma_inst} v[{reg_d}], v[{reg_a}], v[{reg_b}], v[{reg_c}] {cbsz_str} {abid_str} {blgp_str}"
+        else:
+            return  f"{mfma_inst} a[{reg_d}], v[{reg_a}], v[{reg_b}], a[{reg_c}] {cbsz_str} {abid_str} {blgp_str}"
 
     def get_nop_count_mfma_acc_raw(self):
         # in unit of passes, aka 4 cycle

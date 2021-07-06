@@ -824,5 +824,4 @@ public:
     hipModule_t         module_tensor_cast;
 };
 
-
 #endif

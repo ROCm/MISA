@@ -34,6 +34,136 @@ INTERLEAVE_PTN_0 = "mbb0 mfma and related share load, mbb1 global_load and move_
 INTERLEAVE_PTN_1 = "mbb0 mfma, mbb1 share_store"
 INTERLEAVE_PTN_2 = "mbb0 global store, mbb 1 share store"
 
+def mbb_have_global_mem(mbb):
+    '''
+    check if mbb contains at least one globel mem
+    '''
+    for mi in mbb.mc_inst_list:
+        if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
+            return True
+    return False
+
+def mbb_have_mfma(mbb):
+    for mi in mbb.mc_inst_list:
+        if mi.type() == MC_INST_TYPE_VALU:
+            mi_op = get_mc_inst_op(mi.inst_str)
+            if mi_op.startswith('v_mfma_'):
+                return True
+    return False
+
+def mbb_is_macro_c_clear(mbb):
+    '''
+    check if mbb is indeed a legacy macro of .v_clear_nc
+    '''
+    if mbb.length() == 1:
+        if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
+            if get_mc_inst_op(mbb.mc_inst().inst_str).startswith('.v_clear_nc'):
+                return True
+    return False
+
+def mbb_is_global_mem_with_flag(mbb):
+    def _check_inst_prefix(istr, check_list):
+        for cl in check_list:
+            if istr.startswith(cl):
+                return True
+        else:
+            return False
+    if not mbb_have_global_mem(mbb):
+        return False
+    mi_op_start = get_mc_inst_op(mbb.mc_inst(0).inst_str)
+    mi_op_end = get_mc_inst_op(mbb.mc_inst(-1).inst_str)
+    if _check_inst_prefix(mi_op_start, ['v_cmpx_']) and _check_inst_prefix(mi_op_end, ['s_mov_b64']):
+        return True
+    return False
+
+class pass_global_mem_merge_dup_flag_t(mc_base_t):
+    '''
+    this is try to optimize code from:
+
+    v_cmpx_le_u32 vcc, 1, v[v_wei_flag]
+    buffer_load_dword v[v_gld_b+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+1] offen offset:0
+    s_mov_b64 exec, -1
+    v_cmpx_le_u32 vcc, 1, v[v_wei_flag]
+    buffer_load_dword v[v_gld_b+4], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+2] offen offset:0
+    s_mov_b64 exec, -1
+    v_cmpx_le_u32 vcc, 1, v[v_wei_flag]
+    buffer_load_dword v[v_gld_b+5], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+3] offen offset:0
+    s_mov_b64 exec, -1
+
+    to
+
+    v_cmpx_le_u32 vcc, 1, v[v_wei_flag]
+    buffer_load_dword v[v_gld_b+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+1] offen offset:0
+    buffer_load_dword v[v_gld_b+4], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+2] offen offset:0
+    buffer_load_dword v[v_gld_b+5], v[v_wei_os], s[s_p_wei:s_p_wei+3], s[s_wei_offset+3] offen offset:0
+    s_mov_b64 exec, -1
+
+    that is, merge duplicated v_cmpx flag if possible, in current mbb
+    '''
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+
+    def call_mbb(self, mbb):
+        '''
+        basically this is to deal with indent...
+        within mbb, there is no concept of indent.
+        but while lowering, we need indent to pretty emit
+        '''
+        mbb_lines = mbb().split('\n')
+        with self._deferred_context():
+            for line in mbb_lines:
+                self._emit(line)
+        return self._get_deferred()
+
+    def lower(self, mbb_lists, **options):
+        with self._deferred_context():
+            modified_mbb1_list = list()     # note: copy to here!
+            flag_have_previous_merged_flag = False
+            mbb1_length = len(mbb_lists)
+            for i_x in range(mbb1_length):
+                current_mbb = None
+                if mbb_is_global_mem_with_flag(mbb_lists[i_x]):
+                    if (i_x + 1) < mbb1_length:
+                        if mbb_is_global_mem_with_flag(mbb_lists[i_x + 1]):
+                            if mbb_lists[i_x].mc_inst(0).inst_str == mbb_lists[i_x + 1].mc_inst(0).inst_str:
+                                if not flag_have_previous_merged_flag:
+                                    #print(f"entering mbb merge start")
+                                    current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[:-1]))
+                                    flag_have_previous_merged_flag = True
+                                else:
+                                    #print(f"entering mbb merge middle")
+                                    current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[1:-1]))
+                            else:
+                                if not flag_have_previous_merged_flag:
+                                    current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[:]))
+                                else:
+                                    #print(f"entering mbb merge end")
+                                    current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[1:]))
+                                    flag_have_previous_merged_flag = False
+                        else:
+                            if not flag_have_previous_merged_flag:
+                                current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[:]))
+                            else:
+                                #print(f"entering mbb merge end")
+                                current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[1:]))
+                                flag_have_previous_merged_flag = False
+                    else:
+                        if not flag_have_previous_merged_flag:
+                            current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[:]))
+                        else:
+                            #print(f"entering mbb merge end")
+                            current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[1:]))
+                            flag_have_previous_merged_flag = False
+                else:
+                    assert flag_have_previous_merged_flag == False
+                    current_mbb = machine_basic_block_t(copy.copy(mbb_lists[i_x].mc_inst_list[:]))
+                assert current_mbb != None
+                modified_mbb1_list.append(current_mbb)
+
+            for mx in modified_mbb1_list:
+                self._emit(self.call_mbb(mx))
+        return self._get_deferred()
+
 class simple_interleave_scheduler_t(mc_base_t):
     '''
     2 mbb list, mbb_0 and mbb_1. interleave mbb_1 into first mbb list mbb_0
@@ -73,32 +203,7 @@ class simple_interleave_scheduler_t(mc_base_t):
             else:
                 return default_value
 
-        def mbb_have_global_mem(mbb):
-            '''
-            check if mbb contains at least one globel mem
-            '''
-            for mi in mbb.mc_inst_list:
-                if mi.type() == MC_INST_TYPE_GLOBAL_MEM:
-                    return True
-            return False
 
-        def mbb_have_mfma(mbb):
-            for mi in mbb.mc_inst_list:
-                if mi.type() == MC_INST_TYPE_VALU:
-                    mi_op = get_mc_inst_op(mi.inst_str)
-                    if mi_op.startswith('v_mfma_'):
-                        return True
-            return False
-
-        def mbb_is_macro_c_clear(mbb):
-            '''
-            check if mbb is indeed a legacy macro of .v_clear_nc
-            '''
-            if mbb.length() == 1:
-                if mbb.mc_inst().type() == MC_INST_TYPE_LEGACY_MACRO:
-                    if get_mc_inst_op(mbb.mc_inst().inst_str).startswith('.v_clear_nc'):
-                        return True
-            return False
 
         assert len(self.mbb_lists) == 2, "currently only support 2 mbb list interleave together"
 
@@ -110,6 +215,7 @@ class simple_interleave_scheduler_t(mc_base_t):
         global_mem_per_interval = get_dict_with_default(options, "global_mem_per_interval", 1)
         share_mem_per_interval = get_dict_with_default(options, "share_mem_per_interval", 1)
         mbb_0_mfma_cnt_after_branch_to_start = get_dict_with_default(options, "mbb_0_mfma_cnt_after_branch_to_start", 1)    # used in pattern_1
+        global_mem_merge_dup_flag = get_dict_with_default(options, "global_mem_merge_dup_flag", 1)
 
         assert min_interval[0] == 1, 'currently only support base mbb interval is 1'
         interleave_slot = len(self.mbb_lists[0])
@@ -167,25 +273,41 @@ class simple_interleave_scheduler_t(mc_base_t):
                 else:
                     state = STATE_GMEM                   # 0-emit gmem, v_clear, 1-other
                 m1_idx = 0
+                def emit_current_mbb1(c_mbb1):
+                    if global_mem_merge_dup_flag:
+                        mbb1_pass = pass_global_mem_merge_dup_flag_t(self.mc)
+                        self._emit(mbb1_pass.lower(c_mbb1))
+                    else:
+                        for x in c_mbb1:
+                            self._emit(self.call_mbb(x))
+
                 for m0_idx in range(len(mbb_0)):
                     self._emit(self.call_mbb(mbb_0[m0_idx]))
                     #print(f" ---- m0_idx:{m0_idx}, m1_idx:{m1_idx}")
+                    current_mbb1 = list()
                     if state == STATE_GMEM:
                         for j in range(gmem_per_interval):
                             if m1_idx < num_gmem:
-                                self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                                #self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                                current_mbb1.append(mbb_1[m1_idx]) ; m1_idx += 1
                                 #print(f'      m1_idx:{m1_idx}')
+
                             else:
                                 state = STATE_OTHER
                                 continue
                         if m1_idx == num_gmem:
                             state = STATE_OTHER
+                            emit_current_mbb1(current_mbb1)
                             continue
+
+                        emit_current_mbb1(current_mbb1)
 
                     elif state == STATE_OTHER:
                         for j in range(mbb_1_left_per_interval):
                             if m1_idx < len(mbb_1):
-                                self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                                #self._emit(self.call_mbb(mbb_1[m1_idx])) ; m1_idx += 1
+                                current_mbb1.append(mbb_1[m1_idx]) ; m1_idx += 1
+                        emit_current_mbb1(current_mbb1)
 
                 #m0_idx = 0
                 #m1_idx = 0

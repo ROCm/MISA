@@ -30,3 +30,11 @@ some environment variables may affect the behavior and printout of `conv_driver.
 * `IGEMM_LOG_FASTEST_CONFIG` : set to `1` to print the fastest config from current convolution. default is `0`
 
 *more description to be added*
+
+# Third party code for fp16 data type
+* `half.hpp` : When fp16 kernel is generated, `half.hpp` need to be installed, e.g.:
+``` shell
+wget https://github.com/pfultz2/half/archive/1.12.0.tar.gz
+tar -zvxf 1.12.0.tar.gz
+cp half-1.12.0/include/half.hpp /usr/local/include/
+```

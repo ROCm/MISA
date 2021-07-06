@@ -140,13 +140,13 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 
     int fp_factor = 1;
     if(data_type == driverHalf){
-        if(gcn_arch == 908)
+        if(gcn_arch == 908 || gcn_arch == 910)
             fp_factor = 4;  // xdlops
         else
             fp_factor = 2;  // dlops
     }
     if(data_type == driverInt8){
-        if(gcn_arch == 908)
+        if(gcn_arch == 908 || gcn_arch == 910)
             fp_factor = 4;  // xdlops
         else
             fp_factor = 4;  // dlops
@@ -156,7 +156,7 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
     //     fp_factor = 4;
     // }
 
-    if(gcn_arch == 908){
+    if(gcn_arch == 908 || gcn_arch == 910){
         num_simd = 4 * 32 ; // 4x miSIMD, 32x mac unit
     }
 
@@ -656,8 +656,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 
     if(p_bcsv){
         //          time tflops efficiency kernel
-        fprintf(p_bcsv, "%.3f,%.3f,%.2f%%,%s[%d]-grid[%d],",
-            fastest_result.duration_ms, fastest_result.gflops/1000, fastest_result.efficiency, fastest_result.kernel_name.c_str(), fastest_result.gks, fastest_result.grid_size);
+        fprintf(p_bcsv, "%.3f,%.3f,%.2f%%,%s,",
+            fastest_result.duration_ms, fastest_result.gflops/1000, fastest_result.efficiency, fastest_result.kernel_name.c_str());
         std::string conv_cmd = log_cmd(conv_args, driver_data_type, direction);
         fprintf(p_bcsv, "%s\n", conv_cmd.c_str());
         fflush(p_bcsv);

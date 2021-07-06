@@ -426,10 +426,12 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.block_size = 256
         self.vector_write_out = 1
         self.precision = 'fp32'
+        self.accvgpr_unified = False        # agpr unified in gfx90a
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
         self.gemm_k_global_split = False
         self.feat_vgpr_collapse = True
+        self.accvgpr_unified = False
         self.co_m_update_os_functor = None  # update offset based on current i_m. otherwise use sgpr to update offset
 
         self.feat_co_m_flag_check = False   # custom flag check, not using internal check
@@ -1255,31 +1257,40 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                      sst_n_offset * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) * data_byte
                         assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * data_byte < lds_size_per_group
 
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
-                        self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
+                        if not ctrl.accvgpr_unified:
+                            self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 0)}], a[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
+                            self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 1)}], a[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
+                            self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 2)}], a[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
+                            self._emit(f"v_accvgpr_read_b32 v[{v_c(vgpr_index + 3)}], a[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
                         # self._emit(f"s_nop 4")    # might consider nop to solve RAW
                         # for fp16 and bf16, vgpr need to be cast to 16 bits
                         if ctrl.precision == 'fp16':
-                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}]")
-                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 1)}]")
-                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 2)}]")
-                            self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{v_c(vgpr_index + 3)}]")
+                            if not ctrl.accvgpr_unified:
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}]")
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 1)}]")
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 2)}]")
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{v_c(vgpr_index + 3)}]")
+                            else:
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 0)}], v[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 1)}], v[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 2)}], v[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
+                                self._emit(f"v_cvt_f16_f32_e32 v[{v_c(vgpr_index + 3)}], v[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
                             if ctrl.vector_write_out == 1:
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
                         elif ctrl.precision == 'int8':
                             # CAUSION: must have a symbol s_0xff and pre inited with 0xff
                             if ctrl.vector_write_out == 1:
-                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
-                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
-                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
-                                # self._emit(f"v_and_b32 v[{v_c(vgpr_index + 3)}], s[s_0xff], v[{v_c(vgpr_index + 3)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
-                                self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 3)}], 24, v[{v_c(vgpr_index + 3)}]")
+                                if not ctrl.accvgpr_unified:
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{v_c(vgpr_index + 0)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{v_c(vgpr_index + 1)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{v_c(vgpr_index + 2)}]")
+                                    self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 3)}], 24, v[{v_c(vgpr_index + 3)}]")
+                                else:
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 0)}], s[s_0xff], v[{a_c(agpr_index + 0)}]"); agpr_consume_list.append(agpr_index + 0)
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 1)}], s[s_0xff], v[{a_c(agpr_index + 1)}]"); agpr_consume_list.append(agpr_index + 1)
+                                    self._emit(f"v_and_b32 v[{v_c(vgpr_index + 2)}], s[s_0xff], v[{a_c(agpr_index + 2)}]"); agpr_consume_list.append(agpr_index + 2)
+                                    self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 3)}], 24, v[{a_c(agpr_index + 3)}]")   ; agpr_consume_list.append(agpr_index + 3) 
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 1)}],  8, v[{v_c(vgpr_index + 1)}]")
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vgpr_index + 2)}], 16, v[{v_c(vgpr_index + 2)}]")
                                 self._emit(f"v_or_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 3)}]")
@@ -1296,15 +1307,22 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                 # self._emit(f"v_or_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 3)}]")
                                 # self._emit(f"v_or3_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}]")
 
+                        accvgpr_as_sst = ctrl.accvgpr_unified and ctrl.precision == 'fp32'
+                        if accvgpr_as_sst:
+                            agpr_consume_list.append(agpr_index + 0)
+                            agpr_consume_list.append(agpr_index + 1)
+                            agpr_consume_list.append(agpr_index + 2)
+                            agpr_consume_list.append(agpr_index + 3)
+
                         if not ctrl.can_skip_coalescing():
                             idword = sst_offset // (data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1))
                             if ctrl.vector_write_out == 1:
-                                self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
+                                self._emit(inst_sst(v_co_sst(), a_c(agpr_index) if accvgpr_as_sst else v_c(vgpr_index), sst_offset) + \
                                     f"   ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
                                     f" /{(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}")
                             else:
                                 for i in range(4):
-                                    self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
+                                    self._emit(inst_sst(v_co_sst(), a_c(agpr_index + i) if accvgpr_as_sst else v_c(vgpr_index + i), sst_offset + i * ctrl.cxm.macro_tile_n * data_byte) + \
                                             f' ; idword:{idword}({idword // ctrl.cxm.macro_tile_n},{idword % ctrl.cxm.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, i_ms:{i_ms}, i_mw:{i_mw}, i_mb:{i_mb}  x  i_nr:{i_nr}, i_ns:{i_ns}, i_nw:{i_nw}')
                         #vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
                         if ctrl.feat_vgpr_collapse:

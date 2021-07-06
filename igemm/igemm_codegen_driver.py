@@ -63,7 +63,7 @@ class igemm_codegen_driver_t(mc_base_t):
             else:
                 kernel_list.extend([igemm_bwd_gtc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
             # in bwd direction, need such upsampling clear kernel
-            kernel_list.extend([igemm_upsampling_clear_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(tunable_dicts[0]))])
+            # kernel_list.extend([igemm_upsampling_clear_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(tunable_dicts[0]))])
 
         elif tunable_dicts[0]['direction'] == 'wrw':
             for tdd in tunable_dicts:
@@ -104,7 +104,7 @@ class igemm_codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(self.mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.use_dlops:
@@ -127,7 +127,7 @@ class igemm_codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.use_dlops:
