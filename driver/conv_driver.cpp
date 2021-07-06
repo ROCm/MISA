@@ -346,7 +346,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     }
     double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
     double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
-    printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
+    // printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
     return (computed_nrms < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)

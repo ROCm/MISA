@@ -172,7 +172,7 @@ public:
             int gemm_k_global_splits = gemm_k_global_split == 1 ? compute_log2_gemmk_global_splits(grid_size, max_grid_size, n / min_n_per_block, b, gemm_k_per_block)
                                                                  : 0;
 
-            int num_of_gemm = gemm_k_global_splits;
+            int num_of_gemm = 1 << gemm_k_global_splits;
             grid_size *= num_of_gemm;
         }
 
@@ -687,10 +687,10 @@ public:
         karg.x             = x;
         karg.gemm_k_global_split = gemm_k_global_splits;
         karg.group         = group;
-        karg.gemm_k_per_wg = (int)(ceil((n / min_n_per_block) * b / (float)gemm_k_global_splits));
-        karg.gemm_k_per_wg = (karg.gemm_k_per_wg + nb_per_block - 1) / nb_per_block * nb_per_block;
+        //karg.gemm_k_per_wg = (int)(ceil((n / min_n_per_block) * b / (float)gemm_k_global_splits));
+        //karg.gemm_k_per_wg = (karg.gemm_k_per_wg + nb_per_block - 1) / nb_per_block * nb_per_block;
 
-        gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(karg.gemm_k_per_wg)));
+        //gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(karg.gemm_k_per_wg)));
 
         // tensor cast kernel args
         size_t cast_per_thread = 8;
@@ -739,11 +739,12 @@ public:
         int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
         float min_duration = FLT_MAX;
         int selected_gkgs = 0;
+        int selected_grid_size = 0;
         //max_split_num = 1;
-        for(int gkgs = 0; gkgs < max_split_num; gkgs++){
-            std::vector<igemm_launch_kernel_t> kernel_launchers;
-
-            if(tunable->tensor_layout == "nhwc"){
+        if(tunable->tensor_layout == "nhwc"){
+            for(int gkgs = 0; gkgs < max_split_num; gkgs++){
+                std::vector<igemm_launch_kernel_t> kernel_launchers;
+            
                 // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
                 gemm_k_global_splits = gkgs == 0 ? 1 : compute_gemmk_global_splits(cur_grid_size, gkgs);
                 if(gemm_k_global_splits == 0){
@@ -754,30 +755,40 @@ public:
                 gemm_k_global_splits = (int)(ceil(ceil(n / (float)min_n_per_block) * b / (float)(tmp_gemm_k_per_wg)));
                 karg.gemm_k_global_split = gemm_k_global_splits;
                 karg.gemm_k_per_wg = tmp_gemm_k_per_wg;
-                printf("gemm_k_global_splits=%d, tmp_gemm_k_per_wg=%d\n", gemm_k_global_splits, tmp_gemm_k_per_wg);
-                fflush(stdout);
-            }
+                // printf("gemm_k_global_splits=%d, tmp_gemm_k_per_wg=%d\n", gemm_k_global_splits, tmp_gemm_k_per_wg);
+                // fflush(stdout);
 
-            kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
-            if(use_workspace == 1){
-                kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
-            }
-            float duration = igemm_launch_kernels_with_prolog({
+                kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
+                if(use_workspace == 1){
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
+                }
+                float duration = igemm_launch_kernels_with_prolog({
                         kernel_launchers
                     }, wrw_prolog, this->warmup, this->repeat);
-            if(min_duration > duration){
-                min_duration = duration;
-                selected_gkgs = gemm_k_global_splits;
+                if(min_duration > duration){
+                    min_duration = duration;
+                    selected_gkgs = gemm_k_global_splits;
+                    selected_grid_size = grid_size * selected_gkgs;
+                }
+                // printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
+                // fflush(stdout);
             }
-            printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
-            fflush(stdout);
+        }else{
+            // nchw do not search for gemmksplit
+            float duration = igemm_launch_kernels_with_prolog({
+                        {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
+                    }, wrw_prolog, this->warmup, this->repeat);
+            min_duration = duration;
+            selected_gkgs = gemm_k_global_splits;
+            selected_grid_size = grid_size;
+
         }
 
         result.return_code = 0;
         result.duration_ms = min_duration;
         result.gks         = selected_gkgs;
         result.kernel_name = kernel_name;
-        result.grid_size   = grid_size * selected_gkgs;
+        result.grid_size   = selected_grid_size;
 		// debug section of code
 #if 0
         printf("workspace debug \r\n");
