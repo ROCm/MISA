@@ -311,13 +311,13 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2         = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2         = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
         self.lds_single        = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        self.lds_buffer_num    = 2 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        self.lds_buffer_num    = 2
         self.lds_total         = self.lds_buffer_num * self.lds_single
 
         # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
         # TODO: need to make some compromise in occupancy and lds double buffer
         if self.is_occupancy_decreased():
-            self.lds_buffer_num                 = 1
+            self.lds_buffer_num                 = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
             self.lds_total                      = self.lds_buffer_num * self.lds_single
         if self.lds_total > 32 * 1024:
             self.lds_buffer_num                 = 1
@@ -374,6 +374,8 @@ class igemm_gtc_tunable_parameter_t(object):
             is_agpr_decreased = True
 
         a_data_per_vgpr = 1 
+
+        # for fwd and bwd pass, return true directly, because they do not use lds double buffer
         if self.direction == 'fwd':
             return True
 
