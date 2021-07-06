@@ -38,6 +38,7 @@ from .mfma_main_loop import *
 IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
+IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -129,6 +130,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
+            ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
 
             def get_vector_write_out():
                 vector_write = 1
@@ -174,7 +176,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
 
     def name(self):
-        return igemm_gtc_encode_kernel_name(self.tunable)
+        return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
 
     def try_shift_stride(self, gpr, shifter):
         assert type(gpr) is sym_t
@@ -612,13 +614,22 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             if IGEMM_WRW_GTC_DEBUG == 1:
                 self.v_dbg                = sym_t("v_dbg"            ,vseq(2, 2))
             total_vgpr                    = vseq()
+            self.accum_start              = 0
             if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-                # if xdlops agpr is larger than vgpr usage, must change vgpr count to agpr
-                total_vgpr                = max(total_vgpr, outer.tunable.num_agpr_accumulate_c)
+                if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                    total_vgpr            = (total_vgpr + 3) // 4 * 4 # round to multiply of 4
+                    self.accum_start      = total_vgpr
+                    total_vgpr            = total_vgpr + outer.tunable.num_agpr_accumulate_c
+                else:
+                    # if xdlops agpr is larger than vgpr usage, must change vgpr count to agpr
+                    total_vgpr            = max(total_vgpr, outer.tunable.num_agpr_accumulate_c)
             self.v_end                    = sym_t("v_end"          ,total_vgpr)
 
         def get_count(self):
             return self.v_end.value
+
+        def get_accum_start(self):
+            return self.accum_start
 
         def emit(self):
             for k, v in self.__dict__.items():
@@ -938,7 +949,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         return s_out_stride_d0, s_out_stride_d1, s_in_stride_d0, s_in_stride_d1
 
     def get_kernel_code(self):
-        kernel_code = amdgpu_kernel_code_t({
+        kernel_code_dict = {
                 'enable_sgpr_kernarg_segment_ptr'   :   1,
                 'enable_sgpr_workgroup_id_x'        :   1,
                 'enable_sgpr_workgroup_id_y'        :   1,
@@ -947,8 +958,11 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 'workgroup_group_segment_byte_size' :   self.tunable.lds_total,
                 'kernarg_segment_byte_size'         :   self.karg.get_count(),
                 'wavefront_sgpr_count'              :   self.sgpr.get_count() + 2*3,
-                'workitem_vgpr_count'               :   self.vgpr.get_count()
-                })
+                'workitem_vgpr_count'               :   self.vgpr.get_count()}
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+            assert self.vgpr.get_accum_start() % 4 == 0
+            kernel_code_dict['accum_offset']        =   self.vgpr.get_accum_start()
+        kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
     def get_kernel_args(self):
@@ -1539,6 +1553,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
             fctrl.interleave                  = self.tunable.fma_interleave
+            fctrl.accvgpr_unified             = IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_out
