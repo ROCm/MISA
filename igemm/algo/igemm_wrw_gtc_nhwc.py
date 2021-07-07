@@ -641,7 +641,11 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            aseq = gpr_sequencer_t()
+            if IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                vgpr = outer.kernel_vgpr_t(mc, outer)
+                aseq = gpr_sequencer_t(vgpr.get_accum_start())
+            else:
+                aseq = gpr_sequencer_t()
             self.a_c           = sym_t("a_c",          aseq(outer.tunable.num_agpr_accumulate_c))
             self.a_end         = sym_t("a_end",        aseq())
 
