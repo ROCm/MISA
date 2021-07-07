@@ -18,6 +18,12 @@ else
     PREC="fp32"
 fi
 
+if [ $# -ge 4 ] ; then
+    ARCH=$4
+else
+    ARCH="gfx908"
+fi
+
 if [ "${LAYOUT}" = "nchw" ] ; then
     LAYOUT_HSACO=""
     LAYOUT_ARG=""
@@ -43,8 +49,13 @@ else
     exit 1
 fi
 
-echo IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908${LAYOUT_HSACO}${PREC_HSACO}.hsaco
-export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908${LAYOUT_HSACO}${PREC_HSACO}.hsaco
+if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] ; then
+    echo "wrong arch: ${ARCH}"
+    exit 1
+fi
+
+echo IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
+export IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
