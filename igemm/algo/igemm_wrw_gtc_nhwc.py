@@ -617,7 +617,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self.accum_start              = 0
             if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
                 if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
-                    total_vgpr            = (total_vgpr + 3) // 4 * 4 # round to multiply of 4
+                    total_vgpr            = (total_vgpr + 7) // 8 * 8 # round to multiply of 4
                     self.accum_start      = total_vgpr
                     total_vgpr            = total_vgpr + outer.tunable.num_agpr_accumulate_c
                 else:
