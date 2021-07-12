@@ -315,7 +315,12 @@ public:
     static inline int compute_gemmk_global_splits(const int& grid_size,
                                                   const int& potential_occupancy)
     {
-        int num_cu = 120;
+        int num_cu;
+        hipDeviceProp_t dev_prop;
+        hipDevice_t dev;
+        HIP_CALL(hipGetDevice(&dev));
+        HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
+        num_cu = dev_prop.multiProcessorCount;
         int gemm_k_global_splits = num_cu * potential_occupancy / grid_size;
         
         return gemm_k_global_splits;
