@@ -260,10 +260,15 @@ class igemm_gtc_tunable_parameter_t(object):
             else:
                 assert False
         else:
-            assert self.gemm_k_per_block % self.nxb == 0
-            self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
-            self.unmerge_sub_k = 1
-            self.unmerge_sub_c = self.gemm_n_per_block
+            if self.tensor_layout == 'nchw':
+                assert self.gemm_k_per_block % self.nxb == 0
+                self.unmerge_sub_n = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxb)
+                self.unmerge_sub_k = 1
+                self.unmerge_sub_c = self.gemm_n_per_block
+            elif self.tensor_layout == 'nhwc':
+                self.unmerge_sub_n = 1                          # not used
+                self.unmerge_sub_k = 1                          # not used
+                self.unmerge_sub_c = 1                          # not used
 
         self.tensor_a_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
         self.tensor_b_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
@@ -306,8 +311,17 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_a_np2         = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2         = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
         self.lds_single        = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        self.lds_buffer_num    = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+        self.lds_buffer_num    = 2
         self.lds_total         = self.lds_buffer_num * self.lds_single
+
+        # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
+        # TODO: need to make some compromise in occupancy and lds double buffer
+        if self.is_occupancy_decreased():
+            self.lds_buffer_num                 = 1 if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 2
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
+        if self.lds_total > 32 * 1024:
+            self.lds_buffer_num                 = 1
+            self.lds_total                      = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
 
@@ -321,7 +335,11 @@ class igemm_gtc_tunable_parameter_t(object):
         # number of loops at least needed for final coalescing store, dicided by LDS size
         # self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
         #         (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
-        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // amdgpu_precision_data_byte(self.precision))
+        if self.direction == "wrw" and (self.tensor_b_thread_lengths[3] == 1 or self.vector_store == 1) and self.gemm_k_global_split == 1 and self.precision == 'fp16':
+            use_fp32_atomic_add = 1
+        else:
+            use_fp32_atomic_add = 0
+        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if use_fp32_atomic_add == 0 else 4))
         
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
@@ -343,6 +361,39 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+
+    def is_occupancy_decreased(self):
+        is_decreased = False
+        is_lds_decreased = False
+        is_agpr_decreased = False
+        is_vgpr_decreased = False
+        if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024:
+            is_lds_decreased = True
+
+        if self.num_agpr_accumulate_c < 128:
+            is_agpr_decreased = True
+
+        a_data_per_vgpr = 1 
+
+        # for fwd and bwd pass, return true directly, because they do not use lds double buffer
+        if self.direction == 'fwd':
+            return True
+
+        elif self.direction == "wrw":
+            if self.precision == "fp32":
+                return True
+            elif self.tensor_a_thread_lengths[3] > 1:
+                a_data_per_vgpr = 2
+            else:
+                a_data_per_vgpr = 1
+        else:
+            return True
+
+        if self.num_global_load_a // a_data_per_vgpr <= 8:
+            is_vgpr_decreased = True
+
+        is_decreased = is_lds_decreased and is_agpr_decreased and is_vgpr_decreased
+        return is_decreased
 
     def output(self):
         def to_miopen_prec(precision):
@@ -368,8 +419,8 @@ class igemm_gtc_tunable_parameter_t(object):
             brace_right='}'
             direction = "\"" + self.direction + "\""
             tensor_layout = "\"" + self.tensor_layout + "\""
-            precision = "\"" + self.precision + "\""
-            out_str = (f"{'{'}{direction}, {tensor_layout}, {precision}, {self.nxb:2},{self.nxe:2},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+            precision = to_miopen_prec(self.precision)
+            out_str = (f"        {'{'}{direction}, {tensor_layout}, {precision}, {self.nxb:2},{self.nxe:2},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
             out_str += (f"{self.wave_tile_m:3},{self.wave_tile_n:3},{self.wave_tile_k:3},{self.wave_step_m:2},{self.wave_step_n:2},{self.wave_repeat_m:2},{self.wave_repeat_n:2},")
             out_str += (f"{self.multihead:2},{self.vector_store:2},{self.gemm_k_global_split:2},{self.merge_e:2},{self.tensor_a_pass_through:2},")
             out_str += (f" {brace_left}{self.tensor_a_thread_lengths[0]:2},{self.tensor_a_thread_lengths[1]:2},{self.tensor_a_thread_lengths[2]:2},{self.tensor_a_thread_lengths[3]:2}{brace_right},")

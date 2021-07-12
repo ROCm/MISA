@@ -33,6 +33,7 @@
 typedef struct {
     int return_code     {-1};
     int gks             {0};  // this is to store the gks value after benchmarked.
+    int grid_size       {0};
     float duration_ms   {FLT_MAX};
     float gflops        {0};
     float efficiency    {0};

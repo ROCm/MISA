@@ -133,6 +133,7 @@ class ctrl_2d_global_load_t(object):
                                      # 5: d0 use vgpr precache, d1 use immidiate value
                                      # 4: .... maybe consider not using precache?
         self.flag_merge_v = 0        # when flag on v_offset, flag and multiple load, or flag per load
+        self.dim_conti_flag  = 0        # when dim flag is set, means length d0 is contiguous, and sgpr offset will not be used
 
 
 class macro_igemm_2d_global_load_t(macro_base_t):
@@ -362,19 +363,22 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
             i_soffset = 0
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
-                    if ctrl.use_flag and self.v_flag != None:
-                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_dst)}]")
-                    if i_d0 == 0 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
-                    elif i_d0 == 0 and i_d1 == 1:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
-                    elif i_d0 == 1 and i_d1 == 0:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                    if ctrl.dim_conti_flag == 0:
+                        if ctrl.use_flag and self.v_flag != None:
+                            self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_dst)}]")
+                        if i_d0 == 0 and i_d1 == 0:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
+                        elif i_d0 == 0 and i_d1 == 1:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d1()}", 0))
+                        elif i_d0 == 1 and i_d1 == 0:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_stride_d0()}", 0))
+                        else:
+                            self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
+                            i_soffset += 1
+                        if ctrl.use_flag and self.v_flag != None:
+                            self._emit(f"s_mov_b64 exec, -1")
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", f"{self.s_offset()}+{i_soffset}", 0))
-                        i_soffset += 1
-                    if ctrl.use_flag and self.v_flag != None:
-                        self._emit(f"s_mov_b64 exec, -1")
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, i_d1 * vgpr_per_vector * 4))
                     i_dst = i_dst + 1
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
