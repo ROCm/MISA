@@ -1148,6 +1148,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
             else:
                 ctrl_wei_gld.length_d0 = 1
+                ctrl_wei_gld.flag_on_d1 = 1
                 ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
 
         if self.tunable.tensor_a_pass_through:
