@@ -29,7 +29,7 @@ from .codegen import *
 IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 
 
-def igemm_host_driver(**options):
+def host_driver(**options):
     def get_dict_with_default(some_dict, key, default_value):
         if key in some_dict:
             return some_dict[key]

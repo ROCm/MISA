@@ -25,7 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 
-from .algo import *
+from .igemm import *
 from .codegen import *
 
 import os
@@ -35,7 +35,7 @@ import multiprocessing as mp
 IGEMM_EMIT_KERNEL_PER_INC_FILE = 1
 IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE = 0     # it seems fail to find symbol if seperate metadata of different kernel using multiple .amdgpu_metadata
 
-class igemm_codegen_driver_t(mc_base_t):
+class codegen_driver_t(mc_base_t):
     def __init__(self, mc, tunable_dicts):
         mc_base_t.__init__(self, mc)
         self.tunable_dicts = tunable_dicts

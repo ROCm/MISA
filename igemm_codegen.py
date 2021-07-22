@@ -27,7 +27,7 @@ from __future__ import print_function
 import argparse
 import sys, os, shutil
 
-from igemm import *
+from python import *
 
 OUT_DIR='out'
 
@@ -47,7 +47,7 @@ def igemm_flatten(args, config_content):
     for td in tunable_dicts:
         td['arch'] = sec_root['arch']       # append arch to each section
 
-    igemm_codegen_driver_t(mc, tunable_dicts)(split_kernel = args.split_kernel)
+    codegen_driver_t(mc, tunable_dicts)(split_kernel = args.split_kernel)
 
     # os.chmod(asm_target, 0x777)
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
         cxxflags = []
         if args.split_kernel:
             cxxflags += ["-DIGEMM_SPLIT_KERNEL"]
-        igemm_host_driver(cxxflags=cxxflags, arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config)
+        host_driver(cxxflags=cxxflags, arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):
@@ -114,7 +114,7 @@ if __name__ == '__main__':
         if os.path.exists(args.dir):
             shutil.rmtree(args.dir)
         os.mkdir(args.dir)
-        igemm_sequence_driver(arch=arch, code_object=code_object,
+        sequence_driver(arch=arch, code_object=code_object,
                             config_content=config_content, out_dir=args.dir )
 
 

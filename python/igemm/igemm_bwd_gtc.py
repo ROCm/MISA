@@ -25,15 +25,9 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
-from .fma_main_loop import *
+from ..operations import *
 from .igemm_base import *
-from .global_memory import *
-from .shared_memory import *
-from .utility import *
-from .thread_mapping import *
-from .xdlops_mapping import *
-from .coalescing_store import *
-from .mfma_main_loop import *
+
 
 
 IGEMM_BWD_GTC_LDS_STORE_ORDER_GEMM_M_C0_C1 = 0

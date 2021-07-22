@@ -25,15 +25,9 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
-from .fma_main_loop import *
+from ..operations import *
 from .igemm_base import *
-from .global_memory import *
-from .shared_memory import *
-from .utility import *
-from .thread_mapping import *
-from .xdlops_mapping import *
-from .coalescing_store import *
-from .mfma_main_loop import *
+
 
 IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
