@@ -25,20 +25,20 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 
-from .algo import *
+from .igemm import *
 from .codegen import *
-from .igemm_codegen_driver import igemm_codegen_driver_t
-from .igemm_host_driver import igemm_host_driver
+from .codegen_driver import codegen_driver_t
+from .host_driver import host_driver
 
 import os
 import copy
 import math
 
 
-def igemm_sequence_get_config_file_name(direction, arch_str, out_dir):
+def sequence_get_config_file_name(direction, arch_str, out_dir):
     return os.path.join(out_dir, f'igemm_{direction}_gtc_{arch_str}.config')
 
-def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tunable_dicts):
+def sequence_serialize_all_configs(arch_str, code_object, config_file, tunable_dicts):
     assert len(tunable_dicts) != 0
     with open(config_file, "w") as fp:
         fp.write('[codegen]\n')
@@ -51,14 +51,14 @@ def igemm_sequence_serialize_all_configs(arch_str, code_object, config_file, tun
             fp.write(igemm_gtc_tunable_parameter_t(td).serialize_as_section())
             fp.write('\n')
 
-def igemm_sequence_is_cgt(t0, t1, t2, t3, c0, c1, c2, c3):
+def sequence_is_cgt(t0, t1, t2, t3, c0, c1, c2, c3):
     '''
     check if cluster length is >= thread length
     '''
     return (c0 * c1) >= (t0 * t1) and (c2 * c3) >= (t2 * t3)
 
 
-def igemm_sequence_is_tunable_resource_valid(direction, mc, tunable):
+def sequence_is_tunable_resource_valid(direction, mc, tunable):
     if direction == 'fwd':
         igemm = igemm_fwd_gtc_t(mc, tunable)
     elif direction == 'bwd':
@@ -71,7 +71,7 @@ def igemm_sequence_is_tunable_resource_valid(direction, mc, tunable):
 
     return True
 
-class igemm_sequence_xdlops_t(mc_base_t):
+class sequence_xdlops_t(mc_base_t):
     def __init__(self, mc, config):
         mc_base_t.__init__(self, mc)
         self.config = config
@@ -160,9 +160,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                 tb_2 = macro_tile_n // (cb_3 * tb_3)
 
                                 if "cgt" in options and options["cgt"] == 1:
-                                    if not igemm_sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
+                                    if not sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
                                         continue
-                                    if not igemm_sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
+                                    if not sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
                                         continue
 
                                 # nxb, nxe
@@ -249,9 +249,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                     continue 
 
                                 if "cgt" in options and options["cgt"] == 1:
-                                    if not igemm_sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
+                                    if not sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
                                         continue
-                                    if not igemm_sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
+                                    if not sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
                                         continue
 
                                 # nxb, nxe
@@ -340,9 +340,9 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                     continue 
 
                                 if "cgt" in options and options["cgt"] == 1:
-                                    if not igemm_sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
+                                    if not sequence_is_cgt(ta_0, ta_1, ta_2, ta_3, ca_0, ca_1, ca_2, ca_3):
                                         continue
-                                    if not igemm_sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
+                                    if not sequence_is_cgt(tb_0, tb_1, tb_2, tb_3, cb_0, cb_1, cb_2, cb_3):
                                         continue
 
                                 # nxb, nxe
@@ -444,7 +444,7 @@ class igemm_sequence_xdlops_t(mc_base_t):
                                         tentative_ctrl_coalescing_store_xdlops.coalescing_groups != 0:
                                     continue
 
-                                if not igemm_sequence_is_tunable_resource_valid(config["current_direction"], self.mc, tentative_tunable):
+                                if not sequence_is_tunable_resource_valid(config["current_direction"], self.mc, tentative_tunable):
                                     continue
 
                                 tunable_dicts.append(tunable_dict)
@@ -458,11 +458,11 @@ class igemm_sequence_xdlops_t(mc_base_t):
         print(f"[{config['current_direction']}] total configs:{len(tunable_dicts)}")
         #for td in tunable_dicts:
         #    print(igemm_gtc_tunable_parameter_t(td).serialize())
-        igemm_codegen_driver_t(self.mc, tunable_dicts)(emit_kernel_mp=True, compile_skip_disass=True)
+        codegen_driver_t(self.mc, tunable_dicts)(emit_kernel_mp=True, compile_skip_disass=True)
         #serialize_all_configs(tunable_dicts)
         return tunable_dicts
 
-class igemm_sequence_driver_t(mc_base_t):
+class sequence_driver_t(mc_base_t):
     def __init__(self, mc, config):
         mc_base_t.__init__(self, mc)
         self.config = config
@@ -478,15 +478,15 @@ class igemm_sequence_driver_t(mc_base_t):
         code_object = get_dict_with_default(options, 'code_object', 'cov3')
 
         if self.mc.arch_config.arch == 908:
-            tunable_dicts = igemm_sequence_xdlops_t(self.mc, self.config)()
+            tunable_dicts = sequence_xdlops_t(self.mc, self.config)()
         else:
             assert False
         
         if tunable_dicts == None:
             return
 
-        igemm_sequence_serialize_all_configs(arch, code_object,
-                                igemm_sequence_get_config_file_name(tunable_dicts[0]['direction'],
+        sequence_serialize_all_configs(arch, code_object,
+                                sequence_get_config_file_name(tunable_dicts[0]['direction'],
                                         arch,
                                         out_dir),
                                 tunable_dicts)
@@ -530,5 +530,5 @@ def igemm_sequence_driver(**options):
 
     # build host
     direction = config_dicts[0]["direction"][0] if type(config_dicts[0]["direction"]) is list else config_dicts[0]["direction"]
-    config_file = igemm_sequence_get_config_file_name(direction, arch, out_dir)
-    igemm_host_driver(arch=arch, config_file=config_file, out_dir=out_dir)
+    config_file = sequence_get_config_file_name(direction, arch, out_dir)
+    host_driver(arch=arch, config_file=config_file, out_dir=out_dir)

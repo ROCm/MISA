@@ -27,9 +27,7 @@ from __future__ import print_function
 import sys
 import math
 from ..codegen import *
-from .utility import *
-from .conv import *
-from .xdlops_mapping import get_ctrl_xdlops_mapping_from_wave_tile, set_ctrl_xdlops_mapping_accvgpr_unified
+from ..operations import *
 
 
 IGEMM_GTC_FEAT_ALLOW_LDS_REORDER = 0

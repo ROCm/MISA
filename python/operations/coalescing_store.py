@@ -25,7 +25,6 @@
 ################################################################################
 
 import math
-from .igemm_base import *
 from .shared_memory import *
 from .global_memory import *
 from .thread_mapping import *
@@ -151,7 +150,7 @@ class ctrl_coalescing_store_t(object):
         assert g_m1 == 1
         sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
         return sub_m0_offset
-        #print(" i_c_m0 >> igemm_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
+        #print(" i_c_m0 >> utility_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
 
     def get_m0_m1_index(self, m_index):
         assert len(self.gemm_m_m0_m1) != 0
@@ -241,12 +240,12 @@ class igemm_coalescing_store_t(mc_base_t):
             self._emit(f"; init_co_lds_offset")
             gemm_m_shrink = g_m0
             if gemm_m_shrink != 1:
-                self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp2}], {utility_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp2}], {utility_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_gemm_im}], {igemm_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_gemm_im}], {utility_log2(ctrl.ctm.n_m_total())}, v[{v_gemm_in}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * ctrl.vector_write_out)}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -263,14 +262,14 @@ class igemm_coalescing_store_t(mc_base_t):
         with self._deferred_context():
             self._emit(f"; init_co_sub_m_index")
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.ctm.n_n_total())}, v[{v_tid}]")
             else:
-                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.ctm.n_n_total())}, v[{v_tmp2}]")
 
             self._emit(f"v_and_b32 v[{v_tmp2}], {l_m0 - 1}, v[{v_co_sub_m_index}]")
-            self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {igemm_log2(l_m0)}, v[{v_co_sub_m_index}]")
-            self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}] v[{v_tmp2}+1], {igemm_log2(ctrl.ctm.t_m0())}, v[{v_tmp2}]")
+            self._emit(f"v_lshrrev_b32 v[{v_tmp2}+1], {utility_log2(l_m0)}, v[{v_co_sub_m_index}]")
+            self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}] v[{v_tmp2}+1], {utility_log2(ctrl.ctm.t_m0())}, v[{v_tmp2}]")
         return self._get_deferred()
 
     def init_co_sub_n_index(self, v_co_sub_n_index, v_tid, v_tmp2):
@@ -286,7 +285,7 @@ class igemm_coalescing_store_t(mc_base_t):
             if ctrl.vector_write_out == 1:
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tid}]")
             else:
-                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.ctm.n_n_total() - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
@@ -388,7 +387,7 @@ class igemm_coalescing_store_t(mc_base_t):
                     if i_gst % 2 == 0:
                         i_issues =  (i_gst // 2) + 1
                         i_issue_list = issue_list[i_issues:]
-                        i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
+                        i_issue_cnt = utility_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                         self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                     # vdata, vaddr, srsrc, soffset, offset
                     self._emit(inst_gst(v_c(c_group_start_index + i_gst*ctrl.vector_write_out), v_out_offset, s_p_out, s_out_offset_itr(), 0))
@@ -589,7 +588,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         assert g_m1 == 1
         sub_m0_offset = ((i_c_m0 >> int(math.log2(g_m0))) << self.ctm.t_m0()) | (i_c_m0 & (g_m0 - 1))
         return sub_m0_offset
-        #print(" i_c_m0 >> igemm_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
+        #print(" i_c_m0 >> utility_log2(g_m0) << self.t_m0   i_c_m0 & (g_m0 - 1)  ")
 
     def get_m0_m1_index(self, m_index):
         assert len(self.gemm_m_m0_m1) != 0
@@ -881,42 +880,42 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             gemm_m_shrink is in multi-dimension.
             then, consider that introduced by granularity
             '''
-            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_gemm_im}]")
+            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_gemm_im}]")
             self._emit(f"v_and_b32 v[{v_tmp4}],  {ctrl.cxm.lanegroup_m_per_cluster() - 1} v[{v_tmp4}]   ; thread id of lanegroup_m_per_cluster")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_tmp4}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(ctrl.cxm.lanegroup_m_per_thread())}, v[{v_tmp4}]")
 
             if ctrl.cxm.block_m_per_lanegroup() != 1:
                 length_above_block_m_per_lanegroup = ctrl.cxm.lanegroup_m_per_block() * ctrl.cxm.lanegroup_m_per_cluster() * \
                                                     ctrl.cxm.lanegroup_m_per_thread()
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+1], {igemm_log2(length_above_block_m_per_lanegroup)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+1], {utility_log2(length_above_block_m_per_lanegroup)}, v[{v_gemm_im}]")
                 self._emit(f"v_and_b32 v[{v_tmp4}+1], {ctrl.cxm.block_m_per_lanegroup() - 1}  , v[{v_tmp4}+1]   ; thread id of block_m_per_lanegroup")
                 assert length_above_block_m_per_lanegroup % g_mb == 0, f"length_above_block_m_per_lanegroup:{length_above_block_m_per_lanegroup}, g_mb:{g_mb}"
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+1], {igemm_log2(length_above_block_m_per_lanegroup // g_mb)}, v[{v_co_sst}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+1], {utility_log2(length_above_block_m_per_lanegroup // g_mb)}, v[{v_co_sst}]")
 
             if ctrl.cxm.waves_per_m() != 1:
                 length_above_waves_per_m = ctrl.cxm.wave_step_m * ctrl.cxm.lanegroup_m_per_wave() * \
                                                     ctrl.cxm.lanegroup_m_per_block() * ctrl.cxm.block_m_per_lanegroup() * \
                                                     ctrl.cxm.lanegroup_m_per_thread() * ctrl.cxm.lanegroup_m_per_cluster()
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+2], {igemm_log2(length_above_waves_per_m)}, v[{v_gemm_im}]  ; thread id of waves_per_m")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+2], {utility_log2(length_above_waves_per_m)}, v[{v_gemm_im}]  ; thread id of waves_per_m")
                 assert length_above_waves_per_m % (g_ms * g_mw * g_mb) == 0, f"length_above_waves_per_m:{length_above_waves_per_m}, g_ms:{g_ms} g_mw:{g_mw} g_mb:{g_mb}"
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+2], {igemm_log2(length_above_waves_per_m // (g_ms * g_mw * g_mb))}, v[{v_co_sst}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+2], {utility_log2(length_above_waves_per_m // (g_ms * g_mw * g_mb))}, v[{v_co_sst}]")
 
             if ctrl.vector_write_out == 1:
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
-                self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_co_sst}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_co_sst}], {utility_log2(ctrl.cxm.macro_tile_n)}, v[{v_gemm_in}]")
 
             # gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
             # gemm_m_shrink = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
             # if gemm_m_shrink != 1:
-            #     self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {igemm_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-            #     self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {igemm_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+            #     self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
+            #     self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cxm.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
             # else:
             #     assert False, "impossible"
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {igemm_log2(data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {igemm_log2(data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out))}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out))}, v[{v_tid}]")
 
         return self._get_deferred()
 
@@ -944,10 +943,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")
             else:
                 if ctrl.vector_write_out == 1:
-                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tid}]   ; get tid along m")
+                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.cxm.macro_tile_n)}, v[{v_tid}]   ; get tid along m")
                 else:
-                    self._emit(f"v_lshlrev_b32 v[{v_tmp6}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp6}]  ; get tid along m")
+                    self._emit(f"v_lshlrev_b32 v[{v_tmp6}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.cxm.macro_tile_n)}, v[{v_tmp6}]  ; get tid along m")
 
                 v_idx = 0
                 # iterate all dimensions
@@ -958,43 +957,43 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         v_idx = v_idx + 1
                         c_m0  = c_m0 // l_mt
                         if c_m0 not in (0, 1):
-                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(l_mt)}  ,v[{v_co_sub_m_index}]")
+                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mt)}  ,v[{v_co_sub_m_index}]")
                 if n_mc != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_mc - 1}, v[{v_co_sub_m_index}]                   ; => x_mc")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // n_mc
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(n_mc)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_mc)}  ,v[{v_co_sub_m_index}]")
                 if n_ml != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_ml - 1}, v[{v_co_sub_m_index}]                   ; => x_ml")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // n_ml
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(n_ml)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_ml)}  ,v[{v_co_sub_m_index}]")
                 if l_mb != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mb - 1}, v[{v_co_sub_m_index}]                   ; => x_mb")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // l_mb
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(l_mb)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mb)}  ,v[{v_co_sub_m_index}]")
                 if l_mw != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mw - 1}, v[{v_co_sub_m_index}]                   ; => x_mw")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // l_mw
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(l_mw)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mw)}  ,v[{v_co_sub_m_index}]")
                 if l_ms != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_ms - 1}, v[{v_co_sub_m_index}]                   ; => x_ms")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // l_ms
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(l_ms)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_ms)}  ,v[{v_co_sub_m_index}]")
                 if n_mv != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_mv - 1}, v[{v_co_sub_m_index}]                   ; => x_mv")
                     v_idx = v_idx + 1
                     c_m0  = c_m0 // n_mv
                     if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {igemm_log2(n_mv)}  ,v[{v_co_sub_m_index}]")
+                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_mv)}  ,v[{v_co_sub_m_index}]")
                 if l_mr != 1 and c_m0 not in (0, 1):
                     self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mr - 1}, v[{v_co_sub_m_index}]                   ; => x_mr")
 
@@ -1009,18 +1008,18 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         '''
                         return a string to calculate v_co_sub_m_index = v_idx * k_multiplier + v_co_sub_m_index
                         '''
-                        assert igemm_is_pow2(k_multiplier)
+                        assert utility_is_pow2(k_multiplier)
                         if self.first == 1:
                             self.first = 0
                             if k_multiplier == 1:
                                 return f"v_mov_b32 v[{v_co_sub_m_index}], v[{v_idx}]"
                             else:
-                                return f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(k_multiplier)}, v[{v_idx}]"
+                                return f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(k_multiplier)}, v[{v_idx}]"
                         else:
                             if k_multiplier == 1:
                                 return  f"v_add_u32 v[{v_co_sub_m_index}], v[{v_idx}], v[{v_co_sub_m_index}]"
                             else:
-                                return f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_idx}], {igemm_log2(k_multiplier)}, v[{v_co_sub_m_index}]"
+                                return f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_idx}], {utility_log2(k_multiplier)}, v[{v_co_sub_m_index}]"
 
                 c_m0 = ttm.c_m0()
                 v_idx_r = 0
@@ -1030,27 +1029,27 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // n_mc
                 # if n_ml != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:1]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:1]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // n_ml
                 # if l_mb != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:2]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mb")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:2]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mb")
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // l_mb
                 # if l_mw != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:3]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mw")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:3]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mw")
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // l_mw
                 # if l_ms != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:4]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ms")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:4]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ms")
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // l_ms
                 # if n_mv != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:5]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mv")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:5]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mv")
                 #     v_idx_r = v_idx_r + 1
                 #     c_m0    = c_m0 // n_mv
                 # if l_mr != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {igemm_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mr")
+                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mr")
                 accumulate_co_sub_m = pretty_accumulate_co_sub_m_t()
                 if ctrl.vector_write_out != 1:
                     # if have vector store, we no longer have granularity, hence every dimension participate in m divide
@@ -1086,7 +1085,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                     self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:7])) + "      ; => accumulate x_mr")
 
                 # if ctrl.vector_write_out == 1:
-                #     self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {igemm_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
+                #     self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
 
                 assert v_idx == v_idx_r, "please check!"
 
@@ -1104,7 +1103,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
             if ctrl.vector_write_out == 1:
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tid}]")
             else:
-                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {igemm_log2(ctrl.vector_write_out)}, v[{v_tid}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cxm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
@@ -1387,7 +1386,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         # self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                         issue_list.append(inst_sld.get_issues(sld_offset))
 
-                total_lgkmcnt = igemm_flatten_list_accumulate(issue_list)
+                total_lgkmcnt = utility_flatten_list_accumulate(issue_list)
                 issues_per_ssgroup = 4 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
 
                 assert MAX_LGKMCNT % issues_per_ssgroup == 0
@@ -1421,7 +1420,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             if i_gst % (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1) == 0:
                                 i_issues =  (i_gst // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) + 1
                                 i_issue_list = current_issue_list[i_issues:]
-                                i_issue_cnt = igemm_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
+                                i_issue_cnt = utility_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):

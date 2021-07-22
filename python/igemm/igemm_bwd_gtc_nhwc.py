@@ -25,15 +25,8 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
-from .fma_main_loop import *
+from ..operations import *
 from .igemm_base import *
-from .global_memory import *
-from .shared_memory import *
-from .utility import *
-from .thread_mapping import *
-from .xdlops_mapping import *
-from .coalescing_store import *
-from .mfma_main_loop import *
 
 IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG = 0
 # IGEMM_BWD_GTC_NHWC_P_INTERLEAVE_GLD = False     # p tensor interleave
