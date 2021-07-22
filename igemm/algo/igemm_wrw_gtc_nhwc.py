@@ -545,7 +545,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 v_c_coalescing_num        = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
                 v_c_needed                = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
-                v_c_needed                = v_c_needed if v_c_needed > 2 else 2  # let at least 2
+                v_c_needed                = v_c_needed if v_c_needed > 0 else 0  # let at least 2
+                v_c_needed                = (v_c_needed + 1) // 2 * 2 
                 self.v_c                  = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
             self.v_a                      = sym_t("v_a"            ,vseq(outer.tunable.num_vgpr_accumulate_a))
             self.v_b                      = sym_t("v_b"            ,vseq(outer.tunable.num_vgpr_accumulate_b))
@@ -641,7 +642,11 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            aseq = gpr_sequencer_t()
+            if IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                vgpr = outer.kernel_vgpr_t(mc, outer)
+                aseq = gpr_sequencer_t(vgpr.get_accum_start())
+            else:
+                aseq = gpr_sequencer_t()
             self.a_c           = sym_t("a_c",          aseq(outer.tunable.num_agpr_accumulate_c))
             self.a_end         = sym_t("a_end",        aseq())
 
