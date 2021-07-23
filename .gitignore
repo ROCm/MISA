@@ -1,4 +1,5 @@
 out/
+build/
 *.py[cod]
 __pycache__
 *.s
