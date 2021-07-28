@@ -31,7 +31,7 @@ bool RTBackendHIP::init(bool profiling, bool counters, uint gpu_id, base_gpu_inf
         return false;
 
     if (gpu_id < 0 || (int)gpu_id >= ndevs) {
-        //LOG(severity::FATAL) << "Invalid HIP device id. " << ndevs << " gpu devices available, requested gpu_id==" << gpu_id << endl;
+        std::cout << "(severity::FATAL) "<< "Invalid HIP device id. " << ndevs << " gpu devices available, requested gpu_id==" << gpu_id << endl;
         return false;
     }
 
@@ -111,27 +111,26 @@ bool RTBackendHIP::free_cpumem(void* ptr)
     return CHECK(hipHostFree(ptr));
 }
 
-//bool RTBackendHIP::load_kernel_from_memory(kernel* kern, void* bin, size_t size)
-//{
-//    CodeObjectHIP co;
-//    co.mod = 0;
-//    co.func = 0;
-//    co.name = "sp3AsmKernel"; // todo: query function names
-//    if (!CHECK(hipModuleLoadData(&co.mod, bin)) ||
-//        !CHECK(hipModuleGetFunction(&co.func, co.mod, co.name.c_str())))
-//    {
-//        if (co.mod)
-//            CHECK(hipModuleUnload(co.mod));
-//        return false;
-//    }
-//
-//    co.lds_size = 0; // todo: add lds_size
-//    kern->name = co.name;
-//    kern->handle = cobjects.size();
-//    cobjects.push_back(co);
-//
-//    return true;
-//}
+bool RTBackendHIP::load_kernel_from_memory(kernel* kern, void* bin, size_t size, const string& name)
+{
+    CodeObjectHIP co;
+    co.mod = 0;
+    co.func = 0;
+    co.name = name; // todo: query function names
+    if (!CHECK(hipModuleLoadData(&co.mod, bin)) ||
+        !CHECK(hipModuleGetFunction(&co.func, co.mod, co.name.c_str())))
+    {
+        if (co.mod)
+            CHECK(hipModuleUnload(co.mod));
+        return false;
+    }
+    co.lds_size = 0; // todo: add lds_size
+    kern->name = co.name;
+    kern->handle = cobjects.size();
+    cobjects.push_back(co);
+
+    return true;
+}
 
 bool RTBackendHIP::run_kernel(const kernel* kern, const dispatch_params* params, uint64_t timeout, int64_t* time, int64_t* clocks)
 {

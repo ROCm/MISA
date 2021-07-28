@@ -40,7 +40,8 @@ protected:
 
 	void* allocate_cpumem(size_t size) override;
 	bool free_cpumem(void* ptr) override;
-
+	
+	bool load_kernel_from_memory(kernel* kern, void* bin, size_t size, const string& name) override;
 	bool run_kernel(const kernel* kern, const dispatch_params* params, uint64_t timeout, int64_t* time, int64_t* clocks) override;
 };
 

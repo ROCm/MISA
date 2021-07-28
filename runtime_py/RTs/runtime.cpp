@@ -12,8 +12,9 @@
 
 #include "utils_math.hpp"
 //#include "utils.hpp"
-#include "log.hpp"
+//#include "log.hpp"
 #include <sstream>
+#include <iostream>
 
 using std::endl;
 
@@ -25,6 +26,7 @@ using std::endl;
         }                                                               \
     } while (0)
 
+#define LOG(x) std::cout << #x							  
 
 ostream& operator<<(ostream& os, const memtag& t)
 {
@@ -51,7 +53,7 @@ ostream& operator<<(ostream& os, const gpu_info& v)
 		<< (v.mem_size >> 20) << " MB, " << (v.max_alloc >> 20) << " MB, " << v.alloc_gran;
 }
 
-Runtime::Runtime()// : rtbe(nullptr)
+Runtime::Runtime() : rtbe(nullptr)
 {
 }
 
@@ -183,41 +185,41 @@ void Runtime::copy_mem(const bufview* dst, const void* src, size_t size) const
 //
 //}
 
-//bool read_file(const char* path, vector<char>& bin)
-//{
-//	std::ifstream file(path, std::ios::binary | std::ios::ate);
-//	const auto size = file.tellg();
-//	bool read_failed = false;
-//	do {
-//		if (size < 0) { read_failed = true; break; }
-//		file.seekg(std::ios::beg);
-//		if (file.fail()) { read_failed = true; break; }
-//		bin.resize(size);
-//		if (file.rdbuf()->sgetn(bin.data(), size) != size) { read_failed = true; break; }
-//	} while (false);
-//	file.close();
-//
-//	if (read_failed)
-//		LOG(severity::ERROR) << "unable to read file \"" << path << "\"\n";
-//
-//	return !read_failed;
-//}
-
-
-void Runtime::load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params)
+bool read_file(const char* path, vector<char>& bin)
 {
-	if(is_binary_kernel(src_path))
-		load_kernel_from_binary(kern, src_path);
-	else 
-		load_kernel_from_source(kern, src_path, asmpl_path, params);
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+	const auto size = file.tellg();
+	bool read_failed = false;
+	do {
+		if (size < 0) { read_failed = true; break; }
+		file.seekg(std::ios::beg);
+		if (file.fail()) { read_failed = true; break; }
+		bin.resize(size);
+		if (file.rdbuf()->sgetn(bin.data(), size) != size) { read_failed = true; break; }
+	} while (false);
+	file.close();
+
+	if (read_failed)
+		LOG(severity::ERROR) << "unable to read file \"" << path << "\"\n";
+
+	return !read_failed;
 }
 
-void Runtime::load_kernel_from_binary(kernel* kern, const string& path)
-{
-	vector<char> bin;
-	//if (!read_file(path.c_str(), bin))
-	//	throw std::runtime_error(std::string("[Runtime] failed to read the file:") + path);
 
-	//RT_CALL(rtbe->load_kernel_from_memory(kern, bin.data(), bin.size()));
+void Runtime::load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name)
+{
+        //if(is_binary_kernel(src_path))
+                load_kernel_from_binary(kern, src_path, name);
+        //else 
+        //      load_kernel_from_source(kern, src_path, asmpl_path, params);
+}
+
+void Runtime::load_kernel_from_binary(kernel* kern, const string& path, const string& name)
+{
+        vector<char> bin;
+        if (!read_file(path.c_str(), bin))
+                throw std::runtime_error(std::string("[Runtime] failed to read the file:") + path);
+
+        RT_CALL(rtbe->load_kernel_from_memory(kern, bin.data(), bin.size(), name));
 }
 

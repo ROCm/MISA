@@ -16,6 +16,9 @@ enum class usage
 
 struct memtag
 {
+    memtag(){}
+    memtag(string name, size_t size, usage use, bool gpu)
+        : name(name), size(size), use(use), gpu(gpu) { }
 	string name;
 	size_t size;
 	usage use;
@@ -84,12 +87,6 @@ struct gpu_info : base_gpu_info
 ostream& operator<<(ostream& os, const gpu_info& v);
 
 
-class RTCodeObject
-{
-	public:
-	RTCodeObject() {};
-	virtual kernel get_kernel(const string & kernel_name) { return kernel{};}
-};
 
 class RTBackend
 {
@@ -116,6 +113,7 @@ protected:
 	virtual void* allocate_cpumem(size_t size) { return new char[size]; }
 	virtual bool free_cpumem(void* ptr) { delete[] static_cast<char*>(ptr); return true; }
 
+    virtual bool load_kernel_from_memory(kernel* kern, void* bin, size_t size, const string& name) { return false; }
 	virtual bool run_kernel(const kernel* kern, const dispatch_params* params, uint64_t timeout, int64_t* time, int64_t* clocks) { return false; }
 };
 
@@ -149,9 +147,9 @@ public:
 	void copy_mem(void* dst, const bufview* src, size_t size) const;
 	void copy_mem(const bufview* dst, const void* src, size_t size) const;
 
-	void load_kernel_from_binary(kernel* kern, const string& src_path);
+	void load_kernel_from_binary(kernel* kern, const string& src_path, const string& name);
 	void load_kernel_from_source(kernel* kern, const string& src_path, const string& asmpl_path, const string& params);
-	void load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params);
+	void load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name);
 	void run_kernel(const kernel* kern, const dispatch_params* params, uint64_t timeout = 0, int64_t* time = nullptr, int64_t* clocks = nullptr)
 		const { rtbe->run_kernel(kern, params, timeout, time, clocks); }
 };

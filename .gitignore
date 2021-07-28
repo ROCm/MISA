@@ -8,7 +8,8 @@ driver/xdnn_conv.h
 *.log
 *.inc
 *_bak
-*.txt
+*tunable_parameter_list.txt #CMakeLists.txt
+!CMakeLists.txt
 *_fail.*
 *_out/
 *.csv
