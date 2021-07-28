@@ -691,7 +691,7 @@ public:
         
         int num_of_gemm = 1 << gemm_k_global_split;
         void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * num_of_gemm * k * c * y * x * sizeof(short)));
+        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * k * c * y * x * sizeof(short)));
 
 #if USE_HOST_REDUCTION_TO_CHECK
         float16 *p_wei_host_workspace = (float16 *)malloc(num_of_gemm * k * c * y * x * sizeof(float16));
@@ -733,7 +733,7 @@ public:
         karg.group         = group;
 
         int dim_b          = (ho * wo + tunable->nxb - 1) / tunable->nxb * tunable->nxb;
-        karg.__pack_0      = dim_b == tunable->nxb ? utility_integer_divide_ceil(dim_b, wo) : ho;
+        karg.__pack_0      = dim_b <= tunable->gemm_k_per_block ? utility_integer_divide_ceil(dim_b, wo) : ho;
 
         // reduction kernel args
         size_t reduction_per_thread = 8;
