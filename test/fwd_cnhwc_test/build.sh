@@ -1,6 +1,6 @@
 #!/bin/sh
 # to launch from top of generator
-ARCH=gfx1030
+ARCH=gfx908
 rm -rf out
 mkdir out
 
@@ -15,9 +15,8 @@ AS_CLAGS="-Wa,-defsym,activ_mode=0" # PASTHRU = 0
 #AS_CLAGS="-Wa,-defsym,activ_mode=8" # LEAKY_RELU = 8   
 #AS_CLAGS="-Wa,-defsym,activ_mode=9" # ELU = 9          
 
-/opt/rocm/hip/bin/hipcc --amdgpu-target=$ARCH -Idriver -std=c++14 -lpthread test/inference/test_inference.cpp -o out/test_inference.exe || exit 1
-/opt/rocm/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$ARCH -mcumode $AS_CLAGS -Itest/inference/kernel/fp16/ test/inference/kernel/fp16/igemm_fwd_btm_nhwc_fp16.asm -o out/igemm_fwd_btm_nhwc_fp16.hsaco || exit 1
-/opt/rocm/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$ARCH -mcumode $AS_CLAGS -Itest/inference/kernel/int8/ test/inference/kernel/int8/igemm_fwd_btm_nhwc_int8.asm -o out/igemm_fwd_btm_nhwc_int8.hsaco || exit 1
+/opt/rocm/hip/bin/hipcc --amdgpu-target=$ARCH -Idriver -std=c++14 -lpthread test/fwd_cnhwc_test/test_driver.cpp -o out/test_driver.exe || exit 1
+/opt/rocm/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$ARCH -mcumode $AS_CLAGS -Itest/fwd_cnhwc_test/kernel/ test/fwd_cnhwc_test/kernel/igemm_fwd_cnhwc_gfx908_fp16.asm -o out/igemm_fwd_cnhwc_gfx908_fp16.hsaco || exit 1
 /opt/rocm/hip/bin/hipcc -x hip --cuda-gpu-arch=$ARCH --cuda-device-only -c -O3 driver/gpu_naive_conv/naive_conv.cpp -o out/naive_conv.hsaco
 
 
