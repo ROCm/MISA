@@ -824,6 +824,7 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
+        HIP_CALL(hipFree(p_wei_workspace));
         return result;
     }
     hipModule_t         module_tensor_cast;
