@@ -128,7 +128,7 @@ typedef struct {
 
 igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] = 
 {
-    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt128x256x32_wt32x32x8_ws1x2_wr2x2"  , "fp16",  128,  4, 16,  64, 2, 4},
+    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt128x256x32_wt32x32x8_ws1x2_wr2x2"  , "fp16",  128,  256, 32, 256, 1, 2},
 };
 
 class igemm_fwd_btm_t {
