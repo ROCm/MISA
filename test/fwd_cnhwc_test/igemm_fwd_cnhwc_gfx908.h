@@ -47,6 +47,8 @@
     } while (0)
 #endif
 
+#define _VEC_C_ 8
+
 static inline size_t gpu_conv_out_size(size_t in_size, size_t pad,
                                          size_t dilation, size_t ksize,
                                          size_t stride) {
@@ -73,6 +75,7 @@ typedef struct {
     uint32_t fy;
     uint32_t fx;
     uint32_t group;
+    uint32_t vec_c;
     uint32_t batch_m;
     uint32_t stride_m;
     float    alpha;
@@ -82,8 +85,8 @@ typedef struct {
     uint32_t magic_1;
     uint32_t magic_2;
     uint32_t shift_pack_0;
-} __attribute__((packed)) igemm_fwd_btm_2d_karg_t;
-static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
+} __attribute__((packed)) igemm_fwd_cnhwc_karg_t;
+static inline void dump_igemm_fwd_cnhwc_2d_karg(igemm_fwd_cnhwc_karg_t * karg)
 {
     std::cout<<"p_in:"<<karg->p_in<<", ";
     std::cout<<"p_wei:"<<karg->p_wei<<", ";
@@ -104,6 +107,7 @@ static inline void dump_igemm_fwd_btm_2d_karg(igemm_fwd_btm_2d_karg_t * karg)
     std::cout<<"fy:"<<karg->fy<<", ";
     std::cout<<"fx:"<<karg->fx<<", ";
     std::cout<<"group:"<<karg->group<<", ";
+    std::cout<<"vec_c:"<<karg->vec_c<<", ";
     std::cout<<"batch_m:"<<karg->batch_m<<", ";
     std::cout<<"stride_m:"<<karg->stride_m<<", ";
     std::cout<<"alpha:"<<karg->alpha<<", ";
@@ -124,18 +128,18 @@ typedef struct {
     uint32_t block_size;
     uint32_t r;
     uint32_t occupancy;
-} igemm_fwd_btm_kernel_info_t;
+} igemm_fwd_cnhwc_kernel_info_t;
 
-igemm_fwd_btm_kernel_info_t igemm_fwd_btm_kernel_list [] = 
+igemm_fwd_cnhwc_kernel_info_t igemm_fwd_cnhwc_kernel_list [] = 
 {
-    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt128x256x32_wt32x32x8_ws1x2_wr2x2"  , "fp16",  128,  256, 32, 256, 1, 2},
+    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2"  , "fp16",  128,  256, 32, 256, 1, 2},
 };
 
-class igemm_fwd_btm_t {
+class igemm_fwd_cnhwc_t {
 public:
     int num_cu;
     int gcn_arch = 0;
-    igemm_fwd_btm_t(){
+    igemm_fwd_cnhwc_t(){
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
         HIP_CALL(hipGetDevice(&dev));
@@ -145,12 +149,12 @@ public:
         if(gcn_arch >= 1000)
             num_cu *= 2;
     }
-    ~igemm_fwd_btm_t(){}
-    std::string get_kernel_name(const igemm_fwd_btm_kernel_info_t *kernel_info) {
+    ~igemm_fwd_cnhwc_t(){}
+    std::string get_kernel_name(const igemm_fwd_cnhwc_kernel_info_t *kernel_info) {
         return kernel_info->kernel_name;
     }
 
-    bool is_valid(const args_t *arg, igemm_fwd_btm_kernel_info_t * kernel_info)
+    bool is_valid(const args_t *arg, igemm_fwd_cnhwc_kernel_info_t * kernel_info)
     {
         size_t hi = arg->get_int("in_h");
         size_t wi = arg->get_int("in_w");
@@ -177,16 +181,13 @@ public:
         size_t k_per_group  = k / group;
         size_t c_per_group  = c / group;
 
-        if(c_per_group != kernel_info->k_per_block)
-            return false;
-
         if(k_per_group % kernel_info->n_per_block != 0)
             return false;
         
         return true;
     }
 
-    result_t run(const args_t *arg,  hipModule_t module, igemm_fwd_btm_kernel_info_t * kernel_info,
+    result_t run(const args_t *arg,  hipModule_t module, igemm_fwd_cnhwc_kernel_info_t * kernel_info,
                  void *p_in, void *p_wei, void *p_out,
                  int warmup, int repeat, const driverDataType_t& data_type) {
         if(!is_valid(arg, kernel_info)){
@@ -212,13 +213,15 @@ public:
         size_t wo = gpu_conv_out_size(wi, px, dx, fx, sx);
         size_t group = arg->get_int("group_count");
 
-        assert(c % group == 0 && k % group == 0);
+        size_t vec_c = _VEC_C_;
 
-        assert(group != 0 && c % group == 0 && k % group == 0);
+        assert(c % (group * vec_c) == 0 && k % (group * vec_c) == 0);
 
-        size_t k_per_group  = k / group;
-        size_t c_per_group  = c / group;
-        igemm_fwd_btm_2d_karg_t karg;
+        assert(group != 0 && c % (group * vec_c) == 0 && k % (group * vec_c) == 0);
+
+        size_t k_per_group  = k / group / vec_c;
+        size_t c_per_group  = c / group / vec_c;
+        igemm_fwd_cnhwc_karg_t karg;
         karg.p_in           = p_in;
         karg.p_wei          = p_wei;
         karg.p_out          = p_out;
@@ -238,6 +241,7 @@ public:
         karg.fy             = static_cast<int>(fy);
         karg.fx             = static_cast<int>(fx);
         karg.group          = static_cast<int>(group);
+        karg.vec_c          = static_cast<int>(vec_c);
         size_t karg_size    = sizeof(karg);
 
         void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
@@ -248,37 +252,13 @@ public:
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_info->kernel_name.c_str()));
 
         int block_size  = kernel_info->block_size;
-        int num_gemm_m  = (ho * wo + kernel_info->m_per_block - 1) / kernel_info->m_per_block;
-        int num_gemm_n  = (k_per_group + kernel_info->n_per_block - 1) / kernel_info->n_per_block;
+        int num_gemm_m  = (n * ho * wo + kernel_info->m_per_block - 1) / kernel_info->m_per_block;
+        int num_gemm_n  = (k_per_group * vec_c + kernel_info->n_per_block - 1) / kernel_info->n_per_block;
 
-        int grid_size = kernel_info->occupancy * num_cu;
-        grid_size = env_get_int("GRID_SIZE", grid_size);
-        if(grid_size % num_gemm_n == 0){
-            int grids_for_m = grid_size / num_gemm_n;
-            karg.batch_m    = (num_gemm_m + grids_for_m - 1) / grids_for_m;
-            karg.stride_m   = kernel_info->m_per_block * grids_for_m;
-
-        }else{
-            grid_size = num_gemm_m * num_gemm_n;
-            karg.batch_m    = 1;
-            karg.stride_m   = 0;
-        }
-
-        // TODO: proper set alpha/beta/gamma
-        karg.alpha          = 1.0f;
-        karg.beta           = 1.0f;
-        karg.gamma          = 1.0f;
-
-        magic_div_u32_t mdiv_0 = magic_div_u32_gen(fx);
-        magic_div_u32_t mdiv_1 = magic_div_u32_gen(wo);
-        magic_div_u32_t mdiv_2 = magic_div_u32_gen(num_gemm_n);
-        karg.magic_0        = mdiv_0.magic;
-        karg.magic_1        = mdiv_1.magic;
-        karg.magic_2        = mdiv_2.magic;
-        karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, 0);
+        int grid_size = num_gemm_m * num_gemm_n;
 
         // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
-        // dump_igemm_fwd_btm_2d_karg(&karg);
+        // dump_igemm_fwd_cnhwc_2d_karg(&karg);
 
         auto launch_fwd = [&]() -> float {
             void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
@@ -292,7 +272,7 @@ public:
             hipEventCreate(&stop);
 
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, n, group,
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
 

@@ -22,8 +22,8 @@
 ---
 amdhsa.version: [ 1, 0 ]
 amdhsa.kernels:
-  - .name: igemm_fwd_gtcx_cnhwc_fp16_ex0_bt128x256x32_wt32x32x8_ws1x2_wr2x2
-    .symbol: igemm_fwd_gtcx_cnhwc_fp16_ex0_bt128x256x32_wt32x32x8_ws1x2_wr2x2.kd
+  - .name: igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2
+    .symbol: igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2.kd
     .sgpr_count: 54
     .vgpr_count: 128
     .kernarg_segment_align: 8

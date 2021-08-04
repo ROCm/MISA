@@ -116,7 +116,7 @@ static inline int env_get_int(const char *var_name, int default_int) {
 #define NAIVE_CONV_THREADED
 #include "naive_conv.h"
 #include "gpu_naive_conv.h"
-#include "igemm_fwd_btm_nhwc.h"
+#include "igemm_fwd_cnhwc_gfx908.h"
 
 
 #define HIP_CALL(call)                                                         \
@@ -373,12 +373,12 @@ static inline double get_nrms(int forw, driverDataType_t driver_data_type){
 }
 
 #define     GPU_NAIVE_CONV_HSACO    "naive_conv.hsaco"
-#define     SCLK_MHZ    2200
+#define     SCLK_MHZ    1283
 #define WARMUP 3
 #define REPEAT 8
 
 #ifndef HSACO
-#define HSACO "igemm_fwd_btm_nhwc_fp16.hsaco"
+#define HSACO "igemm_fwd_cnhwc_gfx908_fp16.hsaco"
 #endif
 int main(int argc, char **argv){
     int warmup = env_get_int("WARMUP", WARMUP);
@@ -391,13 +391,13 @@ int main(int argc, char **argv){
     gpu_naive_conv_init(gpu_naive_conv_hsaco);
 
     std::string base_arg = parse_base_arg(argc, argv);
-    std::string default_hsaco = "igemm_fwd_btm_nhwc_";
+    std::string default_hsaco = "igemm_fwd_cnhwc_gfx908_";
 
     driverDataType_t driver_data_type;
     int fp_factor = 1;
     if(base_arg == "conv"){
         driver_data_type = driverFloat;
-        default_hsaco += "fp32.hsaco";
+        exit(0);
     }
     else if(base_arg == "convfp16"){
         driver_data_type = driverHalf;
@@ -410,8 +410,7 @@ int main(int argc, char **argv){
     }
     else if(base_arg == "convint8") {
         driver_data_type = driverInt8;
-        default_hsaco += "int8.hsaco";
-        fp_factor = 4;
+        exit(0);
     }
     else
         exit(0);
@@ -430,6 +429,8 @@ int main(int argc, char **argv){
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
+
+    int vec_c = _VEC_C_;
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
@@ -535,10 +536,10 @@ int main(int argc, char **argv){
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
             
-            gpu_naive_conv_fwd_nhwc_fp32(device_input, device_weight, device_output,
+            gpu_naive_conv_fwd_cnhwc_fp32(device_input, device_weight, device_output,
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
-                                dilation_w, dilation_h, ngroups);
+                                dilation_w, dilation_h, ngroups, vec_c);
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_output, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
@@ -565,19 +566,15 @@ int main(int argc, char **argv){
                         static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
         }
 
-        igemm_fwd_btm_t conv_fwd_driver;
+        igemm_fwd_cnhwc_t conv_fwd_driver;
         int valid_index = 0;
         result_t fastest_result;
         fastest_result.duration_ms = FLT_MAX;
         int fastest_id = -1;
-        for (int i = 0; i < sizeof(igemm_fwd_btm_kernel_list)/sizeof(igemm_fwd_btm_kernel_list[0]); i++) {
-            igemm_fwd_btm_kernel_info_t *kinfo = &igemm_fwd_btm_kernel_list[i];
+        for (int i = 0; i < sizeof(igemm_fwd_cnhwc_kernel_list)/sizeof(igemm_fwd_cnhwc_kernel_list[0]); i++) {
+            igemm_fwd_cnhwc_kernel_info_t *kinfo = &igemm_fwd_cnhwc_kernel_list[i];
             if(driver_data_type == driverHalf){
                 if(kinfo->data_type != "fp16")
-                    continue;
-            }
-            else if(driver_data_type == driverInt8){
-                if(kinfo->data_type != "int8")
                     continue;
             }
 

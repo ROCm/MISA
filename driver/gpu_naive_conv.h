@@ -71,6 +71,8 @@ static struct {
     hipFunction_t   kernel_naive_conv_fwd_ndhwc_fp32;
     hipFunction_t   kernel_naive_conv_bwd_ndhwc_fp32;
     hipFunction_t   kernel_naive_conv_wrw_ndhwc_fp32;
+
+    hipFunction_t   kernel_naive_conv_fwd_cnhwc_fp32;
 } the_gpu_handle;
 
 
@@ -99,6 +101,8 @@ static inline void gpu_naive_conv_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_bwd_ndhwc_fp32, the_gpu_handle.module, "naive_conv_bwd_ndhwc_fp32"));
         HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_wrw_ndhwc_fp32, the_gpu_handle.module, "naive_conv_wrw_ndhwc_fp32"));
 
+        HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_fwd_cnhwc_fp32, the_gpu_handle.module, "naive_conv_fwd_cnhwc_fp32"));
+
         inited = 1;
     }
 }
@@ -123,6 +127,7 @@ typedef struct {
     int fy;
     int fx;
     int group;
+    int vec_c;
 } __attribute__((packed)) naive_conv_2d_karg_t;
 
 typedef struct {
@@ -708,6 +713,52 @@ static inline void gpu_naive_conv_wrw_ndhwc_fp32(void *src, void *filter, void *
     int block_size = 256;
     int grid_size = group * k_per_group;
     HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_ndhwc_fp32, grid_size * block_size, 1, 1,
+                                            block_size, 1, 1, 0, 0, NULL,
+                                            (void **)&config, NULL, NULL));
+
+}
+
+static inline void gpu_naive_conv_fwd_cnhwc_fp32(void *src, void *filter,
+                                       void *dst, size_t n, size_t w, size_t h,
+                                       size_t c, size_t k, size_t fx, size_t fy,
+                                       size_t px, size_t py, size_t sx,
+                                       size_t sy, size_t dx, size_t dy, size_t group, size_t vec_c)
+{
+    assert(group != 0 && c % group == 0 && k % group == 0 && (c / group) % vec_c == 0 && (k / group) % vec_c == 0);
+    size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
+    size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
+    size_t k_per_group  = k / group / vec_c;
+    size_t c_per_group  = c / group / vec_c;
+    naive_conv_2d_karg_t karg;
+    karg.p_in           = src;
+    karg.p_wei          = filter;
+    karg.p_out          = dst;
+    karg.hi             = static_cast<int>(h);
+    karg.wi             = static_cast<int>(w);
+    karg.n              = static_cast<int>(n);
+    karg.k_per_group    = static_cast<int>(k_per_group);
+    karg.c_per_group    = static_cast<int>(c_per_group);
+    karg.ho             = static_cast<int>(ho);
+    karg.wo             = static_cast<int>(wo);
+    karg.sy             = static_cast<int>(sy);
+    karg.sx             = static_cast<int>(sx);
+    karg.dy             = static_cast<int>(dy);
+    karg.dx             = static_cast<int>(dx);
+    karg.py             = static_cast<int>(py);
+    karg.px             = static_cast<int>(px);
+    karg.fy             = static_cast<int>(fy);
+    karg.fx             = static_cast<int>(fx);
+    karg.group          = static_cast<int>(group);
+    karg.vec_c          = static_cast<int>(vec_c);
+    size_t karg_size    = sizeof(karg);
+
+    void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
+                        HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
+                        HIP_LAUNCH_PARAM_END};
+
+    int block_size = 256;
+    int grid_size = group * n * ho;
+    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, NULL, NULL));
 
