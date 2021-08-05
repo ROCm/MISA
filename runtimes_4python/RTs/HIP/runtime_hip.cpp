@@ -31,7 +31,7 @@ bool RTBackendHIP::init(bool profiling, bool counters, uint gpu_id, base_gpu_inf
         return false;
 
     if (gpu_id < 0 || (int)gpu_id >= ndevs) {
-        std::cout << "(severity::FATAL) "<< "Invalid HIP device id. " << ndevs << " gpu devices available, requested gpu_id==" << gpu_id << endl;
+        LOG(severity::FATAL) << "Invalid HIP device id. " << ndevs << " gpu devices available, requested gpu_id==" << gpu_id << endl;
         return false;
     }
 
@@ -88,6 +88,7 @@ bool RTBackendHIP::memsetD8(const bufview& dst, uint8_t val, size_t size) const
 void* RTBackendHIP::allocate_gpumem(size_t size)
 {
     void* ptr;
+    std::cout << "(severity::DEBUG) "<< "allocate_gpumem start " << size<<"\n";
     bool status = CHECK(hipMalloc(&ptr, size));
 
     return status ? ptr : 0;

@@ -2,6 +2,7 @@
 #define RUNTIME_HPP__ 1
 
 #include <vector>
+#include <array>
 #include <string>
 using std::vector;
 using std::string;
@@ -19,28 +20,58 @@ struct memtag
     memtag(){}
     memtag(string name, size_t size, usage use, bool gpu)
         : name(name), size(size), use(use), gpu(gpu) { }
-	string name;
-	size_t size;
-	usage use;
-	bool gpu;
+    string name;
+    size_t size;
+    usage use;
+    bool gpu;
+};
+
+struct membuf;
+class RTBackend;
+
+struct bufview
+{
+    memtag tag;
+
+    membuf* buf;//TODO shared ptr for buf
+    size_t off;
+    void* ptr() const ;
+
+    void map(membuf* b, size_t offset);
+	bufview() = default;
+	//bufview(membuf& b) : tag(b.tag) { map(&b, 0); };
+    bufview(membuf& b);
+
+    void copy_mem_out(void* dst, size_t byte_size);
+    void copy_mem_in(const void* src, size_t byte_size);
+
+    template <typename T>
+    std::vector<T> get_vector() { return get_vector<T>(tag.size); }
+    
+    template <typename T>
+    std::vector<T> get_vector(size_t bytes)
+    {
+        int vector_size = (bytes + sizeof(T)) / sizeof(T);
+        std::vector<T> val(vector_size);
+        copy_mem_out(val.data(), bytes);
+        return val;
+    }
+
+    template <typename T>
+    void set_vector(const std::vector<T>& val) { set_vector<T>(val, tag.size); }
+
+    template <typename T>
+    void set_vector(const std::vector<T>& val, size_t bytes) { copy_mem_in(val.data(), bytes);}
+
 };
 
 struct membuf
 {
-	memtag tag;
-	void* ptr;
-};
+    memtag tag;
+    void* ptr;
+    RTBackend* rtbe; //TODO weak_ptr for rtbe
 
-struct bufview
-{
-	memtag tag;
-	membuf* buf;
-	size_t off;
-
-	void* ptr() const { return (char*)buf->ptr + off; }
-	void map(membuf* b, size_t offset) { buf = b; off = offset; }
-	bufview() = default;
-	bufview(membuf& b) : tag(b.tag) { map(&b, 0); };
+    bufview make_view(){ return bufview(*this); }
 };
 
 typedef void* gpu_ptr;
@@ -50,11 +81,13 @@ ostream& operator<<(ostream& os, const bufview& v);
 
 struct dispatch_params
 {
-	uint32_t wg_size[3];
-	uint32_t grid_size[3];
-	const void* kernarg;
-	size_t kernarg_size;
-	uint32_t dynamic_lds;
+    dispatch_params(){};
+    std::array<uint32_t, 3> wg_size = {};
+    std::array<uint32_t, 3> grid_size = {};
+    
+    const void* kernarg;
+    size_t kernarg_size;
+    uint32_t dynamic_lds;
 };
 
 struct kernel
@@ -85,8 +118,6 @@ struct gpu_info : base_gpu_info
 	int rate_fp16;
 };
 ostream& operator<<(ostream& os, const gpu_info& v);
-
-
 
 class RTBackend
 {
@@ -143,15 +174,17 @@ public:
 	membuf create_buf(const memtag& tag);
 	void delete_buf(membuf& a);
 	size_t get_freegpumem() const { return memfree; } // it is not precies and might be optimistic estimation depending on actual runtime api
-	void memset_buf(const bufview& dst, uint8_t val, size_t size);
-	void copy_mem(void* dst, const bufview* src, size_t size) const;
-	void copy_mem(const bufview* dst, const void* src, size_t size) const;
+	void memset_buf(const bufview& dst, uint8_t val, size_t byte_size);
+	void copy_mem(void* dst, const bufview* src, size_t byte_size) const;
+	void copy_mem(const bufview* dst, const void* src, size_t byte_size) const;
 
 	void load_kernel_from_binary(kernel* kern, const string& src_path, const string& name);
-	void load_kernel_from_source(kernel* kern, const string& src_path, const string& asmpl_path, const string& params);
+	void load_kernel_from_source(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name);
 	void load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name);
 	void run_kernel(const kernel* kern, const dispatch_params* params, uint64_t timeout = 0, int64_t* time = nullptr, int64_t* clocks = nullptr)
 		const { rtbe->run_kernel(kern, params, timeout, time, clocks); }
+    void short_kernel_run(const kernel* kern, const dispatch_params* params)
+        const { run_kernel(kern, params);}
 };
 
 bool is_binary_kernel(const string& src_path);

@@ -1,5 +1,4 @@
 #include "runtime.hpp"
-
 #include <vector>
 #include <fstream>
 
@@ -11,8 +10,8 @@
 
 
 #include "utils_math.hpp"
-//#include "utils.hpp"
-//#include "log.hpp"
+#include "utils.hpp"
+#include "log.hpp"
 #include <sstream>
 #include <iostream>
 
@@ -20,13 +19,12 @@ using std::endl;
 
 #define RT_CALL(call)                                                   \
     do {                                                                \
-        if (!call) {                                                    \
+        if (!(call)) {                                                    \
             throw std::runtime_error(                                   \
 				std::string("[Runtime] failed at call") + #call);   \
         }                                                               \
     } while (0)
 
-#define LOG(x) std::cout << #x							  
 
 ostream& operator<<(ostream& os, const memtag& t)
 {
@@ -36,7 +34,7 @@ ostream& operator<<(ostream& os, const memtag& t)
 
 ostream& operator<<(ostream& os, const bufview& v)
 {
-	return os << "ptr=" << v.ptr() << " (" << v.tag << ")";
+	return os << "ptr=" << v.ptr() << " rtbe="<< v.buf->rtbe << " (" << v.tag << ")";
 }
 
 ostream& operator<<(ostream& os, const gpu_info& v)
@@ -53,8 +51,38 @@ ostream& operator<<(ostream& os, const gpu_info& v)
 		<< (v.mem_size >> 20) << " MB, " << (v.max_alloc >> 20) << " MB, " << v.alloc_gran;
 }
 
+inline void rt_copy_mem(void* dst, const bufview* src, size_t byte_size)
+{
+    if (src->tag.gpu)
+        RT_CALL(src->buf->rtbe->memcpyDtoH(dst, src->ptr(), byte_size));
+    else
+        memcpy(dst, src->ptr(), byte_size);
+}
+
+inline void rt_copy_mem(bufview* dst, const void* src, size_t byte_size)
+{
+    if (dst->tag.gpu)
+        RT_CALL(dst->buf->rtbe->memcpyHtoD(dst->ptr(), src, byte_size));
+    else
+        memcpy(dst->ptr(), src, byte_size);
+}
+
+void * bufview::ptr() const { return (char*)buf->ptr + off; }
+void bufview::map(membuf* b, size_t offset) { buf = b; off = offset; }
+bufview::bufview(membuf& b) : tag(b.tag) { map(&b, 0); };
+
+void bufview::copy_mem_out(void* dst, size_t byte_size)
+{
+    rt_copy_mem(dst, this, byte_size);
+}
+void bufview::copy_mem_in(const void* src, size_t byte_size)
+{
+    rt_copy_mem(this, src, byte_size);
+}
+
 Runtime::Runtime() : rtbe(nullptr)
 {
+
 }
 
 Runtime::~Runtime()
@@ -64,12 +92,9 @@ Runtime::~Runtime()
 
 void Runtime::init(string rt, bool profiling, bool counters, uint gpu_id)
 {
-//#ifndef KT_DISABLE_HIP_RUNTIME
+
 	if (rt == "hip" && !rtbe) { rtbe = new RTBackendHIP; }
-//#endif
-//#ifndef KT_DISABLE_HSA_RUNTIME
 //	if (rt == "hsa" && !rtbe) { rtbe = new RTBackendHSA; }
-//#endif
 
 	if (!rtbe)
 	{
@@ -111,12 +136,12 @@ void Runtime::shutdown()
 
 void Runtime::delete_buf(membuf& a)
 {
-	if (!a.tag.gpu)
-		RT_CALL(rtbe->free_cpumem(a.ptr));
-	else
-		RT_CALL(rtbe->free_gpumem(a.ptr));
-	
-	track_gpumemfree(a.tag.size);
+    if (!a.tag.gpu)
+        RT_CALL(rtbe->free_cpumem(a.ptr));
+    else{
+        RT_CALL(rtbe->free_gpumem(a.ptr));
+        track_gpumemfree(a.tag.size);
+    }
 }
 
 inline void Runtime::track_gpumemfree(size_t size)
@@ -142,9 +167,11 @@ inline void Runtime::track_gpumemalloc(size_t size)
 
 membuf Runtime::create_buf(const memtag& tag)
 {
-	membuf a = { tag, nullptr };
-	if (tag.gpu)
+	membuf a = { tag, nullptr, rtbe};
+
+	if (tag.gpu){
 		a.ptr = rtbe->allocate_gpumem(tag.size);
+    }
 	else
 		a.ptr = rtbe->allocate_cpumem(tag.size);
 
@@ -156,28 +183,28 @@ membuf Runtime::create_buf(const memtag& tag)
 	return a;
 }
 
-void Runtime::memset_buf(const bufview& dst, uint8_t val, size_t size)
+void Runtime::memset_buf(const bufview& dst, uint8_t val, size_t byte_size)
 {
-	if (dst.tag.gpu)
-		RT_CALL(rtbe->memsetD8(dst, val, size));
-
-	memset(dst.ptr(), val, size);
+    if (dst.tag.gpu)
+        RT_CALL(rtbe->memsetD8(dst, val, byte_size));
+    else
+        memset(dst.ptr(), val, byte_size);
 }
 
-void Runtime::copy_mem(void* dst, const bufview* src, size_t size) const
+void Runtime::copy_mem(void* dst, const bufview* src, size_t byte_size) const
 {
-	if (src->tag.gpu)
-		RT_CALL(rtbe->memcpyDtoH(dst, src->ptr(), size));
-
-	memcpy(dst, src->ptr(), size);
+    if (src->tag.gpu)
+        RT_CALL(rtbe->memcpyDtoH(dst, src->ptr(), byte_size));
+    else
+        memcpy(dst, src->ptr(), byte_size);
 }
 
-void Runtime::copy_mem(const bufview* dst, const void* src, size_t size) const
+void Runtime::copy_mem(const bufview* dst, const void* src, size_t byte_size) const
 {
-	if (dst->tag.gpu)
-		RT_CALL(rtbe->memcpyHtoD(dst->ptr(), src, size));
-
-	memcpy(dst->ptr(), src, size);
+    if (dst->tag.gpu)
+        RT_CALL(rtbe->memcpyHtoD(dst->ptr(), src, byte_size));
+    else
+        memcpy(dst->ptr(), src, byte_size);
 }
 
 //void Runtime::load_code_object(const string& src_path)
@@ -185,26 +212,37 @@ void Runtime::copy_mem(const bufview* dst, const void* src, size_t size) const
 //
 //}
 
-bool read_file(const char* path, vector<char>& bin)
+void Runtime::load_kernel_from_source(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name)
 {
-	std::ifstream file(path, std::ios::binary | std::ios::ate);
-	const auto size = file.tellg();
-	bool read_failed = false;
-	do {
-		if (size < 0) { read_failed = true; break; }
-		file.seekg(std::ios::beg);
-		if (file.fail()) { read_failed = true; break; }
-		bin.resize(size);
-		if (file.rdbuf()->sgetn(bin.data(), size) != size) { read_failed = true; break; }
-	} while (false);
-	file.close();
+    TempFile outfile("conv-asm-out-XXXXXX");
 
-	if (read_failed)
-		LOG(severity::ERROR) << "unable to read file \"" << path << "\"\n";
+    vector<string> args({
+        "-p", src_path,
+        "-o", outfile,
+        "-mcpu", gi.agent_name,
+        });
 
-	return !read_failed;
+    {
+        std::istringstream iss(params);
+        string param;
+        while (iss >> param) {
+            args.push_back(param);
+        };
+    }
+
+    LOG(severity::DEBUG) << "Assembly options:\n";
+    for (auto arg : args)
+        LOG(severity::DEBUG, 0) << "\t" << arg << "\n";
+
+    std::ostringstream asmsh_stderr;
+    const auto asm_rc = ExecuteProcess(asmpl_path, args, nullptr, nullptr, &asmsh_stderr);
+    if (asm_rc != 0){
+        LOG(severity::ERROR) << "Asm stderr:\n" << asmsh_stderr.str().substr(0, 2048)
+        << "\nAssembly error(" << asm_rc << ")\n";
+        RT_CALL(asm_rc != 0);
+    }
+    load_kernel_from_binary(kern, outfile.path(), name);
 }
-
 
 void Runtime::load_kernel(kernel* kern, const string& src_path, const string& asmpl_path, const string& params, const string& name)
 {
@@ -217,8 +255,8 @@ void Runtime::load_kernel(kernel* kern, const string& src_path, const string& as
 void Runtime::load_kernel_from_binary(kernel* kern, const string& path, const string& name)
 {
         vector<char> bin;
-        if (!read_file(path.c_str(), bin))
-                throw std::runtime_error(std::string("[Runtime] failed to read the file:") + path);
+        RT_CALL(read_file(path.c_str(), bin));
+                //throw std::runtime_error(std::string("[Runtime] failed to read the file:") + path);
 
         RT_CALL(rtbe->load_kernel_from_memory(kern, bin.data(), bin.size(), name));
 }

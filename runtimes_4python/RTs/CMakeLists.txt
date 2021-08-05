@@ -14,6 +14,7 @@ set_target_properties(general_runtime_cxx PROPERTIES POSITION_INDEPENDENT_CODE O
 #set_target_properties(general_runtime_cxx PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 add_subdirectory(Logger)
+add_subdirectory(Utils)
 
 if(WIN32)
     add_subdirectory(PAL)
@@ -29,7 +30,7 @@ target_include_directories(general_runtime_cxx
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-target_link_libraries(general_runtime_cxx PRIVATE ${RUNTIME_LIBS} logger)
+target_link_libraries(general_runtime_cxx PRIVATE ${RUNTIME_LIBS} logger System_Utils)
 
 #get_target_property(LIBA_INCLUDES general_runtime_cxx INCLUDE_DIRECTORIES)
 ## Construct the compiler string for the include directories.
