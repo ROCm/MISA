@@ -750,11 +750,14 @@ class inst_ds_write_t(object):
             return '' if offset == 0 else 'offset:{}'.format(offset)
         assert False
 
-    def __call__(self, vaddr, vdata, offset = 0):
+    def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
         if self.bytes == 1:
             return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 2:
-            return 'ds_write_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            if lo_hi == 0:
+                return 'ds_write_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            else:
+                return 'ds_write_b16_d16_hi v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 4:
             return 'ds_write_b32 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 8:
@@ -923,6 +926,8 @@ class ctrl_3d_shared_store_t(object):
         self.length_d1 = 1
         self.length_dp = 1
         self.vector_dp = 1
+        self.length_dv = 1
+        self.vector_dv = 1
         self.stride_d0 = 1        # stride
         self.stride_d1 = 1         # if have stride_d1, then each d1 may have stride
         self.precision = 'fp32'      # 'fp32', 'fp16', ...
@@ -969,6 +974,9 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         assert ctrl.length_dp % ctrl.vector_dp == 0
         num_dp = ctrl.length_dp // ctrl.vector_dp
         ds_write = inst_ds_write_t(ctrl.vector_dp * data_byte)
+        assert ctrl.length_dv in (1, 2) and ctrl.vector_dv == 1
+        num_dv = ctrl.length_dv // ctrl.vector_dv
+        assert not(num_dp > 1 and num_dv > 1)
         if ctrl.length_d0 == 1 or ctrl.length_d1 == 1:
             # this is indeed a 2d case.
             if ctrl.length_d0 == 1 and ctrl.length_d1 == 1:
@@ -988,10 +996,16 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
                             issue_cnt += ds_write2.get_issues(2 * i_d * stride_d + i_p * ctrl.vector_dp * data_byte)
                 else:
                     # nhwc almost all case goes here
-                    for i_d in range(length_d):
-                        for i_p in range(num_dp):
-                            self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d * num_dp + i_p)*vgpr_per_vector}', i_d * stride_d + i_p * ctrl.vector_dp * data_byte))
-                            issue_cnt += ds_write.get_issues()
+                    for i_d in range(0, length_d, num_dv):
+                        if num_dv == 1:
+                            for i_p in range(num_dp):
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d * num_dp + i_p)*vgpr_per_vector}', i_d * stride_d + i_p * ctrl.vector_dp * data_byte))
+                                issue_cnt += ds_write.get_issues()
+                        if num_dv > 1:
+                            for i_v in range(num_dv):
+                                lo_hi = i_v % 2
+                                self._emit(ds_write(f'{self.v_sst_os()}', f'{self.v_src()}+{(i_d // num_dv)*vgpr_per_vector}', (i_d + i_v) * stride_d, lo_hi))
+                                issue_cnt += ds_write.get_issues()
         else:
             for i_d0 in range(ctrl.length_d0):
                 if ctrl.length_d1 % 2 == 0 and data_byte == 4 and ctrl.vector_dp in (1, 2):

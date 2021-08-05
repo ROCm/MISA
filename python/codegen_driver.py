@@ -25,7 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 
-from .algo import *
+from .igemm import *
 from .codegen import *
 
 import os
@@ -35,7 +35,7 @@ import multiprocessing as mp
 IGEMM_EMIT_KERNEL_PER_INC_FILE = 1
 IGEMM_EMIT_KERNEL_METADATA_PER_INC_FILE = 0     # it seems fail to find symbol if seperate metadata of different kernel using multiple .amdgpu_metadata
 
-class igemm_codegen_driver_t(mc_base_t):
+class codegen_driver_t(mc_base_t):
     def __init__(self, mc, tunable_dicts):
         mc_base_t.__init__(self, mc)
         self.tunable_dicts = tunable_dicts
@@ -63,13 +63,16 @@ class igemm_codegen_driver_t(mc_base_t):
             else:
                 kernel_list.extend([igemm_bwd_gtc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
             # in bwd direction, need such upsampling clear kernel
-            kernel_list.extend([igemm_upsampling_clear_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(tunable_dicts[0]))])
+            # kernel_list.extend([igemm_upsampling_clear_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(tunable_dicts[0]))])
 
         elif tunable_dicts[0]['direction'] == 'wrw':
             for tdd in tunable_dicts:
                 assert tdd['direction'] == 'wrw'
             # gtc wrw
-            kernel_list.extend([igemm_wrw_gtc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+            if 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'] == 'nhwc':
+                kernel_list.extend([igemm_wrw_gtc_nhwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+            else:
+                kernel_list.extend([igemm_wrw_gtc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
         else:	
             assert False, f"unknown direcrion? {tunable_dicts[0]['direction']}"
@@ -101,7 +104,7 @@ class igemm_codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(self.mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.use_dlops:
@@ -124,7 +127,7 @@ class igemm_codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX908 and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.use_dlops:

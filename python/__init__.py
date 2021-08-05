@@ -23,22 +23,16 @@
 #  SOFTWARE.
 # 
 ################################################################################
+# igemm module
 
-from .conv import *
-from .fma_main_loop import *
-from .global_memory import *
-from .shared_memory import *
-from .igemm_base import *
-from .igemm_bwd_gtc import *
-from .igemm_bwd_gtc_nhwc import *
-from .igemm_wrw_gtc import *
-from .igemm_fwd_gtc import *
-from .igemm_fwd_gtc_nhwc import *
-from .igemm_upsampling_clear import *
-from .utility import *
-from .thread_mapping import *
-from .coalescing_store import *
-from .mfma import *
-from .xdlops_mapping import *
-from .mfma_main_loop import *
-from .nop import *
+import sys
+from .codegen import *
+from .igemm import *
+from .operations import *
+from .codegen_driver import *
+from .sequence_driver import *
+from .host_driver import *
+
+if sys.hexversion < 0x30600f0:
+    print("must use python 3.6+. current is {}".format(sys.version))
+    sys.exit(-1)

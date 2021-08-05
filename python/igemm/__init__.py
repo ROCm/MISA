@@ -23,15 +23,12 @@
 #  SOFTWARE.
 # 
 ################################################################################
-# igemm module
 
-import sys
-from .codegen import *
-from .algo import *
-from .igemm_codegen_driver import *
-from .igemm_sequence_driver import *
-from .igemm_host_driver import *
-
-if sys.hexversion < 0x30600f0:
-    print("must use python 3.6+. current is {}".format(sys.version))
-    sys.exit(-1)
+from .igemm_base import *
+from .igemm_bwd_gtc import *
+from .igemm_bwd_gtc_nhwc import *
+from .igemm_wrw_gtc import *
+from .igemm_fwd_gtc import *
+from .igemm_fwd_gtc_nhwc import *
+from .igemm_wrw_gtc_nhwc import *
+from .igemm_upsampling_clear import *

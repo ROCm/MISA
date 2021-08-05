@@ -29,7 +29,7 @@ from .codegen import *
 IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 
 
-def igemm_host_driver(**options):
+def host_driver(**options):
     def get_dict_with_default(some_dict, key, default_value):
         if key in some_dict:
             return some_dict[key]
@@ -77,3 +77,11 @@ def igemm_host_driver(**options):
         rtn = hip_builder.compile()
         if not rtn:
             assert False
+
+    # compile tensor cast code
+    hip_src = os.path.join(cpp_dir, "gpu_tensor_cast", "gpu_tensor_cast.cpp")
+    target_hsaco = os.path.join(out_dir, "igemm_gtc_tensor_cast.hsaco")
+    hip_builder = compile_hip_t(arch_config, hip_src, target_hsaco)
+    rtn = hip_builder.compile()
+    if not rtn:
+        assert False
