@@ -298,22 +298,30 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
     s_barrier
 
 L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_body:
-    ds_read_b128 v[v_a:v_a+3], v[v_sld_a_os]
-    ds_read_b128 v[v_b:v_b+3], v[v_sld_b_os]
-    ds_read_b128 v[v_b+4:v_b+4+3], v[v_sld_b_os]
-    ds_read_b128 v[v_a+4:v_a+4+3], v[v_sld_a_os]
+    ds_read_b128 v[v_a:v_a+3], v[v_sld_a_os] ; i_k 0 repeat 0 step 0
+    ds_read_b128 v[v_b:v_b+3], v[v_sld_b_os] ; i_k 0 repeat 0
+    ds_read_b128 v[v_b+4:v_b+4+3], v[v_sld_b_os] offset: 1024 ; i_k 0 repeat 1 
+    ds_read_b128 v[v_a+4:v_a+4+3], v[v_sld_a_os] offset: 256 ; i_k 0 repeat 0 step 1
 
     s_waitcnt lgkmcnt(2)
     v_mfma_f32_32x32x8f16 a[a_c+0:a_c+15], v[v_a+0:v_a+1], v[v_b+0:v_b+1], a[a_c+0:a_c+15]     ; repeat:0x0, step:0x0, num_a_c:16
+    buffer_load_dwordx4 v[v_gld_b:v_gld_b+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], 0 offen offset:0
     v_mfma_f32_32x32x8f16 a[a_c+0:a_c+15], v[v_a+2:v_a+3], v[v_b+2:v_b+3], a[a_c+0:a_c+15]     ; repeat:0x0, step:0x0, num_a_c:16
 
-    buffer_load_dwordx4 v[v_gld_b:v_gld_b+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], 0 offen offset:0
+    ds_read_b128 v[v_a+8:v_a+8+3], v[v_sst_a_os] offset: 2048 ; i_k 0 repeat 1 step 0
+    ds_read_b128 v[v_a+12:v_a+12+3], v[v_sst_a_os] offset: 2304 ; i_k 0 repeat 1 step 1
 
-    s_waitcnt lgkmcnt(1)
+    s_waitcnt lgkmcnt(2)
     v_mfma_f32_32x32x8f16 a[a_c+16:a_c+31], v[v_a+4:v_a+4+1], v[v_b+0:v_b+1], a[a_c+16:a_c+31]     ; repeat:0x0, step:1x0, num_a_c:16
+    buffer_load_dwordx4 v[v_gld_b:v_gld_b+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], 0 offen offset:2048
     v_mfma_f32_32x32x8f16 a[a_c+16:a_c+31], v[v_a+4+2:v_a+4+3], v[v_b+2:v_b+3], a[a_c+16:a_c+31]     ; repeat:0x0, step:1x0, num_a_c:16
 
-    
+    ds_read_b128 v[v_b+4:v_b+4+3], v[v_sld_b_os] offset: 2048 ; i_k 1 repeat 0
+    v_mfma_f32_32x32x8f16 a[a_c+32:a_c+47], v[v_a+0:v_a+1], v[v_b+4:v_b+4+1], a[a_c+32:a_c+47]     ; repeat:0x1, step:0x0, num_a_c:16
+
+
+
+
 
 L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_end:
 
