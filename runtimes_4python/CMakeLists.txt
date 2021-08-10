@@ -26,7 +26,6 @@ add_executable(test_libs main.cpp)
 add_subdirectory(RTs)
 
 
-
 # very problematic to use package installed by pip
 # so used git submodule
 add_subdirectory(pybind11)
@@ -57,14 +56,15 @@ target_link_libraries(test_libs
         ${PYTHON_LIBRARIES}
     )
 target_include_directories(test_libs
-    #    PRIVATE  
-    #        ${PYTHON_INCLUDE_DIRS} 
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}
-    #        ${PYBIND11_INC}
         )
-    
 
+#copy testing python script        
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sample_tester.py
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/sample_tester.py ${CMAKE_CURRENT_BINARY_DIR}/sample_tester.py
+    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/sample_tester.py)
 
     
 #get_target_property(LIBA_INCLUDES runtime_py INCLUDE_DIRECTORIES)

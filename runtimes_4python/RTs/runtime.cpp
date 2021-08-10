@@ -2,11 +2,13 @@
 #include <vector>
 #include <fstream>
 
-#define DISABLE_PAL_RUNTIME
+#ifdef ENABLE_PAL_RUNTIME
+	#include "runtime_pal.hpp"
+#endif
 
-//#ifndef DISABLE_HIP_RUNTIME
+#ifdef ENABLE_HIP_RUNTIME
 	#include "runtime_hip.hpp"
-//#endif
+#endif
 
 
 #include "utils_math.hpp"
@@ -14,6 +16,8 @@
 #include "log.hpp"
 #include <sstream>
 #include <iostream>
+#include <cstring>
+
 
 using std::endl;
 
@@ -93,8 +97,12 @@ Runtime::~Runtime()
 void Runtime::init(string rt, bool profiling, bool counters, uint gpu_id)
 {
 
+#ifdef ENABLE_HIP_RUNTIME
 	if (rt == "hip" && !rtbe) { rtbe = new RTBackendHIP; }
-//	if (rt == "hsa" && !rtbe) { rtbe = new RTBackendHSA; }
+#endif
+#ifdef ENABLE_PAL_RUNTIME
+	if (rt == "hsa" && !rtbe) { rtbe = new RTBackendPAL; }
+#endif
 
 	if (!rtbe)
 	{

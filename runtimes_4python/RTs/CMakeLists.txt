@@ -16,11 +16,31 @@ set_target_properties(general_runtime_cxx PROPERTIES POSITION_INDEPENDENT_CODE O
 add_subdirectory(Logger)
 add_subdirectory(Utils)
 
-if(WIN32)
-    add_subdirectory(PAL)
+option( NO_RUNTIME_INTERFACE "" OFF)
+
+if(NO_RUNTIME_INTERFACE)
+
+elseif(WIN32)
+    option( ENABLE_PAL_RUNTIME "" OFF)
+    
+    if(ENABLE_PAL_RUNTIME)
+        #add_subdirectory(PAL)
+        #set(RUNTIME_LIBS runtime_hip)
+        #target_compile_definitions(general_runtime_cxx 
+        #PRIVATE 
+        #ENABLE_PAL_RUNTIME)
+    endif()
 else()
-    add_subdirectory(HIP)
-    set(RUNTIME_LIBS runtime_hip)
+    option( ENABLE_HIP_RUNTIME "" ON)
+
+    if(ENABLE_HIP_RUNTIME)
+        add_subdirectory(HIP)
+        set(RUNTIME_LIBS runtime_hip)
+        target_compile_definitions(general_runtime_cxx 
+            PRIVATE 
+                ENABLE_HIP_RUNTIME
+        )
+    endif()
 endif()
 
 target_include_directories(general_runtime_cxx
