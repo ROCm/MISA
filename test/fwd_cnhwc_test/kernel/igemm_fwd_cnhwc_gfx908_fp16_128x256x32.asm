@@ -218,31 +218,28 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
 
     v_mov_b32 v[v_tmp+5], v0
 
-    ;-----------------TODO Part-------------------------------------------
-    ; xdlops mapping, get dst matrix gemm index
-    v_and_b32 v[v_tmp+0], 31, v[v_tmp+5] ; v_tmp0 = tid % 32
-    v_lshrrev_b32 v[v_tmp+5], 5, v[v_tmp+5] ; v_tmp5 = tid / 32
-    v_and_b32 v[v_tmp+1], 1, v[v_tmp+5] ; v_tmp1 = tid / 32 % 2
-    v_lshrrev_b32 v[v_tmp+5], 1, v[v_tmp+5] ; v_tmp5 = tid / 32 / 2
-    v_mov_b32 v[v_co_sst], v[v_tmp+0] ; v_co_sst = v_tmp0 = tid % 32
-    v_lshlrev_b32 v[v_co_sld], 2, v[v_tmp+1] ; v_co_sld = v_tmp1 * 4 = tid / 32 % 2 * 4
-    v_and_b32 v[v_tmp+0], 1, v[v_tmp+5] ; v_tmp0 = tid / 32 / 2 % 2
-    v_lshrrev_b32 v[v_tmp+5], 1, v[v_tmp+5] ; v_tmp5 = tid / 32 / 2 / 2
-    v_and_b32 v[v_tmp+1], 1, v[v_tmp+5] ; v_tmp1 = tid / 32 / 2 / 2 % 2
-    v_lshl_or_b32 v[v_co_sst], v[v_tmp+0], 5, v[v_co_sst] ; v_co_sst = tid % 32 + tid / 32 / 2 % 2 * 32
-    v_lshl_or_b32 v[v_co_sld], v[v_tmp+1], 6, v[v_co_sld] ; v_co_sld = v_co_sld + tid / 32 / 2 / 2 % 2 * 64
-
-    v_mov_b32 v[v_gemm_in], v[v_co_sst]
-    v_mov_b32 v[v_gemm_im], v[v_co_sld]
-    ; init_co_lds_offset for xdlops
-    v_lshrrev_b32 v[v_tmp], 2, v[v_gemm_im]
-    v_and_b32 v[v_tmp],  1 v[v_tmp]   ; thread id of lanegroup_m_per_cluster
-    v_lshlrev_b32 v[v_co_sst], 2, v[v_tmp]
-    v_lshrrev_b32 v[v_tmp+2], 6, v[v_gemm_im]  ; thread id of waves_per_m
-    v_lshl_or_b32 v[v_co_sst], v[v_tmp+2], 6, v[v_co_sst]
-    v_lshl_or_b32 v[v_co_sst], v[v_co_sst], 7, v[v_gemm_in]
+    ;-----------------co sst---------------------
+    v_lshrrev_b32 v[v_tmp+5], 7, v0
+    ;v_lshlrev_b32 v[v_tmp+5], 8, v[v_tmp+5] ; v_tmp_5 = tid / 128 * 32 * 8
+    v_and_b32 v[v_tmp+4], 127, v0
+    v_lshrrev_b32 v[v_tmp+4], 6, v[v_tmp+4]
+    v_mul_lo_u32 v[v_tmp+4], v[v_tmp+4], (64*8+8)*4 ; v_tmp4 = tid % 128 / 64 * (64 * 8 + 8) * (32 / 8)
+    v_lshl_add_u32 v[v_tmp+4], v[v_tmp+5], 8, v[v_tmp+4] ; v_tmp4 = tid / 128 * 32 * 8 + tid % 128 / 64 * (64 * 8 + 8) * (32 / 8)
+    v_lshrrev_b32 v[v_tmp+3], 5, v0 
+    v_and_b32 v[v_tmp+3], 1, v[v_tmp+3]
+    v_lshl_add_u32 v[v_tmp+3], v[v_tmp+3], 5, v[v_tmp+4] ; v_tmp3 = tid / 32 % 2 * 8 * 4 + v_tmp4
+                                                         ;        = tid / 128 * 32 * 8 + tid % 128 / 64 * (64 * 8 + 8) * (32 / 8) + tid / 32 % 2 * 8 * 4
+    v_and_b32 v[v_tmp+2], 31, v0
+    v_lshrrev_b32 v[v_tmp+2], 3, v[v_tmp+2]
+    v_mul_lo_u32 v[v_tmp+2], v[v_tmp+2], (64*8+8) ; v_tmp2 = tid % 32 / 8 * (64 * 8 + 8)
+    v_and_b32 v[v_tmp+1], 7, v0 ; v_tmp1 = tid%8
+    v_add3_u32 v[v_co_sst], v[v_tmp+1], v[v_tmp+2], v[v_tmp+3]
     v_lshlrev_b32 v[v_co_sst], 1, v[v_co_sst]
-    v_lshlrev_b32 v[v_co_sld], 2, v[0]
+
+    ;-----------------co sld------------------------
+    v_lshlrev_b32 v[v_co_sld], 4, v[0] ; v_co_sld = tid * 16
+
+    ;-----------------TODO Part-------------------------------------------
     ; init_co_sub_m_index xdlops, block_size:256, macro-tile:256x128 sub_m_index:[0, 1, 2, 3]
     ; g_mr:2, g_ms:1, g_mw:1, g_mb:1, g_mt:1 | l_mr:1, l_ms:2, l_mw:1, l_mb:4, l_mt:4 | n_mc:2, n_ml:1, n_mv:2
     ; nd_stride:[4, 2, 1, 4, 1, 2, 2, 1]
@@ -488,7 +485,9 @@ L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_end:
     s_nop 15
     s_nop 2
 
-    
+    s_barrier
+
+
 
 
 
