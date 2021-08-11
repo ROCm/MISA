@@ -280,14 +280,14 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
 
     ; start MFMA loop, 32x32 wave tile with 2x2 repeat, 2x1 step, k_pack:8
     s_waitcnt vmcnt(4)
-    ;ds_write_b128 v[v_sst_b_os], v[v_gld_b+0:v_gld_b+0+3] 
-    ;ds_write_b128 v[v_sst_b_os], v[v_gld_b+4:v_gld_b+4+3] offset:1024
+    ds_write_b128 v[v_sst_b_os], v[v_gld_b+0:v_gld_b+0+3] 
+    ds_write_b128 v[v_sst_b_os], v[v_gld_b+4:v_gld_b+4+3] offset:1024
 
     s_waitcnt vmcnt(0)
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+0:v_gld_a+0+3] 
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+4:v_gld_a+4+3] offset:1024
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+8:v_gld_a+8+3] offset:1024*2
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+12:v_gld_a+12+3] offset:1024*3
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+0:v_gld_a+0+3] 
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+4:v_gld_a+4+3] offset:1024
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+8:v_gld_a+8+3] offset:1024*2
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+12:v_gld_a+12+3] offset:1024*3
 
     .v_clear_acc_c a_c, 128
 
@@ -383,21 +383,21 @@ L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_body:
     s_waitcnt lgkmcnt(0)
     s_barrier
     s_waitcnt vmcnt(4)
-    ;ds_write_b128 v[v_sst_b_os], v[v_gld_b+0:v_gld_b+0+3] 
+    ds_write_b128 v[v_sst_b_os], v[v_gld_b+0:v_gld_b+0+3] 
     v_mfma_f32_32x32x8f16 a[a_c+64:a_c+79], v[v_a_1+8:v_a_1+8+1], v[v_b_1+0:v_b_1+1], a[a_c+64:a_c+79]     ; repeat:1x0, step:0x0, num_a_c:16
     
-    ;ds_write_b128 v[v_sst_b_os], v[v_gld_b+4:v_gld_b+4+3] offset:1024
+    ds_write_b128 v[v_sst_b_os], v[v_gld_b+4:v_gld_b+4+3] offset:1024
     v_mfma_f32_32x32x8f16 a[a_c+64:a_c+79], v[v_a_1+8+2:v_a_1+8+3], v[v_b_1+2:v_b_1+3], a[a_c+64:a_c+79]     ; repeat:1x0, step:0x0, num_a_c:16
     
     s_waitcnt vmcnt(0)
     
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+0:v_gld_a+0+3] 
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+4:v_gld_a+4+3] offset:1024
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+0:v_gld_a+0+3] 
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+4:v_gld_a+4+3] offset:1024
 
     v_mfma_f32_32x32x8f16 a[a_c+96:a_c+111], v[v_a_1+8:v_a_1+8+1], v[v_b_1+4:v_b_1+4+1], a[a_c+96:a_c+111]     ; repeat:1x1, step:0x0, num_a_c:16
     
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+8:v_gld_a+8+3] offset:1024*2
-    ;ds_write_b128 v[v_sst_a_os], v[v_gld_a+12:v_gld_a+12+3] offset:1024*3
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+8:v_gld_a+8+3] offset:1024*2
+    ds_write_b128 v[v_sst_a_os], v[v_gld_a+12:v_gld_a+12+3] offset:1024*3
 
     v_mfma_f32_32x32x8f16 a[a_c+96:a_c+111], v[v_a_1+8+2:v_a_1+8+3], v[v_b_1+4+2:v_b_1+4+3], a[a_c+96:a_c+111]     ; repeat:1x1, step:0x0, num_a_c:16
     v_mfma_f32_32x32x8f16 a[a_c+80:a_c+95], v[v_a_1+12:v_a_1+12+1], v[v_b_1+0:v_b_1+1], a[a_c+80:a_c+95]     ; repeat:1x0, step:1x0, num_a_c:16
@@ -491,7 +491,7 @@ L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_end:
 
     s_nop 15
     s_nop 2
-
+s_branch L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_prg_end
     ; group 0
     v_accvgpr_read_b32 v[v_c], a[a_c]
     v_accvgpr_read_b32 v[v_c+1], a[a_c+1]
