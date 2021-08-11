@@ -105,8 +105,8 @@
 .set v_tmp, 78
 .set v_wei_tmp_pack, 23
 .set v_wei_flag, 78
-.set v_a_1 80
-.set v_b_1 96
+.set v_a_1, 80
+.set v_b_1, 96
 .set v_end, 128
 
 .set a_c, 0
@@ -221,7 +221,8 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
     ;v_lshlrev_b32 v[v_tmp+5], 8, v[v_tmp+5] ; v_tmp_5 = tid / 128 * 32 * 8
     v_and_b32 v[v_tmp+4], 127, v0
     v_lshrrev_b32 v[v_tmp+4], 6, v[v_tmp+4]
-    v_mul_lo_u32 v[v_tmp+4], v[v_tmp+4], (64*8+8)*4 ; v_tmp4 = tid % 128 / 64 * (64 * 8 + 8) * (32 / 8)
+    s_mov_b32 s[s_tmp], (64*8+8)*4
+    v_mul_lo_u32 v[v_tmp+4], v[v_tmp+4], s[s_tmp] ; v_tmp4 = tid % 128 / 64 * (64 * 8 + 8) * (32 / 8)
     v_lshl_add_u32 v[v_tmp+4], v[v_tmp+5], 8, v[v_tmp+4] ; v_tmp4 = tid / 128 * 32 * 8 + tid % 128 / 64 * (64 * 8 + 8) * (32 / 8)
     v_lshrrev_b32 v[v_tmp+3], 5, v0 
     v_and_b32 v[v_tmp+3], 1, v[v_tmp+3]
@@ -229,7 +230,8 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
                                                          ;        = tid / 128 * 32 * 8 + tid % 128 / 64 * (64 * 8 + 8) * (32 / 8) + tid / 32 % 2 * 8 * 16
     v_and_b32 v[v_tmp+2], 31, v0
     v_lshrrev_b32 v[v_tmp+2], 3, v[v_tmp+2]
-    v_mul_lo_u32 v[v_tmp+2], v[v_tmp+2], (64*8+8) ; v_tmp2 = tid % 32 / 8 * (64 * 8 + 8)
+    s_mov_b32 s[s_tmp], (64*8+8)
+    v_mul_lo_u32 v[v_tmp+2], v[v_tmp+2], s[s_tmp] ; v_tmp2 = tid % 32 / 8 * (64 * 8 + 8)
     v_and_b32 v[v_tmp+1], 7, v0 ; v_tmp1 = tid%8
     v_add3_u32 v[v_co_sst], v[v_tmp+1], v[v_tmp+2], v[v_tmp+3]
     v_lshlrev_b32 v[v_co_sst], 1, v[v_co_sst]
@@ -238,7 +240,8 @@ igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2:
     v_and_b32 v[v_tmp], 63, v[0]
     v_lshlrev_b32 v[v_tmp], 3, v[v_tmp]
     v_lshrrev_b32 v[v_tmp+1], 6, v[0]
-    v_mad_u32_u24 v[v_co_sld], (64*8+8), v[v_tmp+1], v[v_tmp] ; v_co_sld = tid / 64 * (64 * 8 + 8) + tid % 64 * 8
+    s_mov_b32 s[s_tmp], (64*8+8)
+    v_mad_u32_u24 v[v_co_sld], s[s_tmp], v[v_tmp+1], v[v_tmp] ; v_co_sld = tid / 64 * (64 * 8 + 8) + tid % 64 * 8
     v_lshlrev_b32 v[v_co_sld], 1, v[v_co_sld] 
 
     ; init_co_sub_m_index xdlops, block_size:256, macro-tile:256x128
