@@ -534,9 +534,9 @@ int main(int argc, char **argv){
         void *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
-            gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
-            gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
+            //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
+            //gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
             //for(int a0 = 0; a0 < c; a0 += vec_c){
             //    for(int a1 = 0; a1 < n * hi * wi; a1++){
             //        for(int a2 = 0; a2 < vec_c; a2++){
@@ -544,7 +544,7 @@ int main(int argc, char **argv){
             //        }
             //    }
             //}
-            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
+            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
             //for(int a0 = 0; a0 < c; a0 += vec_c){
             //    for(int a1 = 0; a1 < k; a1++){
             //        for(int a2 = 0; a2 < vec_c; a2++){
