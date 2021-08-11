@@ -105,14 +105,6 @@ static inline size_t get_data_byte(driverDataType_t dtype)
     return 0;
 }
 
-static inline int env_get_int(const char *var_name, int default_int) {
-    char *v = getenv(var_name);
-    int r = default_int;
-    if (v)
-        r = atoi(v);
-    return r;
-}
-
 #define NAIVE_CONV_THREADED
 #include "naive_conv.h"
 #include "gpu_naive_conv.h"
@@ -239,7 +231,7 @@ bool valid_vector(const float *ref, const T *pred, size_t n,
                                 double nrms = 1e-6) {
     double s0 = 0.0;
     double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
+    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 1);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
     size_t pp_err = 0;
 
@@ -257,7 +249,7 @@ bool valid_vector(const float *ref, const T *pred, size_t n,
         s1 += rr;
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi,  *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            //printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi,  *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -370,6 +362,35 @@ static inline double get_nrms(int forw, driverDataType_t driver_data_type){
         }
     }
     return nrms;
+}
+
+static inline void gpu_naive_conv_fwd_cnhwc_fp32_ex0(void *src, void *filter,
+                                       void *dst, size_t n, size_t w, size_t h,
+                                       size_t c, size_t k, size_t fx, size_t fy,
+                                       size_t px, size_t py, size_t sx,
+                                       size_t sy, size_t dx, size_t dy, size_t group, size_t vec_c)
+{
+    int gemm_m = n * h * w;
+    int gemm_n = k;
+    int gemm_k = c;
+
+    float* tmp_i = (float*)src;
+    float* tmp_f = (float*)filter;
+    float* tmp_o = (float*)dst;
+
+    for(int i = 0; i < gemm_n; i += vec_c){
+        for(int ivk = 0; ivk < vec_c; ivk++){
+            for(int j = 0; j < gemm_m; j++){
+                float value = 0.f;
+                for(int k = 0; k < gemm_k; k += vec_c){
+                    for(int ivc = 0; ivc < vec_c; ivc++){
+                        value += tmp_i[k * gemm_m + j * vec_c + ivc] * tmp_f[k * gemm_n + (i + ivk) * vec_c + ivc]; 
+                    }
+                }
+                tmp_o[i * gemm_m + j * vec_c + ivk]  = value;
+            }
+        }
+    }
 }
 
 #define     GPU_NAIVE_CONV_HSACO    "naive_conv.hsaco"
@@ -515,10 +536,10 @@ int main(int argc, char **argv){
             // gen rand
             //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
             //gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
-            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
-            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
             if(driver_data_type == driverHalf){
                 // move to different data type
@@ -535,11 +556,17 @@ int main(int argc, char **argv){
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
-            
+#if 1
             gpu_naive_conv_fwd_cnhwc_fp32(device_input, device_weight, device_output,
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups, vec_c);
+#else
+            gpu_naive_conv_fwd_cnhwc_fp32_ex0(device_input, device_weight, device_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups, vec_c);
+#endif
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_output, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),

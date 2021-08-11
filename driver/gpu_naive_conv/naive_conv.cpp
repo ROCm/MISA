@@ -2742,7 +2742,7 @@ extern "C" __global__ void naive_conv_wrw_ndhwc_bf16(
 
 /***************************** cnhwc *****************************/
 // design block_size 256
-extern "C" __global__ void naive_conv_fwd_cnhwc_fp32(
+extern "C" __global__ void naive_conv_fwd_cnhwc_fp32_ex0(
     const float *__restrict__ p_in, const float *__restrict__ p_wei,
     float *__restrict__ p_out, int hi, int wi, int n, int k_per_group,
     int c_per_group, int ho, int wo, int sy, int sx, int dy, int dx, int py,
@@ -2753,59 +2753,30 @@ extern "C" __global__ void naive_conv_fwd_cnhwc_fp32(
      *  k_per_group` pixel,
      *  hence need `group * n * ho` workgroups (grid_size).
      */
-    int k = k_per_group * group;
-    int c = c_per_group * group;
-    int thread_length = wo * k_per_group * vec_c;
+    int k = k_per_group;
+    int c = c_per_group;
+    int gemm_m = n * ho * wo;
+    int thread_length = gemm_m * vec_c;
     int bid = blockIdx.x;
-    int iho = bid % ho;
-    int in = (bid / ho) % n;
-    int ig = bid / (n * ho);
+    int ik = bid / (k / vec_c);
 
-    p_in  += static_cast<size_t>(in) * hi * wi * vec_c +
-             static_cast<size_t>(ig) * c_per_group * hi * wi * n * vec_c;
-    p_wei += static_cast<size_t>(ig) * k_per_group * fy * fx * c_per_group * vec_c;
-    p_out += static_cast<size_t>(in) * ho * wo * vec_c +
-             static_cast<size_t>(ig) * k_per_group * ho * wo * n * vec_c +
-             static_cast<size_t>(iho) * wo * vec_c;
+    p_out += ik * gemm_m * vec_c;
 
     for (int tid = threadIdx.x; tid < thread_length; tid += 256) {
-        int iwo = tid / k_per_group;
-        int ik = tid % (k_per_group * vec_c);
+        int igemm_m = tid / vec_c;
+        int ivk = tid % vec_c;
 
         double value = .0f;
-
-        for (int iy = 0; iy < fy; iy++) {
-            int valid_h = 1;
-            int cur_h = sy * iho - py + dy * iy;
-            if (cur_h < 0 || cur_h >= hi)
-                valid_h &= 0;
-            for (int ix = 0; ix < fx; ix++) {
-                int valid_w = 1;
-                int cur_w = sx * iwo - px + dx * ix;
-                if (cur_w < 0 || cur_w >= wi)
-                    valid_w &= 0;
-                for (int ic = 0; ic < c_per_group; ic++) {
-                    for (int ivecc = 0; ivecc < vec_c; ivecc++){
-                        if (valid_w & valid_h) {
-                            size_t i_idx = static_cast<size_t>(cur_h) * wi * vec_c +
-                                           static_cast<size_t>(cur_w) * vec_c +
-                                           static_cast<size_t>(ic) * n * hi * wi * c * vec_c + 
-                                           static_cast<size_t>(ivecc);
-                            size_t f_idx =
-                                static_cast<size_t>(ik) * fy * fx * vec_c +
-                                static_cast<size_t>(iy) * fx * vec_c +
-                                static_cast<size_t>(ix) * vec_c +
-                                static_cast<size_t>(ic) * fy * fx * vec_c * k + 
-                                static_cast<size_t>(ivecc);
-                            value += static_cast<double>(p_in[i_idx]) *
-                                     static_cast<double>(p_wei[f_idx]);
-                        }
-                    }
-                }
+        for (int ic = 0; ic < c_per_group; ic += vec_c) {
+            for (int ivc = 0; ivc < vec_c; ivc++){
+                size_t i_idx = ic * gemm_m + igemm_m * vec_c + ivc;
+                size_t f_idx = ic * k + ivk * vec_c + ivc;
+                value += static_cast<double>(p_in[i_idx]) *
+                         static_cast<double>(p_wei[f_idx]);
             }
         }
-        size_t o_idx = static_cast<size_t>(iwo) * vec_c + static_cast<size_t>(ik) / vec_c * n * wo * ho * vec_c + 
-                       static_cast<size_t>(ik) % vec_c;
+        
+        size_t o_idx = igemm_m * vec_c + ivk;
         p_out[o_idx] = static_cast<float>(value);
     }
 }

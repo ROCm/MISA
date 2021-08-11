@@ -55,6 +55,14 @@ static inline size_t gpu_conv_out_size(size_t in_size, size_t pad,
     return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
 }
 
+static inline int env_get_int(const char *var_name, int default_int) {
+    char *v = getenv(var_name);
+    int r = default_int;
+    if (v)
+        r = atoi(v);
+    return r;
+}
+
 typedef struct {
     void *   p_in;
     void *   p_wei;
@@ -132,7 +140,7 @@ typedef struct {
 
 igemm_fwd_cnhwc_kernel_info_t igemm_fwd_cnhwc_kernel_list [] = 
 {
-    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2"  , "fp16",  128,  256, 32, 256, 1, 2},
+    {"igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2"  , "fp16",  256,  128, 32, 256, 1, 2},
 };
 
 class igemm_fwd_cnhwc_t {
@@ -219,7 +227,7 @@ public:
 
         assert(group != 0 && c % (group * vec_c) == 0 && k % (group * vec_c) == 0);
 
-        size_t k_per_group  = k / group / vec_c;
+        size_t k_per_group  = k / group;
         size_t c_per_group  = c / group / vec_c;
         igemm_fwd_cnhwc_karg_t karg;
         karg.p_in           = p_in;
@@ -253,11 +261,13 @@ public:
 
         int block_size  = kernel_info->block_size;
         int num_gemm_m  = (n * ho * wo + kernel_info->m_per_block - 1) / kernel_info->m_per_block;
-        int num_gemm_n  = (k_per_group * vec_c + kernel_info->n_per_block - 1) / kernel_info->n_per_block;
+        int num_gemm_n  = (k_per_group + kernel_info->n_per_block - 1) / kernel_info->n_per_block;
 
-        int grid_size = num_gemm_m * num_gemm_n;
+        // int grid_size = num_gemm_m * num_gemm_n;
 
-        // printf("launch fwd block:%d, grid:%d\n", block_size, grid_size);
+        printf("s_p_out=%x\n", p_out);
+
+        printf("launch fwd block:%d, grid:[%d,%d]\n", block_size, num_gemm_m, num_gemm_n);
         // dump_igemm_fwd_cnhwc_2d_karg(&karg);
 
         auto launch_fwd = [&]() -> float {
@@ -272,7 +282,7 @@ public:
             hipEventCreate(&stop);
 
             // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size * block_size, 1, 1,
+            HIP_CALL(hipHccModuleLaunchKernel(kernel_func, num_gemm_m * block_size, num_gemm_n, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, start, stop));
 
@@ -286,6 +296,27 @@ public:
 
         for (int i = 0; i < warmup; i++) {
             launch_fwd();
+        }
+
+        if(env_get_int("DBG_MODE", 0) != 0){
+            printf("workspace debug \r\n");
+            float* gemmc_host_check = (float* )malloc(k * n * ho * wo * sizeof(float));
+            printf("gemmc_host_check size=%d\n",  k * n * ho * wo * sizeof(float));
+            printf("copy output\n");
+            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo * sizeof(float16), hipMemcpyDeviceToHost);
+
+            for (int i_check = 0; i_check < (0+block_size); i_check++)
+            {
+                float16 *gemmc_host_check_fp16 = (float16 *)gemmc_host_check;
+                float16 check_num0 = gemmc_host_check_fp16[i_check*2];
+                float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
+                float check_num0_fp32 = (float)check_num0;
+                float check_num1_fp32 = (float)check_num1;
+                printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+            }
+            printf("s_p_out=%x\n", p_out);
+            printf("workspace debug end \r\n");
+            free(gemmc_host_check);
         }
 
         std::vector<float> duration_list;

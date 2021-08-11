@@ -101,7 +101,7 @@ static inline void gpu_naive_conv_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_bwd_ndhwc_fp32, the_gpu_handle.module, "naive_conv_bwd_ndhwc_fp32"));
         HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_wrw_ndhwc_fp32, the_gpu_handle.module, "naive_conv_wrw_ndhwc_fp32"));
 
-        HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_fwd_cnhwc_fp32, the_gpu_handle.module, "naive_conv_fwd_cnhwc_fp32"));
+        HIP_CALL(hipModuleGetFunction(&the_gpu_handle.kernel_naive_conv_fwd_cnhwc_fp32, the_gpu_handle.module, "naive_conv_fwd_cnhwc_fp32_ex0"));
 
         inited = 1;
     }
@@ -727,8 +727,8 @@ static inline void gpu_naive_conv_fwd_cnhwc_fp32(void *src, void *filter,
     assert(group != 0 && c % group == 0 && k % group == 0 && (c / group) % vec_c == 0 && (k / group) % vec_c == 0);
     size_t ho = gpu_naive_conv_out_size(h, py, dy, fy, sy);
     size_t wo = gpu_naive_conv_out_size(w, px, dx, fx, sx);
-    size_t k_per_group  = k / group / vec_c;
-    size_t c_per_group  = c / group / vec_c;
+    size_t k_per_group  = k / group;
+    size_t c_per_group  = c / group;
     naive_conv_2d_karg_t karg;
     karg.p_in           = src;
     karg.p_wei          = filter;
