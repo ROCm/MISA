@@ -2758,7 +2758,7 @@ extern "C" __global__ void naive_conv_fwd_cnhwc_fp32_ex0(
     int gemm_m = n * ho * wo;
     int thread_length = gemm_m * vec_c;
     int bid = blockIdx.x;
-    int ik = bid / (k / vec_c);
+    int ik = bid;
 
     p_out += ik * gemm_m * vec_c;
 
@@ -2770,7 +2770,7 @@ extern "C" __global__ void naive_conv_fwd_cnhwc_fp32_ex0(
         for (int ic = 0; ic < c_per_group; ic += vec_c) {
             for (int ivc = 0; ivc < vec_c; ivc++){
                 size_t i_idx = ic * gemm_m + igemm_m * vec_c + ivc;
-                size_t f_idx = ic * k + ivk * vec_c + ivc;
+                size_t f_idx = ic * k + ivk * vec_c + ivc + ik * vec_c * vec_c;
                 value += static_cast<double>(p_in[i_idx]) *
                          static_cast<double>(p_wei[f_idx]);
             }

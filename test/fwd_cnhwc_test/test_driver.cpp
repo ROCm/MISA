@@ -382,9 +382,9 @@ static inline void gpu_naive_conv_fwd_cnhwc_fp32_ex0(void *src, void *filter,
         for(int ivk = 0; ivk < vec_c; ivk++){
             for(int j = 0; j < gemm_m; j++){
                 float value = 0.f;
-                for(int k = 0; k < gemm_k; k += vec_c){
+                for(int igemmk = 0; igemmk < gemm_k; igemmk += vec_c){
                     for(int ivc = 0; ivc < vec_c; ivc++){
-                        value += tmp_i[k * gemm_m + j * vec_c + ivc] * tmp_f[k * gemm_n + (i + ivk) * vec_c + ivc]; 
+                        value += tmp_i[igemmk * gemm_m + j * vec_c + ivc] * tmp_f[igemmk * gemm_n + (i + ivk) * vec_c + ivc]; 
                     }
                 }
                 tmp_o[i * gemm_m + j * vec_c + ivk]  = value;
@@ -534,12 +534,26 @@ int main(int argc, char **argv){
         void *device_output_to_host = NULL;
         if (need_verify) {
             // gen rand
-            //gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
-            //gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
-            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
-            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
+            gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
+            gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -2, 2);
+            //for(int a0 = 0; a0 < c; a0 += vec_c){
+            //    for(int a1 = 0; a1 < n * hi * wi; a1++){
+            //        for(int a2 = 0; a2 < vec_c; a2++){
+            //            host_input[a0 * n * hi * wi + a1 * vec_c + a2] = a1;
+            //        }
+            //    }
+            //}
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
+            //for(int a0 = 0; a0 < c; a0 += vec_c){
+            //    for(int a1 = 0; a1 < k; a1++){
+            //        for(int a2 = 0; a2 < vec_c; a2++){
+            //            host_weight[a0 * k + a1 * vec_c + a2] = a1;
+            //        }
+            //    }
+            //}
+            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
 
             if(driver_data_type == driverHalf){
                 // move to different data type
@@ -561,16 +575,17 @@ int main(int argc, char **argv){
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups, vec_c);
-#else
-            gpu_naive_conv_fwd_cnhwc_fp32_ex0(device_input, device_weight, device_output,
-                                n, wi, hi, c,
-                                k, x, y, pad_w, pad_h, stride_w, stride_h,
-                                dilation_w, dilation_h, ngroups, vec_c);
-#endif
             HIP_CALL(hipDeviceSynchronize());
             HIP_CALL(hipMemcpy(host_output, device_output,
                                    static_cast<size_t>(n) * k * ho * wo * sizeof(float),
                                    hipMemcpyDeviceToHost));
+#else
+            gpu_naive_conv_fwd_cnhwc_fp32_ex0(host_input, host_weight, host_output,
+                                n, wi, hi, c,
+                                k, x, y, pad_w, pad_h, stride_w, stride_h,
+                                dilation_w, dilation_h, ngroups, vec_c);
+#endif
+            
 
             if(driver_data_type == driverHalf || driver_data_type == driverInt8){
                 device_output_to_host = malloc((static_cast<size_t>(n) * k * ho * wo * data_byte + 3) / 4 * 4);

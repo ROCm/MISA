@@ -757,8 +757,8 @@ static inline void gpu_naive_conv_fwd_cnhwc_fp32(void *src, void *filter,
                         HIP_LAUNCH_PARAM_END};
 
     int block_size = 256;
-    int grid_size = group * n * ho;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nhwc_fp32, grid_size * block_size, 1, 1,
+    int grid_size = k / vec_c;
+    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_cnhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, NULL, NULL));
 
