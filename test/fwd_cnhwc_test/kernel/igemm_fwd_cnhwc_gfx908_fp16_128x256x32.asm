@@ -491,7 +491,6 @@ L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_mfma_end:
 
     s_nop 15
     s_nop 2
-s_branch L_igemm_fwd_gtcx_cnhwc_fp16_ex0_bt256x128x32_wt32x32x8_ws2x1_wr2x2_prg_end
     ; group 0
     v_accvgpr_read_b32 v[v_c], a[a_c]
     v_accvgpr_read_b32 v[v_c+1], a[a_c+1]
