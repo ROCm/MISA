@@ -250,6 +250,9 @@ class amdgpu_arch_config_t(object):
         elif self.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A):
             self.use_dlops  = ad('use_dlops', False)
             self.use_xdlops = ad('use_xdlops', True)
+        elif self.arch == AMDGPU_ARCH_GFX1030:
+            self.use_dlops  = ad('use_dlops', True)
+            self.use_xdlops = ad('use_xdlops', False)
 
         self.data_type      = ad('data_type', AMDGPU_PRECISION_FP32)
         self.code_object    = ad('code_object', AMDGPU_CODEOBJECT_V3)
@@ -361,6 +364,8 @@ class amdgpu_kernel_code_t(object):
         self.kernarg_segment_byte_size              = kc('kernarg_segment_byte_size', 0)
         self.tg_split                               = kc('tg_split', 0)
         self.accum_offset                           = kc('accum_offset', 0)
+        self.wavefront_size                         = kc('wavefront_size', 64)
+        self.cumode                                 = kc('cumode', 0)   # 0-cu mode, 1-wgp mode. for gfx>10
 
     def cal_user_sgpr_count(self):
         count = 0
@@ -483,8 +488,8 @@ class amd_kernel_code_t(mc_base_t):
                     self._emit('.amdhsa_tg_split {}'.format(                        self.ki.kernel_code.tg_split))
                     self._emit('.amdhsa_accum_offset {}'.format(                    self.ki.kernel_code.accum_offset))
                 if self.mc.arch_config.arch >= 1000:
-                    self._emit('.amdhsa_wavefront_size32 1')
-                    self._emit('.amdhsa_workgroup_processor_mode 1')
+                    self._emit('.amdhsa_wavefront_size32 {}'.format(                1 if self.ki.kernel_code.wavefront_size == 32 else 0))
+                    self._emit('.amdhsa_workgroup_processor_mode {}'.format(        1 if not self.ki.kernel_code.cumode else 1))
             self._emit('.end_amdhsa_kernel')
         else:
             assert False

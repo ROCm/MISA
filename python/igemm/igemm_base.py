@@ -114,9 +114,7 @@ def get_igemm_gtc_fma_type(tunable_dict):
     if 'gemm_m_per_thread' in tunable_dict and 'gemm_n_per_thread' in tunable_dict:
         if tunable_dict['arch'] == 'gfx900':
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
-        if tunable_dict['arch'] == 'gfx906':
-            return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
-        if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
+        if tunable_dict['arch'] in ('gfx906', 'gfx908', 'gfx90a', 'gfx1030'):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
         assert tunable_dict['arch'] in ('gfx908', 'gfx90a')
@@ -300,8 +298,13 @@ class igemm_gtc_tunable_parameter_t(object):
         self.num_global_load_a                  = igemm_flatten_list_product(self.tensor_a_thread_lengths)
         self.num_global_load_b                  = igemm_flatten_list_product(self.tensor_b_thread_lengths)
 
-        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
-        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
+        if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
+            gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.gemm_m_per_thread}x{self.gemm_m_level0_cluster}x{self.gemm_m_level1_cluster}, gemm_n_per_block:{self.gemm_n_per_block} - {self.gemm_n_per_thread}x{self.gemm_n_level0_cluster}x{self.gemm_n_level1_cluster}, gemm_k_per_block:{self.gemm_k_per_block}"
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
+
+        assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block, gemm_msg
+        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, gemm_msg
 
         # LDS size
         self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
@@ -368,8 +371,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.lds_single <= 16 * 1024 and self.lds_single > 8 * 1024:
             is_lds_decreased = True
 
-        if self.num_agpr_accumulate_c < 128:
-            is_agpr_decreased = True
+        if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            if self.num_agpr_accumulate_c < 128:
+                is_agpr_decreased = True
 
         a_data_per_vgpr = 1 
 
