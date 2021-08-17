@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Without this, any build libraries automatically have names "lib{x}.so"
 set(CMAKE_SHARED_MODULE_PREFIX "")
 
+find_package(Boost 1.45.0 COMPONENTS Boost::container)
 
 #debug info
 #set(CMAKE_DEBUG_TARGET_PROPERTIES
@@ -35,6 +36,7 @@ add_subdirectory(pybind11)
 target_link_libraries(runtime_py 
     PUBLIC
         pybind11::module
+        Boost::container
     #PRIVATE  
         general_runtime_cxx
         ${PYTHON_LIBRARIES}
@@ -51,6 +53,7 @@ target_include_directories(runtime_py
 target_link_libraries(test_libs 
     PUBLIC
         pybind11::module
+        Boost::container
     #PRIVATE  
         general_runtime_cxx
         ${PYTHON_LIBRARIES}

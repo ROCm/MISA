@@ -5,6 +5,14 @@ else()
 endif()
 
 add_library(System_Utils utils.cpp ${OC_based_src})
+
+if (MSVC)
+	target_compile_definitions(System_Utils 
+	PUBLIC 
+		uint=unsigned\ int
+	)
+endif()
+
 set_target_properties(System_Utils PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(System_Utils 
