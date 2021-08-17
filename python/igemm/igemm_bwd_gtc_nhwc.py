@@ -545,9 +545,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         def __call__(self):
             s = self.outer.sgpr
             v = self.outer.vgpr
+            ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.outer.get_thread_lengths()
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
-                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' else ()))
+                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' and tb_k % 2 == 0 else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -869,25 +870,29 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                                                                     (self.v_gld_a.value - 1 if self.v_gld_a.value > 1 else vseq(1)))
             if IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG == 0:
                 if data_byte == 2:
-                    tb_num_pack_k_tmp = tb_k // 2
-                    def possible_assign_tmp(num_a, num_b, balance = 4):
-                        if num_a <= num_b:
-                            if num_b <= 4:
-                                return vseq(num_a), self.v_tmp.value    # a <= b <= 4
-                            elif num_a <= 4:
-                                return self.v_tmp.value, vseq(num_b)    # a <= 4 <= b
+                    if tb_k % 2 != 0:
+                        num_v_wei_flag              = self.v_tmp.value if tb_nc_per_thread <= 4 else vseq(tb_nc_per_thread)
+                        self.v_wei_flag             = sym_t("v_wei_flag"        ,num_v_wei_flag)
+                    else:
+                        tb_num_pack_k_tmp = tb_k // 2
+                        def possible_assign_tmp(num_a, num_b, balance = 4):
+                            if num_a <= num_b:
+                                if num_b <= 4:
+                                    return vseq(num_a), self.v_tmp.value    # a <= b <= 4
+                                elif num_a <= 4:
+                                    return self.v_tmp.value, vseq(num_b)    # a <= 4 <= b
+                                else:
+                                    return vseq(num_a), vseq(num_b)         # 4 <= a <= b
                             else:
-                                return vseq(num_a), vseq(num_b)         # 4 <= a <= b
-                        else:
-                            if num_a <= 4:
-                                return self.v_tmp.value, vseq(num_b)
-                            elif num_b <= 4:
-                                return vseq(num_a), self.v_tmp.value
-                            else:
-                                return vseq(num_a), vseq(num_b)
-                    num_v_wei_flag, num_v_pack_k_tmp = possible_assign_tmp(tb_nc_per_thread, tb_num_pack_k_tmp)
-                    self.v_wei_flag             = sym_t("v_wei_flag"        ,num_v_wei_flag)
-                    self.v_pack_k_tmp           = sym_t("v_pack_k_tmp"      ,num_v_pack_k_tmp)
+                                if num_a <= 4:
+                                    return self.v_tmp.value, vseq(num_b)
+                                elif num_b <= 4:
+                                    return vseq(num_a), self.v_tmp.value
+                                else:
+                                    return vseq(num_a), vseq(num_b)
+                        num_v_wei_flag, num_v_pack_k_tmp = possible_assign_tmp(tb_nc_per_thread, tb_num_pack_k_tmp)
+                        self.v_wei_flag             = sym_t("v_wei_flag"        ,num_v_wei_flag)
+                        self.v_pack_k_tmp           = sym_t("v_pack_k_tmp"      ,num_v_pack_k_tmp)
 
                 else:
                     self.v_wei_flag         = sym_t("v_wei_flag"        ,self.v_tmp.value if tb_nc_per_thread <= 4 else vseq(tb_nc_per_thread))
@@ -1199,7 +1204,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.issue_cnt = 0
                 self.declare_arg("v_src")
                 self.declare_arg("v_sst_os")
-                if data_byte == 2:
+                if data_byte == 2 and tb_k % 2 == 0:
                     self.declare_arg("v_pack_k_tmp")    # need tb_k // 2
 
             def name(self):
@@ -1214,9 +1219,17 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     assert ta_k % tb_k == 0, "currently only need tb_k smaller than ta_k, other wise need add support for split k_pack"
                     # fp16 order is different from fp32. we do emit here
                     dwords_per_c = num_tb_c // (2 if tb_c1 != 1 else 1)
+                    stride_dc = stride_dc * (nb_c1 if tb_c1 == 1 else 1)
 
                     if tb_k % 2 != 0:
-                        assert False
+                        ds_write = inst_ds_write_t(data_byte)
+                        for i_c in range(num_tb_c):
+                            for i_k in range(num_tb_k):
+                                idx = i_k * num_tb_c + i_c
+                                k_r, k_p = i_k // k_pack_src_mat, i_k % k_pack_src_mat
+                                offset = k_r * stride_dk + i_c * stride_dc + k_p * data_byte
+                                self._emit(ds_write(self.v_sst_os(), self.v_src(idx), offset))
+                                self.issue_cnt = self.issue_cnt + ds_write.get_issues(offset)
                     else:
                         packed_k_dword = tb_k // 2
                         assert packed_k_dword <= 4, "currently other size not used yet"
