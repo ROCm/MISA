@@ -197,6 +197,8 @@ class igemm_gtc_tunable_parameter_t(object):
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
+        self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
@@ -206,6 +208,8 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
             assert self.nxb == 0, 'nhwc now no need have different nxb value'
+        elif self.tensor_layout == "nchwc":
+            assert self.vector_c in (4, 8), 'do not support arbitary vector_c'
         else:
             assert False
         assert self.nxe in (0,1)
