@@ -245,6 +245,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
+            elif self.tensor_layout == "nchwc":
+                pass
             else:
                 assert False
         elif self.direction == 'bwd':
