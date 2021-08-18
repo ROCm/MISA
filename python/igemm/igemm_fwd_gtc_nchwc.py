@@ -82,11 +82,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store.block_size = self.tunable.block_size
 
-            gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
-            na_c0, na_c1e, na_nb0, na_nb1, nb_c0, nb_c1e, nb_n0, nb_n1b = self.get_dims_lengths()
-            ctrl_coalescing_store.gemm_m_m0_m1 = [na_nb0, na_nb1]
-            if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0:
-                ctrl_coalescing_store.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
+            na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
+            ctrl_coalescing_store.gemm_m_m0_m1 = [1, na_k_vec_c]
 
             ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
@@ -108,7 +105,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
             ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
             # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
-            na_k0, na_k1, na_ce0, na_ce1, nb_ce0, nb_ce1, nb_nb0, nb_nb1 = self.get_dims_lengths()
+            na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
             ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [na_k0, na_k1]
             ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_FWD_GTC_NCHW_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
 
@@ -663,8 +660,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             else:
                 self.k_end          = sym_t('k_end'             ,88)
 
-            ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = outer.get_thread_lengths()
-            ca_k0, ca_k1, ca_ce1, ca_ce0, cb_ce0, cb_ce1, cb_nb0, cb_nb1 = outer.get_cluster_lengths()
+            ta_k_vec_c, tb_nb0, tb_nb_vec_c = outer.get_thread_lengths()
+            ca_k, ca_ce, cb_ce, cb_nb1 = outer.get_cluster_lengths()
             data_byte = amdgpu_precision_data_byte(outer.tunable.precision)
 
             self.k_gload_in_c_stride    = sym_t('k_gload_in_c_stride', \
@@ -811,8 +808,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
             self.outer = outer
-            ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = outer.get_thread_lengths()
-            ca_k0, ca_k1, ca_ce1, ca_ce0, cb_ce0, cb_ce1, cb_nb0, cb_nb1 = outer.get_cluster_lengths()
+            ta_k_vec_c, tb_nb0, tb_nb_vec_c = outer.get_thread_lengths()
+            ca_k, ca_ce, cb_ce, cb_nb1 = outer.get_cluster_lengths()
 
             nb_per_thread = ta_k0 if ta_k0 != 1 else ta_k1
             nk_per_thread = tb_nb0 if tb_nb0 != 1 else tb_nb1
@@ -962,12 +959,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                     self._emit(v.declare())
 
     def get_num_vgpr_global_load_a(self):
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_ce1 != 1 else 1
         return self.tunable.num_global_load_a // pack_factor
     
     def get_num_vgpr_global_load_b(self):
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_ce1 != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
@@ -982,7 +979,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         ta_k_vec_c  = t_ta[3]
         tb_nb0, tb_nb_vec_c = t_tb[2], t_tb[3]
 
-        assert self.tunable.nxb == tb_nb0
+        #assert self.tunable.nxb == tb_nb0
 
         return ta_k_vec_c, tb_nb0, tb_nb_vec_c # M, N
 
@@ -1034,16 +1031,14 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         update:
         in merge_e config, is_pad_c actually means is_pad_gemm_k
         '''
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
-        if ta_ce1 == 1 and tb_ce1 == 1:
-            assert self.tunable.vector_store == 0
-            return True
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         return False
 
     def get_macro_global_load(self):
         inline = True if self.tunable.fma_interleave else False
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
-        na_k0, na_k1, na_ce0, na_ce1, nb_ce0, nb_ce1, nb_nb0, nb_nb1 = self.get_dims_lengths()
+        vector_c = self.tunable.vector_c
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c                 = self.get_thread_lengths()
+        na_k_vec_c, na_ce,  nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
 
         in_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         in_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
@@ -1054,74 +1049,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         ctrl_wei_gld.precision = self.tunable.precision
         ctrl_in_gld.precision  = self.tunable.precision
-        ctrl_wei_gld.vector_d1 = utility_gcd(tb_ce1, 4 * (4 // data_byte)) if tb_ce1 != 1 else 1
-        ctrl_in_gld.vector_d1  = utility_gcd(ta_ce1, 4 * (4 // data_byte)) if ta_ce1 != 1 else 1
-
-        if self.tunable.tensor_b_pass_through:
-            ctrl_wei_gld.precache_ptn = GLOBAL_PTN_D0_S | GLOBAL_PTN_D1_S
-            ctrl_wei_gld.flag_on_d0 = 1
-            ctrl_wei_gld.length_d0 = tb_nb0 if tb_nb0 != 1 else tb_nb1
-            ctrl_wei_gld.length_d1 = tb_ce1
-            ctrl_wei_gld.vector_d1 = self.get_k_pack()
-            # ctrl_wei_gld.flag_merge_v = 0 if self.tunable.tensor_b_pass_through_interleave_gld else 1
-        else:
-            ctrl_wei_gld.precache_ptn = GLOBAL_PTN_D0_S | GLOBAL_PTN_D1_S
-            if self.wei_thread_copy_ndim == 2:
-                ctrl_wei_gld.flag_on_d0 = 1
-                ctrl_wei_gld.length_d0 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-                ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[1]]
-            elif self.wei_thread_copy_ndim == 1:
-                if tb_nb0 * tb_nb1 != 1:
-                    ctrl_wei_gld.flag_on_d0 = 0
-                    ctrl_wei_gld.flag_on_d1 = 1
-                else:
-                    ctrl_wei_gld.flag_on_d0 = 1
-                    ctrl_wei_gld.flag_on_d1 = 0
-                ctrl_wei_gld.length_d0 = 1
-                ctrl_wei_gld.length_d1 = wei_thread_copy_dims[wei_thread_copy_index[0]]
-            else:
-                ctrl_wei_gld.length_d0 = 1
-                ctrl_wei_gld.length_d1 = wei_thread_copy_dims[-1]
-
-        if self.tunable.tensor_a_pass_through:
-            #ctrl_in_gld.length_d0 = ta_ce1 // self.get_k_pack()
-            #ctrl_in_gld.length_d1 = (ta_k0 if ta_k0 != 1 else ta_k1) * self.get_k_pack()
-            #ctrl_in_gld.vector_d1 = self.get_k_pack()
-            #ctrl_in_gld.flag_merge_v = 0 if self.tunable.tensor_a_pass_through_interleave_gld else 1
-            ctrl_in_gld.length_d0 = ta_k0 if ta_k0 != 1 else ta_k1
-            ctrl_in_gld.length_d1 = ta_ce1
-            ctrl_in_gld.vector_d1 = self.get_k_pack()
-            assert not self.tunable.tensor_a_pass_through_interleave_gld, "NCHW always not interleave, this may reduce performance"
-            # ctrl_in_gld.flag_merge_v = 1
-            ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K
-            ctrl_in_gld.flag_on_d0 = 1
-        else:
-            # ctrl_in_gld.vector_d1 = self.get_k_pack()
-            if self.in_thread_copy_ndim == 2:
-                ctrl_in_gld.flag_on_d0 = 1
-                ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K
-                ctrl_in_gld.length_d0 = in_thread_copy_dims[in_thread_copy_index[0]]
-                ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[1]]
-            elif self.in_thread_copy_ndim == 1:
-                if ta_k0 * ta_k1 != 1:
-                    ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_K | GLOBAL_PTN_D1_V
-                    ctrl_in_gld.flag_on_d1 = 1
-                else:
-                    ctrl_in_gld.precache_ptn = GLOBAL_PTN_D0_V | GLOBAL_PTN_D1_K
-                    ctrl_in_gld.flag_on_d0 = 1
-                ctrl_in_gld.length_d0 = 1
-                ctrl_in_gld.length_d1 = in_thread_copy_dims[in_thread_copy_index[0]]
-            else:
-                ctrl_in_gld.length_d0 = 1
-                ctrl_in_gld.length_d1 = in_thread_copy_dims[-1]
+        ctrl_wei_gld.vector_d1 = utility_gcd(vector_c, 4 * (4 // data_byte))
+        ctrl_in_gld.vector_d1  = utility_gcd(vector_c, 4 * (4 // data_byte))
 
         ctrl_in_gld.use_flag = 1
         ctrl_wei_gld.use_flag = 1
-
-        if self.tunable.nxe != 0:
-            if IGEMM_FWD_GTC_NCHW_PACK_IN_FLAG:
-                ctrl_wei_gld.bfe_flag = 1
-                ctrl_in_gld.bfe_flag = 1
 
         if self.tunable.precache_soffset:
             return macro_igemm_2d_global_load_precache_offset_t(self.mc, ctrl_wei_gld, inline), \
@@ -1133,7 +1065,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         #in_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
         #in_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
         na_k0, na_k1, na_ce0, na_ce1, nb_ce0, nb_ce1, nb_nb0, nb_nb1 = self.get_dims_lengths()
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         k_pack = self.get_k_pack()
@@ -1171,7 +1103,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
     def get_macro_move_slice_window(self):
         inline = True if self.tunable.fma_interleave else False
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         nb_per_thread = ta_k0 if ta_k0 != 1 else ta_k1
         nk_per_thread = tb_nb0 if tb_nb0 != 1 else tb_nb1
         unroll_k = self.tunable.gemm_k_per_block
@@ -1192,7 +1124,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
     def get_macro_move_slice_window_accumulate(self):
         inline = True if self.tunable.fma_interleave else False
         if self.tunable.nxe != 0:
-            ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+            ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
             nb_per_thread = ta_k0 if ta_k0 != 1 else ta_k1
             nk_per_thread = tb_nb0 if tb_nb0 != 1 else tb_nb1
             is_pad_c = self.is_pad_c()
@@ -1209,13 +1141,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         return self.macro_set_flag_nhw(self.mc, inline)
 
     def get_symbol_global_load_s_stride_d0_d1(self):
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         # get the symbol object that load 2d may use
         s = self.sgpr
         s_dummy = sym_t("s_dummy")
         in_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
 
-        # input is ignored
         # [ta_k0, ta_k1, ta_ce0, ta_ce1]
         in_stride_gprs = [s_dummy,
                             s_dummy,
@@ -1364,9 +1295,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         v = self.vgpr
         k = self.karg
 
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
-        ca_k0, ca_k1, ca_ce1, ca_ce0, cb_ce0, cb_ce1, cb_nb0, cb_nb1 = self.get_cluster_lengths()
-        na_k0, na_k1, na_ce0, na_ce1, nb_ce0, nb_ce1, nb_nb0, nb_nb1 = self.get_dims_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
+        ca_k, ca_ce, cb_ce, cb_nb1 = self.get_cluster_lengths()
+        na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
 
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
