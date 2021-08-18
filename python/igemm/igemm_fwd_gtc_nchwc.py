@@ -708,7 +708,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
             if tb_nb0 != 1:
                 self.s_in_stride_nb0        = sym_t('s_in_stride_nb0'           , sseq(1))
-            # self.s_wei_stride_k             = sym_t('s_wei_stride_k'            , sseq(1))
+            self.s_wei_stride_x             = sym_t('s_wei_stride_x'            , sseq(1))
 
             self.s_out_stride_k             = sym_t('s_out_stride_k'           , sseq(1))
             self.s_out_stride_n             = sym_t('s_out_stride_n'            , sseq(1))
@@ -731,6 +731,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.s_dim_mp                   = sym_t("s_dim_mp"                  , sseq(1))
             self.s_dim_mr                   = sym_t("s_dim_mr"                  , sseq(1))
             self.s_dim_np                   = sym_t("s_dim_np"                  , sseq(1))
+            self.s_dim_nr                   = sym_t("s_dim_nr"                  , sseq(1))
 
             if outer.tunable.merge_e == 0:
                 self.s_gemm_k_num_c         = sym_t("s_gemm_k_num_c"            , self.s_dim_np.value)
@@ -1385,18 +1386,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_in_stride_n()}], s[{s.s_tmp()}], s[{s.s_group()}]")
 
         # weight
-        if self.tunable.nxe != 0:
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_c()}]")
-            self._emit(f"s_mul_i32 s[{s.s_wei_stride_k()}], s[{s.s_tmp()}], s[{s.s_y()}]")
-        else:
-            self._emit(f"s_mov_b32 s[{s.s_wei_stride_k()}], s[{s.s_c()}]")
-        
-        if ta_k0 != 1:
-            self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k0()}], s[{s.s_wei_stride_k()}], {igemm_log2(na_k1)}")
+        self._emit(f"s_mul_i32 s[{s.s_wei_stride_x()}], s[{s.s_k()}], {self.tunable.vector_c}")
 
         # output
         self._emit(f"s_mul_i32 s[{s.s_out_stride_k}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}], s[{s.s_ho() if self.tunable.nxe != 0 else s.s_hi()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_k()}], s[{s.s_out_stride_k()}]")
+        self._emit(f"s_mul_i32 s[{s.s_out_stride_k()}], {self.tunable.vector_c}, s[{s.s_out_stride_k()}]")
         self._emit(f"s_mul_i32 s[{s.s_out_stride_n()}], s[{s.s_tmp()}], s[{s.s_group()}]")
 
         # calculate batch split and accumulate the base pointer for input/output
@@ -1431,10 +1426,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if self.tunable.gemm_k_global_split:
                 self._emit(f"s_lshr_b32 s[{s.s_knum()}], s[{s.s_wei_stride_k()}], s[{s.s_gemmk_split()}]")
             else:
-                self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_wei_stride_k()}]")
+                self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_y()}]")
+                self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_tmp()}], s[{s.s_c()}]")
 
         # pad gemm_m, gemm_n
-        self._emit(f"s_mul_i32 s[{s.s_dim_br()}], s[{s.s_hi() if self.tunable.nxe != 0 else s.s_ho()}], s[{s.s_wi() if self.tunable.nxe != 0 else s.s_wo()}]")
+        self._emit(f"s_mul_i32 s[{s.s_dim_br()}], s[{s.s_ho() if self.tunable.nxe != 0 else s.s_hi()}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}]")
         self._emit(f"s_mul_i32 s[{s.s_dim_nr()}], s[{s.s_n()}], s[{s.s_dim_br()}]")
         self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_n_per_block - 1}, s[{s.s_dim_nr()}]")
         self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
@@ -1512,9 +1508,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_y()}], s[{s.s_x()}]")
                 self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_1()}], 0x00080000 ; offset:0, width:8")
-                self._emit(m_mdiv_u32_vs(v.v_tmp(4), v.v_in_ic(), v.v_tmp(5), s.s_magic_4(), s.s_tmp(3), s.s_tmp(), v.v_tmp()))
+                self._emit(m_mdiv_u32_vs(v.v_tmp(4), v.v_gtc_ic(), v.v_tmp(5), s.s_magic_4(), s.s_tmp(3), s.s_tmp(), v.v_tmp()))
                 self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_1()}], 0x00080008 ; offset:8, width:8")
-                self._emit(m_mdiv_u32_vs(v.v_in_ix(), v.v_in_iy(), v.v_tmp(4), s.s_magic_5(), s.s_tmp(3), s.s_x(), v.v_tmp()))
+                self._emit(m_mdiv_u32_vs(v.v_gtc_ix(), v.v_gtc_iy(), v.v_tmp(4), s.s_magic_5(), s.s_tmp(3), s.s_x(), v.v_tmp()))
             else:
                 assert False
 
