@@ -470,7 +470,7 @@ public:
                 ;   // if output k 1, indicate padded k support
             }
             else{
-                if(((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
+                if(k >> tunable->gemm_k_global_split == 0 || ((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
                     return false;
             }
             if((tunable->nxe == 0) && !unit_conv){
