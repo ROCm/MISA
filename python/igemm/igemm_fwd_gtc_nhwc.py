@@ -779,7 +779,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self.s_diff_in_iwi_acc_x        = sym_t("s_diff_in_iwi_acc_x"       , self.s_dim_mp.value)
                 self.s_diff_in_iwi_ovf_x        = sym_t("s_diff_in_iwi_ovf_x"       , self.s_dim_np.value)
                 self.s_diff_in_ihi_acc_y        = sym_t("s_diff_in_ihi_acc_y"       , self.s_pad_w.value)
-                self.s_y_x_c                    = sym_t("s_y_x_c"                   , self.s_pad_h.value)
+                self.s_y_x_c                    = sym_t("s_y_x_c"                   , sseq(1))
 
             self.s_kitr                     = sym_t("s_kitr"                    , 1)
             if outer.tunable.precision == 'int8':
@@ -1549,6 +1549,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         if tb_k0 != 1:
             self._emit(f"s_lshl_b32 s[{s.s_wei_stride_k0()}], s[{s.s_wei_stride_k()}], {igemm_log2(nb_k1)}")
 
+        if self.tunable.merge_e == 1:
+            self._emit(f"s_mov_b32 s[{s.s_y_x_c()}], s[{s.s_wei_stride_k()}]")
+
         # output
         self._emit(f"s_mul_i32 s[{s.s_out_stride_wo()}], s[{s.s_k()}], s[{s.s_group()}]")
         self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}], s[{s.s_out_stride_wo()}]")
@@ -1689,7 +1692,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_n()}], v[{v.v_in_in()}]")
             self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
             if self.is_pad_c():
-                self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                if self.tunable.merge_e == 0:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                else:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
                 self._emit(f"v_cndmask_b32 v[{v.v_tmp(1)}], 0, 1, vcc")
                 self._emit(f"v_and_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], v[{v.v_tmp()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_in_flag(0)}], 16, v[{v.v_tmp()}]")
@@ -1697,7 +1703,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_n()}], v[{v.v_in_in()}]")
             self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
             if self.is_pad_c():
-                self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                if self.tunable.merge_e == 0:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                else:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
                 self._emit(f"v_cndmask_b32 v[{v.v_tmp(1)}], 0, 1, vcc")
                 self._emit(f"v_and_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], v[{v.v_tmp()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_in_flag_n()}], 0, v[{v.v_tmp()}]")
@@ -1801,7 +1810,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_n()}], v[{v.v_in_in()}]")
                     self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
                     if self.is_pad_c():
-                        self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                        if self.tunable.merge_e == 0:
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                        else:
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
                         self._emit(f"v_cndmask_b32 v[{v.v_tmp(1)}], 0, 1, vcc")
                         self._emit(f"v_and_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], v[{v.v_tmp()}]")
                     self._emit(f"v_lshl_or_b32 v[{v.v_in_flag()}], v[{v.v_tmp()}], {16 + i}, v[{v.v_in_flag(0)}]")
@@ -1811,7 +1823,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                     self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_n()}], v[{v.v_in_in()}]")
                     self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
                     if self.is_pad_c():
-                        self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                        if self.tunable.merge_e == 0:
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_a() if self.tunable.tensor_a_pass_through else v.v_gtc_ic()}]")
+                        else:
+                            self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
                         self._emit(f"v_cndmask_b32 v[{v.v_tmp(1)}], 0, 1, vcc")
                         self._emit(f"v_and_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], v[{v.v_tmp()}]")
                     self._emit(f"v_lshl_or_b32 v[{v.v_in_flag_n()}], v[{v.v_tmp()}], {i}, v[{v.v_in_flag_n()}]")
@@ -1847,6 +1862,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             # wei flag
             self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_tmp(5)}]")
             self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, 1, vcc")
+            if self.is_pad_c():
+                if self.tunable.merge_e == 0:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_b() if self.tunable.tensor_b_pass_through else v.v_gtc_ic()}]")
+                else:
+                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
+                self._emit(f"v_cndmask_b32 v[{v.v_wei_flag()}], 0, v[{v.v_wei_flag()}], vcc")
             self._emit(f"v_mov_b32 v[{v.v_wei_tmp_pack()}], v[{v.v_wei_flag()}]")
 
             for i in range(1, nk_per_thread):
@@ -1857,9 +1878,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_k()}], v[{v.v_tmp(5)}]")
                 self._emit(f"v_cndmask_b32 v[{v.v_wei_flag(i)}], 0, 1, vcc")
                 if self.is_pad_c():
-                    self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_b() if self.tunable.tensor_b_pass_through else v.v_gtc_ic()}]")
-                    self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1, vcc")
-                    self._emit(f"v_and_b32 v[{v.v_wei_flag(i)}], v[{v.v_wei_flag(i)}], v[{v.v_tmp()}]")
+                    if self.tunable.merge_e == 0:
+                        self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_c()}], v[{v.v_gtc_ic_b() if self.tunable.tensor_b_pass_through else v.v_gtc_ic()}]")
+                    else:
+                        self._emit(f"v_cmp_gt_u32 vcc, s[{s.s_y_x_c()}], v[{v.v_gtc_iec()}]")
+                    self._emit(f"v_cndmask_b32 v[{v.v_wei_flag(i)}], 0, v[{v.v_wei_flag(i)}], vcc")
                 self._emit(f"v_lshl_or_b32 v[{v.v_wei_tmp_pack()}], v[{v.v_wei_flag(i)}], {i}, v[{v.v_wei_tmp_pack()}]")
 
             self._emit_empty_line()
@@ -2054,10 +2077,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_add_u32 s[{s.s_diff_in_os_acc_y_x_c()}], s[{s.s_diff_in_os_acc_y_x_c()}], s[{s.s_tmp(2)}]")
             self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_diff_in_iwi_ovf_x()}], s[{s.s_in_stride_wi()}]") # s_x * s_dilation_w * in_stride_wi
             self._emit(f"s_sub_i32 s[{s.s_diff_in_os_ovf_x_acc_y()}], s[{s.s_tmp(5)}], s[{s.s_tmp(0)}]")
-            if s.s_wei_stride_k.label in self.dict_shifted_stride:
-                self._emit(f"s_lshr_b32 s[{s.s_y_x_c()}], s[{s.s_wei_stride_k()}], {igemm_log2(data_byte)}")
-            else:
-                self._emit(f"s_mov_b32 s[{s.s_y_x_c()}], s[{s.s_wei_stride_k()}]")
+            # if s.s_wei_stride_k.label in self.dict_shifted_stride:
+            #     self._emit(f"s_lshr_b32 s[{s.s_y_x_c()}], s[{s.s_wei_stride_k()}], {igemm_log2(data_byte)}")
+            # else:
+            #     self._emit(f"s_mov_b32 s[{s.s_y_x_c()}], s[{s.s_wei_stride_k()}]")
 
         self._emit_empty_line()
 

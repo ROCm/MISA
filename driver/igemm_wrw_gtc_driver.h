@@ -232,10 +232,6 @@ public:
 
         int gemm_k_global_split      = tunable->gemm_k_global_split;
         int gemmk_blocks             = 1 << gemm_k_global_split;
-        
-        if (n % gemmk_blocks != 0){
-            //return false;
-        }
 
         int n_per_block = n >> gemm_k_global_split;
 
@@ -252,6 +248,9 @@ public:
         }
 
         if(tunable->tensor_layout == "nchw"){
+            if (n % gemmk_blocks != 0){
+                return false;
+            }
             if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
             {
                 return false;
