@@ -26,7 +26,7 @@
 
 import re
 import copy
-
+from .mc import *
 
 MC_INST_TYPE_SALU = 0
 MC_INST_TYPE_VALU = 1
@@ -406,7 +406,7 @@ def emit_machine_basic_blocks(mc, mbb_lists):
         def emit(self):
             with self._deferred_context():
                 for mbb in mbb_lists:
-                    self._emit(call_mbb(mbb))
+                    self._emit(self.call_mbb(mbb))
             return self._get_deferred()
 
     assert type(mbb_lists) is list
