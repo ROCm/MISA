@@ -1871,7 +1871,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         #     self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
         # else:
         if self.tunable.merge_e == 0:
-            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_c()}], {na_ce1 * data_byte}")
+            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_c()}], {na_ce * data_byte}")
         else:
             self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_gemm_k()}], {self.tunable.gemm_k_per_block * data_byte}")
 
@@ -2036,7 +2036,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             fctrl                             = ctrl_fma_main_loop_t()
             fctrl.thread_m                    = self.tunable.thread_tile_m
             fctrl.thread_n                    = self.tunable.thread_tile_n
-            fctrl.unroll_k                    = self.tunable.gemm_k_per_block
+            fctrl.unroll_k                    = self.tunable.gemm_k_per_block // self.tunable.vector_c
             fctrl.label_prefix                = self.name()
             fctrl.gemm_m_repeat               = self.tunable.gemm_m_repeat
             fctrl.gemm_m_level0_cluster       = self.tunable.gemm_m_level0_cluster
