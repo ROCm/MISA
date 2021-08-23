@@ -479,8 +479,9 @@ public:
 
             if(tunable->precision == "fp16"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->tensor_a_thread_lengths[1] == 1){
-                    ;   // if output k 1, c is also write out one by one
+                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[3] == 1 && tunable->merge_e && !tunable->gemm_k_global_split){
+                    ;   // only case that support every config
+                        // thread_k, thread_c is one, merge_e, and not gks
                 }
                 else{
                     if(tunable->gemm_k_global_split){
@@ -785,6 +786,12 @@ public:
             int selected_gks = 0;
             int max_split_num = tunable->gemm_k_global_split == 0 ?
                 0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
+            if(tunable->gemm_k_global_split == 1 && tunable->merge_e == 1){
+                // this is merge_e, which indicate support padding k
+                int padded_k_num = ((k / group) + tunable->gemm_k_per_block - 1) / tunable->gemm_k_per_block;
+                int k_pow2 = (int)log2(utility_prev_pow2(padded_k_num));
+                max_split_num = k_pow2 <= MAX_GEMM_K_SPLITS_BWD ? k_pow2 : MAX_GEMM_K_SPLITS_BWD;
+            }
             int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
             for(int gks = start_gks; gks <= max_split_num; gks++){
                 size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
