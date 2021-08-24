@@ -292,6 +292,9 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
 
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        n = n / splits;   // split batch size here
+
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -379,6 +382,13 @@ public:
             return false;
 
         assert(c % group == 0 && k % group == 0);
+
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        if(splits == 0){
+            printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -543,6 +553,9 @@ public:
         int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
+
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -770,7 +783,7 @@ public:
 
         auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
             std::function<float()>{[&]() -> float{
-                hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                hipMemset(p_in, 0, static_cast<size_t>(splits)*n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -815,7 +828,7 @@ public:
                         karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
                         karg->ks       = gks;
 
-                        kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                        kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
                     }else{
                         assert(0);
                     }
@@ -866,7 +879,7 @@ public:
                                 karg->ks       = gks;
                             }
 
-                            kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                            kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
 
                             valid_kernel_index++;
                         }
