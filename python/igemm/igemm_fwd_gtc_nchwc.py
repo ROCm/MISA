@@ -1602,7 +1602,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             else:
                 thread_stride = nb_nb1_vec_c // self.tunable.vector_c
 
-            print(f"nb_per_thread={nb_per_thread}")
+            #print(f"nb_per_thread={nb_per_thread}")
 
             for i in range(1, nb_per_thread):
                 self._emit(f"s_mov_b32 s1, {thread_stride * i}")
@@ -2155,17 +2155,17 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         v = self.vgpr
         #label_out = f"L_{self.name()}_out"
 
-        ta_k0, ta_k1, ta_ce0, ta_ce1, tb_ce0, tb_ce1, tb_nb0, tb_nb1 = self.get_thread_lengths()
-        ca_k0, ca_k1, ca_ce1, ca_ce0, cb_ce0, cb_ce1, cb_nb0, cb_nb1 = self.get_cluster_lengths()
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
+        ca_k, ca_ce, cb_ce, cb_nb1 = self.get_cluster_lengths()
 
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            # if self.tunable.nxe != 0:
-            #     self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
-            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_stride_c(), s.s_tmp(), v.v_in_flag()))
-            # else:
-            #     self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
-            #         s.s_in_stride_c0() if self.tunable.gemm_m_unmerge_cluster == 1 else None, s.s_stride_c(), s.s_tmp()))
-            assert False
+            if self.tunable.nxe != 0:
+                self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
+                    None, s.s_out_stride_k(), s.s_tmp(), v.v_in_flag()))
+            else:
+                self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
+                    None, s.s_out_stride_k(), s.s_tmp()))
+            #assert False
         else:
             a = self.agpr
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,

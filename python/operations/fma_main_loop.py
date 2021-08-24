@@ -176,8 +176,6 @@ class fma_main_loop_t(mc_base_t):
         thread_sub_m = self.ctrl.thread_m // self.ctrl.gemm_m_repeat
         thread_sub_n = self.ctrl.thread_n // self.ctrl.gemm_n_repeat
 
-        print(self.ctrl.arch_name)
-
         if self.ctrl.arch_name == AMDGPU_ARCH_GFX1030:
             v_fma = macro_dlops_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n, self.ctrl.precision)
         else:
