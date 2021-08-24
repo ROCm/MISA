@@ -156,6 +156,21 @@ class codegen_driver_t(mc_base_t):
         root_file_name = os.path.dirname(origin_file_name)
         return root_file_name + '/' + ker.name() + '.s'
 
+    def get_kernel_util_inc_name(self, origin_file_name):
+        kernel_base_name = igemm_gtc_encode_kernel_base_name(igemm_gtc_tunable_parameter_t(self.tunable_dicts[0]), self.mc.arch_config.arch)
+        root_file_name = os.path.dirname(origin_file_name)
+        return root_file_name + '/' + kernel_base_name + '_utils.inc'
+
+    def emit_kernel_util_inc(self, origin_file_name):
+        origin_emitter = self.mc.emitter
+        kutil_file_name = self.get_kernel_util_inc_name(origin_file_name)
+        kutil_emitter = mc_emit_to_file_t(kutil_file_name, copy.copy(origin_emitter.indent))
+        kutil_emitter.open()
+        self.mc.emitter = kutil_emitter
+        self.emit_global_macro()
+        self.mc.emitter = origin_emitter
+        kutil_emitter.close()
+
     def emit_igemm_kernel(self, **options):
         is_multiprocess = True if "emit_kernel_mp" in options and options["emit_kernel_mp"] == True else False
         emit_kernel_per_s = options["split_kernel"]
@@ -250,14 +265,17 @@ class codegen_driver_t(mc_base_t):
                             kinfo_per_inc_dict[kpi_file_name].append(kernel.get_kernel_info())
 
                 elif emit_kernel_per_s:
+                    self.emit_kernel_util_inc(origin_emitter.file_name)
+                    kutil_file_name = self.get_kernel_util_inc_name(origin_emitter.file_name)
+
                     kps_file_name = self.get_kernel_per_s_file_name(kernel, origin_emitter.file_name)
                     if kps_file_name not in emitter_per_inc_dict:
 
                         kps_emitter = mc_emit_to_file_t(kps_file_name, copy.copy(origin_emitter.indent))
                         kernel.mc.emitter = kps_emitter
                         kps_emitter.open()
-                        #kernel._emit(f".include \"{os.path.basename(origin_emitter.file_name)}\"")
-                        self.emit_global_macro_per_s_file(kernel.mc)
+                        kernel._emit(f".include \"{os.path.basename(kutil_file_name)}\"")
+                        #self.emit_global_macro_per_s_file(kernel.mc)
 
                         emitter_per_inc_dict[kps_file_name] = kps_emitter
                         kinfo_per_inc_dict[kps_file_name] = [kernel.get_kernel_info()]
