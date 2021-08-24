@@ -528,9 +528,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self.declare_arg("s_diff_wei_os_acc_k_dsy_dsx")     # due to k, dslice_y, dslice_x increment,
                                                                 #    s_move_slice_k_k * wei_stride_k + s_move_slice_k_dsy * dtile_y * wei_stride_y + s_move_slice_k_dsx * dtile_x * wei_stride_x
             self.declare_arg("s_diff_wei_os_ovf_dsx_acc_dsy")   # due to dslice_x increment and overflow
-                                                                #    dtile_y * wei_stride_y - dslice_x * wei_stride_x
+                                                                #    dtile_y * wei_stride_y - dslice_x * dtile_x * wei_stride_x
             self.declare_arg("s_diff_wei_os_ovf_dsy_acc_k")     # due to dslice_y increment and overflow
-                                                                #    wei_stride_k - dslice_y * wei_stride_y
+                                                                #    wei_stride_k - dslice_y * dtile_y* wei_stride_y
 
             self.declare_arg("s_diff_out_iwo_acc_dsx")          # due to dslice_x increment, iwo diff, -1 * s_move_slice_k_dsx * s_dtile_dx
             self.declare_arg("s_diff_out_iwo_ovf_dsx")          # due to dslice_x overflow, will increase s_dslice_x * s_dtile_dx
@@ -2526,8 +2526,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             s_diff_out_os_ovf_dsy_acc_k     : s_diff_out_iho_ovf_dsy * out_stride_ho + data_byte
 
             s_diff_wei_os_acc_k_dsy_dsx     : s_move_slice_k_k * wei_stride_k + s_move_slice_k_dsy * dtile_y * wei_stride_y + s_move_slice_k_dsx * dtile_x * wei_stride_x
-            s_diff_wei_os_ovf_dsx_acc_dsy   : dtile_y * wei_stride_y - dslice_x * wei_stride_x
-            s_diff_wei_os_ovf_dsy_acc_k     :  wei_stride_k - dslice_y * wei_stride_y
+            s_diff_wei_os_ovf_dsx_acc_dsy   : dtile_y * wei_stride_y - dslice_x * dtile_x * wei_stride_x
+            s_diff_wei_os_ovf_dsy_acc_k     :  wei_stride_k - dslice_y * dtile_y * wei_stride_y
 
             s_diff_out_iwo_acc_dsx          : -1 * s_move_slice_k_dsx * s_dtile_dx
             s_diff_out_iwo_ovf_dsx          : s_dslice_x * s_dtile_dx
@@ -2550,15 +2550,15 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_mul_i32 s[{s.s_diff_out_iwo_acc_dsx()}], s[{s.s_move_slice_k_dsx()}], s[{s.s_dtile_dx()}]")
             self._emit(f"s_mul_i32 s[{s.s_diff_out_iwo_acc_dsx()}], -1, s[{s.s_diff_out_iwo_acc_dsx()}]")
 
-            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_tmp(5)}], s[{s.s_dslice_y()}]")
-            self._emit(f"s_sub_u32 s[{s.s_diff_wei_os_ovf_dsy_acc_k()}], s[{s.s_wei_stride_k()}], s[{s.s_tmp(0)}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_dtile_y()}], s[{s.s_tmp(5)}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dslice_x()}], s[{s.s_tmp(4)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_dtile_y()}], s[{s.s_tmp(5)}]")               # dtile_y * wei_stride_y
+            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_dtile_x()}], s[{s.s_tmp(4)}]")               # dtile_x * wei_stride_x
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_tmp(0)}], s[{s.s_dslice_y()}]")
+            self._emit(f"s_sub_u32 s[{s.s_diff_wei_os_ovf_dsy_acc_k()}], s[{s.s_wei_stride_k()}], s[{s.s_tmp(1)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dslice_x()}], s[{s.s_tmp(2)}]")
             self._emit(f"s_sub_u32 s[{s.s_diff_wei_os_ovf_dsx_acc_dsy()}], s[{s.s_tmp(0)}], s[{s.s_tmp(1)}]")
 
-            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_move_slice_k_dsy()}], s[{s.s_tmp(0)}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_move_slice_k_dsx()}], s[{s.s_tmp(4)}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_dtile_x()}], s[{s.s_tmp(1)}]")
+            self._emit(f"s_mul_i32 s[{s.s_tmp(0)}], s[{s.s_move_slice_k_dsy()}], s[{s.s_tmp(0)}]")      # s_move_slice_k_dsy * dtile_y * wei_stride_y
+            self._emit(f"s_mul_i32 s[{s.s_tmp(1)}], s[{s.s_move_slice_k_dsx()}], s[{s.s_tmp(2)}]")      # s_move_slice_k_dsx * dtile_x * wei_stride_x
             self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_move_slice_k_k()}], s[{s.s_wei_stride_k()}]")
             self._emit(f"s_add_u32 s[{s.s_tmp(0)}], s[{s.s_tmp(0)}], s[{s.s_tmp(1)}]")
             self._emit(f"s_add_u32 s[{s.s_diff_wei_os_acc_k_dsy_dsx()}], s[{s.s_tmp(0)}], s[{s.s_tmp(2)}]")
