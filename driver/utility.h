@@ -87,7 +87,7 @@ utility_int_list_to_string(const std::vector<int> list){
     return enc;
 }
 
-static inline int utility_next_pow2(int n) {
+static inline uint32_t utility_next_pow2(uint32_t n) {
     if (n == 0)
         return 1;
     if ((n & (n - 1)) == 0)
@@ -96,6 +96,16 @@ static inline int utility_next_pow2(int n) {
         n &= (n - 1);
     return n << 1;
 }
+
+static inline uint32_t utility_prev_pow2(uint32_t n) {
+    n = n | (n >> 1);
+    n = n | (n >> 2);
+    n = n | (n >> 4);
+    n = n | (n >> 8);
+    n = n | (n >> 16);
+    return n - (n >> 1);
+}
+
 
 static inline int utility_string_to_data_byte(std::string precision)
 {
