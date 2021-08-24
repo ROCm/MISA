@@ -1674,14 +1674,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             # iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w
             self._emit(f"v_mul_lo_u32 v[{v.v_in_ihi_list(0)}], s[{s.s_stride_h()}], v[{v.v_in_ihi_list(0)}]")
             if self.tunable.merge_e == 0:
-                self._emit(f"v_sub_i32 v[{v.v_in_ihi_list(0)}], v[{v.v_in_ihi_list(0)}], s[{s.s_pad_h()}]")
+                self._emit(f"v_sub_nc_i32 v[{v.v_in_ihi_list(0)}], v[{v.v_in_ihi_list(0)}], s[{s.s_pad_h()}]")
             else:
-                self._emit(f"v_add_u32 v[{v.v_in_ihi_list(0)}], v[{v.v_in_ihi_list(0)}], v[{v.v_sst_a_os()}]")
+                self._emit(f"v_add_nc_u32 v[{v.v_in_ihi_list(0)}], v[{v.v_in_ihi_list(0)}], v[{v.v_sst_a_os()}]")
             self._emit(f"v_mul_lo_u32 v[{v.v_in_iwi_list(0)}], s[{s.s_stride_w()}], v[{v.v_in_iwi_list(0)}]")
             if self.tunable.merge_e == 0:
-                self._emit(f"v_sub_i32 v[{v.v_in_iwi_list(0)}], v[{v.v_in_iwi_list(0)}], s[{s.s_pad_w()}]")
+                self._emit(f"v_sub_nc_i32 v[{v.v_in_iwi_list(0)}], v[{v.v_in_iwi_list(0)}], s[{s.s_pad_w()}]")
             else:
-                self._emit(f"v_add_u32 v[{v.v_in_iwi_list(0)}], v[{v.v_in_iwi_list(0)}], v[{v.v_sld_a_os()}]")
+                self._emit(f"v_add_nc_u32 v[{v.v_in_iwi_list(0)}], v[{v.v_in_iwi_list(0)}], v[{v.v_sld_a_os()}]")
             self._emit_empty_line()
 
         if IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG:

@@ -241,9 +241,13 @@ class macro_mdiv_u32_vs_t(macro_base_t):
         self.declare_arg("s_magic")
         self.declare_arg("s_shift")
         self.declare_arg("v_tmp")
+        self.mc = mc
     def expr(self):
         self._emit(f"v_mul_hi_u32 v[{self.v_tmp()}], s[{self.s_magic()}], v[{self.v_numer()}]")
-        self._emit(f"v_add_u32 v[{self.v_tmp()}], v[{self.v_tmp()}], v[{self.v_numer()}]")
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit(f"v_add_nc_u32 v[{self.v_tmp()}], v[{self.v_tmp()}], v[{self.v_numer()}]")
+        else:
+            self._emit(f"v_add_u32 v[{self.v_tmp()}], v[{self.v_tmp()}], v[{self.v_numer()}]")
         self._emit(f"v_lshrrev_b32 v[{self.v_quot()}], s[{self.s_shift()}], v[{self.v_tmp()}]")
 
 class macro_mdiv_u32_rem_vs_t(macro_base_t):
@@ -262,7 +266,10 @@ class macro_mdiv_u32_rem_vs_t(macro_base_t):
         mdiv_u32_vs = macro_mdiv_u32_vs_t(self.mc, self.inline)
         self._emit(mdiv_u32_vs( self.v_quot(), self.v_numer(), self.s_magic(), self.s_shift(), self.v_tmp()  ))
         self._emit(f"v_mul_lo_u32 v[{self.v_tmp()}], s[{self.s_denom()}], v[{self.v_quot()}]")
-        self._emit(f"v_sub_u32 v[{self.v_rem()}], v[{self.v_numer()}], v[{self.v_tmp()}]")
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit(f"v_sub_nc_u32 v[{self.v_rem()}], v[{self.v_numer()}], v[{self.v_tmp()}]")
+        else:
+            self._emit(f"v_sub_u32 v[{self.v_rem()}], v[{self.v_numer()}], v[{self.v_tmp()}]")
 
 
 class macro_c_clear_t(macro_base_t):
