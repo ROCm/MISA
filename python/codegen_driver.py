@@ -90,6 +90,12 @@ class codegen_driver_t(mc_base_t):
         macro_v_fma_mxn_t(self.mc, 4, 2, 4).emit()
         macro_v_fma_mxn_t(self.mc, 2, 2, 4).emit()
 
+    def _emit_dlops_macro(self):
+        macro_dlops_mxn_t(self.mc, 4, 4, 8, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 2, 4, 8, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 4, 2, 4, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 2, 2, 4, 'fp16').emit()
+
     def emit_global_macro(self):
         # emit global macro, independent of tunable
         macro_int_div_vv_t(self.mc).emit()
@@ -109,7 +115,9 @@ class codegen_driver_t(mc_base_t):
         if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
-        if self.mc.arch_config.use_dlops:
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit_dlops_macro()
+        else:
             self._emit_fma_macro()
 
     def emit_global_macro_per_s_file(self, mc):
@@ -132,7 +140,9 @@ class codegen_driver_t(mc_base_t):
         if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
-        if self.mc.arch_config.use_dlops:
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit_dlops_macro()
+        else:
             self._emit_fma_macro()
 
     def emit_igemm_macro(self):
