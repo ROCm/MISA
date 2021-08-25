@@ -587,8 +587,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             s_in_stride_d0, s_in_stride_d1, s_wei_stride_d0, s_wei_stride_d1 = self.outer.get_symbol_global_load_s_stride_d0_d1()
             with self._deferred_context():
                 self._emit(f"; load weight")
-                self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), None, s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset(), 
-                                v.v_wei_flag(), None, None, None))
+                self._emit(m_wei_2d_global_load(v.v_gld_a(), s.s_p_wei(), v.v_wei_os(), s_wei_stride_d0(), s_wei_stride_d1(), s.s_wei_offset()))
             return self._get_deferred() 
 
     class shared_store_in_t(mc_base_t):
@@ -1038,6 +1037,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         inline = True if self.tunable.fma_interleave else False
         vector_c = self.tunable.vector_c
         ta_k_vec_c, tb_nb0, tb_nb_vec_c                 = self.get_thread_lengths()
+        ca_k, ca_ce, cb_ce, cb_nb1                      = self.get_cluster_lengths()
         na_k_vec_c, na_ce,  nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
 
         in_thread_copy_dims, wei_thread_copy_dims = self.get_thread_copy_dims()
@@ -1053,7 +1053,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         ctrl_in_gld.vector_d1  = utility_gcd(vector_c, 4 * (4 // data_byte))
 
         ctrl_in_gld.use_flag = 1
-        ctrl_wei_gld.use_flag = 1
+        ctrl_wei_gld.use_flag = 0
 
         ctrl_in_gld.arch_name = AMDGPU_ARCH_GFX1030
         ctrl_wei_gld.arch_name = AMDGPU_ARCH_GFX1030
@@ -1081,9 +1081,10 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         ctrl_wei_gld.precache_ptn = GLOBAL_PTN_D0_S | GLOBAL_PTN_D1_S
 
         ctrl_wei_gld.dim_conti_flag = 1
+        ctrl_wei_gld.workgroup_length = ca_k
 
         if self.tunable.precache_soffset:
-            return macro_igemm_2d_global_load_precache_offset_t(self.mc, ctrl_wei_gld, inline), \
+            return macro_igemm_2d_global_load_precache_soffset_t(self.mc, ctrl_wei_gld, inline), \
                     macro_igemm_2d_global_load_precache_offset_t(self.mc, ctrl_in_gld, inline)
         else:
             return macro_igemm_2d_global_load_t(self.mc, ctrl_wei_gld, inline),  macro_igemm_2d_global_load_precache_voffset_t(self.mc, ctrl_in_gld, inline)

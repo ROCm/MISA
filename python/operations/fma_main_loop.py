@@ -157,7 +157,7 @@ class fma_main_loop_t(mc_base_t):
 
         # assert type(v_a) is sym_t and type(s_kitr) is sym_t  # other gpr type check ignore
 
-        data_byte = amdgpu_string_to_precision(self.ctrl.precision)
+        data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(self.ctrl.precision))
 
         lds_width_m = data_byte * self.ctrl.thread_m * self.ctrl.gemm_m_level0_cluster * self.ctrl.gemm_m_level1_cluster
         lds_width_n = data_byte * self.ctrl.thread_n * self.ctrl.gemm_n_level0_cluster * self.ctrl.gemm_n_level1_cluster

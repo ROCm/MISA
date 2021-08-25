@@ -145,6 +145,7 @@ class ctrl_2d_global_load_t(object):
         self.flag_merge_v = 0        # when flag on v_offset, flag and multiple load, or flag per load
         self.dim_conti_flag  = 0        # when dim flag is set, means length d0 is contiguous, and sgpr offset will not be used
         self.arch_name = AMDGPU_ARCH_GFX908
+        self.workgroup_length = 1
 
 
 class macro_igemm_2d_global_load_t(macro_base_t):
@@ -392,7 +393,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                         if ctrl.use_flag and self.v_flag != None:
                             self._emit(f"s_mov_b64 exec, -1")
                     else:
-                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, i_d1 * vgpr_per_vector * 4))
+                        self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, i_d1 * vgpr_per_vector * 4 * ctrl.workgroup_length))
                     i_dst = i_dst + 1
 
         elif ctrl.src_order == 1 and ctrl.dst_order == 0:
