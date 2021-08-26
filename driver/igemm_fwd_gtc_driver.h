@@ -370,7 +370,7 @@ public:
                 ;   // if both 1, indicate padded c support
             }
             else{
-                if(((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
+                if(c >> tunable->gemm_k_global_split == 0  || ((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
                     return false;
             }
 

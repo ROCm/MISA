@@ -564,11 +564,7 @@ class igemm_gtc_tunable_parameter_t(object):
     def serialize_as_section(self):
         return self.serialize(section_name=True, line_start='', equal='=', extra_info=False)
 
-def igemm_gtc_encode_kernel_name(tunable, arch):
-    def lengths_str(lengths):
-        assert type(lengths) is list
-        return "x".join( [f"{x}" for x in lengths] )
-
+def igemm_gtc_encode_kernel_base_name(tunable, arch):
     assert type(tunable) is igemm_gtc_tunable_parameter_t
 
     kernel_name = f"igemm_{tunable.direction}_"
@@ -578,16 +574,27 @@ def igemm_gtc_encode_kernel_name(tunable, arch):
         arch_str = arch
 
     if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
-        kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
+        kernel_name += 'gtcm'                                  # generic tensor contraction with mac
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-        kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
+        kernel_name += 'gtc'                                   # generic tensor contraction with dlops
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         if arch_str == 'gfx908':
-            kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops
+            kernel_name += 'gtcx'                              # generic tensor contraction with xdlops
         elif arch_str == 'gfx90a':
-            kernel_name += 'gtcx2_'
+            kernel_name += 'gtcx2'
         else:
             assert False
+
+    return kernel_name
+
+def igemm_gtc_encode_kernel_name(tunable, arch):
+    def lengths_str(lengths):
+        assert type(lengths) is list
+        return "x".join( [f"{x}" for x in lengths] )
+
+    assert type(tunable) is igemm_gtc_tunable_parameter_t
+
+    kernel_name = igemm_gtc_encode_kernel_base_name(tunable, arch) + '_'
 
     kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
     if IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME:

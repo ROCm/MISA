@@ -60,6 +60,9 @@ export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
+export IGEMM_ASSERT_WHEN_INVALID=1
+export IGEMM_WARMUP=1
+export IGEMM_REPEAT=4
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
@@ -239,27 +242,53 @@ echo "=============================================================== resnet50"
 ./out/conv_driver.exe $CONV -n 64 -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 64 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
 sleep 2
-#from v4r1_origin_conv.sh
-#./out/conv_driver.exe $CONV -n 64 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 1024 -H 17 -W 17 -k 1024 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 64 -c 256 -H 34 -W 34 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 128 -H 35 -W 35 -k 128 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 64 -c 1536 -H 8 -W 8 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 2048 -H 8 -W 8 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 832 -H 7 -W 7 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 1280 -H 8 -W 8 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 512 -H 14 -W 14 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 64 -c 1536 -H 8 -W 8 -k 384 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 256 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 832 -H 7 -W 7 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 768 -H 17 -W 17 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 528 -H 14 -W 14 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 528 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 832 -H 7 -W 7 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 288 -H 35 -W 35 -k 384 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 48 -H 7 -W 7 -k 128 -y 5 -x 5 -p 2 -q 2 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 128 -H 17 -W 17 -k 128 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 128 -c 128 -H 17 -W 17 -k 128 -y 7 -x 1 -p 3 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
+
+echo "=============================================================== ssd"
+./out/conv_driver.exe $CONV -n 120 -c 3 -H 300 -W 300 -k 64 -y 7 -x 7 -p 3 -q 3 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 128 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 64 -H 75 -W 75 -k 128 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 512 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 512 -H 19 -W 19 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 19 -W 19 -k 512 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 512 -H 10 -W 10 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 10 -W 10 -k 256 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 5 -W 5 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 5 -W 5 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 3 -W 3 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 128 -H 3 -W 3 -k 256 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 38 -W 38 -k 340 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 512 -H 19 -W 19 -k 510 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 512 -H 10 -W 10 -k 510 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 5 -W 5 -k 510 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 3 -W 3 -k 340 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 120 -c 256 -H 1 -W 1 -k 340 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 1 -F $FORW ${LAYOUT_ARG}
 
 echo "=============================================================== mask rcnn"
 #mask rcnn
