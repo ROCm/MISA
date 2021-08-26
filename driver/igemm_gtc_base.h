@@ -186,7 +186,7 @@ static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const 
     if(sec.count("gemm_m_per_thread") > 0 && sec.count("gemm_n_per_thread") > 0){
         if(arch_string == "gfx900")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC;
-        if(arch_string == "gfx906")
+        if(arch_string == "gfx906" || arch_string == "gfx1030")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
         if(arch_string == "gfx908" || arch_string == "gfx90a")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;

@@ -50,6 +50,10 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
+#ifndef VECTOR_C_FP16
+#define VECTOR_C_FP16 8
+#endif
+
 #ifdef USE_GPU_NAIVE_CONV
 #   include "gpu_naive_conv.h"
 #   ifndef IGEMM_GPU_NAIVE_CONV_HSACO
@@ -68,6 +72,7 @@
 #include "args.h"
 #include "config_parser.h"
 #include "perf.h"
+#include "tensor_transpose.h"
 #include "igemm_gtc_base.h"
 #include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
@@ -346,7 +351,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     }
     double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
     double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
-    // printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
+     printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
     return (computed_nrms < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -732,6 +737,7 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
+    int vector_c = env_get_int("VECTOR_C_FP16", VECTOR_C_FP16);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
@@ -753,10 +759,12 @@ int main(int argc, char **argv) {
     int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
     int need_wrw = (forw == 0 ? 1 : (forw & 4 ? 1 : 0));
 
-    assert(in_layout == out_layout && in_layout == fil_layout); // currently only support all layout is the same
-    assert(in_layout == "NCHW" || in_layout == "NHWC"); // currently only support these layout
+    //assert(in_layout == out_layout && in_layout == fil_layout); // currently only support all layout is the same
+    assert(in_layout == out_layout); 
+    assert(in_layout == "NCHW" || in_layout == "NHWC" || in_layout == "NCHWC"); // currently only support these layout
     assert((in_layout == "NCHW" && tunables[0].tensor_layout == "nchw") || 
-            (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc"));  // check pairs
+           (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc") ||
+           (in_layout == "NCHWC" && tunables[0].tensor_layout == "nchwc"));  // check pairs
 
     // init host side
     float *host_input = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
@@ -843,6 +851,50 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
+            else if(in_layout == "NCHWC" && fil_layout == "CHWNC"){
+                assert(c % vector_c == 0);
+                float* aux_in = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
+                float* aux_wei = (float*)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
+                float* aux_out = (float*)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
+
+                tensor_transpose_nchwc_2_nchw<float*>(aux_in, host_input, n, c, hi, wi, vector_c);
+                tensor_transpose_chwnc_2_nchw<float*>(aux_wei, host_weight, k, c, y, x, vector_c);
+
+                if(env_get_int("IGEMM_CHECK_TRNASPOSE", 0)){
+                    float* aux_wei_check = (float*)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
+                    float* aux_in_check = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
+
+                    tensor_transpose_nchw_2_nchwc<float*>(aux_in_check, aux_in, n, c, hi, wi, vector_c);
+                    tensor_transpose_nchw_2_chwnc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
+
+                    double transpose_nrms = get_nrms("fwd", driver_data_type);
+                    valid_vector<float>(host_input, aux_in_check, static_cast<size_t>(n) * c * hi * wi, transpose_nrms);
+                    valid_vector<float>(host_weight, aux_wei_check, static_cast<size_t>(k) * c * y * x, transpose_nrms);
+
+                    free(aux_in_check);
+                    free(aux_wei_check);
+                }
+                
+                HIP_CALL(hipMemcpy(device_input, aux_in,
+                       static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+                HIP_CALL(hipMemcpy(device_weight, aux_wei,
+                       static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+
+                gpu_naive_conv_fwd_nchw_fp32(device_input, device_weight, device_output,
+                        n, wi, hi, c,
+                        k, x, y, pad_w, pad_h, stride_w, stride_h,
+                        dilation_w, dilation_h, ngroups);
+
+                HIP_CALL(hipMemcpy(device_input, host_input,
+                       static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
+                HIP_CALL(hipMemcpy(device_weight, host_weight,
+                       static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
+
+                free(aux_in);
+                free(aux_wei);
+                free(aux_out);
+                exit(1);
+            }
             else
                 assert(0);
             HIP_CALL(hipDeviceSynchronize());
