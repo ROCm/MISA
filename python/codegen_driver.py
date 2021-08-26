@@ -275,6 +275,7 @@ class codegen_driver_t(mc_base_t):
                         kernel.mc.emitter = kps_emitter
                         kps_emitter.open()
                         kernel._emit(f".include \"{os.path.basename(kutil_file_name)}\"")
+                        kernel._emit_empty_line()
                         #self.emit_global_macro_per_s_file(kernel.mc)
 
                         emitter_per_inc_dict[kps_file_name] = kps_emitter

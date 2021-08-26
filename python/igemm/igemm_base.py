@@ -570,16 +570,18 @@ def igemm_gtc_encode_kernel_base_name(tunable, arch):
         arch_str = arch
 
     if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
-        kernel_name += 'gtcm'                                  # generic tensor contraction with mac
+        kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-        kernel_name += 'gtc'                                   # generic tensor contraction with dlops
+        kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         if arch_str == 'gfx908':
-            kernel_name += 'gtcx'                              # generic tensor contraction with xdlops
+            kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops
         elif arch_str == 'gfx90a':
-            kernel_name += 'gtcx2'
+            kernel_name += 'gtcx2_'
         else:
             assert False
+
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}"
 
     return kernel_name
 
@@ -592,7 +594,7 @@ def igemm_gtc_encode_kernel_name(tunable, arch):
 
     kernel_name = igemm_gtc_encode_kernel_base_name(tunable, arch) + '_'
 
-    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}_bx{tunable.nxb}_ex{tunable.nxe}_"
+    kernel_name += f"bx{tunable.nxb}_ex{tunable.nxe}_"
     if IGEMM_GTC_FEAT_SOURCE_ACCESS_ENCODING_KERNEL_NAME:
         kernel_name += f"sa{tunable.source_access_order}_"
     kernel_name += f"bt{tunable.gemm_m_per_block}x{tunable.gemm_n_per_block}x{tunable.gemm_k_per_block}_"
