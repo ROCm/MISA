@@ -579,7 +579,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
         }
         
-        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
+        printf("[%s:%2d] %s\n", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
         fflush(stdout);
 
         pre_func();
@@ -885,15 +885,24 @@ int main(int argc, char **argv) {
                         k, x, y, pad_w, pad_h, stride_w, stride_h,
                         dilation_w, dilation_h, ngroups);
 
+                HIP_CALL(hipMemcpy(host_output, device_output,
+                                   static_cast<size_t>(n) * k * ho * wo * sizeof(float),
+                                   hipMemcpyDeviceToHost));
+
+                tensor_transpose_nchw_2_nchwc<float*>(aux_out, host_output, n, k, ho, wo, vector_c);
+
                 HIP_CALL(hipMemcpy(device_input, host_input,
                        static_cast<size_t>(n) * c * hi * wi * sizeof(float), hipMemcpyHostToDevice));
                 HIP_CALL(hipMemcpy(device_weight, host_weight,
                        static_cast<size_t>(k) * c * y * x * sizeof(float), hipMemcpyHostToDevice));
 
+                HIP_CALL(hipMemcpy(device_output, aux_out,
+                       static_cast<size_t>(n) * k * ho * wo * sizeof(float), hipMemcpyHostToDevice));
+
                 free(aux_in);
                 free(aux_wei);
                 free(aux_out);
-                exit(1);
+                // exit(1);
             }
             else
                 assert(0);
