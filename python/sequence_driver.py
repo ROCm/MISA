@@ -516,7 +516,7 @@ def igemm_sequence_driver(**options):
         asm_target = os.path.join(out_dir, asm_file)
         emitter = mc_emit_to_file_t(asm_target)
         mc = mc_asm_printer_t(emitter, arch_config)
-        igemm_sequence_driver_t(mc, config)(**options)
+        sequence_driver_t(mc, config)(**options)
 
     for config in config_dicts:
         assert "direction" in config

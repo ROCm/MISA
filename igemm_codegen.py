@@ -114,7 +114,7 @@ if __name__ == '__main__':
         if os.path.exists(args.dir):
             shutil.rmtree(args.dir)
         os.mkdir(args.dir)
-        sequence_driver(arch=arch, code_object=code_object,
+        igemm_sequence_driver(arch=arch, code_object=code_object,
                             config_content=config_content, out_dir=args.dir )
 
 
