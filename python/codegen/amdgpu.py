@@ -417,7 +417,7 @@ class amdgpu_kernel_info_t(object):
         self.kernel_name = kernel_name
         self.kernel_block_size = kernel_block_size
         self.kernel_args = kernel_args
-
+    
 class amd_kernel_code_t(mc_base_t):
     def __init__(self, mc, kernel_info):
         mc_base_t.__init__(self, mc)
@@ -543,6 +543,27 @@ class hsa_header_t(mc_base_t):
             self._emit(".hsa_code_object_version 2,1")
             self._emit(".hsa_code_object_isa")
             self._emit_empty_line()
+
+class hsa_kernel_header(mc_base_t):
+    '''
+    only used in cov2
+    '''
+    def __init__(self, mc, amdgpu_kernel_info:amdgpu_kernel_info_t):
+        mc_base_t.__init__(self, mc)
+        self._kernel_info = amdgpu_kernel_info
+
+    def emit(self):
+        kernel_name = self._kernel_info.kernel_name
+        self._emit('.text')
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
+            self._emit('.globl {}'.format(kernel_name))
+        self._emit('.p2align 8')
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
+            self._emit('.type {},@function'.format(kernel_name))
+        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
+            self._emit('.amdgpu_hsa_kernel {}'.format(kernel_name))
+        self._emit('{}:'.format(kernel_name))
+
 
 class hsa_footer_t(mc_base_t):
     def __init__(self, mc):

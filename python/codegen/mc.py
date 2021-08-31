@@ -102,52 +102,68 @@ class _mc_indent_t(object):
     def get(self):
         return self.level
 
-class mc_emit_to_string_t(object):
+from abc import ABC, abstractmethod
+
+class base_emitter(ABC):
     def __init__(self, indent = _mc_indent_t(4)):
         self.indent = indent
         self.string_buffer = ''
-    def emit(self, s):
-        self.string_buffer += self.indent() + s + '\n'
+    
+    @abstractmethod
+    def emit(self, s : str):
+        pass
+    
     def open(self):
         pass
+    
     def close(self):
         pass
+    
     def indent_context(self, enter_func=None, exit_func=None):
         return _mc_indent_context_manager_t(self.indent, enter_func, exit_func)
+    
     def inc_indent(self):
         self.indent.inc()
+    
     def dec_indent(self):
         self.indent.dec()
+    
+    #???
     def get_buffer(self):
         return self.string_buffer
+
+    def get_filename(self) -> str:
+        return ""
+    
     def set_indent(self, level):
         self.indent.set(level)
+    
     def get_indent(self):
         return self.indent.get()
 
-class mc_emit_to_iostream_t(object):
+
+class mc_emit_to_string_t(base_emitter):
+    
+    def __init__(self, indent = _mc_indent_t(4)):
+        self.indent = indent
+        self.string_buffer = ''
+    
+    def emit(self, s : str):
+        self.string_buffer += self.indent() + s + '\n'
+
+    def get_buffer(self):
+        return self.string_buffer
+
+class mc_emit_to_iostream_t(base_emitter):
     def __init__(self, indent = _mc_indent_t(4)):
         self.indent = indent
     def emit(self, s):
         print(self.indent() + s)
-    def open(self):
-        pass
-    def close(self):
-        pass
-    def indent_context(self, enter_func=None, exit_func=None):
-        return _mc_indent_context_manager_t(self.indent, enter_func, exit_func)
-    def inc_indent(self):
-        self.indent.inc()
-    def dec_indent(self):
-        self.indent.dec()
-    def set_indent(self, level):
-        self.indent.set(level)
-    def get_indent(self):
-        return self.indent.get()
 
-class mc_emit_to_file_t(object):
+
+class mc_emit_to_file_t(base_emitter):
     # TODO: exception check
-    def __init__(self, file_name, indent = _mc_indent_t(4)):
+    def __init__(self, file_name : str, indent = _mc_indent_t(4)):
         self.file_name = file_name
         self.f = None
         self.indent = indent
@@ -222,16 +238,11 @@ class mc_emit_to_file_t(object):
             os.fsync(self.f)
             self.f.close()
             self.f = None
-    def indent_context(self,enter_func=None, exit_func=None):
-        return _mc_indent_context_manager_t(self.indent,enter_func, exit_func)
-    def inc_indent(self):
-        self.indent.inc()
-    def dec_indent(self):
-        self.indent.dec()
-    def set_indent(self, level):
-        self.indent.set(level)
-    def get_indent(self):
-        return self.indent.get()
+
+    def get_filename(self) -> str:
+        return self.file_name
+
+
 
 class mc_deferred_emit_t(object):
     '''
@@ -248,12 +259,6 @@ class mc_deferred_emit_t(object):
         else:
             self.buffer += '\n' + self.indent() + s
 
-    def open(self):
-        pass
-    def close(self):
-        pass
-    def indent_context(self, enter_func=None, exit_func=None):
-        return _mc_indent_context_manager_t(self.indent, enter_func, exit_func)
     def inc_indent(self):
         self.indent.inc()
     def dec_indent(self):
@@ -265,11 +270,14 @@ class mc_deferred_emit_t(object):
     def get_buffer(self):
         return self.buffer
 
+#from .amdgpu import amdgpu_arch_config_t
+
 class mc_asm_printer_t(object):
     '''
     this is the MC
+    any class need do emit should inherit from this
     '''
-    def __init__(self, emitter, arch_config):
+    def __init__(self, emitter : base_emitter, arch_config : 'amdgpu_arch_config_t'):
         self.emitter = emitter
         self.emitter.open()
         self.deferred_buffer = ''
@@ -277,13 +285,29 @@ class mc_asm_printer_t(object):
         self.unique_emitter_dict = dict()
         self.arch_config = arch_config
 
+    @classmethod
+    def new_from(cls, obj):
+        if issubclass(obj.__class__, mc_asm_printer_t):
+            _new = cls(obj.emitter, obj.arch_config)
+            return _new
+        else:
+            raise TypeError('Expected subclass of <class mc_asm_printer_t>, got {}.'\
+                                .format(type(obj)))
+
+    def init_from_instence(self, inst):
+        if issubclass(inst.__class__, mc_asm_printer_t):
+            self.__init__(inst.emitter, inst.arch_config)
+        else:
+            raise TypeError('Expected subclass of <class mc_asm_printer_t>, got {}.'\
+                                .format(type(inst)))
+
     def __del__(self):
         self.emitter.close()
     
     def close(self):
         self.emitter.close()
 
-    def insert_unique(self, k, v):
+    def insert_unique(self, k:str, v):
         # TODO: better check valid emitter
         assert type(k) is str
         assert hasattr(v, 'emit'), 'insert a object must have attribute "emit()"!'
@@ -295,7 +319,7 @@ class mc_asm_printer_t(object):
         for k, v in sorted(self.unique_emitter_dict.items()):
             v.emit()
 
-    def emit(self, s):
+    def emit(self, s:str):
         self.emitter.emit(s)
 
     def emit_empty_line(self):
@@ -312,7 +336,7 @@ class mc_asm_printer_t(object):
             self.emit_empty_line()
         return self.indent_context(macro_enter, macro_exit)
 
-    def emit_macro_desc(self, *misc):
+    def _emit_macro_desc(self, *misc):
         self.emit('; ' + ' '.join( '{}'.format(e) for e in misc))
 
     def emit_front(self, s):
@@ -344,31 +368,35 @@ class mc_asm_printer_t(object):
     def get_deferred(self):
         return self.deferred_buffer
 
-    def inject(self, other):
-        '''
-        useful to inject some control func here
-        '''
-        #def _emit_unique_wrapper():
-        #    self.emit_unique(other)
-        def _macro_desc_wrapper(*misc):
-            self.emit_macro_desc(inspect.cleandoc(other.__doc__), *misc)
-        other._emit = self.emit
-        other._emit_empty_line = self.emit_empty_line
-        other._emit_macro_indented = self.emit_macro_indented
-        other._emit_macro_desc = _macro_desc_wrapper
-        other._emit_front = self.emit_front
-        #other._emit_unique = _emit_unique_wrapper
-        other._inc_indent = self.inc_indent
-        other._dec_indent = self.dec_indent
-        other._indent_context = self.indent_context
-        other._deferred_context = self.deferred_context
-        other._get_deferred = self.get_deferred
-        other._insert_unique = self.insert_unique
 
 class mc_base_t(object):
     '''
     helper class for mc inject, any class need do emit should inherit from this
     '''
-    def __init__(self, mc):
-        self.mc = mc
-        mc.inject(self)
+    __slots__ = ['mc']
+    def __init__(self, mc_asm_printer : mc_asm_printer_t):
+        assert type(mc_asm_printer) is mc_asm_printer_t
+        self.mc = mc_asm_printer
+    def _emit(self, s:str):
+        self.mc.emit(s)
+    def _emit_empty_line(self):
+        self.mc.emit_empty_line()
+    def _emit_macro_indented(self, macro_define_str):
+        self.mc.emit_macro_indented(macro_define_str)
+    def _emit_front(self, s):
+        self.mc.emit_front(s)
+        #self.._emit_unique = _emit_unique_wrapper
+    def _inc_indent(self): 
+        self.mc.inc_indent()
+    def _dec_indent(self): 
+        self.mc.dec_indent()
+    def _indent_context(self): 
+        return self.mc.indent_context()
+    def _deferred_context(self): 
+        return self.mc.deferred_context()
+    def _get_deferred(self): 
+        return self.mc.get_deferred()
+    def _insert_unique(self, k:str, v): 
+        self.mc.insert_unique(k, v)
+    def _emit_macro_desc(self, *misc):
+        self.mc._emit_macro_desc(inspect.cleandoc(self.__doc__), *misc)

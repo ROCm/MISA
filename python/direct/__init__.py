@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
+#  Copyright (c) 2021 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,5 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .symbol import *
-from .macro import *
-from .compile import *
-from .config_parser import *
-from .amdgpu import *
-from .mc import *
-from .mbb import *
-from .scheduler import *
-from .instruction import *
-from .kernel_driver import *
+from .kernel_constructor import *
+from .direct_class import *
