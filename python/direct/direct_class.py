@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
+from python.codegen.kernel_driver import base_config
 from ..codegen.config_parser import config_content_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
-from python.codegen.kernel_driver import *
 from .kernel_constructor import *
 
 
@@ -27,21 +27,23 @@ class conv_direct_navi(kernel_constructor):
     class _sgpr(sgpr_file_t):
         def __init__(self, mc):
             super().__init__(mc)
-            sseq = self._sq 
-            self.karg_ptr = sym_t('karg_ptr', sseq(2))
-            self.group_id = sym_t('group_id', sseq(1))
-            self.gid_off = sym_t('gid_off', sseq(1))
-            self.in_buff_ptr = sym_t('in_buff_ptr', sseq(1))
-            self.H = sym_t('H', sseq(1))
-            self.W = sym_t('W', sseq(1))
+            sseq = self._sq
+            add = self.add 
+            self.karg_ptr = add('karg_ptr', sseq(2))
+            self.group_id = add('group_id', sseq(1))
+            self.gid_off = add('gid_off', sseq(1))
+            self.in_buff_ptr = add('in_buff_ptr', sseq(1))
+            self.H = add('H', sseq(1))
+            self.W = add('W', sseq(1))
     
     class _vgpr(vgpr_file_t):
         def __init__(self, mc):
             super().__init__(mc)
-            sseq = self._sq 
-            self.tid = sym_t('tid', sseq(1))
-            self.in_off = sym_t('in_off', sseq(1))
-            self.in_off = sym_t('in_off', sseq(1))
+            sseq = self._sq
+            add = self.add 
+            self.tid = add('tid', sseq(1))
+            self.in_off = add('in_off', sseq(1))
+            self.in_off = add('in_off', sseq(1))
 
     def _get_LDS_usage(self):
         return 0
@@ -55,9 +57,12 @@ class conv_direct_navi(kernel_constructor):
         s = self.sgpr
         v = self.vgpr
         karg = self.kargs
-        self._emit(f"s_load_dwordx2  s[{s.in_buff_ptr((0,1))}],    s[{s.karg_ptr((0, 1))}],    0+{karg.in_buff()}")
-        self._emit(f"s_load_dwordx  s[{s.H()}],   s[{s.karg_ptr((0, 1))}],    0+{karg.H()}")
-        self._emit(f"s_load_dwordx4  s[{s.in_buff_ptr((0,3))}],   s[{s.karg_ptr((0, 1))}],    0+{karg.in_buff()}")
+        
+        self._emit(f"s_load_dwordx2  s[{s.in_buff_ptr(0, 1)}],    s[{s.karg_ptr(0, 1)}],    0+{karg.in_buff()}")
+        self._emit(f"s_load_dwordx  s[{s.H()}],   s[{s.karg_ptr(0, 1)}],    0+{karg.H()}")
+        self._emit(f"s_load_dwordx4  {s.in_buff_ptr[0, 3]},  {s.karg_ptr[0, 1]},    0+{karg.in_buff()}")
+        self._emit(f"s_load_dwordx  {s.H[0]},   {s.karg_ptr[0, 1]},    0+{karg.H()}")
+
 
     def _set_kernel_karg_t(self) -> None:
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
