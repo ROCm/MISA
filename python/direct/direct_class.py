@@ -20,9 +20,19 @@ class conv_direct_navi(kernel_constructor):
         '''Define kernel arguments. Used in _set_kernel_karg_t'''
         def __init__(self, k_ptr:kernel_constructor, mc) -> None:
             super().__init__(mc)
-            self.in_buff = k_ptr._pb_kernel_arg('in_buff', arg_kind.GlobBuffer, arg_type.F32)    
-            self.H = k_ptr._pb_kernel_arg('H', arg_kind.value, arg_type.I32)
-            self.W = k_ptr._pb_kernel_arg('W', arg_kind.value, arg_type.I32)
+            pb_arg = k_ptr._pb_kernel_arg
+            self.in_ptr  = pb_arg('in_ptr',  arg_kind.GlobBuffer, arg_type.F32)
+            self.out_ptr = pb_arg('out_ptr', arg_kind.GlobBuffer, arg_type.F32)
+            self.wei_ptr = pb_arg('wei_ptr', arg_kind.GlobBuffer, arg_type.F32)
+            self.N = pb_arg('N', arg_kind.value, arg_type.I32)
+            self.C = pb_arg('C', arg_kind.value, arg_type.I32)
+            self.H = pb_arg('H', arg_kind.value, arg_type.I32)
+            self.W = pb_arg('W', arg_kind.value, arg_type.I32)
+            self.K = pb_arg('K', arg_kind.value, arg_type.I32)
+            self.X = pb_arg('Y', arg_kind.value, arg_type.I32)
+            self.Y = pb_arg('X', arg_kind.value, arg_type.I32)
+            self.G = pb_arg('G', arg_kind.value, arg_type.I32)
+
 
     class _sgpr(sgpr_file_t):
         def __init__(self, mc):
@@ -32,9 +42,17 @@ class conv_direct_navi(kernel_constructor):
             self.karg_ptr = add('karg_ptr', sseq(2))
             self.group_id = add('group_id', sseq(1))
             self.gid_off = add('gid_off', sseq(1))
-            self.in_buff_ptr = add('in_buff_ptr', sseq(1))
+            self.in_buff_ptr = add('in_buff_ptr', sseq(4))
+            self.out_buff_ptr = add('out_buff_ptr', sseq(4))
+            self.wei_buff_ptr = add('wei_buff_ptr', sseq(4))
+            self.N = add('N', sseq(1))
+            self.C = add('C', sseq(1))
             self.H = add('H', sseq(1))
             self.W = add('W', sseq(1))
+            self.K = add('K', sseq(1))
+            self.X = add('X', sseq(1))
+            self.Y = add('Y', sseq(1))
+            self.G = add('G', sseq(1))
     
     class _vgpr(vgpr_file_t):
         def __init__(self, mc):
@@ -58,10 +76,27 @@ class conv_direct_navi(kernel_constructor):
         v = self.vgpr
         karg = self.kargs
         
-        self._emit(f"s_load_dwordx2  s[{s.in_buff_ptr(0, 1)}],    s[{s.karg_ptr(0, 1)}],    0+{karg.in_buff()}")
-        self._emit(f"s_load_dwordx  s[{s.H()}],   s[{s.karg_ptr(0, 1)}],    0+{karg.H()}")
-        self._emit(f"s_load_dwordx4  {s.in_buff_ptr[0, 3]},  {s.karg_ptr[0, 1]},    0+{karg.in_buff()}")
-        self._emit(f"s_load_dwordx  {s.H[0]},   {s.karg_ptr[0, 1]},    0+{karg.H()}")
+        cl = self._emit
+
+        cl(f"s_load_dwordx2  {s.in_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.in_ptr()}")
+        cl(f"s_load_dwordx2  {s.out_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.out_ptr()}")
+        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.wei_ptr()}")
+
+        cl(f"s_load_dwordx4  {s.H[0, 3]},   {s.karg_ptr[0, 1]},    0+{karg.H()}")
+        cl(f"s_load_dwordx2  {s.Y[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.Y()}")
+
+
+        cl(f"s_mov_b32  {s.in_buff_ptr[2]}, {input_buffer_size}")
+        cl(f"s_mov_b32 {s.in_buff_ptr[3]}, {0x00027000}")
+
+        cl(f"s_mov_b32 {s.out_buff_ptr[2]}, {filter_buffer_size}")
+        cl(f"s_mov_b32 {s.out_buff_ptr[3]}, {0x00027000}")
+
+        cl(f"s_mov_b32 {s.wei_buff_ptr[2]}, {output_buffer_size}")
+        cl(f"s_mov_b32 {s.wei_buff_ptr[3]}, {0x00027000}")
+
+
+
 
 
     def _set_kernel_karg_t(self) -> None:
