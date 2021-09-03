@@ -87,6 +87,7 @@ class ctrl_mfma_main_loop_t(object):
         self.pass_through_b_v_pack       = 1
         self.pass_through_a_interleave_gld         = 1
         self.pass_through_b_interleave_gld         = 1
+        self.opt_1st_sld                 = True    # optimize 1st ds_read
 
 class mfma_main_loop_t(mc_base_t):
     '''
@@ -994,15 +995,21 @@ class mfma_main_loop_t(mc_base_t):
             self._emit_empty_line()
             self._emit(f_gld_b())                                           # global load
             self._emit(f_gld_a())                                           # global load
+            if self.ctrl.opt_1st_sld:
+                self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
             self._emit_empty_line()
 
             # Label: start of fma body
             self._emit_front(f"{label_mfma_body}:")
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
-            self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
-            self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
-            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
+            if not self.ctrl.opt_1st_sld:
+                self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
             def do_unroll_k_sub():
                 unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
@@ -1123,18 +1130,27 @@ class mfma_main_loop_t(mc_base_t):
             self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
             self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
             self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
-
+            if self.ctrl.opt_1st_sld:
+                self._emit(f"s_waitcnt lgkmcnt(0)")
+                self._emit(f"s_barrier")
+                self._emit(f_gld_b())
+                self._emit(f_gld_a())
+                self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
             # 3rd fma
             self._emit(mfma_step_mxn(1, 0, 1, 1))
             self._emit_empty_line()
 
             # 4th fma
             self._emit(mfma_step_mxn(1, 1, 1, 1))
-            self._emit(f"s_waitcnt lgkmcnt(0)")
-            self._emit(f"s_barrier")
-            #       load next from global
-            self._emit(f_gld_b())
-            self._emit(f_gld_a())
+            if not self.ctrl.opt_1st_sld:
+                self._emit(f"s_waitcnt lgkmcnt(0)")
+                self._emit(f"s_barrier")
+                #       load next from global
+                self._emit(f_gld_b())
+                self._emit(f_gld_a())
             self._emit(f"s_branch {label_mfma_body}")
             self._emit_empty_line()
 
@@ -1356,6 +1372,13 @@ class mfma_main_loop_t(mc_base_t):
                         self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
                         self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
                         self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        if self.ctrl.opt_1st_sld:
+                            self._emit(f"s_waitcnt lgkmcnt(0)")
+                            self._emit(f"s_barrier")
+                            self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                            self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
                         # 3rd fma
                         self._emit(mfma_step_mxn(1, 0, 1, 1))
@@ -1363,22 +1386,32 @@ class mfma_main_loop_t(mc_base_t):
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 1, 1))
-                        self._emit(f"s_waitcnt lgkmcnt(0)")
-                        self._emit(f"s_barrier")
+                        if not self.ctrl.opt_1st_sld:
+                            self._emit(f"s_waitcnt lgkmcnt(0)")
+                            self._emit(f"s_barrier")
                         self._emit(f"s_branch {label_mfma_body}")
                     else:
                         #       iteration--
                         self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
                         self._emit(f"s_cmp_gt_i32 s[{s_kitr()}], 0")
                         self._emit(f"s_cbranch_scc0 {label_mfma_finishing}")
+                        if self.ctrl.opt_1st_sld:
+                            self._emit(f"s_waitcnt lgkmcnt(0)")
+                            self._emit(f"s_barrier")
+                            self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                            self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
+
                         # 3rd fma
                         self._emit(mfma_step_mxn(1, 0, 1, 1))
                         self._emit_empty_line()
 
                         # 4th fma
                         self._emit(mfma_step_mxn(1, 1, 1, 1))
-                        self._emit(f"s_waitcnt lgkmcnt(0)")
-                        self._emit(f"s_barrier")
+                        if not self.ctrl.opt_1st_sld:
+                            self._emit(f"s_waitcnt lgkmcnt(0)")
+                            self._emit(f"s_barrier")
                         self._emit(f"s_branch {label_mfma_body}")
                 return self._get_deferred()
 
@@ -1400,14 +1433,20 @@ class mfma_main_loop_t(mc_base_t):
 
             self._emit(f"s_waitcnt lgkmcnt(0)")
             self._emit(f"s_barrier")
+            if self.ctrl.opt_1st_sld:
+                self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
             # Label: start of fma body
             self._emit_front(f"{label_mfma_body}:")
             self._emit(f"; do fma accumulate with unroll {unroll_k}")
-            self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
-            self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
-            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
+            if not self.ctrl.opt_1st_sld:
+                self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+                self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+                self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
             unroll_k_sub = (unroll_k // k_per_inst) // 2 - 1
             #if (unroll_k // k_per_inst) // 2 - 1 != 0:
