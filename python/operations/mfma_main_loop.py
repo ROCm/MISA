@@ -1377,11 +1377,12 @@ class mfma_main_loop_t(mc_base_t):
                             self._emit(f"s_barrier")
                             self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
                             self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-                            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
-                            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
 
                         # 3rd fma
                         self._emit(mfma_step_mxn(1, 0, 1, 1))
+                        if self.ctrl.opt_1st_sld:
+                            self._emit(f_sld_b(v_b(repeat_n_thread_offset), v_sld_b_os(), lds_base_n + mi_n(0, lds_width_n // 2) ))  # lds_width_n // 2
+                            self._emit(f_sld_a(v_a(repeat_m_thread_offset), v_sld_a_os(), lds_base_m + mi_m(0, lds_width_m // 2) ))  # lds_width_m // 2
                         self._emit_empty_line()
 
                         # 4th fma
