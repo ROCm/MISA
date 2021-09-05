@@ -30,7 +30,7 @@ rm out/conv_driver.exe
 rm out/${TEST_KERNEL}.hsaco
 
 /opt/rocm/hip/bin/hipcc -DUSE_MAGIC_DIV=1 \
--DIGEMM_CONFIG_FILE="\"/dockerx/MIOpen/igemm_codegen/igemm_codegen_fp16/igemmgen_nhwc_fp32_wrw/config/${TEST_KERNEL}.config\"" \
+-DIGEMM_CONFIG_FILE="\"./config/${TEST_KERNEL}.config\"" \
 -DIGEMM_HSACO="\"${TEST_KERNEL}.hsaco\"" -DIGEMM_WRW_USE_ATOMIC_ADD=1 \
 -Wno-sign-compare -Wno-unused-variable -Wno-write-strings -Wno-unused-function -Wno-deprecated-declarations \
 -Wno-return-type -Wno-uninitialized -Wno-non-c-typedef-for-linkage -Wno-format -std=c++14 \
