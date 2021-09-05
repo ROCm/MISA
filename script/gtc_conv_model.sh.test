@@ -67,6 +67,8 @@ else
 fi
 
 ./out/conv_driver.exe $CONV -n 16 -c 4096 -H 16 -W 16 -k 3840 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
+./out/conv_driver.exe $CONV -n 32 -c 8192 -H 16 -W 16 -k 7680 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
+
 #./out/conv_driver.exe $CONV -n 16 -c 4096 -H 16 -W 16 -k 3840 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 0
 
 #./out/conv_driver.exe $CONV -n 64 -c 1024 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 4 -F $FORW ${LAYOUT_ARG}
