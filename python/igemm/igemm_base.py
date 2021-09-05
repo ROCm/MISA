@@ -312,6 +312,9 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_buffer_num    = 2
         self.lds_total         = self.lds_buffer_num * self.lds_single
 
+        # LDS pad
+        self.lds_pad = self.need_lds_pad()
+
         # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
         # TODO: need to make some compromise in occupancy and lds double buffer
         if self.is_occupancy_decreased():
@@ -359,6 +362,15 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+
+    def need_lds_pad(self):
+        if self.direction == 'wrw' and self.precision == 'fp16':
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block == 256 and self.gemm_n_per_block == 256:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
 
     def is_occupancy_decreased(self):
         is_decreased = False

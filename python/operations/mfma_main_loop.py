@@ -88,6 +88,7 @@ class ctrl_mfma_main_loop_t(object):
         self.pass_through_a_interleave_gld         = 1
         self.pass_through_b_interleave_gld         = 1
         self.opt_1st_sld                 = True    # optimize 1st ds_read
+        self.lds_pad                     = 0       # optimize for wrw lds layout
 
 class mfma_main_loop_t(mc_base_t):
     '''
@@ -609,10 +610,16 @@ class mfma_main_loop_t(mc_base_t):
 
         # mi = mapped_ioffset
         def mi_m(i_k, offset = 0):
-            return mapped_ioffset(i_k, lds_width_m, pad_m, offset)
+            if self.ctrl.lds_pad > 0:
+                return mapped_ioffset(i_k, lds_width_m, pad_m, offset) // 8 * 9
+            else:
+                return mapped_ioffset(i_k, lds_width_m, pad_m, offset)
         
         def mi_n(i_k, offset = 0):
-            return mapped_ioffset(i_k, lds_width_n, pad_n, offset)
+            if self.ctrl.lds_pad > 0:
+                return mapped_ioffset(i_k, lds_width_n, pad_n, offset) // 8 * 9
+            else:
+                return mapped_ioffset(i_k, lds_width_n, pad_n, offset)
 
         def mfma_step_mxn(i_repeat_m, i_repeat_n, i_local_buffer_m = 0, i_local_buffer_n = 0):
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m
@@ -1820,20 +1827,6 @@ class mfma_main_loop_t(mc_base_t):
 
             if unroll_k_sub > 0:
                 self._emit(f"; k iteration : {unroll_k - 2}")
-                # 1st fma
-                self._emit(f's_waitcnt lgkmcnt(6)')
-                self._emit(mfma_step_mxn(0, 0, 0, 0))
-                self._emit_empty_line()
-
-                # 2nd fma
-                self._emit(f's_waitcnt lgkmcnt(5)')
-                self._emit(mfma_step_mxn(0, 1, 0, 0))
-                self._emit_empty_line()
-
-                # 3rd fma
-                self._emit(f's_waitcnt lgkmcnt(4)')
-                self._emit(mfma_step_mxn(1, 0, 0, 0))
-                self._emit_empty_line()
 
                 # 4th fma
                 self._emit(mfma_step_mxn(1, 1, 0, 0))
