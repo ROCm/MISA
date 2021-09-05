@@ -3401,7 +3401,7 @@ class mfma_main_loop_t(mc_base_t):
                         if cxm.wave_step_m == 2 and cxm.wave_step_n == 2:
                             mfma_loop_repeat_2x2_step_2x2_lp2_with_interleave()
                         else:
-                            mfma_loop_repeat_2x2_lp2_with_interleave()
+                            mfma_loop_repeat_2x2_step_2x2_lp2_with_interleave()
                 else:
                     mfma_loop_repeat_2x2_lp2()
         elif cxm.wave_repeat_m == 1 and cxm.wave_repeat_n == 1:
