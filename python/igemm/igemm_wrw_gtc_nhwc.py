@@ -29,7 +29,7 @@ from ..operations import *
 from .igemm_base import *
 
 
-IGEMM_WRW_GTC_DEBUG = 0
+IGEMM_WRW_GTC_DEBUG = 1
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
 IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
@@ -134,7 +134,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                     vector_write = 1                        # fp32 vector seems not much perf improvement
                 elif self.tunable.precision == 'fp16':
                     if self.tunable.gemm_k_global_split == 0:
-                        vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])
+                        vector_write = igemm_gcd(8, self.tunable.tensor_b_thread_lengths[3])
                     else:
                         if config_vs == 0:
                             vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])

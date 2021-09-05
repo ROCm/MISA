@@ -39,6 +39,14 @@
 
 #define WRW_MAX_GEMM_K_SPLITS 10
 
+static inline int env_get_int_wrw(const char *var_name, int default_int) {
+    char *v = getenv(var_name);
+    int r = default_int;
+    if (v)
+        r = atoi(v);
+    return r;
+}
+
 typedef struct {
     void* output;
     void* input;
@@ -795,32 +803,32 @@ public:
         result.kernel_name = kernel_name;
         result.grid_size   = selected_grid_size;
 		// debug section of code
-#if 0
-        printf("workspace debug \r\n");
-        float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        printf("gemmc_host_check size=%d\n", (1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
-        if(gemm_k_global_split > 0){
-            printf("copy workspace\n");
-            //hipMemcpy(gemmc_host_check, p_wei_workspace, (1 << gemm_k_global_split) * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
-            hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float16), hipMemcpyDeviceToHost);
+        if(env_get_int_wrw("WRW_DBG", 0)){
+            printf("workspace debug \r\n");
+            float* gemmc_host_check = (float* )malloc((1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
+            printf("gemmc_host_check size=%d\n", (1 << gemm_k_global_split) * k * c * y * x * sizeof(float));
+            if(gemm_k_global_split > 0){
+                printf("copy workspace\n");
+                //hipMemcpy(gemmc_host_check, p_wei_workspace, (1 << gemm_k_global_split) * k * c * y * x * sizeof(float), hipMemcpyDeviceToHost);
+                hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float16), hipMemcpyDeviceToHost);
+            }
+            else{
+                printf("copy weight\n");
+                hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float16), hipMemcpyDeviceToHost);
+            }
+            for (int i_check = 0; i_check < (0+block_size); i_check++)
+            {
+                float16 *gemmc_host_check_fp16 = (float16 *)gemmc_host_check;
+                float16 check_num0 = gemmc_host_check_fp16[i_check*2];
+                float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
+                float check_num0_fp32 = (float)check_num0;
+                float check_num1_fp32 = (float)check_num1;
+                printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+            }
+            printf("s_p_in=%x\n", p_in);
+            printf("workspace debug end \r\n");
+            free(gemmc_host_check);
         }
-        else{
-            printf("copy weight\n");
-            hipMemcpy(gemmc_host_check, p_wei, group * (k / group) * (c / group) * y * x * sizeof(float16), hipMemcpyDeviceToHost);
-        }
-        for (int i_check = 0; i_check < (0+block_size); i_check++)
-        {
-            float16 *gemmc_host_check_fp16 = (float16 *)gemmc_host_check;
-            float16 check_num0 = gemmc_host_check_fp16[i_check*2];
-            float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
-            float check_num0_fp32 = (float)check_num0;
-            float check_num1_fp32 = (float)check_num1;
-            printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
-        }
-        printf("s_p_in=%x\n", p_in);
-        printf("workspace debug end \r\n");
-        free(gemmc_host_check);
-#endif
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
