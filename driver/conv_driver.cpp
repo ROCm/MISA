@@ -1157,7 +1157,7 @@ int main(int argc, char **argv) {
         auto wrw_pre = [&](){
             if (need_verify)
                 HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_weight : device_weight_dtype,
-                    0, static_cast<size_t>(k) * c * y * x * sizeof(float)));
+                    0, static_cast<size_t>(k) * c * y * x * data_byte));
         };
 
         auto wrw_post = [&](){
