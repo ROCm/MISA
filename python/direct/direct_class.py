@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from python.codegen.gpu_reg_block import reg_block
 from python.codegen.kernel_driver import base_config
 from ..codegen.config_parser import config_content_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
@@ -33,26 +34,24 @@ class conv_direct_navi(kernel_constructor):
             self.Y = pb_arg('X', arg_kind.value, arg_type.I32)
             self.G = pb_arg('G', arg_kind.value, arg_type.I32)
 
-
     class _sgpr(sgpr_file_t):
         def __init__(self, mc):
             super().__init__(mc)
-            sseq = self._sq
             add = self.add 
-            self.karg_ptr = add('karg_ptr', sseq(2))
-            self.group_id = add('group_id', sseq(1))
-            self.gid_off = add('gid_off', sseq(1))
-            self.in_buff_ptr = add('in_buff_ptr', sseq(4))
-            self.out_buff_ptr = add('out_buff_ptr', sseq(4))
-            self.wei_buff_ptr = add('wei_buff_ptr', sseq(4))
-            self.N = add('N', sseq(1))
-            self.C = add('C', sseq(1))
-            self.H = add('H', sseq(1))
-            self.W = add('W', sseq(1))
-            self.K = add('K', sseq(1))
-            self.X = add('X', sseq(1))
-            self.Y = add('Y', sseq(1))
-            self.G = add('G', sseq(1))
+            self.karg_ptr = add('karg_ptr', 2)
+            self.group_id = add('group_id', 1)
+            self.gid_off = add('gid_off', 1)
+            self.in_buff_ptr = add('in_buff_ptr', 4)
+            self.out_buff_ptr = add('out_buff_ptr', 4)
+            self.wei_buff_ptr = add('wei_buff_ptr', 4)
+            self.N = add('N', 1)
+            self.C = add('C', 1)
+            self.H = add('H', 1)
+            self.W = add('W', 1)
+            self.K = add('K', 1)
+            self.X = add('X', 1)
+            self.Y = add('Y', 1)
+            self.G = add('G', 1)
     
     class _vgpr(vgpr_file_t):
         def __init__(self, mc):
@@ -67,7 +66,6 @@ class conv_direct_navi(kernel_constructor):
         return 0
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
-        print(conv_direct_navi.__mro__)
         super().__init__(mc_asm_printer, **kwargs)
                 
         
@@ -85,6 +83,13 @@ class conv_direct_navi(kernel_constructor):
         cl(f"s_load_dwordx4  {s.H[0, 3]},   {s.karg_ptr[0, 1]},    0+{karg.H()}")
         cl(f"s_load_dwordx2  {s.Y[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.Y()}")
 
+        #def fill_buff_desc(desc_reg, size, cl):
+        #    cl(f"s_mov_b32 {desc_reg[2]}, {size}")
+        #    cl(f"s_mov_b32 {desc_reg[3]}, {0x00027000}")
+        
+        input_buffer_size = filter_buffer_size = output_buffer_size = 100
+        
+        #fill_buff_desc()
 
         cl(f"s_mov_b32  {s.in_buff_ptr[2]}, {input_buffer_size}")
         cl(f"s_mov_b32 {s.in_buff_ptr[3]}, {0x00027000}")
@@ -96,6 +101,33 @@ class conv_direct_navi(kernel_constructor):
         cl(f"s_mov_b32 {s.wei_buff_ptr[3]}, {0x00027000}")
 
 
+        cl(f"s_load_dwordx2  {s.in_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.in_ptr()}")
+        cl(f"s_load_dwordx2  {s.out_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.out_ptr()}")
+        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.wei_ptr()}")
+
+        cl(f"s_load_dwordx4  {s.H[0:3]},   {s.karg_ptr[0:1]},    0+{karg.H()}")
+        cl(f"s_load_dwordx2  {s.Y[0:1]},   {s.karg_ptr[0:1]},    0+{karg.Y()}")
+
+        def fill_buff_desc(desc_reg:reg_block, size:int, cl):
+            cl(f"s_mov_b32 {desc_reg[2]}, {size}")
+            cl(f"s_mov_b32 {desc_reg[3]}, {0x00027000}")
+        
+        input_buffer_size = 25
+        filter_buffer_size = 50
+        output_buffer_size = 100
+        
+        fill_buff_desc(s.in_buff_ptr, input_buffer_size, cl)
+        fill_buff_desc(s.out_buff_ptr, filter_buffer_size, cl)
+        fill_buff_desc(s.wei_buff_ptr, output_buffer_size, cl)
+
+        cl(f"s_mov_b32  {s.in_buff_ptr[2:2]}, {input_buffer_size}")
+        cl(f"s_mov_b32 {s.in_buff_ptr[3:3]}, {0x00027000}")
+
+        cl(f"s_mov_b32 {s.out_buff_ptr[2:2]}, {filter_buffer_size}")
+        cl(f"s_mov_b32 {s.out_buff_ptr[3:3]}, {0x00027000}")
+
+        cl(f"s_mov_b32 {s.wei_buff_ptr[2:2]}, {output_buffer_size}")
+        cl(f"s_mov_b32 {s.wei_buff_ptr[3:3]}, {0x00027000}")
 
 
 

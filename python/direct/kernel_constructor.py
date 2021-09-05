@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from python.codegen.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t, amdgpu_kernel_info_t, hsa_kernel_header
 from python.codegen.kernel_arg import _args_manager_t, karg_file_t
-from python.codegen.gpu_reg import sgpr_file_t, vgpr_file_t
+from python.codegen.gpu_reg_block import sgpr_file_t, vgpr_file_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
 
 #public dep

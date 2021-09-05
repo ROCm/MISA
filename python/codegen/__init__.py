@@ -33,6 +33,6 @@ from .mbb import *
 from .scheduler import *
 from .instruction import *
 from .kernel_driver import *
-from .gpu_reg import *
-from .gpu_instruct import *
+from .gpu_reg_block import *
+#from .gpu_instruct import *
 from .kernel_arg import *
