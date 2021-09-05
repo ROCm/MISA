@@ -885,7 +885,8 @@ int main(int argc, char **argv) {
 
         auto fwd_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_output, 0, static_cast<size_t>(n) * k * ho * wo * data_byte));
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_output : device_output_dtype,
+                    0, static_cast<size_t>(n) * k * ho * wo * data_byte));
         };
 
         auto fwd_post = [&](){
@@ -1009,7 +1010,8 @@ int main(int argc, char **argv) {
 
         auto bwd_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0x7f, static_cast<size_t>(n) * c * hi * wi * data_byte)); // 0x7f7f7f7f ~= 7.41e+28, a very large number
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_input : device_input_dtype,
+                    0x7f, static_cast<size_t>(n) * c * hi * wi * data_byte)); // 0x7f7f7f7f ~= 7.41e+28, a very large number
         };
 
         auto bwd_post = [&](){
@@ -1154,7 +1156,8 @@ int main(int argc, char **argv) {
         
         auto wrw_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_weight, 0, static_cast<size_t>(k) * c * y * x * sizeof(float)));
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_weight : device_weight_dtype,
+                    0, static_cast<size_t>(k) * c * y * x * sizeof(float)));
         };
 
         auto wrw_post = [&](){
