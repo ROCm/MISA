@@ -61,6 +61,8 @@ export IGEMM_RAND_INT=1
 export WRW_DBG=0
 export IGEMM_BENCH_CSV=1
 
+#HIP_VISIBLE_DEVICES=1 # 2
+
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
     FORW=1

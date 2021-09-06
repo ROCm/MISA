@@ -610,13 +610,13 @@ class mfma_main_loop_t(mc_base_t):
         # mi = mapped_ioffset
         def mi_m(i_k, offset = 0):
             if pad_m > 0:
-                return mapped_ioffset(i_k, lds_width_m, 0, offset) // 8 * 9
+                return mapped_ioffset(i_k, lds_width_m, 0, offset) // 32 * (32 + pad_m)
             else:
                 return mapped_ioffset(i_k, lds_width_m, 0, offset)
         
         def mi_n(i_k, offset = 0):
             if pad_n > 0:
-                return mapped_ioffset(i_k, lds_width_n, 0, offset) // 8 * 9
+                return mapped_ioffset(i_k, lds_width_n, 0, offset) // 32 * (32 + pad_n)
             else:
                 return mapped_ioffset(i_k, lds_width_n, 0, offset)
 

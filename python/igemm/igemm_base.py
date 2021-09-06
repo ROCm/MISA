@@ -304,16 +304,18 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
         # LDS size
-        self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
-        self.lds_b             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
-        self.lds_a_np2         = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
-        self.lds_b_np2         = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
-        self.lds_single        = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        self.lds_buffer_num    = 2
-        self.lds_total         = self.lds_buffer_num * self.lds_single
-
-        # LDS pad
-        self.lds_pad_m, self.lds_pad_n = self.need_lds_pad()
+        self.lds_pad_m, self.lds_pad_n = self.need_lds_pad() # LDS pad
+        self.lds_a                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
+        self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
+        self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
+        self.lds_b_np2                 = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
+        if self.lds_pad_m > 0:
+            self.lds_a_np2             = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
+        if self.lds_pad_n > 0:
+            self.lds_b_np2             = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
+        self.lds_single                = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
+        self.lds_buffer_num            = 2
+        self.lds_total                 = self.lds_buffer_num * self.lds_single
 
         # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
         # TODO: need to make some compromise in occupancy and lds double buffer
@@ -365,13 +367,13 @@ class igemm_gtc_tunable_parameter_t(object):
 
     def need_lds_pad(self):
         if self.direction == 'wrw' and self.precision == 'fp16':
-            if self.gemm_k_per_block == 32 and self.gemm_m_per_block == 256 and self.gemm_n_per_block == 256:
-                return 1, 1
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 4:
+                return 4, 4
             else:
                 return 0, 0
         if self.direction == 'bwd' and self.precision == 'fp16':
-            if self.gemm_k_per_block == 32 and self.gemm_m_per_block == 256 and self.gemm_n_per_block == 128:
-                return 0, 1
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 8:
+                return 0, 4
             else:
                 return 0, 0
         else:
