@@ -309,10 +309,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
         self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2                 = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
-        if self.lds_pad_m > 0:
-            self.lds_a_np2             = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
-        if self.lds_pad_n > 0:
-            self.lds_b_np2             = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
+        lds_a_pad                      = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
+        lds_b_pad                      = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
         self.lds_single                = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
         self.lds_buffer_num            = 2
         self.lds_total                 = self.lds_buffer_num * self.lds_single
@@ -364,6 +362,12 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+
+        if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            if self.lds_total >= lds_a_pad + lds_b_pad:
+                pass
+            else:
+                self.lds_total += (lds_a_pad - self.lds_a_np2 + lds_b_pad - self.lds_b_np2)
 
     def need_lds_pad(self):
         if self.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
