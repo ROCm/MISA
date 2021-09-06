@@ -313,7 +313,10 @@ class igemm_gtc_tunable_parameter_t(object):
             self.lds_a_np2             = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
         if self.lds_pad_n > 0:
             self.lds_b_np2             = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
-        self.lds_single                = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
+        if self.lds_pad_m == 0 and self.lds_pad_n == 0:
+            self.lds_single            = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
+        else:
+            self.lds_single            = self.lds_a_np2 + self.lds_b_np2
         self.lds_buffer_num            = 2
         self.lds_total                 = self.lds_buffer_num * self.lds_single
 
@@ -366,6 +369,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 assert length_in_m % self.coalescing_store_groups == 0
 
     def need_lds_pad(self):
+        if self.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            return 0, 0
         if self.direction == 'wrw' and self.precision == 'fp16':
             if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 4:
                 return 4, 4
