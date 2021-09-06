@@ -313,10 +313,7 @@ class igemm_gtc_tunable_parameter_t(object):
             self.lds_a_np2             = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
         if self.lds_pad_n > 0:
             self.lds_b_np2             = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
-        if self.lds_pad_m == 0 and self.lds_pad_n == 0:
-            self.lds_single            = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        else:
-            self.lds_single            = self.lds_a_np2 + self.lds_b_np2
+        self.lds_single                = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
         self.lds_buffer_num            = 2
         self.lds_total                 = self.lds_buffer_num * self.lds_single
 
