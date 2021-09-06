@@ -15,5 +15,5 @@ dir_list="wrw bwd fwd"
 for dir in $dir_list
 do 
 python igemm_codegen.py config/igemm_${dir}_gtc_gfx908_nhwc_fp16.config
-sh script/${SCRIPT_NAME} ${dir} nhwc fp16
+sh script/${SCRIPT_NAME} ${dir} nhwc fp16 2>&1 | tee ${SCRIPT_NAME}_${dir}.log
 done 
