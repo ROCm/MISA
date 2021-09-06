@@ -24,6 +24,7 @@
 # 
 ################################################################################
 from .symbol import *
+from .callable import *
 from .macro import *
 from .compile import *
 from .config_parser import *

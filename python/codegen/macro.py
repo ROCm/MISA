@@ -25,67 +25,29 @@
 ################################################################################
 
 from .symbol import *
+from .callable import *
 from .mc import *
 
-class macro_base_t(mc_base_t):
+class macro_base_t(callable_t):
     '''
     base class of a macro
     a macro can be inline-ed, which means no need to generate .macro ..... .endm and then call this macro
     '''
     def __init__(self, mc, inline = False):
-        mc_base_t.__init__(self, mc)
-        self.arg_list = list()
+        callable_t.__init__(self, mc)
         self.inline = inline
-        self.expr_cnt = 0
+
     def name(self):
         return 'n/a macro'
+
     def is_inline(self):
         return self.inline
 
-    def _declare_arg(self, arg_name):
-        assert type(arg_name) is str
-        if self.is_inline():
-            setattr(self, arg_name, sym_t(arg_name))
-        else:
-            setattr(self, arg_name, msym_t(sym_t(arg_name)))
-
-    def declare_arg(self, arg_name):
-        '''
-        we want to call this function when child class __init__(), that means all args are statically created
-        can't suport both inline and non-inline
-        '''
-        self._declare_arg(arg_name)
-        self.arg_list.append(arg_name)
-
-    def expr(self):
-        '''
-        child class should overload this function to type kernel body
-        child class overload this function must not have deferred_context
-        '''
-        pass
     def __call__(self, *args):
-        assert len(args) == len(self.arg_list), f'parse in args:{args} not equal to arg_list:{self.arg_list}'
         if self.is_inline():
-            # 1st, overwrite original declared arguments
-            for i in range(len(args)):
-                if type(args[i]) is str:
-                    setattr(self, self.arg_list[i], sym_t(args[i]))
-                elif type(args[i]) is sym_t:
-                    setattr(self, self.arg_list[i], args[i])
-                elif args[i] is None:
-                    setattr(self, self.arg_list[i], None)
-
-            # 2nd, do the emit
-            with self._deferred_context():
-                self.expr()
-            self.expr_cnt += 1
-
-            # last, restore arg to default value.
-            for a in self.arg_list:
-                self._declare_arg(a)
-
-            return self._get_deferred()
+            return callable_t.__call__(self, *args)
         else:
+            assert len(args) == len(self.arg_list), f'parse in args:{args} not equal to arg_list:{self.arg_list}'
             for x in args:
                 assert type(x) is str, f'call this macro need parse in string!, {x}:{type(x)}'
             return '{} {}'.format(self.name(), ','.join(args))
