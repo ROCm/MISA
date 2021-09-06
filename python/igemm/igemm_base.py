@@ -378,7 +378,7 @@ class igemm_gtc_tunable_parameter_t(object):
             else:
                 return 0, 0
         if self.direction == 'bwd' and self.precision == 'fp16':
-            if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 8:
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block == 256 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 8:
                 return 0, 4
             else:
                 return 0, 0
