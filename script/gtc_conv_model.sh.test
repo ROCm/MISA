@@ -74,9 +74,9 @@ else
 fi
 
 if [ "${DIR}" = "fwd" -o "${DIR}" = "wrw" ] ; then
-#./out/conv_driver.exe $CONV -n 4 -c 1024 -H 16 -W 16 -k 960 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
-#./out/conv_driver.exe $CONV -n 8 -c 2048 -H 16 -W 16 -k 1920  -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
-#./out/conv_driver.exe $CONV -n 16 -c 4096 -H 16 -W 16 -k 3840 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
+./out/conv_driver.exe $CONV -n 4 -c 1024 -H 16 -W 16 -k 960 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
+./out/conv_driver.exe $CONV -n 8 -c 2048 -H 16 -W 16 -k 1920  -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
+./out/conv_driver.exe $CONV -n 16 -c 4096 -H 16 -W 16 -k 3840 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
 ./out/conv_driver.exe $CONV -n 32 -c 8192 -H 16 -W 16 -k 7680 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
 elif [ "${DIR}" = "bwd" ] ; then
 ./out/conv_driver.exe $CONV -n 15 -c 1024 -H 8 -W 8 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -t 1 -F $FORW ${LAYOUT_ARG} -V 1
