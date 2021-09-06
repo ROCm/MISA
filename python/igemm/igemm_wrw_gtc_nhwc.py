@@ -954,7 +954,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 'enable_sgpr_workgroup_id_y'        :   1,
                 'enable_sgpr_workgroup_id_z'        :   1,
                 'enable_vgpr_workitem_id'           :   0,
-                'workgroup_group_segment_byte_size' :   self.tunable.lds_total if self.tunable.lds_pad == 0 else self.tunable.lds_total // 8 * 9,
+                'workgroup_group_segment_byte_size' :   self.tunable.lds_total if self.tunable.lds_pad_m == 0 else self.tunable.lds_total // 8 * 9,
                 'kernarg_segment_byte_size'         :   self.karg.get_count(),
                 'wavefront_sgpr_count'              :   self.sgpr.get_count() + 2*3,
                 'workitem_vgpr_count'               :   self.vgpr.get_count()}
@@ -1339,7 +1339,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
         
-        if self.tunable.lds_pad == 1:
+        if self.tunable.lds_pad_n == 1:
             self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sst_b_os()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 4, v[{v.v_tmp()}]")
             self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], v[{v.v_tmp()}], v[{v.v_sst_b_os()}]")
@@ -1360,7 +1360,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(na_k)}, v[{v.v_gtc_ik()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
-        if self.tunable.lds_pad == 1:
+        if self.tunable.lds_pad_m == 1:
             self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sst_a_os()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 4, v[{v.v_tmp()}]")
             self._emit(f"v_add_u32 v[{v.v_sst_a_os()}], v[{v.v_tmp()}], v[{v.v_sst_a_os()}]")
@@ -1371,12 +1371,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
-        if self.tunable.lds_pad == 1:
+        if self.tunable.lds_pad_n == 1:
             self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_b_os()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 4, v[{v.v_tmp()}]")
             self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], v[{v.v_tmp()}], v[{v.v_sld_b_os()}]")
             self._emit_empty_line()
-        if self.tunable.lds_pad == 1:
+        if self.tunable.lds_pad_m == 1:
             self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_a_os()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 4, v[{v.v_tmp()}]")
             self._emit(f"v_add_u32 v[{v.v_sld_a_os()}], v[{v.v_tmp()}], v[{v.v_sld_a_os()}]")
@@ -1582,7 +1582,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.shared_store_b_functor      = self.shared_store_in
 
             fctrl.lds_k_pack                  = k_pack
-            fctrl.lds_pad                     = self.tunable.lds_pad
+            fctrl.lds_pad_m, fctrl.lds_pad_n  = self.tunable.lds_pad_m, self.tunable.lds_pad_n
             share_load_packed                 = ctrl_xdlops_mapping.lanegroup_k_per_thread()
 
 
@@ -1590,7 +1590,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                if fctrl.lds_pad > 0:
+                if fctrl.lds_pad_m > 0:
                     fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte // 8 * 9, sym_t(self.vgpr.v_tmp(4)))
                 else:
                     fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
@@ -1599,7 +1599,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                if fctrl.lds_pad > 0:
+                if fctrl.lds_pad_n > 0:
                     fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte // 8 * 9, sym_t(self.vgpr.v_tmp(5)))
                 else:
                     fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))

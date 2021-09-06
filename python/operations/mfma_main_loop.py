@@ -88,7 +88,6 @@ class ctrl_mfma_main_loop_t(object):
         self.pass_through_a_interleave_gld         = 1
         self.pass_through_b_interleave_gld         = 1
         self.opt_1st_sld                 = True    # optimize 1st ds_read
-        self.lds_pad                     = 0       # optimize for wrw lds layout
 
 class mfma_main_loop_t(mc_base_t):
     '''
@@ -610,16 +609,16 @@ class mfma_main_loop_t(mc_base_t):
 
         # mi = mapped_ioffset
         def mi_m(i_k, offset = 0):
-            if self.ctrl.lds_pad > 0:
-                return mapped_ioffset(i_k, lds_width_m, pad_m, offset) // 8 * 9
+            if pad_m > 0:
+                return mapped_ioffset(i_k, lds_width_m, 0, offset) // 8 * 9
             else:
-                return mapped_ioffset(i_k, lds_width_m, pad_m, offset)
+                return mapped_ioffset(i_k, lds_width_m, 0, offset)
         
         def mi_n(i_k, offset = 0):
-            if self.ctrl.lds_pad > 0:
-                return mapped_ioffset(i_k, lds_width_n, pad_n, offset) // 8 * 9
+            if pad_n > 0:
+                return mapped_ioffset(i_k, lds_width_n, 0, offset) // 8 * 9
             else:
-                return mapped_ioffset(i_k, lds_width_n, pad_n, offset)
+                return mapped_ioffset(i_k, lds_width_n, 0, offset)
 
         def mfma_step_mxn(i_repeat_m, i_repeat_n, i_local_buffer_m = 0, i_local_buffer_n = 0):
             local_buffer_m = cxm.inst_mfma.num_v_a * cxm.wave_step_m * cxm.wave_repeat_m
