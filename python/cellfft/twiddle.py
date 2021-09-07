@@ -136,7 +136,6 @@ class btfl_t(macro_base_t):
         return ".btfl_{}_w{}_{}".format('fwd' if self.ctrl.direction == BUTTERFLY_DIRECTION_FORWARD else 'bwd', n, k)
 
     def expr(self):
-        madmk = inst_v_madmk_t(self.mc)
         def cal_theta(n, k):
             if CELLFFT_FEAT_BTFL_MINUS_THETA:
                 return -2*np.pi*(k*1.0/n)
@@ -195,10 +194,10 @@ class btfl_t(macro_base_t):
                         else:
                             self._emit(f"v_add_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
                             self._emit(f"v_sub_f32 v[{self.v_t(1)}], v[{self.v_y(1)}], v[{self.v_y(0)}]")
-                        self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
-                        self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
-                        self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                        self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                     elif twiddle_isclose(s/c, -1):
                         if CELLFFT_FEAT_BTFL_MINUS_THETA:
                             self._emit(f"v_add_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
@@ -206,37 +205,37 @@ class btfl_t(macro_base_t):
                         else:
                             self._emit(f"v_sub_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
                             self._emit(f"v_add_f32 v[{self.v_t(1)}], v[{self.v_y(1)}], v[{self.v_y(0)}]")
-                        self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
-                        self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
-                        self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                        self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                     else:
                         if CELLFFT_FEAT_BTFL_MERGE_S_C:
                             if CELLFFT_FEAT_BTFL_MINUS_THETA:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s/c, self.v_y(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), s/c, self.v_y(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s/c, self.v_y(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), s/c, self.v_y(1)))
                             else:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), s/c, self.v_y(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s/c, self.v_y(1)))
-                            self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
-                            self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
-                            self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                            self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), s/c, self.v_y(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s/c, self.v_y(1)))
+                            self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1) * c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1) * c, self.v_x(1)))
+                            self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                         else:
                             if CELLFFT_FEAT_BTFL_MINUS_THETA:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), s, self.v_x(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
-                                self._emit(madmk(self.v_x(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
-                                self._emit(madmk(self.v_x(1), self.v_y(0), s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_x(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_x(1), self.v_y(0), s, self.v_x(1)))
                             else:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), s, self.v_x(1)))
-                                self._emit(madmk(self.v_x(0), self.v_y(1), s, self.v_x(0)))
-                                self._emit(madmk(self.v_x(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
-                            self._emit(madmk(self.v_y(0), self.v_y(0), np.float32(-1)*c, self.v_t(0)))
-                            self._emit(madmk(self.v_y(1), self.v_y(1), np.float32(-1)*c, self.v_t(1)))
-                            self._emit(madmk(self.v_x(0), self.v_y(0), c, self.v_x(0)))
-                            self._emit(madmk(self.v_x(1), self.v_y(1), c, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_x(0), self.v_y(1), s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_x(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
+                            self._emit(v_madmk(self.v_y(0), self.v_y(0), np.float32(-1)*c, self.v_t(0)))
+                            self._emit(v_madmk(self.v_y(1), self.v_y(1), np.float32(-1)*c, self.v_t(1)))
+                            self._emit(v_madmk(self.v_x(0), self.v_y(0), c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_x(1), self.v_y(1), c, self.v_x(1)))
 
             return self._get_deferred()
 
@@ -292,10 +291,10 @@ class btfl_t(macro_base_t):
                         else:
                             self._emit(f"v_sub_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
                             self._emit(f"v_add_f32 v[{self.v_t(1)}], v[{self.v_y(1)}], v[{self.v_y(0)}]")
-                        self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
-                        self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
-                        self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                        self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                     elif twiddle_isclose(s/c, -1):
                         if CELLFFT_FEAT_BTFL_MINUS_THETA:
                             self._emit(f"v_sub_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
@@ -303,37 +302,37 @@ class btfl_t(macro_base_t):
                         else:
                             self._emit(f"v_add_f32 v[{self.v_t(0)}], v[{self.v_y(0)}], v[{self.v_y(1)}]")
                             self._emit(f"v_sub_f32 v[{self.v_t(1)}], v[{self.v_y(1)}], v[{self.v_y(0)}]")
-                        self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
-                        self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
-                        self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                        self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
+                        self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                        self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                     else:
                         if CELLFFT_FEAT_BTFL_MERGE_S_C:
                             if CELLFFT_FEAT_BTFL_MINUS_THETA:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), s/c, self.v_y(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s/c, self.v_y(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), s/c, self.v_y(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s/c, self.v_y(1)))
                             else:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s/c, self.v_y(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), s/c, self.v_y(1)))
-                            self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
-                            self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
-                            self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                            self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s/c, self.v_y(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), s/c, self.v_y(1)))
+                            self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
+                            self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
                         else:
                             if CELLFFT_FEAT_BTFL_MINUS_THETA:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), s, self.v_x(1)))
-                                self._emit(madmk(self.v_x(0), self.v_y(1), s, self.v_x(0)))
-                                self._emit(madmk(self.v_x(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_x(0), self.v_y(1), s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_x(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
                             else:
-                                self._emit(madmk(self.v_t(0), self.v_y(1), s, self.v_x(0)))
-                                self._emit(madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
-                                self._emit(madmk(self.v_x(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
-                                self._emit(madmk(self.v_x(1), self.v_y(0), s, self.v_x(1)))
-                            self._emit(madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
-                            self._emit(madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
-                            self._emit(madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
-                            self._emit(madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
+                                self._emit(v_madmk(self.v_t(0), self.v_y(1), s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_t(1), self.v_y(0), np.float32(-1)*s, self.v_x(1)))
+                                self._emit(v_madmk(self.v_x(0), self.v_y(1), np.float32(-1)*s, self.v_x(0)))
+                                self._emit(v_madmk(self.v_x(1), self.v_y(0), s, self.v_x(1)))
+                            self._emit(v_madmk(self.v_y(0), self.v_t(0), np.float32(-1)*c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_y(1), self.v_t(1), np.float32(-1)*c, self.v_x(1)))
+                            self._emit(v_madmk(self.v_x(0), self.v_t(0), c, self.v_x(0)))
+                            self._emit(v_madmk(self.v_x(1), self.v_t(1), c, self.v_x(1)))
             return self._get_deferred()
 
         self._emit(gen_fwd() if self.ctrl.direction == BUTTERFLY_DIRECTION_FORWARD else gen_bwd())
@@ -519,7 +518,6 @@ class fft8_fwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt( 8)}]") # 8
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt( 9)}]") # 9
@@ -562,17 +560,17 @@ class fft8_fwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_tt( 7)}], v[{self.v_pt(11)}], v[{self.v_pt(15)}]") # 7
 
         # omega 8_0, 8_2, 8_1, 8_3
-        self._emit(madmk(self.v_pt(10), self.v_pt( 8), -0.7071067690849304, self.v_pt( 0)))  # 10
+        self._emit(v_madmk(self.v_pt(10), self.v_pt( 8), -0.7071067690849304, self.v_pt( 0)))  # 10
         self._emit(f"v_sub_f32 v[{self.v_pt( 2)}], v[{self.v_tt( 0)}], v[{self.v_tt( 2)}]") # 2
         self._emit(f"v_sub_f32 v[{self.v_pt( 3)}], v[{self.v_tt( 1)}], v[{self.v_tt( 3)}]") # 3
-        self._emit(madmk(self.v_pt(14), self.v_pt(12),  0.7071067690849304, self.v_pt( 4)))  # 14
-        self._emit(madmk(self.v_pt(11), self.v_pt( 9), -0.7071067690849304, self.v_pt( 1)))  # 11
-        self._emit(madmk(self.v_pt(15), self.v_pt(13),  0.7071067690849304, self.v_pt( 5)))  # 15
-        self._emit(madmk(self.v_pt( 8), self.v_pt( 8),  0.7071067690849304, self.v_pt( 0)))  # 8
+        self._emit(v_madmk(self.v_pt(14), self.v_pt(12),  0.7071067690849304, self.v_pt( 4)))  # 14
+        self._emit(v_madmk(self.v_pt(11), self.v_pt( 9), -0.7071067690849304, self.v_pt( 1)))  # 11
+        self._emit(v_madmk(self.v_pt(15), self.v_pt(13),  0.7071067690849304, self.v_pt( 5)))  # 15
+        self._emit(v_madmk(self.v_pt( 8), self.v_pt( 8),  0.7071067690849304, self.v_pt( 0)))  # 8
         self._emit(f"v_sub_f32 v[{self.v_pt( 6)}], v[{self.v_tt( 4)}], v[{self.v_tt( 7)}]") # 6
-        self._emit(madmk(self.v_pt(12), self.v_pt(12), -0.7071067690849304, self.v_pt( 4)))  # 12
-        self._emit(madmk(self.v_pt( 9), self.v_pt( 9),  0.7071067690849304, self.v_pt( 1)))  # 9
-        self._emit(madmk(self.v_pt(13), self.v_pt(13), -0.7071067690849304, self.v_pt( 5)))  # 13
+        self._emit(v_madmk(self.v_pt(12), self.v_pt(12), -0.7071067690849304, self.v_pt( 4)))  # 12
+        self._emit(v_madmk(self.v_pt( 9), self.v_pt( 9),  0.7071067690849304, self.v_pt( 1)))  # 9
+        self._emit(v_madmk(self.v_pt(13), self.v_pt(13), -0.7071067690849304, self.v_pt( 5)))  # 13
         self._emit(f"v_add_f32 v[{self.v_pt( 7)}], v[{self.v_tt( 5)}], v[{self.v_tt( 6)}]") # 7
         self._emit(f"v_add_f32 v[{self.v_pt( 0)}], v[{self.v_tt( 0)}], v[{self.v_tt( 2)}]") # 0
         self._emit(f"v_add_f32 v[{self.v_pt( 4)}], v[{self.v_tt( 4)}], v[{self.v_tt( 7)}]") # 4
@@ -592,7 +590,6 @@ class fft8_bwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt( 8)}]") # 8
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt( 9)}]") # 9
@@ -635,17 +632,17 @@ class fft8_bwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_tt( 7)}], v[{self.v_pt(11)}], v[{self.v_pt(15)}]") # 7
 
         # omega 8_0, 8_2, 8_1, 8_3
-        self._emit(madmk(self.v_pt(10), self.v_pt( 8), -0.7071067690849304, self.v_pt( 0)))  # 10
+        self._emit(v_madmk(self.v_pt(10), self.v_pt( 8), -0.7071067690849304, self.v_pt( 0)))  # 10
         self._emit(f"v_sub_f32 v[{self.v_pt( 2)}], v[{self.v_tt( 0)}], v[{self.v_tt( 2)}]") # 2
         self._emit(f"v_sub_f32 v[{self.v_pt( 3)}], v[{self.v_tt( 1)}], v[{self.v_tt( 3)}]") # 3
-        self._emit(madmk(self.v_pt(14), self.v_pt(12),  0.7071067690849304, self.v_pt( 4)))  # 14
-        self._emit(madmk(self.v_pt(11), self.v_pt( 9), -0.7071067690849304, self.v_pt( 1)))  # 11
-        self._emit(madmk(self.v_pt(15), self.v_pt(13),  0.7071067690849304, self.v_pt( 5)))  # 15
-        self._emit(madmk(self.v_pt( 8), self.v_pt( 8),  0.7071067690849304, self.v_pt( 0)))  # 8
+        self._emit(v_madmk(self.v_pt(14), self.v_pt(12),  0.7071067690849304, self.v_pt( 4)))  # 14
+        self._emit(v_madmk(self.v_pt(11), self.v_pt( 9), -0.7071067690849304, self.v_pt( 1)))  # 11
+        self._emit(v_madmk(self.v_pt(15), self.v_pt(13),  0.7071067690849304, self.v_pt( 5)))  # 15
+        self._emit(v_madmk(self.v_pt( 8), self.v_pt( 8),  0.7071067690849304, self.v_pt( 0)))  # 8
         self._emit(f"v_add_f32 v[{self.v_pt( 6)}], v[{self.v_tt( 4)}], v[{self.v_tt( 7)}]") # 6
-        self._emit(madmk(self.v_pt(12), self.v_pt(12), -0.7071067690849304, self.v_pt( 4)))  # 12
-        self._emit(madmk(self.v_pt( 9), self.v_pt( 9),  0.7071067690849304, self.v_pt( 1)))  # 9
-        self._emit(madmk(self.v_pt(13), self.v_pt(13), -0.7071067690849304, self.v_pt( 5)))  # 13
+        self._emit(v_madmk(self.v_pt(12), self.v_pt(12), -0.7071067690849304, self.v_pt( 4)))  # 12
+        self._emit(v_madmk(self.v_pt( 9), self.v_pt( 9),  0.7071067690849304, self.v_pt( 1)))  # 9
+        self._emit(v_madmk(self.v_pt(13), self.v_pt(13), -0.7071067690849304, self.v_pt( 5)))  # 13
         self._emit(f"v_sub_f32 v[{self.v_pt( 7)}], v[{self.v_tt( 5)}], v[{self.v_tt( 6)}]") # 7
         self._emit(f"v_add_f32 v[{self.v_pt( 0)}], v[{self.v_tt( 0)}], v[{self.v_tt( 2)}]") # 0
         self._emit(f"v_sub_f32 v[{self.v_pt( 4)}], v[{self.v_tt( 4)}], v[{self.v_tt( 7)}]") # 4
@@ -663,7 +660,6 @@ class fft16_fwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt(16)}]") # 16
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt(17)}]") # 17
@@ -745,23 +741,23 @@ class fft16_fwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_pt( 6)}], v[{self.v_pt(30)}], v[{self.v_pt(31)}]") # 13 -- 15 tmp0
         self._emit(f"v_add_f32 v[{self.v_pt( 7)}], v[{self.v_pt(31)}], v[{self.v_pt(30)}]") # 13 -- 15 tmp1
 
-        self._emit(madmk(self.v_pt(20), self.v_pt( 0), -0.7071067690849304, self.v_pt(16))) # 20
-        self._emit(madmk(self.v_pt(21), self.v_pt( 1), -0.7071067690849304, self.v_pt(17))) # 21
-        self._emit(madmk(self.v_pt(22), self.v_pt( 2), -0.7071067690849304, self.v_pt(18))) # 22
-        self._emit(madmk(self.v_pt(23), self.v_pt( 3), -0.7071067690849304, self.v_pt(19))) # 23
-        self._emit(madmk(self.v_pt(28), self.v_pt( 4),  0.7071067690849304, self.v_pt(24))) # 28
-        self._emit(madmk(self.v_pt(29), self.v_pt( 5),  0.7071067690849304, self.v_pt(25))) # 29
-        self._emit(madmk(self.v_pt(30), self.v_pt( 6),  0.7071067690849304, self.v_pt(26))) # 30
-        self._emit(madmk(self.v_pt(31), self.v_pt( 7),  0.7071067690849304, self.v_pt(27))) # 31
+        self._emit(v_madmk(self.v_pt(20), self.v_pt( 0), -0.7071067690849304, self.v_pt(16))) # 20
+        self._emit(v_madmk(self.v_pt(21), self.v_pt( 1), -0.7071067690849304, self.v_pt(17))) # 21
+        self._emit(v_madmk(self.v_pt(22), self.v_pt( 2), -0.7071067690849304, self.v_pt(18))) # 22
+        self._emit(v_madmk(self.v_pt(23), self.v_pt( 3), -0.7071067690849304, self.v_pt(19))) # 23
+        self._emit(v_madmk(self.v_pt(28), self.v_pt( 4),  0.7071067690849304, self.v_pt(24))) # 28
+        self._emit(v_madmk(self.v_pt(29), self.v_pt( 5),  0.7071067690849304, self.v_pt(25))) # 29
+        self._emit(v_madmk(self.v_pt(30), self.v_pt( 6),  0.7071067690849304, self.v_pt(26))) # 30
+        self._emit(v_madmk(self.v_pt(31), self.v_pt( 7),  0.7071067690849304, self.v_pt(27))) # 31
 
-        self._emit(madmk(self.v_pt(16), self.v_pt( 0),  0.7071067690849304, self.v_pt(16))) # 16
-        self._emit(madmk(self.v_pt(17), self.v_pt( 1),  0.7071067690849304, self.v_pt(17))) # 17
-        self._emit(madmk(self.v_pt(18), self.v_pt( 2),  0.7071067690849304, self.v_pt(18))) # 18
-        self._emit(madmk(self.v_pt(19), self.v_pt( 3),  0.7071067690849304, self.v_pt(19))) # 19
-        self._emit(madmk(self.v_pt(24), self.v_pt( 4), -0.7071067690849304, self.v_pt(24))) # 24
-        self._emit(madmk(self.v_pt(25), self.v_pt( 5), -0.7071067690849304, self.v_pt(25))) # 25
-        self._emit(madmk(self.v_pt(26), self.v_pt( 6), -0.7071067690849304, self.v_pt(26))) # 26
-        self._emit(madmk(self.v_pt(27), self.v_pt( 7), -0.7071067690849304, self.v_pt(27))) # 27
+        self._emit(v_madmk(self.v_pt(16), self.v_pt( 0),  0.7071067690849304, self.v_pt(16))) # 16
+        self._emit(v_madmk(self.v_pt(17), self.v_pt( 1),  0.7071067690849304, self.v_pt(17))) # 17
+        self._emit(v_madmk(self.v_pt(18), self.v_pt( 2),  0.7071067690849304, self.v_pt(18))) # 18
+        self._emit(v_madmk(self.v_pt(19), self.v_pt( 3),  0.7071067690849304, self.v_pt(19))) # 19
+        self._emit(v_madmk(self.v_pt(24), self.v_pt( 4), -0.7071067690849304, self.v_pt(24))) # 24
+        self._emit(v_madmk(self.v_pt(25), self.v_pt( 5), -0.7071067690849304, self.v_pt(25))) # 25
+        self._emit(v_madmk(self.v_pt(26), self.v_pt( 6), -0.7071067690849304, self.v_pt(26))) # 26
+        self._emit(v_madmk(self.v_pt(27), self.v_pt( 7), -0.7071067690849304, self.v_pt(27))) # 27
 
         self._emit(f"v_add_f32 v[{self.v_pt( 8)}], v[{self.v_tt( 8)}], v[{self.v_tt(13)}]") #  8
         self._emit(f"v_sub_f32 v[{self.v_pt( 9)}], v[{self.v_tt( 9)}], v[{self.v_tt(12)}]") #  9
@@ -782,35 +778,35 @@ class fft16_fwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_tt(15)}], v[{self.v_tt( 3)}], v[{self.v_tt( 7)}]") #  7
 
         # omega 16_0,4,2,6,1,5,3,7
-        self._emit(madmk(self.v_tt( 4), self.v_pt(19),  0.4142135679721832, self.v_pt(18))) #  8 --  9 tmp0
-        self._emit(madmk(self.v_tt( 5), self.v_pt(18), -0.4142135679721832, self.v_pt(19))) #  8 --  9 tmp1
-        self._emit(madmk(self.v_tt( 8), self.v_pt(27),  2.4142134189605713, self.v_pt(26))) # 12 -- 13 tmp0
-        self._emit(madmk(self.v_tt( 9), self.v_pt(26), -2.4142134189605713, self.v_pt(27))) # 12 -- 13 tmp1
-        self._emit(madmk(self.v_tt( 6), self.v_pt(23), -2.4142134189605713, self.v_pt(22))) # 10 -- 11 tmp0
-        self._emit(madmk(self.v_tt( 7), self.v_pt(22),  2.4142134189605713, self.v_pt(23))) # 10 -- 11 tmp1
-        self._emit(madmk(self.v_tt(10), self.v_pt(31), -0.4142135679721832, self.v_pt(30))) # 14 -- 15 tmp0
-        self._emit(madmk(self.v_tt(11), self.v_pt(30),  0.4142135679721832, self.v_pt(31))) # 14 -- 15 tmp1
+        self._emit(v_madmk(self.v_tt( 4), self.v_pt(19),  0.4142135679721832, self.v_pt(18))) #  8 --  9 tmp0
+        self._emit(v_madmk(self.v_tt( 5), self.v_pt(18), -0.4142135679721832, self.v_pt(19))) #  8 --  9 tmp1
+        self._emit(v_madmk(self.v_tt( 8), self.v_pt(27),  2.4142134189605713, self.v_pt(26))) # 12 -- 13 tmp0
+        self._emit(v_madmk(self.v_tt( 9), self.v_pt(26), -2.4142134189605713, self.v_pt(27))) # 12 -- 13 tmp1
+        self._emit(v_madmk(self.v_tt( 6), self.v_pt(23), -2.4142134189605713, self.v_pt(22))) # 10 -- 11 tmp0
+        self._emit(v_madmk(self.v_tt( 7), self.v_pt(22),  2.4142134189605713, self.v_pt(23))) # 10 -- 11 tmp1
+        self._emit(v_madmk(self.v_tt(10), self.v_pt(31), -0.4142135679721832, self.v_pt(30))) # 14 -- 15 tmp0
+        self._emit(v_madmk(self.v_tt(11), self.v_pt(30),  0.4142135679721832, self.v_pt(31))) # 14 -- 15 tmp1
         self._emit(f"v_add_f32 v[{self.v_tt( 0)}], v[{self.v_pt(10)}], v[{self.v_pt(11)}]") #  4 --  5 tmp0
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt(11)}], v[{self.v_pt(10)}]") #  4 --  5 tmp1
         self._emit(f"v_sub_f32 v[{self.v_tt( 2)}], v[{self.v_pt(14)}], v[{self.v_pt(15)}]") #  6 --  7 tmp0
         self._emit(f"v_add_f32 v[{self.v_tt( 3)}], v[{self.v_pt(15)}], v[{self.v_pt(14)}]") #  6 --  7 tmp1
 
-        self._emit(madmk(self.v_pt(18), self.v_tt( 4), -0.9238795042037964, self.v_pt(16))) # 18
-        self._emit(madmk(self.v_pt(19), self.v_tt( 5), -0.9238795042037964, self.v_pt(17))) # 19
-        self._emit(madmk(self.v_pt(22), self.v_tt( 6),  0.3826834261417389, self.v_pt(20))) # 22
-        self._emit(madmk(self.v_pt(23), self.v_tt( 7),  0.3826834261417389, self.v_pt(21))) # 23
-        self._emit(madmk(self.v_pt(26), self.v_tt( 8), -0.3826834261417389, self.v_pt(24))) # 26
-        self._emit(madmk(self.v_pt(27), self.v_tt( 9), -0.3826834261417389, self.v_pt(25))) # 27
-        self._emit(madmk(self.v_pt(30), self.v_tt(10),  0.9238795042037964, self.v_pt(28))) # 30
-        self._emit(madmk(self.v_pt(31), self.v_tt(11),  0.9238795042037964, self.v_pt(29))) # 31
-        self._emit(madmk(self.v_pt(16), self.v_tt( 4),  0.9238795042037964, self.v_pt(16))) # 16
-        self._emit(madmk(self.v_pt(17), self.v_tt( 5),  0.9238795042037964, self.v_pt(17))) # 17
-        self._emit(madmk(self.v_pt(20), self.v_tt( 6), -0.3826834261417389, self.v_pt(20))) # 20
-        self._emit(madmk(self.v_pt(21), self.v_tt( 7), -0.3826834261417389, self.v_pt(21))) # 21
-        self._emit(madmk(self.v_pt(24), self.v_tt( 8),  0.3826834261417389, self.v_pt(24))) # 24
-        self._emit(madmk(self.v_pt(25), self.v_tt( 9),  0.3826834261417389, self.v_pt(25))) # 25
-        self._emit(madmk(self.v_pt(28), self.v_tt(10), -0.9238795042037964, self.v_pt(28))) # 28
-        self._emit(madmk(self.v_pt(29), self.v_tt(11), -0.9238795042037964, self.v_pt(29))) # 29
+        self._emit(v_madmk(self.v_pt(18), self.v_tt( 4), -0.9238795042037964, self.v_pt(16))) # 18
+        self._emit(v_madmk(self.v_pt(19), self.v_tt( 5), -0.9238795042037964, self.v_pt(17))) # 19
+        self._emit(v_madmk(self.v_pt(22), self.v_tt( 6),  0.3826834261417389, self.v_pt(20))) # 22
+        self._emit(v_madmk(self.v_pt(23), self.v_tt( 7),  0.3826834261417389, self.v_pt(21))) # 23
+        self._emit(v_madmk(self.v_pt(26), self.v_tt( 8), -0.3826834261417389, self.v_pt(24))) # 26
+        self._emit(v_madmk(self.v_pt(27), self.v_tt( 9), -0.3826834261417389, self.v_pt(25))) # 27
+        self._emit(v_madmk(self.v_pt(30), self.v_tt(10),  0.9238795042037964, self.v_pt(28))) # 30
+        self._emit(v_madmk(self.v_pt(31), self.v_tt(11),  0.9238795042037964, self.v_pt(29))) # 31
+        self._emit(v_madmk(self.v_pt(16), self.v_tt( 4),  0.9238795042037964, self.v_pt(16))) # 16
+        self._emit(v_madmk(self.v_pt(17), self.v_tt( 5),  0.9238795042037964, self.v_pt(17))) # 17
+        self._emit(v_madmk(self.v_pt(20), self.v_tt( 6), -0.3826834261417389, self.v_pt(20))) # 20
+        self._emit(v_madmk(self.v_pt(21), self.v_tt( 7), -0.3826834261417389, self.v_pt(21))) # 21
+        self._emit(v_madmk(self.v_pt(24), self.v_tt( 8),  0.3826834261417389, self.v_pt(24))) # 24
+        self._emit(v_madmk(self.v_pt(25), self.v_tt( 9),  0.3826834261417389, self.v_pt(25))) # 25
+        self._emit(v_madmk(self.v_pt(28), self.v_tt(10), -0.9238795042037964, self.v_pt(28))) # 28
+        self._emit(v_madmk(self.v_pt(29), self.v_tt(11), -0.9238795042037964, self.v_pt(29))) # 29
 
         self._emit(f"v_sub_f32 v[{self.v_pt( 2)}], v[{self.v_pt( 0)}], v[{self.v_tt(12)}]") #  2
         self._emit(f"v_sub_f32 v[{self.v_pt( 3)}], v[{self.v_pt( 1)}], v[{self.v_tt(13)}]") #  3
@@ -818,11 +814,11 @@ class fft16_fwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_pt( 6)}], v[{self.v_pt( 4)}], v[{self.v_tt(15)}]") #  6
         self._emit(f"v_add_f32 v[{self.v_pt( 7)}], v[{self.v_pt( 5)}], v[{self.v_tt(14)}]") #  7
         
-        self._emit(madmk(self.v_pt(10), self.v_tt( 0), -0.7071067690849304, self.v_pt( 8))) # 10
-        self._emit(madmk(self.v_pt(11), self.v_tt( 1), -0.7071067690849304, self.v_pt( 9))) # 11
+        self._emit(v_madmk(self.v_pt(10), self.v_tt( 0), -0.7071067690849304, self.v_pt( 8))) # 10
+        self._emit(v_madmk(self.v_pt(11), self.v_tt( 1), -0.7071067690849304, self.v_pt( 9))) # 11
         
-        self._emit(madmk(self.v_pt(14), self.v_tt( 2),  0.7071067690849304, self.v_pt(12))) # 14
-        self._emit(madmk(self.v_pt(15), self.v_tt( 3),  0.7071067690849304, self.v_pt(13))) # 15
+        self._emit(v_madmk(self.v_pt(14), self.v_tt( 2),  0.7071067690849304, self.v_pt(12))) # 14
+        self._emit(v_madmk(self.v_pt(15), self.v_tt( 3),  0.7071067690849304, self.v_pt(13))) # 15
 
         self._emit(f"v_add_f32 v[{self.v_pt( 0)}], v[{self.v_pt( 0)}], v[{self.v_tt(12)}]") #  0
         self._emit(f"v_add_f32 v[{self.v_pt( 1)}], v[{self.v_pt( 1)}], v[{self.v_tt(13)}]") #  1
@@ -830,11 +826,11 @@ class fft16_fwd_sched_t(macro_base_t):
         self._emit(f"v_add_f32 v[{self.v_pt( 4)}], v[{self.v_pt( 4)}], v[{self.v_tt(15)}]") #  4
         self._emit(f"v_sub_f32 v[{self.v_pt( 5)}], v[{self.v_pt( 5)}], v[{self.v_tt(14)}]") #  5
 
-        self._emit(madmk(self.v_pt( 8), self.v_tt( 0),  0.7071067690849304, self.v_pt( 8))) #  8
-        self._emit(madmk(self.v_pt( 9), self.v_tt( 1),  0.7071067690849304, self.v_pt( 9))) #  9
+        self._emit(v_madmk(self.v_pt( 8), self.v_tt( 0),  0.7071067690849304, self.v_pt( 8))) #  8
+        self._emit(v_madmk(self.v_pt( 9), self.v_tt( 1),  0.7071067690849304, self.v_pt( 9))) #  9
 
-        self._emit(madmk(self.v_pt(12), self.v_tt( 2), -0.7071067690849304, self.v_pt(12))) # 12
-        self._emit(madmk(self.v_pt(13), self.v_tt( 3), -0.7071067690849304, self.v_pt(13))) # 13
+        self._emit(v_madmk(self.v_pt(12), self.v_tt( 2), -0.7071067690849304, self.v_pt(12))) # 12
+        self._emit(v_madmk(self.v_pt(13), self.v_tt( 3), -0.7071067690849304, self.v_pt(13))) # 13
 
 
 class fft16_bwd_sched_t(macro_base_t):
@@ -848,7 +844,6 @@ class fft16_bwd_sched_t(macro_base_t):
         self.declare_arg("v_tt")    # half the size of above pixel
 
     def expr(self):
-        madmk = inst_v_madmk_t(self.mc)
         # omega 2_0
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt( 0)}], v[{self.v_pt(16)}]") # 16
         self._emit(f"v_sub_f32 v[{self.v_tt( 1)}], v[{self.v_pt( 1)}], v[{self.v_pt(17)}]") # 17
@@ -930,23 +925,23 @@ class fft16_bwd_sched_t(macro_base_t):
         self._emit(f"v_add_f32 v[{self.v_pt( 6)}], v[{self.v_pt(30)}], v[{self.v_pt(31)}]") # 13 -- 15 tmp0
         self._emit(f"v_sub_f32 v[{self.v_pt( 7)}], v[{self.v_pt(31)}], v[{self.v_pt(30)}]") # 13 -- 15 tmp1
 
-        self._emit(madmk(self.v_pt(20), self.v_pt( 0), -0.7071067690849304, self.v_pt(16))) # 20
-        self._emit(madmk(self.v_pt(21), self.v_pt( 1), -0.7071067690849304, self.v_pt(17))) # 21
-        self._emit(madmk(self.v_pt(22), self.v_pt( 2), -0.7071067690849304, self.v_pt(18))) # 22
-        self._emit(madmk(self.v_pt(23), self.v_pt( 3), -0.7071067690849304, self.v_pt(19))) # 23
-        self._emit(madmk(self.v_pt(28), self.v_pt( 4),  0.7071067690849304, self.v_pt(24))) # 28
-        self._emit(madmk(self.v_pt(29), self.v_pt( 5),  0.7071067690849304, self.v_pt(25))) # 29
-        self._emit(madmk(self.v_pt(30), self.v_pt( 6),  0.7071067690849304, self.v_pt(26))) # 30
-        self._emit(madmk(self.v_pt(31), self.v_pt( 7),  0.7071067690849304, self.v_pt(27))) # 31
+        self._emit(v_madmk(self.v_pt(20), self.v_pt( 0), -0.7071067690849304, self.v_pt(16))) # 20
+        self._emit(v_madmk(self.v_pt(21), self.v_pt( 1), -0.7071067690849304, self.v_pt(17))) # 21
+        self._emit(v_madmk(self.v_pt(22), self.v_pt( 2), -0.7071067690849304, self.v_pt(18))) # 22
+        self._emit(v_madmk(self.v_pt(23), self.v_pt( 3), -0.7071067690849304, self.v_pt(19))) # 23
+        self._emit(v_madmk(self.v_pt(28), self.v_pt( 4),  0.7071067690849304, self.v_pt(24))) # 28
+        self._emit(v_madmk(self.v_pt(29), self.v_pt( 5),  0.7071067690849304, self.v_pt(25))) # 29
+        self._emit(v_madmk(self.v_pt(30), self.v_pt( 6),  0.7071067690849304, self.v_pt(26))) # 30
+        self._emit(v_madmk(self.v_pt(31), self.v_pt( 7),  0.7071067690849304, self.v_pt(27))) # 31
 
-        self._emit(madmk(self.v_pt(16), self.v_pt( 0),  0.7071067690849304, self.v_pt(16))) # 16
-        self._emit(madmk(self.v_pt(17), self.v_pt( 1),  0.7071067690849304, self.v_pt(17))) # 17
-        self._emit(madmk(self.v_pt(18), self.v_pt( 2),  0.7071067690849304, self.v_pt(18))) # 18
-        self._emit(madmk(self.v_pt(19), self.v_pt( 3),  0.7071067690849304, self.v_pt(19))) # 19
-        self._emit(madmk(self.v_pt(24), self.v_pt( 4), -0.7071067690849304, self.v_pt(24))) # 24
-        self._emit(madmk(self.v_pt(25), self.v_pt( 5), -0.7071067690849304, self.v_pt(25))) # 25
-        self._emit(madmk(self.v_pt(26), self.v_pt( 6), -0.7071067690849304, self.v_pt(26))) # 26
-        self._emit(madmk(self.v_pt(27), self.v_pt( 7), -0.7071067690849304, self.v_pt(27))) # 27
+        self._emit(v_madmk(self.v_pt(16), self.v_pt( 0),  0.7071067690849304, self.v_pt(16))) # 16
+        self._emit(v_madmk(self.v_pt(17), self.v_pt( 1),  0.7071067690849304, self.v_pt(17))) # 17
+        self._emit(v_madmk(self.v_pt(18), self.v_pt( 2),  0.7071067690849304, self.v_pt(18))) # 18
+        self._emit(v_madmk(self.v_pt(19), self.v_pt( 3),  0.7071067690849304, self.v_pt(19))) # 19
+        self._emit(v_madmk(self.v_pt(24), self.v_pt( 4), -0.7071067690849304, self.v_pt(24))) # 24
+        self._emit(v_madmk(self.v_pt(25), self.v_pt( 5), -0.7071067690849304, self.v_pt(25))) # 25
+        self._emit(v_madmk(self.v_pt(26), self.v_pt( 6), -0.7071067690849304, self.v_pt(26))) # 26
+        self._emit(v_madmk(self.v_pt(27), self.v_pt( 7), -0.7071067690849304, self.v_pt(27))) # 27
 
         self._emit(f"v_sub_f32 v[{self.v_pt( 8)}], v[{self.v_tt( 8)}], v[{self.v_tt(13)}]") #  8
         self._emit(f"v_add_f32 v[{self.v_pt( 9)}], v[{self.v_tt( 9)}], v[{self.v_tt(12)}]") #  9
@@ -967,35 +962,35 @@ class fft16_bwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_tt(15)}], v[{self.v_tt( 3)}], v[{self.v_tt( 7)}]") #  7
 
         # omega 16_0,4,2,6,1,5,3,7
-        self._emit(madmk(self.v_tt( 4), self.v_pt(19), -0.4142135679721832, self.v_pt(18))) #  8 --  9 tmp0
-        self._emit(madmk(self.v_tt( 5), self.v_pt(18),  0.4142135679721832, self.v_pt(19))) #  8 --  9 tmp1
-        self._emit(madmk(self.v_tt( 8), self.v_pt(27), -2.4142134189605713, self.v_pt(26))) # 12 -- 13 tmp0
-        self._emit(madmk(self.v_tt( 9), self.v_pt(26),  2.4142134189605713, self.v_pt(27))) # 12 -- 13 tmp1
-        self._emit(madmk(self.v_tt( 6), self.v_pt(23),  2.4142134189605713, self.v_pt(22))) # 10 -- 11 tmp0
-        self._emit(madmk(self.v_tt( 7), self.v_pt(22), -2.4142134189605713, self.v_pt(23))) # 10 -- 11 tmp1
-        self._emit(madmk(self.v_tt(10), self.v_pt(31),  0.4142135679721832, self.v_pt(30))) # 14 -- 15 tmp0
-        self._emit(madmk(self.v_tt(11), self.v_pt(30), -0.4142135679721832, self.v_pt(31))) # 14 -- 15 tmp1
+        self._emit(v_madmk(self.v_tt( 4), self.v_pt(19), -0.4142135679721832, self.v_pt(18))) #  8 --  9 tmp0
+        self._emit(v_madmk(self.v_tt( 5), self.v_pt(18),  0.4142135679721832, self.v_pt(19))) #  8 --  9 tmp1
+        self._emit(v_madmk(self.v_tt( 8), self.v_pt(27), -2.4142134189605713, self.v_pt(26))) # 12 -- 13 tmp0
+        self._emit(v_madmk(self.v_tt( 9), self.v_pt(26),  2.4142134189605713, self.v_pt(27))) # 12 -- 13 tmp1
+        self._emit(v_madmk(self.v_tt( 6), self.v_pt(23),  2.4142134189605713, self.v_pt(22))) # 10 -- 11 tmp0
+        self._emit(v_madmk(self.v_tt( 7), self.v_pt(22), -2.4142134189605713, self.v_pt(23))) # 10 -- 11 tmp1
+        self._emit(v_madmk(self.v_tt(10), self.v_pt(31),  0.4142135679721832, self.v_pt(30))) # 14 -- 15 tmp0
+        self._emit(v_madmk(self.v_tt(11), self.v_pt(30), -0.4142135679721832, self.v_pt(31))) # 14 -- 15 tmp1
         self._emit(f"v_sub_f32 v[{self.v_tt( 0)}], v[{self.v_pt(10)}], v[{self.v_pt(11)}]") #  4 --  5 tmp0
         self._emit(f"v_add_f32 v[{self.v_tt( 1)}], v[{self.v_pt(11)}], v[{self.v_pt(10)}]") #  4 --  5 tmp1
         self._emit(f"v_add_f32 v[{self.v_tt( 2)}], v[{self.v_pt(14)}], v[{self.v_pt(15)}]") #  6 --  7 tmp0
         self._emit(f"v_sub_f32 v[{self.v_tt( 3)}], v[{self.v_pt(15)}], v[{self.v_pt(14)}]") #  6 --  7 tmp1
 
-        self._emit(madmk(self.v_pt(18), self.v_tt( 4), -0.9238795042037964, self.v_pt(16))) # 18
-        self._emit(madmk(self.v_pt(19), self.v_tt( 5), -0.9238795042037964, self.v_pt(17))) # 19
-        self._emit(madmk(self.v_pt(22), self.v_tt( 6),  0.3826834261417389, self.v_pt(20))) # 22
-        self._emit(madmk(self.v_pt(23), self.v_tt( 7),  0.3826834261417389, self.v_pt(21))) # 23
-        self._emit(madmk(self.v_pt(26), self.v_tt( 8), -0.3826834261417389, self.v_pt(24))) # 26
-        self._emit(madmk(self.v_pt(27), self.v_tt( 9), -0.3826834261417389, self.v_pt(25))) # 27
-        self._emit(madmk(self.v_pt(30), self.v_tt(10),  0.9238795042037964, self.v_pt(28))) # 30
-        self._emit(madmk(self.v_pt(31), self.v_tt(11),  0.9238795042037964, self.v_pt(29))) # 31
-        self._emit(madmk(self.v_pt(16), self.v_tt( 4),  0.9238795042037964, self.v_pt(16))) # 16
-        self._emit(madmk(self.v_pt(17), self.v_tt( 5),  0.9238795042037964, self.v_pt(17))) # 17
-        self._emit(madmk(self.v_pt(20), self.v_tt( 6), -0.3826834261417389, self.v_pt(20))) # 20
-        self._emit(madmk(self.v_pt(21), self.v_tt( 7), -0.3826834261417389, self.v_pt(21))) # 21
-        self._emit(madmk(self.v_pt(24), self.v_tt( 8),  0.3826834261417389, self.v_pt(24))) # 24
-        self._emit(madmk(self.v_pt(25), self.v_tt( 9),  0.3826834261417389, self.v_pt(25))) # 25
-        self._emit(madmk(self.v_pt(28), self.v_tt(10), -0.9238795042037964, self.v_pt(28))) # 28
-        self._emit(madmk(self.v_pt(29), self.v_tt(11), -0.9238795042037964, self.v_pt(29))) # 29
+        self._emit(v_madmk(self.v_pt(18), self.v_tt( 4), -0.9238795042037964, self.v_pt(16))) # 18
+        self._emit(v_madmk(self.v_pt(19), self.v_tt( 5), -0.9238795042037964, self.v_pt(17))) # 19
+        self._emit(v_madmk(self.v_pt(22), self.v_tt( 6),  0.3826834261417389, self.v_pt(20))) # 22
+        self._emit(v_madmk(self.v_pt(23), self.v_tt( 7),  0.3826834261417389, self.v_pt(21))) # 23
+        self._emit(v_madmk(self.v_pt(26), self.v_tt( 8), -0.3826834261417389, self.v_pt(24))) # 26
+        self._emit(v_madmk(self.v_pt(27), self.v_tt( 9), -0.3826834261417389, self.v_pt(25))) # 27
+        self._emit(v_madmk(self.v_pt(30), self.v_tt(10),  0.9238795042037964, self.v_pt(28))) # 30
+        self._emit(v_madmk(self.v_pt(31), self.v_tt(11),  0.9238795042037964, self.v_pt(29))) # 31
+        self._emit(v_madmk(self.v_pt(16), self.v_tt( 4),  0.9238795042037964, self.v_pt(16))) # 16
+        self._emit(v_madmk(self.v_pt(17), self.v_tt( 5),  0.9238795042037964, self.v_pt(17))) # 17
+        self._emit(v_madmk(self.v_pt(20), self.v_tt( 6), -0.3826834261417389, self.v_pt(20))) # 20
+        self._emit(v_madmk(self.v_pt(21), self.v_tt( 7), -0.3826834261417389, self.v_pt(21))) # 21
+        self._emit(v_madmk(self.v_pt(24), self.v_tt( 8),  0.3826834261417389, self.v_pt(24))) # 24
+        self._emit(v_madmk(self.v_pt(25), self.v_tt( 9),  0.3826834261417389, self.v_pt(25))) # 25
+        self._emit(v_madmk(self.v_pt(28), self.v_tt(10), -0.9238795042037964, self.v_pt(28))) # 28
+        self._emit(v_madmk(self.v_pt(29), self.v_tt(11), -0.9238795042037964, self.v_pt(29))) # 29
 
         self._emit(f"v_sub_f32 v[{self.v_pt( 2)}], v[{self.v_pt( 0)}], v[{self.v_tt(12)}]") #  2
         self._emit(f"v_sub_f32 v[{self.v_pt( 3)}], v[{self.v_pt( 1)}], v[{self.v_tt(13)}]") #  3
@@ -1003,11 +998,11 @@ class fft16_bwd_sched_t(macro_base_t):
         self._emit(f"v_add_f32 v[{self.v_pt( 6)}], v[{self.v_pt( 4)}], v[{self.v_tt(15)}]") #  6
         self._emit(f"v_sub_f32 v[{self.v_pt( 7)}], v[{self.v_pt( 5)}], v[{self.v_tt(14)}]") #  7
         
-        self._emit(madmk(self.v_pt(10), self.v_tt( 0), -0.7071067690849304, self.v_pt( 8))) # 10
-        self._emit(madmk(self.v_pt(11), self.v_tt( 1), -0.7071067690849304, self.v_pt( 9))) # 11
+        self._emit(v_madmk(self.v_pt(10), self.v_tt( 0), -0.7071067690849304, self.v_pt( 8))) # 10
+        self._emit(v_madmk(self.v_pt(11), self.v_tt( 1), -0.7071067690849304, self.v_pt( 9))) # 11
         
-        self._emit(madmk(self.v_pt(14), self.v_tt( 2),  0.7071067690849304, self.v_pt(12))) # 14
-        self._emit(madmk(self.v_pt(15), self.v_tt( 3),  0.7071067690849304, self.v_pt(13))) # 15
+        self._emit(v_madmk(self.v_pt(14), self.v_tt( 2),  0.7071067690849304, self.v_pt(12))) # 14
+        self._emit(v_madmk(self.v_pt(15), self.v_tt( 3),  0.7071067690849304, self.v_pt(13))) # 15
 
         self._emit(f"v_add_f32 v[{self.v_pt( 0)}], v[{self.v_pt( 0)}], v[{self.v_tt(12)}]") #  0
         self._emit(f"v_add_f32 v[{self.v_pt( 1)}], v[{self.v_pt( 1)}], v[{self.v_tt(13)}]") #  1
@@ -1015,8 +1010,8 @@ class fft16_bwd_sched_t(macro_base_t):
         self._emit(f"v_sub_f32 v[{self.v_pt( 4)}], v[{self.v_pt( 4)}], v[{self.v_tt(15)}]") #  4
         self._emit(f"v_add_f32 v[{self.v_pt( 5)}], v[{self.v_pt( 5)}], v[{self.v_tt(14)}]") #  5
 
-        self._emit(madmk(self.v_pt( 8), self.v_tt( 0),  0.7071067690849304, self.v_pt( 8))) #  8
-        self._emit(madmk(self.v_pt( 9), self.v_tt( 1),  0.7071067690849304, self.v_pt( 9))) #  9
+        self._emit(v_madmk(self.v_pt( 8), self.v_tt( 0),  0.7071067690849304, self.v_pt( 8))) #  8
+        self._emit(v_madmk(self.v_pt( 9), self.v_tt( 1),  0.7071067690849304, self.v_pt( 9))) #  9
 
-        self._emit(madmk(self.v_pt(12), self.v_tt( 2), -0.7071067690849304, self.v_pt(12))) # 12
-        self._emit(madmk(self.v_pt(13), self.v_tt( 3), -0.7071067690849304, self.v_pt(13))) # 13
+        self._emit(v_madmk(self.v_pt(12), self.v_tt( 2), -0.7071067690849304, self.v_pt(12))) # 12
+        self._emit(v_madmk(self.v_pt(13), self.v_tt( 3), -0.7071067690849304, self.v_pt(13))) # 13
