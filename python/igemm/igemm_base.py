@@ -304,7 +304,7 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
         # LDS size
-        self.lds_pad_m, self.lds_pad_n = self.need_lds_pad() # LDS pad
+        self.lds_pad_m, self.lds_pad_n = self.get_lds_pad() # LDS pad
         self.lds_a                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
         self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
         self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
@@ -369,7 +369,7 @@ class igemm_gtc_tunable_parameter_t(object):
             else:
                 self.lds_total += (lds_a_pad - self.lds_a_np2 + lds_b_pad - self.lds_b_np2)
 
-    def need_lds_pad(self):
+    def get_lds_pad(self):
         if self.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             return 0, 0
         if self.direction == 'wrw' and self.precision == 'fp16':
