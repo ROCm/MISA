@@ -378,7 +378,6 @@ current using global mc
 '''
 _current_mc = None
 def mc_set_current(mc):
-    import copy
     '''
     TODO: find a better way to set the global variable
     '''
