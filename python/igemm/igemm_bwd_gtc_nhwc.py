@@ -2327,10 +2327,21 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             else:
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}], {igemm_log2(nb_c0*nb_c1 * k_pack_src_mat)}, v[{v.v_wei_ic()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
+
+            if self.tunable.lds_pad_n > 0:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sst_b_os()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
+                self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], v[{v.v_tmp()}], v[{v.v_sst_b_os()}]")
+
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
             self._emit_empty_line()
             self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
+            if self.tunable.lds_pad_n > 0:
+                self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_b_os()}]")
+                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
+                self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], v[{v.v_tmp()}], v[{v.v_sld_b_os()}]")
+                self._emit_empty_line()
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
@@ -2735,7 +2746,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             # ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
             fctrl.lds_k_pack                  = k_pack_src_mat
-
+            fctrl.lds_pad_n                   = self.tunable.lds_pad_n
             share_load_packed                 = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else ctrl_xdlops_mapping.lanegroup_k_per_thread()
 
             if ctrl_xdlops_mapping.wave_step_m == 1:
@@ -2748,7 +2759,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack*ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
+                if fctrl.lds_pad_n > 0:
+                    fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack*ctrl_xdlops_mapping.wave_tile_n * data_byte // 32 * (32 + fctrl.lds_pad_n), sym_t(self.vgpr.v_tmp(5)))
+                else:
+                    fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack*ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
             fctrl.move_slice_window_accumule_functor  = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else None
