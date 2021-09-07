@@ -372,3 +372,18 @@ class mc_base_t(object):
     def __init__(self, mc):
         self.mc = mc
         mc.inject(self)
+
+'''
+current using global mc
+'''
+_current_mc = None
+def mc_set_current(mc):
+    import copy
+    '''
+    TODO: find a better way to set the global variable
+    '''
+    global _current_mc
+    _current_mc = mc
+
+def mc_get_current():
+    return _current_mc
