@@ -301,7 +301,10 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
         kernel_name += "gtcm_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS)
-        kernel_name += "gtc_";
+        if(gcn_arch == 1030)
+            kernel_name += "gtcn2_";
+        else
+            kernel_name += "gtc_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
         if(gcn_arch == 908)
             kernel_name += "gtcx_";

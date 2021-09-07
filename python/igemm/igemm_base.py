@@ -576,7 +576,10 @@ def igemm_gtc_encode_kernel_base_name(tunable, arch):
     if tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC:
         kernel_name += 'gtcm_'                                  # generic tensor contraction with mac
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-        kernel_name += 'gtc_'                                   # generic tensor contraction with dlops
+        if arch_str == 'gfx1030':
+            kernel_name += 'gtcn2_'
+        else:
+            kernel_name += 'gtc_'                               # generic tensor contraction with dlops
     elif tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
         if arch_str == 'gfx908':
             kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops

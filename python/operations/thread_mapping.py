@@ -25,6 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
+from .utility import *
 
 class ctrl_thread_mapping_t(object):
     def __init__(self):
