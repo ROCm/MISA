@@ -898,6 +898,8 @@ public:
                     if(kargs)
                         free(kargs);
                 }
+
+                result.gks_record.emplace_back(std::make_tuple(gks, duration));
             }
             result.return_code = 0;
             result.duration_ms = min_duration;
