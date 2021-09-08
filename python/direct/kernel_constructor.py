@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import List, Type
+from python.codegen.gpu_instruct import gpu_instructions_caller, inst_base, instruction_ctrl
 from python.codegen.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t, amdgpu_kernel_info_t, hsa_kernel_header
 from python.codegen.kernel_arg import _args_manager_t, karg_file_t
 from python.codegen.gpu_reg_block import sgpr_file_t, vgpr_file_t
@@ -27,7 +29,7 @@ class kernel_constructor(mc_base_t, _args_manager_t, ABC):
         self._gpr_init(mc_asm_printer)
         self._set_kernel_karg_t()
         self.kernel_info = self._construct_kernel_info()
-        
+        self.instr_ctrl = instruction_ctrl()
     
     def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
         return amdgpu_kernel_info_t(

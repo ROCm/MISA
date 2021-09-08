@@ -74,6 +74,7 @@ class conv_direct_navi(kernel_constructor):
         s = self.sgpr
         v = self.vgpr
         karg = self.kargs
+        ic = self.instr_ctrl.instructions_caller
         
         cl = self._emit
 
@@ -101,6 +102,18 @@ class conv_direct_navi(kernel_constructor):
         cl(f"s_mov_b32 {s.wei_buff_ptr[2]}, {output_buffer_size}")
         cl(f"s_mov_b32 {s.wei_buff_ptr[3]}, {0x00027000}")
 
+        input_buffer_size = filter_buffer_size = output_buffer_size = 101
+
+        ic.s_mov_b32(s.in_buff_ptr[2], input_buffer_size)
+        ic.s_mov_b32(s.in_buff_ptr[3], '0x00027000')
+
+        ic.s_mov_b32(s.out_buff_ptr[2], output_buffer_size)
+        ic.s_mov_b32(s.out_buff_ptr[3], 0x00027000)
+
+        ic.s_mov_b32(s.wei_buff_ptr[2], filter_buffer_size)
+        ic.s_mov_b32(s.wei_buff_ptr[3], 0x00027000)
+
+        self.instr_ctrl._emmit_all(self._emit)
 
         cl(f"s_load_dwordx2  {s.in_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.in_ptr()}")
         cl(f"s_load_dwordx2  {s.out_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.out_ptr()}")
@@ -121,7 +134,7 @@ class conv_direct_navi(kernel_constructor):
         fill_buff_desc(s.out_buff_ptr, filter_buffer_size, cl)
         fill_buff_desc(s.wei_buff_ptr, output_buffer_size, cl)
 
-        cl(f"s_mov_b32  {s.in_buff_ptr[2:2]}, {input_buffer_size}")
+        cl(f"s_mov_b32 {s.in_buff_ptr[2:2]}, {input_buffer_size}")
         cl(f"s_mov_b32 {s.in_buff_ptr[3:3]}, {0x00027000}")
 
         cl(f"s_mov_b32 {s.out_buff_ptr[2:2]}, {filter_buffer_size}")
@@ -139,9 +152,6 @@ class conv_direct_navi(kernel_constructor):
         block = s.add_block('block', [H4O, H31O])
 
         fill_buff_desc(H2O, 15, cl)
-        SMEM = SMEM_instr_caller()
-        cl(f"{SMEM.s_buffer_load_dword(1, H1O[1:1], H2O[0,1], karg.H()).emit()}")
-        cl(f"{SMEM.s_buffer_load_dword(1, H1O[1:1], H2O[0,1]).emit()}")
 
 
     def _set_kernel_karg_t(self) -> None:
