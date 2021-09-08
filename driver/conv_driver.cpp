@@ -563,6 +563,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
     int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
+    int print_all_gks = env_get_int("IGEMM_PRINT_ALL_GKS", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -599,6 +600,22 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         post_func();
 
         printf("\n");
+        if(print_all_gks){
+            for(auto & gks_itm : result.gks_record){
+                int c_gks = std::get<0>(gks_itm);
+                float c_duration = std::get<1>(gks_itm);
+                if(c_gks != result.gks){
+                    printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
+                    std::string c_gks_string = "[" + std::to_string(c_gks) + "]";
+                    printf("%s, ", c_gks_string.c_str());
+
+                    double c_gflops = theo_conv_flop / (c_duration * 1e6);
+                    printf("cost:%.3fms, tflops:%.3f(%.2f%%)", c_duration,
+                            c_gflops / 1000 , (c_gflops / theo_gpu_gflops) * 100);
+                    printf("\n");
+                }
+            }
+        }
         result.gflops = gflops;
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
 
