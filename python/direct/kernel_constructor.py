@@ -10,31 +10,30 @@ from ..codegen.mc import mc_base_t, mc_asm_printer_t
 from python.codegen.kernel_arg import arg_kind, arg_type
 
 
-class kernel_constructor(mc_base_t, _args_manager_t, ABC):
+class kernel_constructor(mc_base_t, ABC):
 
     class kernel_karg_t(karg_file_t):
         '''Empty class, should be overwritten in child class'''
-        def __init__(self, k_ptr, mc) -> None:
+        def __init__(self, mc) -> None:
             super().__init__(mc)
 
     @abstractmethod
     def _set_kernel_karg_t(self):
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
-        self.kargs=self.kernel_karg_t(self, self.mc)
+        self.kargs=self.kernel_karg_t(self.mc)
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
-        _args_manager_t.__init__(self)
         self._gpr_init(mc_asm_printer)
         self._set_kernel_karg_t()
         self.kernel_info = self._construct_kernel_info()
         self.instr_ctrl = instruction_ctrl()
-    
+        
     def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
         return amdgpu_kernel_info_t(
             kernel_code=self._get_kernel_code_obj_t(),
-            kernel_args=self.get_amdgpu_metadata_list(),
+            kernel_args=self.kargs.get_amdgpu_metadata_list(),
             kernel_block_size=0, kernel_name=self.get_kernel_name())
     
     @abstractmethod
@@ -67,7 +66,7 @@ class kernel_constructor(mc_base_t, _args_manager_t, ABC):
                 'enable_sgpr_workgroup_id_y'        :   1,
                 'enable_vgpr_workitem_id'           :   0,
                 'workgroup_group_segment_byte_size' :   self._get_LDS_usage(),
-                'kernarg_segment_byte_size'         :   self._get_kernel_arg_byte_size(),
+                'kernarg_segment_byte_size'         :   self.kargs._get_arg_byte_size(),
                 'wavefront_sgpr_count'              :   self.sgpr.get_count() + 2*3,
                 'workitem_vgpr_count'               :   self.vgpr.get_count()}
         
@@ -97,7 +96,7 @@ class kernel_constructor(mc_base_t, _args_manager_t, ABC):
         self._emit_empty_line()
 
     def _emit_kernel_symbols(self):
-        self.kargs.emit()
+        self.kargs.emit_symb()
         self._emit_empty_line()
         self.sgpr.emit()
         self._emit_empty_line()
@@ -110,6 +109,7 @@ class kernel_constructor(mc_base_t, _args_manager_t, ABC):
         self._emit_kernel_header()
         self._emit_kernel_symbols()
         self._emit_kernel_body()
+        self.instr_ctrl._emmit_all(self._emit)
         self._emit_kernel_end()
 
     def emit_kernel_amd_kernel_code_t(self):

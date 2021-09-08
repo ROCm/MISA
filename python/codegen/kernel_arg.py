@@ -33,7 +33,20 @@ class _singl_arg():
     def get_amdgpu_arg(self) -> amdgpu_kernel_arg_t:
         misc = {'address_space':self.address_space, 'is_const':self.is_const}
         return amdgpu_kernel_arg_t(self.name, self.size, self.offset, self.value_kind, self.value_type, **misc)
+
+    def declare_symb(self):
+        return f'.set {self.name}, {self.offset}'
         
+class _singl_arg_symbl():
+    __slots__ = ['label', 'offset']
+
+    def __init__(self, label:str, offset:int) -> None:
+        self.label = label
+        self.offset = offset
+    
+    def __str__(self) -> str:
+        return f'0+{self.label}'
+
 class _args_manager_t(ABC):
     #__slots__ = ['args_size', 'args_list']
     def __init__(self) -> None:
@@ -60,7 +73,7 @@ class _args_manager_t(ABC):
             padding      = (alignment - (self.args_size % alignment)) % alignment
             return self.args_size + padding
 
-    def _pb_kernel_arg(self, name:str, value_kind:arg_kind, value_type:arg_type, **misc) ->sym_t:
+    def _pb_kernel_arg(self, name:str, value_kind:arg_kind, value_type:arg_type, **misc) ->_singl_arg_symbl:
         '''Add new kernel_argument record to args_list.'''
         assert type(value_kind) is arg_kind
         assert type(value_type) is arg_type
@@ -72,7 +85,7 @@ class _args_manager_t(ABC):
         self.args_list.append(last_arg)
         self.args_size = offset + val_size
 
-        symbol = sym_t(name, offset)
+        symbol = _singl_arg_symbl(name, offset)
         return symbol
 
     def get_amdgpu_metadata_list(self):
@@ -83,15 +96,15 @@ class _args_manager_t(ABC):
             meta_args.append(i.get_amdgpu_arg())
         return meta_args
     
-    def _get_kernel_arg_byte_size(self) -> int:
+    def _get_arg_byte_size(self) -> int:
         return self.args_size
 
-class karg_file_t(mc_base_t, ABC):
+class karg_file_t(mc_base_t, _args_manager_t, ABC):
     '''base class, should be overwritten in child class'''
     def __init__(self, mc) -> None:
         mc_base_t.__init__(self, mc)
-        #self.sample = k_ptr._pb_kernel_arg('sample', arg_kind.value, arg_type.I32)
+        _args_manager_t.__init__(self)
 
-    def emit(self):
-        for k, v in self.__dict__.items():
-            self._emit(v.declare())
+    def emit_symb(self):
+        for v in self.args_list:
+            self._emit(v.declare_symb())

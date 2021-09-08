@@ -20,9 +20,9 @@ class conv_direct_navi(kernel_constructor):
 
     class kernel_karg_t(karg_file_t):
         '''Define kernel arguments. Used in _set_kernel_karg_t'''
-        def __init__(self, k_ptr:kernel_constructor, mc) -> None:
+        def __init__(self, mc) -> None:
             super().__init__(mc)
-            pb_arg = k_ptr._pb_kernel_arg
+            pb_arg = self._pb_kernel_arg
             self.in_ptr  = pb_arg('in_ptr',  arg_kind.GlobBuffer, arg_type.F32)
             self.out_ptr = pb_arg('out_ptr', arg_kind.GlobBuffer, arg_type.F32)
             self.wei_ptr = pb_arg('wei_ptr', arg_kind.GlobBuffer, arg_type.F32)
@@ -78,12 +78,12 @@ class conv_direct_navi(kernel_constructor):
         
         cl = self._emit
 
-        cl(f"s_load_dwordx2  {s.in_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.in_ptr()}")
-        cl(f"s_load_dwordx2  {s.out_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.out_ptr()}")
-        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.wei_ptr()}")
+        cl(f"s_load_dwordx2  {s.in_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},    {karg.in_ptr}")
+        cl(f"s_load_dwordx2  {s.out_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},   {karg.out_ptr}")
+        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0, 1]},   {s.karg_ptr[0, 1]},   {karg.wei_ptr}")
 
-        cl(f"s_load_dwordx4  {s.H[0, 3]},   {s.karg_ptr[0, 1]},    0+{karg.H()}")
-        cl(f"s_load_dwordx2  {s.Y[0, 1]},   {s.karg_ptr[0, 1]},    0+{karg.Y()}")
+        cl(f"s_load_dwordx4  {s.H[0, 3]},   {s.karg_ptr[0, 1]},    {karg.H}")
+        cl(f"s_load_dwordx2  {s.Y[0, 1]},   {s.karg_ptr[0, 1]},    {karg.Y}")
 
         #def fill_buff_desc(desc_reg, size, cl):
         #    cl(f"s_mov_b32 {desc_reg[2]}, {size}")
@@ -115,12 +115,12 @@ class conv_direct_navi(kernel_constructor):
 
         self.instr_ctrl._emmit_all(self._emit)
 
-        cl(f"s_load_dwordx2  {s.in_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.in_ptr()}")
-        cl(f"s_load_dwordx2  {s.out_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.out_ptr()}")
-        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    0+{karg.wei_ptr()}")
+        cl(f"s_load_dwordx2  {s.in_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    {karg.in_ptr}")
+        cl(f"s_load_dwordx2  {s.out_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    {karg.out_ptr}")
+        cl(f"s_load_dwordx2  {s.wei_buff_ptr[0:1]},   {s.karg_ptr[0:1]},    {karg.wei_ptr}")
 
-        cl(f"s_load_dwordx4  {s.H[0:3]},   {s.karg_ptr[0:1]},    0+{karg.H()}")
-        cl(f"s_load_dwordx2  {s.Y[0:1]},   {s.karg_ptr[0:1]},    0+{karg.Y()}")
+        cl(f"s_load_dwordx4  {s.H[0:3]},   {s.karg_ptr[0:1]},    {karg.H}")
+        cl(f"s_load_dwordx2  {s.Y[0:1]},   {s.karg_ptr[0:1]},    {karg.Y}")
 
         def fill_buff_desc(desc_reg:reg_block, size:int, cl):
             cl(f"s_mov_b32 {desc_reg[2]}, {size}")
@@ -157,7 +157,7 @@ class conv_direct_navi(kernel_constructor):
     def _set_kernel_karg_t(self) -> None:
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
-        self.kargs=self.kernel_karg_t(self, self.mc)
+        self.kargs=self.kernel_karg_t(self.mc)
     
     def _gpr_init(self, mc :mc_asm_printer_t) -> None:
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
