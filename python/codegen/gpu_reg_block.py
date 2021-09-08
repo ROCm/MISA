@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List
 from python.codegen.amdgpu import amdgpu_sgpr_limit
 from python.codegen.mc import mc_base_t
+import copy
 
 class gpr_off_sequencer_t(object):
     def __init__(self, offset = 0):
@@ -74,16 +75,24 @@ class reg_block(object):
             return self.expr((index1,index2))
     
     def __getitem__(self, key):
+        slice_size = 1
+        new_offset = self.offset
+
         if(type(key) is tuple):
             assert len(key) == 2
-            return f'{self.reg_t.value}[{self.label}+{key[0]}:{self.label}+{key[1]}]'
+            slice_size = key[1] - key[0]
+            new_offset = new_offset + key[0]
         elif (type(key) is slice):
-            k = slice(1,2)
             slice_size = key.stop - key.start
-            new_offset = self.offset + key.start
-            #send label without reg_type prefix
-            return reg_block(self.label[2:], self.reg_t, self.start, slice_size, new_offset)
-        return f'{self.reg_t.value}[{self.label}+{key}]'
+            new_offset = new_offset + key.start
+        else:
+            new_offset = new_offset + key
+        #send label without reg_type prefix
+        block_slice = copy.deepcopy(self)
+        block_slice.dwords = slice_size
+        block_slice.offset = new_offset
+        return block_slice
+        
     
     def __str__(self) -> str:
         if(self.dwords == 0):
@@ -92,11 +101,12 @@ class reg_block(object):
             return f'{self.reg_t.value}[{self.label}+{self.offset}:{self.label}+{self.offset}+{self.dwords}]'
         
 class gpr_file_t(mc_base_t):
-    __slots__ = ['_sq', 'reg_t']
+    __slots__ = ['_sq', 'reg_t', 'define_on_creation']
     def __init__(self, mc, reg_t:reg_type):
         mc_base_t.__init__(self, mc)
         self._sq = gpr_off_sequencer_t()
         self.reg_t = reg_t
+        self.define_on_creation = False
     
     def get_count(self):
         return self._sq.get_last_pos()
@@ -107,9 +117,13 @@ class gpr_file_t(mc_base_t):
         for k, v in self.__dict__.items():
             if not k.startswith('_'):
                 self._emit(v.define())
+        self.define_on_creation = True
     
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
-        return reg_block(label, self.reg_t, self._sq(dwords, alignment))
+        ret = reg_block(label, self.reg_t, self._sq(dwords, alignment))
+        if self.define_on_creation :
+            self._emit(ret.define())
+        return ret
 
     def add_no_pos(self, label:str, dwords:int = 1):
         return reg_block.declare(label, self.reg_t, dwords=dwords)
@@ -120,11 +134,16 @@ class gpr_file_t(mc_base_t):
         for i in reg_list:
             assert i.reg_t == self.reg_t, f" reg_t of element {i} doesn't match the block reg_t"
             i.set_offset(in_block_define(i.dwords))
-        
+
         block = reg_block(label, self.reg_t, self._sq(in_block_define.get_last_pos(), alignment))
         
+        if self.define_on_creation :
+            self._emit(block.define())
+
         for i in reg_list:
             i.set_position(block.start)
+            if self.define_on_creation :
+                self._emit(i.define())
         
         return block
 

@@ -129,6 +129,15 @@ class conv_direct_navi(kernel_constructor):
         cl(f"s_mov_b32 {s.wei_buff_ptr[2:2]}, {output_buffer_size}")
         cl(f"s_mov_b32 {s.wei_buff_ptr[3:3]}, {0x00027000}")
 
+        H1O = s.add('H1O', 1, 4)
+        H2O = s.add('H2O', 4, 4)
+
+        H4O = s.add_no_pos('H30',4)
+        H31O = s.add_no_pos('H310',1)
+
+        block = s.add_block('block', [H4O, H31O])
+
+        fill_buff_desc(H2O, 15, cl)
 
 
     def _set_kernel_karg_t(self) -> None:
