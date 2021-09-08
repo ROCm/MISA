@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from python.codegen.gpu_instruct import SMEM_instr_caller
 from python.codegen.gpu_reg_block import reg_block
 from python.codegen.kernel_driver import base_config
 from ..codegen.config_parser import config_content_t
@@ -138,6 +139,9 @@ class conv_direct_navi(kernel_constructor):
         block = s.add_block('block', [H4O, H31O])
 
         fill_buff_desc(H2O, 15, cl)
+        SMEM = SMEM_instr_caller()
+        cl(f"{SMEM.s_buffer_load_dword(1, H1O[1:1], H2O[0,1], karg.H()).emit()}")
+        cl(f"{SMEM.s_buffer_load_dword(1, H1O[1:1], H2O[0,1]).emit()}")
 
 
     def _set_kernel_karg_t(self) -> None:
