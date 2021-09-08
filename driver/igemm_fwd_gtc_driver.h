@@ -484,8 +484,6 @@ public:
         int k = arg->get_int("out_channels");
         int c = arg->get_int("in_channels");
 
-        std::cout << c << std::endl;
-
         int stride_h = arg->get_int("conv_stride_h");
         int stride_w = arg->get_int("conv_stride_w");
         int dilation_h = arg->get_int("dilation_h");
@@ -634,9 +632,6 @@ public:
             karg.n             = n;
             karg.k             = k / group;
             karg.c             = c / group / vector_c;
-            std::cout << c / group << std::endl;
-            std::cout << c / group / vector_c << std::endl;
-            std::cout <<group<< std::endl;
             karg.ho            = ho;
             karg.wo            = wo;
             karg.stride_h      = stride_h;
@@ -648,14 +643,14 @@ public:
             karg.y             = y;
             karg.x             = x;
             karg.group         = group;
-            //if(tunable->merge_e){
-            //    uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / ( x * (c / group))) % y;
-            //    uint32_t s_move_slice_k_x = (tunable->gemm_k_per_block /  (c / group)) % x;
-            //    uint32_t s_move_slice_k_c = tunable->gemm_k_per_block %  (c / group);
-            //    karg.y = (s_move_slice_k_y << 24) | karg.y;
-            //    karg.x = (s_move_slice_k_x << 24) | karg.x;
-            //    karg.c = (s_move_slice_k_c << 24) | karg.c;
-            //}
+            if(tunable->merge_e){
+                uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
+                uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
+                uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
+                karg.y = (s_move_slice_k_y << 24) | karg.y;
+                karg.x = (s_move_slice_k_x << 24) | karg.x;
+                karg.c = (s_move_slice_k_c << 24) | karg.c;
+            }
 #if USE_MAGIC_DIV
             int gemm_n = n * ho * wo;
             int gemm_m = k / group;
@@ -678,7 +673,6 @@ public:
             }
 #endif
             karg_size = sizeof(karg);
-            std::cout << karg.c << std::endl;
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
         } else {
             assert(0);
