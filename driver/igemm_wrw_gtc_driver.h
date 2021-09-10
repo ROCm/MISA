@@ -776,7 +776,6 @@ public:
                 }
                 // printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
                 // fflush(stdout);
-                result.gks_record.emplace_back(std::make_tuple(gemm_k_global_splits, duration));
             }
         }else{
             // nchw do not search for gemmksplit

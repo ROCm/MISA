@@ -656,8 +656,6 @@ public:
                     min_duration = duration;
                     selected_gks = gks;
                 }
-
-                result.gks_record.emplace_back(std::make_tuple(gks, duration));
             }
 
             result.return_code = 0;
