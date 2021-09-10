@@ -526,7 +526,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -911,6 +911,30 @@ public:
 #endif
         usleep(1000 * 5);
         return result;
+    }
+    std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
+    {
+        if(tunable->gemm_k_global_split == 0)
+            return std::vector<int>{};
+        else{
+            int k = arg->get_int("out_channels");
+            int group = arg->get_int("group_count");
+
+            int max_split_num = tunable->gemm_k_global_split == 0 ?
+                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
+            if(tunable->gemm_k_global_split == 1 && tunable->merge_e == 1){
+                // this is merge_e, which indicate support padding k
+                int padded_k_num = ((k / group) + tunable->gemm_k_per_block - 1) / tunable->gemm_k_per_block;
+                int k_pow2 = (int)log2(utility_prev_pow2(padded_k_num));
+                max_split_num = k_pow2 <= MAX_GEMM_K_SPLITS_BWD ? k_pow2 : MAX_GEMM_K_SPLITS_BWD;
+            }
+            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
+
+            std::vector<int> gks_list;
+            for(int gks = start_gks; gks <= max_split_num; gks++)
+                gks_list.push_back(gks);
+            return gks_list;
+        }
     }
 };
 

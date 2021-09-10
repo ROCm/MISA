@@ -586,7 +586,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -824,6 +824,19 @@ public:
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
         return result;
+    }
+    std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
+    {
+        if(tunable->gemm_k_global_split == 0)
+            return std::vector<int>{};
+        else{
+            int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
+
+            std::vector<int> gks_list;
+            for(int gks = 0; gks <= max_split_num; gks++)
+                gks_list.push_back(gks);
+            return gks_list;
+        }
     }
     hipModule_t         module_tensor_cast;
 };
