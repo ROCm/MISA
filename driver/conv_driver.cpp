@@ -618,7 +618,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             if(gks_iterative){
                 if(tunables[i].gemm_k_global_split != 0){
                     std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
-                    for(int gks=0; gks<gks_list.size(); gks++){
+                    for(int gks : gks_list){
                         result_t result = launch(&tunables[i], unique_index, gks);
                         unique_tunables.push_back(tunables[i]);
                         unique_tunables.back().gemm_k_global_split = gks;

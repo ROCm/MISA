@@ -63,6 +63,7 @@ export IGEMM_SLEEP_MS=117
 export IGEMM_ASSERT_WHEN_INVALID=1
 export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
+export IGEMM_GKS_ITERATIVE=1
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
