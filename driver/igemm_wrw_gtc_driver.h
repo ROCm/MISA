@@ -745,12 +745,13 @@ public:
         int selected_gkgs = 0;
         int selected_grid_size = 0;
         //max_split_num = 1;
-        if(tunable->tensor_layout == "nhwc"){
-            for(int gkgs = 0; gkgs < max_split_num; gkgs++){
+        auto run_with_gks = [&](int _gks){
+            if(tunable->tensor_layout == "nhwc"){
+                //for(int gkgs = 0; gkgs < max_split_num; gkgs++){
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
-            
+
                 // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
-                gemm_k_global_splits = gkgs == 0 ? 1 : compute_gemmk_global_splits(cur_grid_size, gkgs);
+                gemm_k_global_splits = _gks == 0 ? 1 : compute_gemmk_global_splits(cur_grid_size, _gks);
                 if(gemm_k_global_splits == 0){
                     gemm_k_global_splits = 1;
                 }
@@ -776,16 +777,25 @@ public:
                 }
                 // printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
                 // fflush(stdout);
-            }
-        }else{
-            // nchw do not search for gemmksplit
-            float duration = igemm_launch_kernels_with_prolog({
-                        {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
-                    }, wrw_prolog, this->warmup, this->repeat);
-            min_duration = duration;
-            selected_gkgs = gemm_k_global_splits;
-            selected_grid_size = grid_size;
 
+            }else{
+                // nchw do not search for gemmksplit
+                float duration = igemm_launch_kernels_with_prolog({
+                            {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
+                        }, wrw_prolog, this->warmup, this->repeat);
+                min_duration = duration;
+                selected_gkgs = gemm_k_global_splits;
+                selected_grid_size = grid_size;
+
+            }
+        };
+        if(current_gks != -1){
+            run_with_gks(current_gks);
+        }else{
+            std::vector<int> all_gks = get_gks_list(arg, tunable);
+            for(int gks : all_gks){
+                run_with_gks(gks);
+            }
         }
 
         result.return_code = 0;
@@ -828,13 +838,14 @@ public:
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
     {
         if(tunable->gemm_k_global_split == 0)
-            return std::vector<int>{};
+            return std::vector<int>{0};
         else{
             int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
 
             std::vector<int> gks_list;
             for(int gks = 0; gks <= max_split_num; gks++)
                 gks_list.push_back(gks);
+            assert(gks_list.size() != 0);
             return gks_list;
         }
     }

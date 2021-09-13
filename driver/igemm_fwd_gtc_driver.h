@@ -636,12 +636,12 @@ public:
         if(this->driver_mode == driver_mode_normal){
             float min_duration = FLT_MAX;
             int selected_gks = 0;
-            if(current_gks != -1){
-                size_t grid_size = get_grid_size(arg, tunable) * (1 << current_gks);
+            auto run_with_gks = [&](int _gks){
+                size_t grid_size = get_grid_size(arg, tunable) * (1 << _gks);
                 if(tunable->tensor_layout == "nhwc"){
                     // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
                     igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
-                    karg_revalue->ks = current_gks;
+                    karg_revalue->ks = _gks;
                     // dump_fwd_karg(karg_revalue);
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
@@ -649,29 +649,18 @@ public:
                 float duration = igemm_launch_kernels_with_prolog({
                         {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
                     }, fwd_prolog, this->warmup, this->repeat);
-                selected_gks = current_gks;
-                min_duration = duration;
-            }else{
-                int max_split_num = tunable->gemm_k_global_split == 0 ?
-                    0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
-                for(int gks = 0; gks <= max_split_num; gks++){
-                    size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
-                    if(tunable->tensor_layout == "nhwc"){
-                        // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
-                        igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
-                        karg_revalue->ks = gks;
-                        // dump_fwd_karg(karg_revalue);
-                        // printf("block:%d, grid:%d\n", block_size, grid_size);
-                        // fflush(stdout);
-                    }
-                    float duration = igemm_launch_kernels_with_prolog({
-                            {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                        }, fwd_prolog, this->warmup, this->repeat);
 
-                    if(min_duration > duration){
-                        min_duration = duration;
-                        selected_gks = gks;
-                    }
+                if(min_duration > duration){
+                    min_duration = duration;
+                    selected_gks = _gks;
+                }
+            };
+            if(current_gks != -1){
+                run_with_gks(current_gks);
+            }else{
+                std::vector<int> all_gks = get_gks_list(arg, tunable);
+                for(int gks : all_gks){
+                    run_with_gks(gks);
                 }
             }
 
@@ -702,17 +691,19 @@ public:
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
     {
         if(tunable->gemm_k_global_split == 0)
-            return std::vector<int>{};
+            return std::vector<int>{0};
         else{
             int c = arg->get_int("in_channels");
             int group = arg->get_int("group_count");
 
             int max_split_num = tunable->gemm_k_global_split == 0 ?
                 0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
+            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
 
             std::vector<int> gks_list;
-            for(int gks = 1; gks <= max_split_num; gks++)
+            for(int gks = start_gks; gks <= max_split_num; gks++)
                 gks_list.push_back(gks);
+            assert(gks_list.size() != 0);
             return gks_list;
         }
     }

@@ -797,18 +797,8 @@ public:
             float min_duration = FLT_MAX;
             float duration = .0;
             int selected_gks = 0;
-            int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
-            if(tunable->gemm_k_global_split == 1 && tunable->merge_e == 1){
-                // this is merge_e, which indicate support padding k
-                int padded_k_num = ((k / group) + tunable->gemm_k_per_block - 1) / tunable->gemm_k_per_block;
-                int k_pow2 = (int)log2(utility_prev_pow2(padded_k_num));
-                max_split_num = k_pow2 <= MAX_GEMM_K_SPLITS_BWD ? k_pow2 : MAX_GEMM_K_SPLITS_BWD;
-            }
-            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
-            for(int gks = start_gks; gks <= max_split_num; gks++){
-                size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
-
+            auto run_with_gks = [&](int _gks){
+                size_t grid_size = get_grid_size(arg, tunable) * (1 << _gks);
                 if(tunable->multihead){
                     std::vector<igemm_launch_kernel_t> kernels;
 
@@ -826,7 +816,7 @@ public:
                         karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
                         karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
                         karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
-                        karg->ks       = gks;
+                        karg->ks       = _gks;
 
                         kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
                     }else{
@@ -838,7 +828,7 @@ public:
 
                     if(min_duration > duration){
                         min_duration = duration;
-                        selected_gks = gks;
+                        selected_gks = _gks;
                     }
                 }else{
                     std::vector<igemm_launch_kernel_t> kernels;
@@ -876,7 +866,7 @@ public:
                                 karg->dtile_ix = i_x_tilda;
                                 karg->dslice_y = y_dot_slice;
                                 karg->dslice_x = x_dot_slice;
-                                karg->ks       = gks;
+                                karg->ks       = _gks;
                             }
 
                             kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
@@ -893,10 +883,18 @@ public:
 
                     if(min_duration > duration){
                         min_duration = duration;
-                        selected_gks = gks;
+                        selected_gks = _gks;
                     }
                     if(kargs)
                         free(kargs);
+                }
+            };
+            if(current_gks != -1){
+                run_with_gks(current_gks);
+            }else{
+                std::vector<int> all_gks = get_gks_list(arg, tunable);
+                for(int gks : all_gks){
+                    run_with_gks(gks);
                 }
             }
             result.return_code = 0;
@@ -915,7 +913,7 @@ public:
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
     {
         if(tunable->gemm_k_global_split == 0)
-            return std::vector<int>{};
+            return std::vector<int>{0};
         else{
             int k = arg->get_int("out_channels");
             int group = arg->get_int("group_count");
@@ -933,6 +931,7 @@ public:
             std::vector<int> gks_list;
             for(int gks = start_gks; gks <= max_split_num; gks++)
                 gks_list.push_back(gks);
+            assert(gks_list.size() != 0);
             return gks_list;
         }
     }
