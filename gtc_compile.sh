@@ -40,3 +40,5 @@ arch=gfx1030
 /opt/rocm/llvm/bin/clang++ -x assembler -target amdgcn--amdhsa -mcpu=$arch -Iout out/${TEST_KERNEL}.s -o out/${TEST_KERNEL}.hsaco
 /opt/rocm/hip/bin/hipcc -x hip --cuda-gpu-arch=$arch --cuda-device-only -c -O3 driver/gpu_naive_conv/naive_conv.cpp -o out/naive_conv.hsaco
 
+# dissassemble
+/opt/rocm/llvm/bin/llvm-objdump --disassemble --mcpu=$arch out/${TEST_KERNEL}.hsaco > out/${TEST_KERNEL}.disass.s
