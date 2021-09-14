@@ -29,8 +29,6 @@
 #include <hip/hip_ext.h>
 #include <hip/hip_runtime.h>
 #include <float.h>
-#include <vector>
-#include <tuple>
 
 typedef struct {
     int return_code     {-1};
@@ -40,7 +38,6 @@ typedef struct {
     float gflops        {0};
     float efficiency    {0};
     std::string kernel_name;
-    std::vector<std::tuple<int, float>> gks_record;  // for all gks, record all the <gks, duration>
 } result_t;
 
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,

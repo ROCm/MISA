@@ -563,27 +563,24 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
     int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
-    int print_all_gks = env_get_int("IGEMM_PRINT_ALL_GKS", 0);
+    int gks_iterative = env_get_int("IGEMM_GKS_ITERATIVE", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
 
-    // TODO: this is ugly
-    auto launch = [&](const igemm_gtc_tunable_t * tunable, int & unique_index, int & unique_index_for_fastest) -> result_t {
+    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
             if(run_only_kernel != driver->get_kernel_name(tunable)){
                 return result_t{};
             }
         }
         
-        unique_index_for_fastest = unique_index;
-        printf("[%s:%2d] %s", direction.c_str(), unique_index, driver->get_kernel_name(tunable).c_str());
+        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
         fflush(stdout);
-        unique_index++;
 
         pre_func();
 
-        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output);
+        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, current_gks);
 
         std::string gks_string = "";
         if(tunable->gemm_k_global_split){
@@ -592,7 +589,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         printf("%s, ", gks_string.c_str());
 
         if (result.return_code != 0){
-            printf("not applicatble\n");
+            printf("not applicable\n");
             return result_t{};
         }
 
@@ -603,24 +600,6 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         post_func();
 
         printf("\n");
-        if(print_all_gks){
-            for(auto & gks_itm : result.gks_record){
-                int c_gks = std::get<0>(gks_itm);
-                float c_duration = std::get<1>(gks_itm);
-                if(c_gks != result.gks){
-                    printf("[%s:%2d] %s", direction.c_str(), unique_index, driver->get_kernel_name(tunable).c_str());
-                    std::string c_gks_string = "[" + std::to_string(c_gks) + "]";
-                    printf("%s, ", c_gks_string.c_str());
-                    fflush(stdout);
-                    unique_index++;
-
-                    double c_gflops = theo_conv_flop / (c_duration * 1e6);
-                    printf("cost:%.3fms, tflops:%.3f(%.2f%%)", c_duration,
-                            c_gflops / 1000 , (c_gflops / theo_gpu_gflops) * 100);
-                    printf("\n");
-                }
-            }
-        }
         result.gflops = gflops;
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
 
@@ -634,13 +613,38 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int fastest_id = -1;
     if(driver->driver_mode == driver_mode_normal){
         int unique_index = 0;
-        int unique_index_for_fastest;
+        std::vector<igemm_gtc_tunable_t> unique_tunables;   // don't use this when gks_iterative is zero, since it will be just the same as the original tunables
         for(int i=0; i<tunables.size(); i++){
-            result_t result = launch(&tunables[i], unique_index, unique_index_for_fastest);
-
-            if(result.duration_ms < fastest_result.duration_ms){
-                fastest_result = result;
-                fastest_id = unique_index_for_fastest;
+            if(gks_iterative){
+                if(tunables[i].gemm_k_global_split != 0){
+                    std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
+                    for(int gks : gks_list){
+                        result_t result = launch(&tunables[i], unique_index, gks);
+                        unique_tunables.push_back(tunables[i]);
+                        unique_tunables.back().gemm_k_global_split = gks;
+                        if(result.duration_ms < fastest_result.duration_ms){
+                            fastest_result = result;
+                            fastest_id = unique_index;
+                        }
+                        unique_index++;
+                    }
+                }else{
+                    result_t result = launch(&tunables[i], unique_index, 0);
+                    unique_tunables.push_back(tunables[i]);
+                    unique_tunables.back().gemm_k_global_split = 0;
+                    if(result.duration_ms < fastest_result.duration_ms){
+                        fastest_result = result;
+                        fastest_id = unique_index;
+                    }
+                    unique_index++;
+                }
+            }
+            else{
+                result_t result = launch(&tunables[i], i, -1);
+                if(result.duration_ms < fastest_result.duration_ms){
+                    fastest_result = result;
+                    fastest_id = i;
+                }
             }
         }
 
@@ -671,9 +675,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                 return;
             }
 
-        int unique_index_dummy_0 = 0;
-        int unique_index_dummy_1 = 0;
-        result_t result = launch(&selected_tunable, unique_index_dummy_0, unique_index_dummy_1);
+        result_t result = launch(&selected_tunable, 0, -1);
         fastest_result = result;
         fastest_id = 0;
     }else{
