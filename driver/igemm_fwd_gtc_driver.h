@@ -690,6 +690,10 @@ public:
     }
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
     {
+        if (!tunable_is_valid(arg, tunable)) {
+            return std::vector<int>{0};
+        }
+
         if(tunable->gemm_k_global_split == 0)
             return std::vector<int>{0};
         else{
