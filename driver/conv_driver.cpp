@@ -825,8 +825,8 @@ int main(int argc, char **argv) {
             }
 
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-            //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
-            //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+            gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
+            gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
             if(driver_data_type == driverHalf){
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
@@ -860,7 +860,10 @@ int main(int argc, char **argv) {
                 float* aux_out = (float*)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
 
                 tensor_transpose_nchwc_2_nchw<float*>(aux_in, host_input, n, c, hi, wi, vector_c);
-                tensor_transpose_chwnc_2_nchw<float*>(aux_wei, host_weight, k, c, y, x, vector_c);
+                for(int i_groups = 0; i_groups < ngroups; i_groups++){
+                    int group_offset = i_groups * (k / ngroups) * (c / ngroups) * y * x;
+                    tensor_transpose_chwnc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
+                }
 
                 if(env_get_int("IGEMM_CHECK_TRNASPOSE", 0)){
                     float* aux_wei_check = (float*)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
