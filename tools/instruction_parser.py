@@ -36,11 +36,11 @@ class instr_type():
             self.opt_type = None
 
     class instruction():
-        def __init__(self, name) -> None:
+        def __init__(self, name:str) -> None:
             self.name = name
             self.arg_list:List[instr_type.i_argument] = []
 
-    def __init__(self, name) -> None:
+    def __init__(self, name:str) -> None:
         self.name = name
         self._arg_format = instr_type.arg_format()
         self.inst_list:List[instr_type.instruction]=[]
@@ -91,7 +91,7 @@ def parse_gfx_instruction_html_file(fileName):
         curent_pack = instr_type(i_p['id'])
         instr_types.append(curent_pack)
         
-        last_i_type:instr_type = None
+
         last_offset = 0
         next_elem_is_arg_type = False
 
@@ -116,8 +116,7 @@ def parse_gfx_instruction_html_file(fileName):
                     for line in lines:
                         p = parse_instruction_name(line)
                         if(p != ''):
-                            last_i_type = instr_type(p)
-                            curent_pack.add_new_instr(last_i_type)
+                            curent_pack.add_new_instr(p)
                             last_offset = len(line)
                     continue
                 elif(lines[0]==':'):
@@ -139,13 +138,16 @@ def create_G_class_code(instr:instr_type, name) -> List:
     no_mods = True
     for i in args[1:]:
         if(i != 'MODIFIERS'):
-            cur_str_head = f', {i}:reg_block'
+            cur_str_head = f', {i}:Union[reg_block,None]'
             cur_str_body = f'\t\tself.{i} = {i} \n'
-
         else:
             no_mods = False
-            cur_str_head = f', **MODIFIERS'
-            cur_str_body = f'\t\tself.{i} = \' \'.join({i}.values()) \n'
+            # TODO
+            #cur_str_head = f', **MODIFIERS'
+            #cur_str_body = f'\t\tself.{i} = \' \'.join({i}.values()) \n'
+            # instead of TODO
+            cur_str_head = f', MODIFIERS:str'
+            cur_str_body = f'\t\tself.{i} = {i} \n'
         init_head_l.append(cur_str_head)
         init_body_l.append(cur_str_body)
     init_head_l.append('): \n')
@@ -172,6 +174,64 @@ def create_G_class_code(instr:instr_type, name) -> List:
 
     return [header, init_head, *init_body_l, str_header, *str_body_l]
 
+
+def create_caller_class_code(name) -> List:
+    header = f'class {name}_instr_caller(inst_caller_base): \n'
+
+    init = f'\tdef __init__(self, insturction_container) -> None:\n \
+    \t\tsuper().__init__(insturction_container)\n'
+
+    return [header, init]
+
+def create_instruction_caller_func_code(cur_i:instr_type.instruction, arg_format_l:List[str], group_name:str):
+    i_name = cur_i.name
+    header_l = [f'\tdef {i_name}(self']
+    i_body_l = [f'\t\treturn self.ic_pb({group_name}(\'{i_name}\'']
+    arg_list = cur_i.arg_list
+    cur_i_arg = 1
+    if(len(arg_list) > 1):
+        cur_arg = arg_list[cur_i_arg]
+    else:
+        cur_arg = instr_type.i_argument("NONE", "NONE")
+    
+    s_arg_t = ':reg_block'
+    for i in arg_format_l[1:]:
+        if(i != 'MODIFIERS'):
+            if(cur_arg.f_type == i):
+                s = f', {cur_arg.name}'
+                i_body_l.append(s)
+                header_l.append(s)
+                if(cur_arg.name == 'gfx10_vaddr_5'):
+                    header_l.append(':Union[reg_block,None]')
+                else:
+                    header_l.append(':reg_block')
+                
+                cur_i_arg += 1
+                if(len(arg_list) > cur_i_arg):
+                    cur_arg = arg_list[cur_i_arg]
+            else:
+                i_body_l.append(f', None')
+
+    # TODO
+    #if(arg_format_l[-1] == 'MODIFIERS'):
+    #    for cur_i_arg in range(len(arg_list)):
+    #        cur_arg = arg_list[cur_i_arg]
+    #        if(cur_arg.name in ['fmt', 'offset', 'dim', 'dmask', 'ufmt',
+    #             'dpp8_sel', 'dpp16_sel', 'dpp16_ctrl','dpp32_ctrl', 'fi',
+    #             'dpp64_ctrl', 'row_mask', 'bank_mask', 'dst_sel', 'dst_unused',
+    #             'src0_sel', 'src1_sel', 'op_sel', 'dpp_op_sel', 'omod', 'op_sel_hi',
+    #             'neg_lo', 'neg_hi', 'm_op_sel', 'm_op_sel_hi', 'cbsz', 'abid', 'blgp']):
+    #Instead of TODO
+    if(cur_arg.f_type == 'MODIFIERS'):
+        s = f', {cur_arg.f_type}'
+        i_body_l.append(s)
+        header_l.append(s)
+        header_l.append(':str=\'\'')
+
+    header_l.append(f'):\n')
+    i_body_l.append(f'))\n')
+    return [*header_l, *i_body_l]
+
 def create_py_code(i_types:List[instr_type], outfile):
     
     outfile.writelines(f"from python.codegen.gpu_instruct import * \n\n")
@@ -180,6 +240,11 @@ def create_py_code(i_types:List[instr_type], outfile):
         group_name = i_t.name
         G_class_name = f'{group_name}_base'
         outfile.writelines(create_G_class_code(i_t, G_class_name))
+        outfile.writelines(create_caller_class_code(group_name))
+        i_list = i_t.inst_list
+        for cur_i in i_list:
+            outfile.writelines(create_instruction_caller_func_code(cur_i,i_t._arg_format.names, G_class_name))
+            
 
 
 
