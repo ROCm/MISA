@@ -589,7 +589,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         printf("%s, ", gks_string.c_str());
 
         if (result.return_code != 0){
-            printf("not applicatble\n");
+            printf("not applicable\n");
             return result_t{};
         }
 

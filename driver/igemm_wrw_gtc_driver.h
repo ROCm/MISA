@@ -865,6 +865,9 @@ public:
     }
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
     {
+        if (!tunable_is_valid(arg, tunable)) {
+            return std::vector<int>{0};
+        }
         size_t cur_grid_size_t = get_cur_grid_size(arg, tunable);
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
