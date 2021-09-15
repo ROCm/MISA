@@ -172,7 +172,7 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 #endif
 
 #ifndef IGEMM_TENSOR_CAST_HSACO
-#define IGEMM_TENSOR_CAST_HSACO "out/igemm_gtc_tensor_cast.hsaco"
+#define IGEMM_TENSOR_CAST_HSACO "igemm_gtc_tensor_cast.hsaco"
 #endif
 
 #ifndef IGEMM_CONFIG_FILE
