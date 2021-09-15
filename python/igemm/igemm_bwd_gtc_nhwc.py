@@ -143,7 +143,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
             na_nb0, na_nb1, na_e, na_k, nb_e, nb_k, nb_c0, nb_c1 = self.get_dims_lengths()
             ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [na_nb0, na_nb1]
-            ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
+            ctrl_coalescing_store_xdlops.accvgpr_unified = self.is_accvgpr_unified()
 
             def get_vector_write_out():
                 vector_write = 1
@@ -205,7 +205,11 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.dict_shifted_stride[gpr.label] = gpr
                 self._emit(f"s_lshl_b32 s[{gpr()}], s[{gpr()}], {shifter}")
         return self._get_deferred()
-    
+
+    def is_accvgpr_unified(self):
+        return IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A \
+                and not (self.tunable.gemm_m_per_block == 256 and self.tunable.gemm_n_per_block == 256)
+
     class macro_set_flag_nhw(macro_base_t):
         def __init__(self, mc, inline = False):
             macro_base_t.__init__(self, mc, inline)
@@ -1155,7 +1159,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            if IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+            if outer.is_accvgpr_unified():
                 vgpr = outer.kernel_vgpr_t(mc, outer)
                 aseq = gpr_sequencer_t(vgpr.get_accum_start())
             else:
@@ -2736,7 +2740,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
             fctrl.interleave                  = self.tunable.fma_interleave
-            fctrl.accvgpr_unified             = IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
+            fctrl.accvgpr_unified             = self.is_accvgpr_unified()
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_out
