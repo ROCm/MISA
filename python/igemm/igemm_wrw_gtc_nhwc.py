@@ -32,7 +32,7 @@ from .igemm_base import *
 IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
-IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED = False   # used in gfx90a
+IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
