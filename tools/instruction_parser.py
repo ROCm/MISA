@@ -30,9 +30,10 @@ class instr_type():
             return self.names[self.arg_positions.index(offset)]
 
     class i_argument():
-        def __init__(self, name, f_type) -> None:
+        def __init__(self, name, f_type, arg_type) -> None:
             self.name = name
             self.f_type = f_type
+            self.arg_type = arg_type
             self.opt_type = None
 
     class instruction():
@@ -53,9 +54,9 @@ class instr_type():
         self.inst_list.append(last_inst)
         self.last_inst = last_inst
 
-    def add_arg_to_last_inst(self, name, offset):
-        arg_type = self._arg_format.get_arg_type(offset)
-        arg =  self.i_argument(name, arg_type)
+    def add_arg_to_last_inst(self, name, offset, arg_type):
+        arg_f_type = self._arg_format.get_arg_type(offset)
+        arg =  self.i_argument(name, arg_f_type, arg_type)
         self.last_inst.arg_list.append(arg)
 
     def add_opt_type_to_last_arg(self, opt_type):
@@ -67,16 +68,18 @@ def parse_instruction_name(l:str):
     return l.translate(str.maketrans('', '', '— '))
 
 def parse_instruction_argument(arg:bs4Element.Tag):
-    name = arg['href']
-    if(name.find('AMDGPUModifierSyntax') != -1):
-        return name.split("amdgpu-synid-",1)[1] 
-    return name[:name.index('.')]
+    type_name = arg['href']
+    name = arg.string
+    if(type_name.find('AMDGPUModifierSyntax') != -1):
+        return (name, type_name.split("amdgpu-synid-",1)[1])
+    return (name, type_name[:type_name.index('.')])
 
-def parse_argument_type(a_type:bs4Element.Tag)->str:
-    name = parse_instruction_argument(a_type)
-    if(name in ['gfx10_m', 'gfx10_dst']):
-        return name
+def parse_argument_mod(a_type:bs4Element.Tag)->str:
+    name, type_name = parse_instruction_argument(a_type)
+    if(type_name in ['gfx10_m', 'gfx10_dst']):
+        return type_name
     return ''
+
 
 def parse_gfx_instruction_html_file(fileName):
     instr_types:List[instr_type] = []
@@ -93,21 +96,21 @@ def parse_gfx_instruction_html_file(fileName):
         
 
         last_offset = 0
-        next_elem_is_arg_type = False
+        next_elem_is_arg_mod = False
 
         litblock = i_p.find("pre")
         
         for i in litblock:
             if(type(i) == bs4Element.Tag):
                 if(i.name == 'a'):
-                    if(next_elem_is_arg_type):
-                        a_type = parse_argument_type(i)
+                    if(next_elem_is_arg_mod):
+                        a_type = parse_argument_mod(i)
                         if(a_type != ''):
                             curent_pack.add_opt_type_to_last_arg(a_type)
-                        next_elem_is_arg_type=False
+                        next_elem_is_arg_mod=False
                     else:
-                        arg_name = parse_instruction_argument(i)
-                        curent_pack.add_arg_to_last_inst(arg_name, last_offset)
+                        arg_name, type_name = parse_instruction_argument(i)
+                        curent_pack.add_arg_to_last_inst(arg_name, last_offset, type_name)
                 elif(i.name == 'strong'):
                     curent_pack.arg_format_append(i.string, last_offset)
             else: #string
@@ -120,7 +123,7 @@ def parse_gfx_instruction_html_file(fileName):
                             last_offset = len(line)
                     continue
                 elif(lines[0]==':'):
-                    next_elem_is_arg_type = True
+                    next_elem_is_arg_mod = True
             
             last_offset += len(i.string)
     return instr_types
@@ -188,21 +191,33 @@ def create_instruction_caller_func_code(cur_i:instr_type.instruction, arg_format
     header_l = [f'\tdef {i_name}(self']
     i_body_l = [f'\t\treturn self.ic_pb({group_name}(\'{i_name}\'']
     arg_list = cur_i.arg_list
-    cur_i_arg = 1
+    cur_i_arg = 0
     if(len(arg_list) > 1):
         cur_arg = arg_list[cur_i_arg]
     else:
-        cur_arg = instr_type.i_argument("NONE", "NONE")
+        cur_arg = instr_type.i_argument("NONE", "NONE", "NONE")
     
     s_arg_t = ':reg_block'
     for i in arg_format_l[1:]:
         if(i != 'MODIFIERS'):
             if(cur_arg.f_type == i):
-                s = f', {cur_arg.name}'
+                if(cur_arg.name == 'vcc'):
+                    s = f', {cur_arg.name}_{cur_arg.f_type}'
+                else:
+                    s = f', {cur_arg.name}'
                 i_body_l.append(s)
                 header_l.append(s)
-                if(cur_arg.name == 'gfx10_vaddr_5'):
-                    header_l.append(':Union[reg_block,None]')
+                arg_type = cur_arg.arg_type
+                if(arg_type == 'gfx10_vaddr_5'):
+                    header_l.append(':Union[reg_block]')
+                elif (arg_type in ['gfx10_ssrc', 'gfx10_ssrc_1', 'gfx10_src_2', 'gfx10_src_3', 'gfx10_src_4','gfx10_src_8', 'gfx10_ssrc_8']):
+                    header_l.append(':Union[reg_block,literal,const]')
+                elif (arg_type in ['gfx10_src_6, gfx10_src_7', 'gfx10_src_1', 'gfx10_src', 'gfx10_ssrc_6', 'gfx10_ssrc_7']):
+                    header_l.append(':Union[reg_block,const]')
+                elif(arg_type in ['gfx10_imm16', 'gfx10_simm32', 'gfx10_label']):
+                    header_l.append(f':{arg_type.split("gfx10_",1)[1]}_t')
+                elif(arg_type == 'gfx10_msg'):
+                    header_l.append(':str')
                 else:
                     header_l.append(':reg_block')
                 
@@ -216,17 +231,26 @@ def create_instruction_caller_func_code(cur_i:instr_type.instruction, arg_format
     #if(arg_format_l[-1] == 'MODIFIERS'):
     #    for cur_i_arg in range(len(arg_list)):
     #        cur_arg = arg_list[cur_i_arg]
-    #        if(cur_arg.name in ['fmt', 'offset', 'dim', 'dmask', 'ufmt',
+    #        if(cur_arg.opt_type in ['fmt', 'offset', 'dim', 'dmask', 'ufmt',
     #             'dpp8_sel', 'dpp16_sel', 'dpp16_ctrl','dpp32_ctrl', 'fi',
     #             'dpp64_ctrl', 'row_mask', 'bank_mask', 'dst_sel', 'dst_unused',
     #             'src0_sel', 'src1_sel', 'op_sel', 'dpp_op_sel', 'omod', 'op_sel_hi',
     #             'neg_lo', 'neg_hi', 'm_op_sel', 'm_op_sel_hi', 'cbsz', 'abid', 'blgp']):
     #Instead of TODO
+    #doc = []
     if(cur_arg.f_type == 'MODIFIERS'):
         s = f', {cur_arg.f_type}'
         i_body_l.append(s)
         header_l.append(s)
         header_l.append(':str=\'\'')
+        #doc.append
+        #for cur_i_arg in range(cur_i_arg, len(arg_list)):
+        #    cur_arg = arg_list[cur_i_arg]
+        #    doc.append(f' {cur_arg.name}')
+    else:
+        if(arg_format_l[-1] == 'MODIFIERS'):
+            i_body_l.append(', \'\'')
+
 
     header_l.append(f'):\n')
     i_body_l.append(f'))\n')
