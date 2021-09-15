@@ -42,6 +42,7 @@ def igemm_flatten(args, config_content):
 
     # create mc
     mc = mc_asm_printer_t(emitter, arch)
+    mc_set_current(mc)
 
     tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
     for td in tunable_dicts:
@@ -50,7 +51,6 @@ def igemm_flatten(args, config_content):
     codegen_driver_t(mc, tunable_dicts)(split_kernel = args.split_kernel)
 
     # os.chmod(asm_target, 0x777)
-
 
 def igemm_out_tunable_param(output_file, config_content):
     sec_root = config_content.get_section('codegen')[0]

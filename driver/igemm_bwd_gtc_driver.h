@@ -292,6 +292,9 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
 
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        n = n / splits;   // split batch size here
+
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
@@ -379,6 +382,13 @@ public:
             return false;
 
         assert(c % group == 0 && k % group == 0);
+
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        if(splits == 0){
+            printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
+            return false;
+        }
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -470,7 +480,7 @@ public:
                 ;   // if output k 1, indicate padded k support
             }
             else{
-                if(((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
+                if(k >> tunable->gemm_k_global_split == 0 || ((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
                     return false;
             }
             if((tunable->nxe == 0) && !unit_conv){
@@ -479,8 +489,9 @@ public:
 
             if(tunable->precision == "fp16"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->tensor_a_thread_lengths[1] == 1){
-                    ;   // if output k 1, c is also write out one by one
+                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[3] == 1 && tunable->merge_e && !tunable->gemm_k_global_split){
+                    ;   // only case that support every config
+                        // thread_k, thread_c is one, merge_e, and not gks
                 }
                 else{
                     if(tunable->gemm_k_global_split){
@@ -515,7 +526,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -542,6 +553,9 @@ public:
         int group = arg->get_int("group_count");
 
         assert(c % group == 0 && k % group == 0);
+
+        size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
+        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -769,7 +783,7 @@ public:
 
         auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
             std::function<float()>{[&]() -> float{
-                hipMemset(p_in, 0, n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                hipMemset(p_in, 0, static_cast<size_t>(splits)*n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -783,12 +797,8 @@ public:
             float min_duration = FLT_MAX;
             float duration = .0;
             int selected_gks = 0;
-            int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
-            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
-            for(int gks = start_gks; gks <= max_split_num; gks++){
-                size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
-
+            auto run_with_gks = [&](int _gks){
+                size_t grid_size = get_grid_size(arg, tunable) * (1 << _gks);
                 if(tunable->multihead){
                     std::vector<igemm_launch_kernel_t> kernels;
 
@@ -806,9 +816,9 @@ public:
                         karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
                         karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
                         karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
-                        karg->ks       = gks;
+                        karg->ks       = _gks;
 
-                        kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                        kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
                     }else{
                         assert(0);
                     }
@@ -818,7 +828,7 @@ public:
 
                     if(min_duration > duration){
                         min_duration = duration;
-                        selected_gks = gks;
+                        selected_gks = _gks;
                     }
                 }else{
                     std::vector<igemm_launch_kernel_t> kernels;
@@ -856,10 +866,10 @@ public:
                                 karg->dtile_ix = i_x_tilda;
                                 karg->dslice_y = y_dot_slice;
                                 karg->dslice_x = x_dot_slice;
-                                karg->ks       = gks;
+                                karg->ks       = _gks;
                             }
 
-                            kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, 1, 1}, std::vector<size_t>{block_size, 1, 1}});
+                            kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
 
                             valid_kernel_index++;
                         }
@@ -873,10 +883,18 @@ public:
 
                     if(min_duration > duration){
                         min_duration = duration;
-                        selected_gks = gks;
+                        selected_gks = _gks;
                     }
                     if(kargs)
                         free(kargs);
+                }
+            };
+            if(current_gks != -1){
+                run_with_gks(current_gks);
+            }else{
+                std::vector<int> all_gks = get_gks_list(arg, tunable);
+                for(int gks : all_gks){
+                    run_with_gks(gks);
                 }
             }
             result.return_code = 0;
@@ -891,6 +909,35 @@ public:
 #endif
         usleep(1000 * 5);
         return result;
+    }
+    std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
+    {
+        if (!tunable_is_valid(arg, tunable)) {
+            return std::vector<int>{0};
+        }
+
+        if(tunable->gemm_k_global_split == 0)
+            return std::vector<int>{0};
+        else{
+            int k = arg->get_int("out_channels");
+            int group = arg->get_int("group_count");
+
+            int max_split_num = tunable->gemm_k_global_split == 0 ?
+                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
+            if(tunable->gemm_k_global_split == 1 && tunable->merge_e == 1){
+                // this is merge_e, which indicate support padding k
+                int padded_k_num = ((k / group) + tunable->gemm_k_per_block - 1) / tunable->gemm_k_per_block;
+                int k_pow2 = (int)log2(utility_prev_pow2(padded_k_num));
+                max_split_num = k_pow2 <= MAX_GEMM_K_SPLITS_BWD ? k_pow2 : MAX_GEMM_K_SPLITS_BWD;
+            }
+            int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
+
+            std::vector<int> gks_list;
+            for(int gks = start_gks; gks <= max_split_num; gks++)
+                gks_list.push_back(gks);
+            assert(gks_list.size() != 0);
+            return gks_list;
+        }
     }
 };
 

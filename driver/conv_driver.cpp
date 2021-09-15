@@ -563,11 +563,12 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int log_fastest_config = env_get_int("IGEMM_LOG_FASTEST_CONFIG", 0);
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
     int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
+    int gks_iterative = env_get_int("IGEMM_GKS_ITERATIVE", 0);
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
 
-    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index) -> result_t {
+    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
             if(run_only_kernel != driver->get_kernel_name(tunable)){
                 return result_t{};
@@ -579,7 +580,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 
         pre_func();
 
-        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output);
+        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, current_gks);
 
         std::string gks_string = "";
         if(tunable->gemm_k_global_split){
@@ -588,7 +589,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         printf("%s, ", gks_string.c_str());
 
         if (result.return_code != 0){
-            printf("not applicatble\n");
+            printf("not applicable\n");
             return result_t{};
         }
 
@@ -611,12 +612,39 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     fastest_result.duration_ms = FLT_MAX;
     int fastest_id = -1;
     if(driver->driver_mode == driver_mode_normal){
+        int unique_index = 0;
+        std::vector<igemm_gtc_tunable_t> unique_tunables;   // don't use this when gks_iterative is zero, since it will be just the same as the original tunables
         for(int i=0; i<tunables.size(); i++){
-            result_t result = launch(&tunables[i], i);
-
-            if(result.duration_ms < fastest_result.duration_ms){
-                fastest_result = result;
-                fastest_id = i;
+            if(gks_iterative){
+                if(tunables[i].gemm_k_global_split != 0){
+                    std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
+                    for(int gks : gks_list){
+                        result_t result = launch(&tunables[i], unique_index, gks);
+                        unique_tunables.push_back(tunables[i]);
+                        unique_tunables.back().gemm_k_global_split = gks;
+                        if(result.duration_ms < fastest_result.duration_ms){
+                            fastest_result = result;
+                            fastest_id = unique_index;
+                        }
+                        unique_index++;
+                    }
+                }else{
+                    result_t result = launch(&tunables[i], unique_index, 0);
+                    unique_tunables.push_back(tunables[i]);
+                    unique_tunables.back().gemm_k_global_split = 0;
+                    if(result.duration_ms < fastest_result.duration_ms){
+                        fastest_result = result;
+                        fastest_id = unique_index;
+                    }
+                    unique_index++;
+                }
+            }
+            else{
+                result_t result = launch(&tunables[i], i, -1);
+                if(result.duration_ms < fastest_result.duration_ms){
+                    fastest_result = result;
+                    fastest_id = i;
+                }
             }
         }
 
@@ -647,7 +675,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                 return;
             }
 
-        result_t result = launch(&selected_tunable, 0);
+        result_t result = launch(&selected_tunable, 0, -1);
         fastest_result = result;
         fastest_id = 0;
     }else{
@@ -885,7 +913,8 @@ int main(int argc, char **argv) {
 
         auto fwd_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_output, 0, static_cast<size_t>(n) * k * ho * wo * data_byte));
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_output : device_output_dtype,
+                    0, static_cast<size_t>(n) * k * ho * wo * data_byte));
         };
 
         auto fwd_post = [&](){
@@ -1009,7 +1038,8 @@ int main(int argc, char **argv) {
 
         auto bwd_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_input, 0x7f, static_cast<size_t>(n) * c * hi * wi * data_byte)); // 0x7f7f7f7f ~= 7.41e+28, a very large number
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_input : device_input_dtype,
+                    0x7f, static_cast<size_t>(n) * c * hi * wi * data_byte)); // 0x7f7f7f7f ~= 7.41e+28, a very large number
         };
 
         auto bwd_post = [&](){
@@ -1154,7 +1184,8 @@ int main(int argc, char **argv) {
         
         auto wrw_pre = [&](){
             if (need_verify)
-                HIP_CALL(hipMemset(device_weight, 0, static_cast<size_t>(k) * c * y * x * sizeof(float)));
+                HIP_CALL(hipMemset(driver_data_type == driverFloat ? device_weight : device_weight_dtype,
+                    0, static_cast<size_t>(k) * c * y * x * data_byte));
         };
 
         auto wrw_post = [&](){

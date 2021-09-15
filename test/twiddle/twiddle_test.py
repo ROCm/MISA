@@ -1,11 +1,11 @@
-from igemm import *
-from igemm.cellfft import *
+from python import *
+from python.cellfft import *
 import sys, os, shutil
 import subprocess
 
 OUT_DIR='out'
 CPP_DIR=os.path.join('test', 'twiddle')
-ARCH="gfx1030"
+ARCH="gfx908"
 
 def run_cmd(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
@@ -42,6 +42,7 @@ def test_fft():
 
     # create mc
     mc = mc_asm_printer_t(emitter, arch)
+    mc_set_current(mc)
     hsa_header_t(mc).emit() 
 
     kernel_info_list = []
@@ -80,8 +81,6 @@ def test_fft():
             return kernel_info
         
         kernel_info_list.append(get_kernel_info())
-        v_add_nc_u32 = inst_v_add_nc_u32_t(mc)
-        v_cmpx_eq_u32 = inst_v_cmpx_eq_u32_t(mc)
         
         label_end = f"{kernel_func}_end"
         mc.emit(f".set s_ka,        0")
@@ -108,7 +107,7 @@ def test_fft():
             # mc.emit(f"buffer_load_dword v[v_pt + {i}], v[v_tmp], s[s_in:s_in+3], 0, offen offset:0")
             # mc.emit(v_add_nc_u32("v_tmp",  "v_tmp",   4))
             # mc.emit(f"buffer_load_dword v[v_pt + {i}], v[v_tmp], s[s_in:s_in+3], 0, offen offset:{i * 4}")
-            mc.emit(f"global_load_dword v[v_pt + {i}], v[v_tmp:v_tmp+1], s[s_in:s_in+1] offset:{i * 4}")
+            mc.emit(f"global_load_dword v[v_pt + {i}], v[v_tmp], s[s_in:s_in+1] offset:{i * 4}")
         mc.emit(f"s_waitcnt vmcnt(0)")
         mc.emit(f";----------------")
         mc.emit(fft("v_pt", "v_tmp"))
@@ -119,7 +118,7 @@ def test_fft():
             # mc.emit(f"buffer_store_dword v[v_pt + {i}], v[v_tmp], s[s_out:s_out+3], 0, offen offset:0")
             # mc.emit(v_add_nc_u32("v_tmp",  "v_tmp",   4))
             # mc.emit(f"buffer_store_dword v[v_pt + {i}], v[v_tmp], s[s_out:s_out+3], 0, offen offset:{i * 4}")
-            mc.emit(f"global_store_dword  v[v_tmp:v_tmp+1],  v[v_pt + {i}],s[s_out:s_out+1] offset:{i * 4}")
+            mc.emit(f"global_store_dword  v[v_tmp],  v[v_pt + {i}],s[s_out:s_out+1] offset:{i * 4}")
         mc.emit(f"s_waitcnt vmcnt(0)")
         mc.emit(f"s_mov_b64         exec,   -1")
         mc.emit(f"{label_end}:")
