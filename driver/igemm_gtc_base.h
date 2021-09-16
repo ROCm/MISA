@@ -61,6 +61,13 @@ typedef enum {
                            (Partially supported) */
 } driverDataType_t;
 
+typedef struct {
+    void* output;
+    void* input;
+    int thread_length;
+    int total_length;
+} __attribute__((packed)) tensor_cast_karg_t;
+
 static inline size_t get_data_byte(driverDataType_t dtype)
 {
     if(dtype == driverHalf)
@@ -473,8 +480,11 @@ static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_lau
     auto launch_kernels = [&]() -> float{
         float ms = .0;
         ms += prolog_kernel();
-        for(const auto & ker :  kernels)
-            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+        for(const auto & ker :  kernels){
+            float t = igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+            std::cout << ker.kernel_func << ": " << t << std::endl;
+            ms += t;
+        }
         return ms;
     };
 
@@ -562,8 +572,8 @@ static inline size_t igemm_split_batch_size(const args_t *arg, int data_byte)
 
 class igemm_driver_base_t{
 public:
-    igemm_driver_base_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_) : 
-        module(module_), driver_mode(driver_mode_), data_type(data_type_), warmup(warmup_), repeat(repeat_), verbose(verbose_)
+    igemm_driver_base_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_) : 
+        module_tensor_cast(module_tensor_cast_), module(module_), driver_mode(driver_mode_), data_type(data_type_), warmup(warmup_), repeat(repeat_), verbose(verbose_)
     {
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
@@ -581,12 +591,13 @@ public:
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
-    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks) = 0;
+    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, void *p_workspace, int current_gks) = 0;
     virtual std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
 
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
     virtual int heuristic_select_gks(const args_t *arg, const igemm_gtc_tunable_t *tunable) {return 0; }
 
+    hipModule_t         module_tensor_cast;
     hipModule_t         module;         // not used in IGEMM_SPLIT_KERNEL case
     driver_mode_t       driver_mode;
     driverDataType_t    data_type;

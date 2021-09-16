@@ -258,8 +258,8 @@ static void dump_bwd_karg(igemm_bwd_gtc_nhwc_karg_t * karg){
 
 class igemm_bwd_gtc_t : public igemm_driver_base_t{
 public:
-    igemm_bwd_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
-        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
+    igemm_bwd_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
+        : igemm_driver_base_t(module_tensor_cast_, module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_bwd_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
@@ -526,7 +526,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
+                 void *p_in, void *p_wei, void *p_out, void *p_workspace, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -780,6 +780,9 @@ public:
         HIP_CALL(
             hipModuleGetFunction(&upsampling_clear_kernel_func, module, upsampling_clear_kernel_name.c_str()));
 #endif
+
+        hipFunction_t tensor_cast_func;
+        HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
 
         auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
             std::function<float()>{[&]() -> float{

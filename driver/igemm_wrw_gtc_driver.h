@@ -40,13 +40,6 @@
 #define WRW_MAX_GEMM_K_SPLITS 10
 
 typedef struct {
-    void* output;
-    void* input;
-    int thread_length;
-    int total_length;
-} __attribute__((packed)) tensor_cast_karg_t;
-
-typedef struct {
     void *p_in;
     void *p_wei;
     void *p_out;
@@ -97,9 +90,7 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
 class igemm_wrw_gtc_t : public igemm_driver_base_t {
 public:
     igemm_wrw_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
-        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {
-            this->module_tensor_cast = module_tensor_cast_;
-        }
+        : igemm_driver_base_t(module_tensor_cast_, module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_wrw_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
@@ -622,7 +613,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
+                 void *p_in, void *p_wei, void *p_out, void *p_workspace, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -689,8 +680,7 @@ public:
         else
             use_workspace = 0;
 
-        void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * group * (k / group) * (c / group) * y * x * sizeof(short)));
+        void *p_wei_workspace = p_workspace;
 
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -861,7 +851,6 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
-        HIP_CALL(hipFree(p_wei_workspace));
         return result;
     }
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
@@ -924,7 +913,6 @@ public:
             return gks_list;
         }
     }
-    hipModule_t         module_tensor_cast;
 };
 
 #endif
