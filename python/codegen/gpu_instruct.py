@@ -12,6 +12,8 @@ class instruction_type(Enum):
     SMEM = 'SMEM'
     VMEM = 'VMEM'
     VOP1 = 'VOP1'
+    REGALLOC = 'REGA'
+    REGDEALLOC = 'REGA'
 
 class inst_base(ABC):
     __slots__ = ['label', 'inst_type']
@@ -35,6 +37,29 @@ class inst_caller_base(ABC):
         self.ic.append(inst)
         return inst
 
+class reg_allocator_base(inst_base):
+    def __init__(self, reg:Union[reg_block, List[reg_block], tuple], alignment, alloc_f) -> None:
+        super().__init__(instruction_type.REGALLOC, 'reg_alloc')
+        self.reg = reg
+        self.alloc_f = alloc_f
+        self.alignment = alignment
+
+    def __str__(self) -> str:
+        return self.alloc_f(self.reg, self.alignment)
+
+class reg_allocator_caller(inst_caller_base):
+    def __init__(self, insturction_container: List[inst_base]) -> None:
+        super().__init__(insturction_container)
+    
+    def reg_alloc(self, dst:reg_block, alignment:int, alloc_f):
+        return self.ic_pb(reg_allocator_base(dst, alignment, alloc_f))
+    
+    def Block_alloc(self, dst:List[reg_block], block_offsets:List[int], alignment:int, alloc_f):
+        return self.ic_pb(reg_allocator_base( (dst, block_offsets), alignment, alloc_f))
+
+    def reg_dealloc(self, dst:reg_block, dealloc_f):
+        return self.ic_pb(reg_allocator_base(dst, 0, dealloc_f))
+
 #class gpu_instructions_caller(VOP1_instr_caller, VMEM_instr_caller, SMEM_instr_caller, SOP1_instr_caller):
 
 from python.codegen.GFX10 import *
@@ -44,7 +69,7 @@ class gpu_instructions_caller(dpp16_instr_caller, dpp8_instr_caller, ds_instr_ca
     mubuf_instr_caller, sdwa_instr_caller, smem_instr_caller, sop1_instr_caller,
     sop2_instr_caller, sopc_instr_caller, sopk_instr_caller, sopp_instr_caller,
     vintrp_instr_caller, vop1_instr_caller, vop2_instr_caller, vop3_instr_caller,
-    vop3p_instr_caller, vopc_instr_caller):
+    vop3p_instr_caller, vopc_instr_caller, reg_allocator_caller):
     def __init__(self, insturction_container) -> None:
         super().__init__(insturction_container)
 

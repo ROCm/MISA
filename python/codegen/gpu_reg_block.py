@@ -251,29 +251,55 @@ def abs(reg:regVar):
 def neg(reg:regVar):
     return regAbs
 
-class gpr_file_t(mc_base_t):
-    __slots__ = ['_sq', 'reg_t', 'define_on_creation']
-    def __init__(self, mc, reg_t:reg_type):
-        mc_base_t.__init__(self, mc)
-        self._sq = gpr_off_sequencer_t()
+from python.codegen.gpu_instruct import gpu_instructions_caller
+
+class gpr_file_t():#mc_base_t):
+    __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic']
+    def __init__(self, ic:gpu_instructions_caller, reg_t:reg_type):
+        #mc_base_t.__init__(self, mc)
+        self._allocator = gpr_off_sequencer_t()
         self.reg_t = reg_t
         self.define_on_creation = False
-    
+        self.ic = ic
+
     def get_count(self):
-        return self._sq.get_last_pos()
+        return self._allocator.get_last_pos()
+
+    #def emit(self):
+    #    _end_val = self._allocator.get_last_pos()
+    #    assert _end_val <= amdgpu_sgpr_limit(self.mc.arch_config.arch), f"{self.reg_t.value}_end:{_end_val} "
+    #    for k, v in self.__dict__.items():
+    #        if not k.startswith('_'):
+    #            reg_alloc(v)
+    #            self._emit(v.define())
+    #    self.define_on_creation = True
+
+    def _alloc(self, reg:reg_block, alignment):
+        reg.set_position(self._allocator(reg.dwords, alignment))
+        return f'.set {reg.label}, {reg.position}'
+
+    def _alloc_block(self, block_info:tuple, alignment):
+        s = []
+        regs:List[reg_block] = block_info[0]
+        ofsets:List[int]  = block_info[1]
+        base_reg = regs[0]
+        base_reg.set_position(self._allocator(base_reg.dwords, alignment))
+        s.append(f'.set {base_reg.label}, {base_reg.position}')
+        base_reg_pos = base_reg.position
+
+        for i in range(len(ofsets)):
+            cur_reg = regs[i+1]
+            cur_reg.set_position(self._allocator(base_reg_pos + ofsets[i], alignment))
+            s.append(f'.set {cur_reg.label}, {cur_reg.position}')
     
-    def emit(self):
-        _end_val = self._sq.get_last_pos()
-        assert _end_val <= amdgpu_sgpr_limit(self.mc.arch_config.arch), f"{self.reg_t.value}_end:{_end_val} "
-        for k, v in self.__dict__.items():
-            if not k.startswith('_'):
-                self._emit(v.define())
-        self.define_on_creation = True
+        return '\n'.join(s)
+    
+    def _dealloc(self, reg:reg_block, alignment):
+        return f'#dealock .unset {reg.label}, {reg.position}'
     
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
-        ret = reg_block(label, self.reg_t, self._sq(dwords, alignment))
-        if self.define_on_creation :
-            self._emit(ret.define())
+        ret = reg_block.declare(label, self.reg_t, dwords=dwords)
+        self.ic.reg_alloc(ret, alignment, self._alloc)
         return ret
 
     def add_no_pos(self, label:str, dwords:int = 1):
@@ -282,21 +308,14 @@ class gpr_file_t(mc_base_t):
     def add_block(self, label:str, reg_list:List[reg_block], alignment:int = 0):
         in_block_define = gpr_off_sequencer_t()
         block_pos = []
+        block_regs = []
         for i in reg_list:
             assert i.reg_t == self.reg_t, f" reg_t of element {i} doesn't match the block reg_t"
             block_pos.append(in_block_define(i.dwords))
 
-        block = reg_block(label, self.reg_t, self._sq(in_block_define.get_last_pos(), alignment))
-        
-        if self.define_on_creation :
-            self._emit(block.define())
+        block = reg_block.declare(label, self.reg_t, dwords=in_block_define.get_last_pos())
 
-        i = 0
-        for cur_reg in reg_list:
-            cur_reg.set_position(block_pos[i]+block.position)
-            i += 1
-            if self.define_on_creation :
-                self._emit(cur_reg.define())
+        self.ic.Block_alloc([block,*reg_list], block_pos, alignment, self._alloc_block)
         
         return block[:]
 
