@@ -36,7 +36,7 @@ class _singl_arg():
 
     def declare_symb(self):
         return f'.set {self.name}, {self.offset}'
-        
+   
 class _singl_arg_symbl():
     __slots__ = ['label', 'offset']
 
@@ -46,6 +46,26 @@ class _singl_arg_symbl():
     
     def __str__(self) -> str:
         return f'0+{self.label}'
+
+    def __int__(self):
+        return int(self.offset)
+    
+    def __num__(self):
+        return self.__int__()
+
+    def __add__(self, other):   return self.__num__() + self.__getval__(other)
+    def __radd__(self, other):  return self.__getval__(other) + self.__num__() 
+
+    @staticmethod
+    def __getval__(obj):
+        if isinstance(obj, _singl_arg_symbl):
+            return int(obj)
+        if hasattr(type(obj), "__num__") and callable(type(obj).__num__):
+            return type(obj).__num__(obj)
+        try:
+            return int(obj)
+        except TypeError:
+            return int(obj)
 
 class _args_manager_t(ABC):
     #__slots__ = ['args_size', 'args_list']

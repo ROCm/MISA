@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Optional, Union
-from python.codegen.gpu_reg_block import reg_block
+from python.codegen.gpu_reg_block import reg_block, abs, neg
 
 class inst_mode(Enum):
     allocation: auto
@@ -35,59 +35,16 @@ class inst_caller_base(ABC):
         self.ic.append(inst)
         return inst
 
-
-class const():
-    def __init__(self, val) -> None:
-        if(type(val) is int):
-            if(val <= 64 and val >= -16):
-                self.val = val
-            else:
-                assert False
-        elif(type(val) is float):
-            if (val in [0.0, 0.5, 1.0, 2.0, 4.0, -0.5, -1.0, -2.0, -4.0, 0.1592, 0.15915494, 0.15915494309189532]):
-                self.val = val
-            else:
-                assert False
-        else:
-            assert False
-    
-    def __str__(self) -> str:
-        return f' {self.val}'
-
-class literal():
-    def __init__(self, val) -> None:
-        if(type(val) in [type(int), float]):
-            self.val = val
-        else:
-            assert False
-            
-    def __str__(self) -> str:
-        return f' {self.val}'        
-
-class imm16_t():
-    def __init__(self, val) -> None:
-        if(type(val) is int and (val <= 65535) and (val >= -32768)):
-            self.val = val
-        else:
-            assert False
-            
-    def __str__(self) -> str:
-        return f' {self.val}'   
-
-class simm32_t():
-    def __init__(self, val) -> None:
-        if(type(val) is int and (val <= 65535) and (val >= -32768)):
-            self.val = val
-        else:
-            assert False
-            
-    def __str__(self) -> str:
-        return f' {self.val}'  
-
 #class gpu_instructions_caller(VOP1_instr_caller, VMEM_instr_caller, SMEM_instr_caller, SOP1_instr_caller):
 
 from python.codegen.GFX10 import *
-class gpu_instructions_caller(dpp16_instr_caller, dpp8_instr_caller, ds_instr_caller, exp_instr_caller, flat_instr_caller, mimg_instr_caller, mubuf_instr_caller, sop1_instr_caller, sop2_instr_caller, sopc_instr_caller, sopk_instr_caller, vop1_instr_caller, vop2_instr_caller, vop3_instr_caller, vopc_instr_caller):
+
+class gpu_instructions_caller(dpp16_instr_caller, dpp8_instr_caller, ds_instr_caller,
+    exp_instr_caller, flat_instr_caller, mimg_instr_caller, mtbuf_instr_caller,
+    mubuf_instr_caller, sdwa_instr_caller, smem_instr_caller, sop1_instr_caller,
+    sop2_instr_caller, sopc_instr_caller, sopk_instr_caller, sopp_instr_caller,
+    vintrp_instr_caller, vop1_instr_caller, vop2_instr_caller, vop3_instr_caller,
+    vop3p_instr_caller, vopc_instr_caller):
     def __init__(self, insturction_container) -> None:
         super().__init__(insturction_container)
 
