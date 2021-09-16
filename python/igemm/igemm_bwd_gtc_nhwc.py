@@ -153,7 +153,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     vector_write = 1                        # fp32 vector seems not much perf improvement
                 elif self.tunable.precision == 'fp16':
                     if self.tunable.gemm_k_global_split:
-                        vector_write = 2                    # prefer use buffer_atomic_pk_add_f16
+                        if config_vs == 0:
+                            vector_write = 2                    # prefer use buffer_atomic_pk_add_f16
+                        else:
+                            vector_write = utility_gcd(2, config_vs)
                     else:
                         if self.is_pad_k():
                             vector_write = 1
@@ -179,6 +182,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 return vector_write
 
             ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
+
+            if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+                ctrl_coalescing_store_xdlops.precision = 'fp32'
 
             #if gemm_m_order == IGEMM_BWD_GTC_NHWC_LDS_STORE_ORDER_GEMM_M_N1B_N0:
             #    # we may consider not suppor this mode
@@ -2365,17 +2371,26 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         in bwd nhwc, we can not treat gemm_m (n*dslice_h*dslicw_w) as a single dimension, unless stride & dilation is 1
         '''
         self._emit(f"; input offset")
+        if self.tunable.use_fp32_atomic_add_for_fp16_data:
+            # s_block_gtc_ig = ig*2, but for wei workspace, s_block_gtc_ig need to be ig*4, so here we give it a (*2)
+            self._emit(f"s_mul_i32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], 2")
         self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_c()}]")
         self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_c()}]")
         self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp()}]")
         self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in(1)}], s[{s.s_tmp(1)}]")
         self._emit_empty_line()
-        self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic()}], {igemm_log2(data_byte)}")
+        if self.tunable.use_fp32_atomic_add_for_fp16_data:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic()}], 2")
+        else:
+            self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ic()}], {igemm_log2(data_byte)}")
         self._emit(f"s_add_u32 s[{s.s_p_in()}], s[{s.s_p_in()}], s[{s.s_tmp(3)}]")
         self._emit(f"s_addc_u32 s[{s.s_p_in(1)}], s[{s.s_p_in()}+1], 0")
         self._emit_empty_line()
 
-        self._emit(self.try_shift_stride(s.s_in_stride_wi, igemm_log2(data_byte)))
+        if self.tunable.use_fp32_atomic_add_for_fp16_data:
+            self._emit(self.try_shift_stride(s.s_in_stride_wi, 2))
+        else:
+            self._emit(self.try_shift_stride(s.s_in_stride_wi, igemm_log2(data_byte)))
         self._emit(f"v_add_u32 v[{v.v_in_inb()}], s[{s.s_block_gtc_inb()}], v[{v.v_co_sub_m_index()}]   ; total n*h_dslice*w_dslice")
         if self.tunable.nxe != 0:
             if False:
@@ -2430,12 +2445,19 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_add_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(0)}], s[{s.s_tmp(1)}]")
             self._emit(f"s_sub_i32 s[{s.s_in_wi_sshift()}], s[{s.s_tmp(2)}], s[{s.s_pad_w()}]")
 
-            self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], {igemm_log2(data_byte)}, v[{v.v_co_sub_n_index()}]")
-            self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
+            if self.tunable.use_fp32_atomic_add_for_fp16_data:
+                self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], 2, v[{v.v_co_sub_n_index()}]")
+                self._emit(self.try_shift_stride(s.s_in_stride_n, 2))
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], {igemm_log2(data_byte)}, v[{v.v_co_sub_n_index()}]")
+                self._emit(self.try_shift_stride(s.s_in_stride_n, igemm_log2(data_byte)))
 
         else:
             self._emit(f"v_mul_lo_u32 v[{v.v_in_os()}], s[{s.s_in_stride_wi()}], v[{v.v_in_inb()}]")
-            self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], {igemm_log2(data_byte)}, v[{v.v_co_sub_n_index()}]")
+            if self.tunable.use_fp32_atomic_add_for_fp16_data:
+                self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], 2, v[{v.v_co_sub_n_index()}]")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_co_sub_n_index()}], {igemm_log2(data_byte)}, v[{v.v_co_sub_n_index()}]")
             self._emit(f"v_add_u32 v[{v.v_in_os()}], v[{v.v_in_os()}], v[{v.v_co_sub_n_index()}]")
 
         self._emit(f"; move slice stride")
