@@ -1311,7 +1311,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             '''
             only output need to check if k is one. for wei, since k is in higher dimension, so no such assumption
             '''
-            assert self.tunable.vector_store == 0
+            #assert self.tunable.vector_store == 0
             return True
         return False
 
