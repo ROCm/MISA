@@ -5,61 +5,38 @@ extern "C"
 __global__ __launch_bounds__(256,2)
 void tensor_cast_fp16_fp32_1d(half* output, float* input, int total_length)
 {
-    float vec_in_data[8];
-    half vec_out_data[8];
+    constexpr auto unroll_length = 8;
+    float vec_in_data[unroll_length];
+    half vec_out_data[unroll_length];
     float *tmp_in;
     half *tmp_out;
 
     unsigned int tid = threadIdx.x;
     unsigned int bid = blockIdx.x;
 
-    int offset = bid * 8 * 256;
-    int block_end = offset + 8 * 256; 
+    int offset = bid * unroll_length * 256;
+    int block_end = offset + unroll_length * 256; 
 
     if(block_end <= total_length)
     {
         tmp_in = input + offset + tid;
-        vec_in_data[0] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[1] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[2] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[3] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[4] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[5] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[6] = *(tmp_in);
-        tmp_in += 1 * 256;
-        vec_in_data[7] = *(tmp_in);
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            vec_in_data[i] = *(tmp_in);
+            tmp_in += 1 * 256;
+        }
 
-        vec_out_data[0] = (half)(vec_in_data[0]);
-        vec_out_data[1] = (half)(vec_in_data[1]);
-        vec_out_data[2] = (half)(vec_in_data[2]);
-        vec_out_data[3] = (half)(vec_in_data[3]);
-        vec_out_data[4] = (half)(vec_in_data[4]);
-        vec_out_data[5] = (half)(vec_in_data[5]);
-        vec_out_data[6] = (half)(vec_in_data[6]);
-        vec_out_data[7] = (half)(vec_in_data[7]);
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            vec_out_data[i] = (half)(vec_in_data[i]);
+        }
         
         tmp_out = output + offset + tid * 1;
-        *(tmp_out) = vec_out_data[0];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[1];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[2];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[3];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[4];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[5];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[6];
-        tmp_out += 1 * 256;
-        *(tmp_out) = vec_out_data[7];
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            *(tmp_out) = vec_out_data[i];
+            tmp_out += 1 * 256;
+        }
     }
     else
     {

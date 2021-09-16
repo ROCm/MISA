@@ -796,6 +796,7 @@ public:
 
         // tensor cast kernel args
         tensor_cast_karg_t karg_tensor_cast;
+        int length_per_thread = 8;
         karg_tensor_cast.output = p_in;
         karg_tensor_cast.input = p_in_workspace; 
         karg_tensor_cast.total_length = n * c * hi * wi;
@@ -847,7 +848,7 @@ public:
 
                         kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
                         if(use_workspace == 1){
-                            kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(splits)*n*c*hi*wi/8+1, 1, 1}, {256, 1, 1}});
+                            kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(splits)*n*c*hi*wi/length_per_thread+1, 1, 1}, {256, 1, 1}});
                         }
                     }else{
                         assert(0);
@@ -905,7 +906,7 @@ public:
                         }
                     }
                     if(use_workspace == 1){
-                        kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(splits)*n*c*hi*wi/8+1, 1, 1}, {256, 1, 1}});
+                        kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(splits)*n*c*hi*wi/length_per_thread+1, 1, 1}, {256, 1, 1}});
                         valid_kernel_index++;
                     }
                     // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[0]));
