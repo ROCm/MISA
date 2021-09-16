@@ -715,11 +715,9 @@ public:
         //gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(karg.gemm_k_per_wg)));
 
         // tensor cast kernel args
-        size_t cast_per_thread = 8;
         tensor_cast_karg_t karg_tensor_cast;
         karg_tensor_cast.output = p_wei;
         karg_tensor_cast.input = p_wei_workspace; 
-        karg_tensor_cast.thread_length = cast_per_thread;
         karg_tensor_cast.total_length = group * (k / group) * (c / group) * y * x;
 
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
@@ -783,7 +781,7 @@ public:
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(group) * (k / group) * (c / group) * y * x / 8 + 1, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog({
                         kernel_launchers

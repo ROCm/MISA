@@ -64,7 +64,6 @@ typedef enum {
 typedef struct {
     void* output;
     void* input;
-    int thread_length;
     int total_length;
 } __attribute__((packed)) tensor_cast_karg_t;
 
@@ -482,7 +481,7 @@ static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_lau
         ms += prolog_kernel();
         for(const auto & ker :  kernels){
             float t = igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
-            std::cout << ker.kernel_func << ": " << t << std::endl;
+            //std::cout << ker.kernel_func << ": " << t << std::endl;
             ms += t;
         }
         return ms;

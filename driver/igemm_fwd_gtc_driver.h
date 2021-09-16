@@ -635,11 +635,9 @@ public:
 #endif
 
         // tensor cast kernel args
-        size_t cast_per_thread = 8;
         tensor_cast_karg_t karg_tensor_cast;
         karg_tensor_cast.output = p_out;
         karg_tensor_cast.input = p_out_workspace; 
-        karg_tensor_cast.thread_length = cast_per_thread;
         karg_tensor_cast.total_length = n * k * ho * wo;
 
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
@@ -678,7 +676,7 @@ public:
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {n * k * ho * wo / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(n) * k * ho * wo / 8 + 1, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog(kernel_launchers, fwd_prolog, this->warmup, this->repeat);
 
