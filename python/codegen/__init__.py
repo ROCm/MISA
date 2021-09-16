@@ -37,3 +37,4 @@ from .gpu_reg_block import *
 from .gpu_instruct import *
 from .kernel_arg import *
 from .GFX10 import *
+from .gpu_data_types import *

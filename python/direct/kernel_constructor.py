@@ -25,10 +25,11 @@ class kernel_constructor(mc_base_t, ABC):
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
-        self._gpr_init(mc_asm_printer)
+        self.instr_ctrl = instruction_ctrl()
+        self._gpr_init(self.instr_ctrl.instructions_caller)
         self._set_kernel_karg_t()
         self.kernel_info = self._construct_kernel_info()
-        self.instr_ctrl = instruction_ctrl()
+        
         
     def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
         return amdgpu_kernel_info_t(
@@ -37,24 +38,24 @@ class kernel_constructor(mc_base_t, ABC):
             kernel_block_size=0, kernel_name=self.get_kernel_name())
     
     @abstractmethod
-    def _gpr_init(self, mc :mc_asm_printer_t):
+    def _gpr_init(self, ic :gpu_instructions_caller):
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
-        self.sgpr = self._sgpr(mc)
-        self.vgpr = self._vgpr(mc)
-        self.agpr = self._agpr(mc)
+        self.sgpr = self._sgpr(ic)
+        self.vgpr = self._vgpr(ic)
+        self.agpr = self._agpr(ic)
 
     class _sgpr(sgpr_file_t):
-        def __init__(self, mc):
-            super().__init__(mc)
+        def __init__(self, ic):
+            super().__init__(ic)
             
     class _vgpr(vgpr_file_t):
-        def __init__(self, mc):
-            super().__init__(mc)
+        def __init__(self, ic):
+            super().__init__(ic)
     
     class _agpr(vgpr_file_t):
-        def __init__(self, mc):
-            super().__init__(mc)
+        def __init__(self, ic):
+            super().__init__(ic)
 
     def _get_kernel_code_obj_t(self) -> amdgpu_kernel_code_t:
         ''' 
@@ -97,12 +98,6 @@ class kernel_constructor(mc_base_t, ABC):
 
     def _emit_kernel_symbols(self):
         self.kargs.emit_symb()
-        self._emit_empty_line()
-        self.sgpr.emit()
-        self._emit_empty_line()
-        self.vgpr.emit()
-        self._emit_empty_line()
-        self.agpr.emit()
         self._emit_empty_line()
 
     def emit_kernel_code(self):

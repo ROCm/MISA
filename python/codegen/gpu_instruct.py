@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Optional, Union
-from python.codegen.gpu_reg_block import reg_block, abs, neg
+from python.codegen.gpu_data_types import reg_block, abs, neg
 
 class inst_mode(Enum):
     allocation: auto

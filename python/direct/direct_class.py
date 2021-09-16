@@ -56,11 +56,10 @@ class conv_direct_navi(kernel_constructor):
     class _vgpr(vgpr_file_t):
         def __init__(self, mc):
             super().__init__(mc)
-            sseq = self._sq
             add = self.add 
-            self.tid = add('tid', sseq(1))
-            self.in_off = add('in_off', sseq(1))
-            self.in_off = add('in_off', sseq(1))
+            self.tid = add('tid', 1)
+            self.in_off = add('in_off', 1)
+            self.in_off = add('in_off', 1)
 
     def _get_LDS_usage(self):
         return 0
@@ -119,7 +118,7 @@ class conv_direct_navi(kernel_constructor):
 
         block = s.add_block('block', [H4O, H31O])
 
-        fill_buff_desc(H2O[:], 15)
+        fill_buff_desc(H4O[:], 15)
 
 
     def _set_kernel_karg_t(self) -> None:
