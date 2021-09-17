@@ -13,6 +13,7 @@ void tensor_cast_fp16_fp32_1d(half* output, float* input, int total_length)
 
     unsigned int tid = threadIdx.x;
     unsigned int bid = blockIdx.x;
+    unsigned int block_size = blockDim.x;
 
     int offset = bid * unroll_length * 256;
     int block_end = offset + unroll_length * 256; 

@@ -781,7 +781,8 @@ public:
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(group) * (k / group) * (c / group) * y * x / 8 + 1, 1, 1}, {256, 1, 1}});
+                    size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog({
                         kernel_launchers

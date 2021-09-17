@@ -676,7 +676,8 @@ public:
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {static_cast<size_t>(n) * k * ho * wo / 8 + 1, 1, 1}, {256, 1, 1}});
+                    size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog(kernel_launchers, fwd_prolog, this->warmup, this->repeat);
 
