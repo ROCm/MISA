@@ -40,13 +40,6 @@
 #define WRW_MAX_GEMM_K_SPLITS 10
 
 typedef struct {
-    void* output;
-    void* input;
-    int thread_length;
-    int total_length;
-} __attribute__((packed)) tensor_cast_karg_t;
-
-typedef struct {
     void *p_in;
     void *p_wei;
     void *p_out;
@@ -97,9 +90,7 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
 class igemm_wrw_gtc_t : public igemm_driver_base_t {
 public:
     igemm_wrw_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
-        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {
-            this->module_tensor_cast = module_tensor_cast_;
-        }
+        : igemm_driver_base_t(module_tensor_cast_, module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_wrw_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
@@ -689,8 +680,12 @@ public:
         else
             use_workspace = 0;
 
-        void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * group * (k / group) * (c / group) * y * x * sizeof(short)));
+        size_t workspace_size = get_workspace_size(arg, tunable);
+        void *p_wei_workspace;
+        if(workspace_size == 0)
+            p_wei_workspace = nullptr;
+        else
+            HIP_CALL(hipMalloc(&p_wei_workspace, workspace_size));
 
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -725,11 +720,9 @@ public:
         //gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(karg.gemm_k_per_wg)));
 
         // tensor cast kernel args
-        size_t cast_per_thread = 8;
         tensor_cast_karg_t karg_tensor_cast;
         karg_tensor_cast.output = p_wei;
         karg_tensor_cast.input = p_wei_workspace; 
-        karg_tensor_cast.thread_length = cast_per_thread;
         karg_tensor_cast.total_length = group * (k / group) * (c / group) * y * x;
 
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
@@ -793,7 +786,8 @@ public:
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
+                    size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog({
                         kernel_launchers
@@ -861,7 +855,8 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
-        HIP_CALL(hipFree(p_wei_workspace));
+        if(workspace_size > 0)
+            hipFree(p_wei_workspace);
         return result;
     }
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
@@ -924,7 +919,6 @@ public:
             return gks_list;
         }
     }
-    hipModule_t         module_tensor_cast;
 };
 
 #endif

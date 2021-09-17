@@ -181,8 +181,8 @@ static void dump_fwd_karg(igemm_fwd_gtc_nhwc_karg_t * karg){
 
 class igemm_fwd_gtc_t : public igemm_driver_base_t {
 public:
-    igemm_fwd_gtc_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
-        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
+    igemm_fwd_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
+        : igemm_driver_base_t(module_tensor_cast_, module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_fwd_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
@@ -477,6 +477,7 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
+        int data_byte = utility_string_to_data_byte(tunable->precision);
 
         assert(c % group == 0 && k % group == 0);
 
@@ -494,6 +495,20 @@ public:
 
         size_t karg_size = 0;
         uint8_t karg_buffer[IGEMM_FWD_GTC_MAX_KARG_SIZE];
+
+        int use_workspace = 0;
+
+        if(tunable->gemm_k_global_split == 1 && data_byte == 2 && tunable->vector_store == 1)
+            use_workspace = 1;
+        else
+            use_workspace = 0;
+
+        size_t workspace_size = get_workspace_size(arg, tunable);
+        void *p_out_workspace;
+        if(workspace_size == 0)
+            p_out_workspace = nullptr;
+        else
+            HIP_CALL(hipMalloc(&p_out_workspace, workspace_size));
 
         if(tunable->tensor_layout == "nchw"){
             igemm_fwd_gtc_karg_t karg;
@@ -555,7 +570,10 @@ public:
             igemm_fwd_gtc_nhwc_karg_t karg;
             karg.p_in          = p_in;
             karg.p_wei         = p_wei;
-            karg.p_out         = p_out;
+            if(use_workspace == 1)
+                karg.p_out     = p_out_workspace;
+            else
+                karg.p_out     = p_out;
             karg.hi            = hi;
             karg.wi            = wi;
             karg.n             = n;
@@ -621,10 +639,24 @@ public:
         HIP_CALL(hipModuleGetFunction(&kernel_func, module, kernel_name.c_str()));
 #endif
 
+        // tensor cast kernel args
+        tensor_cast_karg_t karg_tensor_cast;
+        karg_tensor_cast.output = p_out;
+        karg_tensor_cast.input = p_out_workspace; 
+        karg_tensor_cast.total_length = n * k * ho * wo;
+
+        size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
+
+        hipFunction_t tensor_cast_func;
+        HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
+
         // TODO: use kernel to pre-clear when atomic
         auto fwd_prolog = tunable->gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
-                hipMemset(p_out, 0, static_cast<size_t>(n) * splits * k * ho * wo * utility_string_to_data_byte(tunable->precision));
+                if(use_workspace == 1)
+                    hipMemset(p_out_workspace, 0, static_cast<size_t>(n) * splits * k * ho * wo * sizeof(float));
+                else
+                    hipMemset(p_out, 0, static_cast<size_t>(n) * splits * k * ho * wo * utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -646,9 +678,13 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
-                float duration = igemm_launch_kernels_with_prolog({
-                        {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                    }, fwd_prolog, this->warmup, this->repeat);
+                std::vector<igemm_launch_kernel_t> kernel_launchers;
+                kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
+                if(use_workspace == 1){
+                    size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                }
+                float duration = igemm_launch_kernels_with_prolog(kernel_launchers, fwd_prolog, this->warmup, this->repeat);
 
                 if(min_duration > duration){
                     min_duration = duration;
@@ -685,6 +721,7 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
+        hipFree(p_out_workspace);
         usleep(1000 * 5);
         return result;
     }

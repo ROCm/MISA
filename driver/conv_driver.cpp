@@ -799,7 +799,6 @@ int main(int argc, char **argv) {
     HIP_CALL(hipMalloc(&device_weight, static_cast<size_t>(k) * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, static_cast<size_t>(n) * k * ho * wo * sizeof(float)));
 
-
     void *host_input_dtype;
     void *host_weight_dtype;
     void *host_output_dtype;
@@ -830,6 +829,11 @@ int main(int argc, char **argv) {
 
     if(driver_data_type == driverInt8)
         igemm_rand_int = 1;
+
+    // launch tensor cast module
+    hipModule_t module_tensor_cast;
+    char *hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
+    HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast));
 
     if (need_fwd){
         int fastest_id = -1;
@@ -909,7 +913,7 @@ int main(int argc, char **argv) {
                         static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
         }
 
-        igemm_fwd_gtc_t conv_fwd_driver(module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        igemm_fwd_gtc_t conv_fwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
 
         auto fwd_pre = [&](){
             if (need_verify)
@@ -1034,7 +1038,7 @@ int main(int argc, char **argv) {
                         static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
         }
 
-        igemm_bwd_gtc_t conv_bwd_driver(module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        igemm_bwd_gtc_t conv_bwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
 
         auto bwd_pre = [&](){
             if (need_verify)
@@ -1079,10 +1083,6 @@ int main(int argc, char **argv) {
 
     if (need_wrw){
         void *device_weight_to_host = NULL;
-        // launch tensor cast module
-        hipModule_t module_tensor_cast;
-        char *hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
-        HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast));
 
         // begin wrw
         if (need_verify) {
