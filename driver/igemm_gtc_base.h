@@ -587,6 +587,51 @@ public:
         return igemm_gtc_encode_kernel_name(tunable);
     }
 
+    size_t get_workspace_size(const args_t *arg){
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        int forw = arg->get_int("forw");
+
+        size_t workspace_size;
+        if(forw & 1) // forward ws size
+        {
+            workspace_size = static_cast<size_t>(n) * k * ho * wo;
+        }
+        else if(forw & 2) // backward data ws size
+        {
+            workspace_size = static_cast<size_t>(n) * c * hi * wi;
+        }
+        else if(forw & 4) // backward weights ws size
+        {
+            workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+        }
+        else if(forw == 0) // all dirs
+        {
+            workspace_size = max(static_cast<size_t>(n) * k * ho * wo, static_cast<size_t>(n) * c * hi * wi);
+            workspace_size = max(workspace_size, static_cast<size_t>(group) * (k / group) * (c / group) * y * x);
+        }
+        else
+        {
+            assert(false);
+        }
+        return workspace_size * sizeof(float);
+    }
+
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
