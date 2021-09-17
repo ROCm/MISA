@@ -555,7 +555,7 @@ std::string log_cmd(const args_t *arg, driverDataType_t driver_data_type, std::s
 template<typename driver_t, typename pre_func_t, typename post_func_t>
 void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::vector<igemm_gtc_tunable_t> & tunables, std::string direction,
                     driverDataType_t driver_data_type, FILE * p_bcsv,
-                    void* device_input, void* device_weight, void* device_output, void *device_workspace,
+                    void* device_input, void* device_weight, void* device_output,
                     pre_func_t && pre_func, post_func_t && post_func)
 {
     int sclk_mhz = env_get_int("IGEMM_SCLK_MHZ", SCLK_MHZ);
@@ -580,7 +580,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 
         pre_func();
 
-        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, device_workspace, current_gks);
+        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, current_gks);
 
         std::string gks_string = "";
         if(tunable->gemm_k_global_split){
@@ -795,8 +795,6 @@ int main(int argc, char **argv) {
     float *device_weight;
     float *device_output;
 
-    float *device_workspace;
-
     HIP_CALL(hipMalloc(&device_input, static_cast<size_t>(n) * c * hi * wi * sizeof(float)));
     HIP_CALL(hipMalloc(&device_weight, static_cast<size_t>(k) * c * y * x * sizeof(float)));
     HIP_CALL(hipMalloc(&device_output, static_cast<size_t>(n) * k * ho * wo * sizeof(float)));
@@ -916,7 +914,6 @@ int main(int argc, char **argv) {
         }
 
         igemm_fwd_gtc_t conv_fwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
-        HIP_CALL(hipMalloc(&device_workspace, conv_fwd_driver.get_workspace_size(&conv_args)));
 
         auto fwd_pre = [&](){
             if (need_verify)
@@ -951,9 +948,9 @@ int main(int argc, char **argv) {
         };
 
         if(driver_data_type == driverFloat)
-            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input, device_weight, device_output, device_workspace, fwd_pre, fwd_post);
+            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input, device_weight, device_output, fwd_pre, fwd_post);
         else
-            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, device_workspace, fwd_pre, fwd_post);
+            launch_conv_driver(&conv_fwd_driver, &conv_args, tunables, "fwd", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, fwd_pre, fwd_post);
 
         if (need_verify)
             free(device_output_to_host);
@@ -1042,7 +1039,6 @@ int main(int argc, char **argv) {
         }
 
         igemm_bwd_gtc_t conv_bwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
-        HIP_CALL(hipMalloc(&device_workspace, conv_bwd_driver.get_workspace_size(&conv_args)));
 
         auto bwd_pre = [&](){
             if (need_verify)
@@ -1077,9 +1073,9 @@ int main(int argc, char **argv) {
         };
 
         if(driver_data_type == driverFloat)
-            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input, device_weight, device_output, device_workspace, bwd_pre, bwd_post);
+            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input, device_weight, device_output, bwd_pre, bwd_post);
         else
-            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, device_workspace, bwd_pre, bwd_post);
+            launch_conv_driver(&conv_bwd_driver, &conv_args, tunables, "bwd",  driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, bwd_pre, bwd_post);
 
         if (need_verify) 
             free(device_input_to_host);
@@ -1185,7 +1181,6 @@ int main(int argc, char **argv) {
 
 
         igemm_wrw_gtc_t conv_wrw_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
-        HIP_CALL(hipMalloc(&device_workspace, conv_wrw_driver.get_workspace_size(&conv_args)));
         
         auto wrw_pre = [&](){
             if (need_verify)
@@ -1217,9 +1212,9 @@ int main(int argc, char **argv) {
         };
 
         if(driver_data_type == driverFloat)
-            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input, device_weight, device_output, device_workspace, wrw_pre, wrw_post);
+            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input, device_weight, device_output, wrw_pre, wrw_post);
         else
-            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, device_workspace, wrw_pre, wrw_post);
+            launch_conv_driver(&conv_wrw_driver, &conv_args, tunables, "wrw", driver_data_type, p_bcsv, device_input_dtype, device_weight_dtype, device_output_dtype, wrw_pre, wrw_post);
 
         if (need_verify) 
             free(device_weight_to_host);
@@ -1235,8 +1230,6 @@ int main(int argc, char **argv) {
     hipFree(device_input);
     hipFree(device_weight);
     hipFree(device_output);
-
-    hipFree(device_workspace);
 
 #if defined(USE_HALF) || defined(USE_INT8)
     free(host_input_dtype);

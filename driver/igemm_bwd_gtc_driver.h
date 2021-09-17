@@ -526,7 +526,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out, void *p_workspace, int current_gks) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -595,7 +595,12 @@ public:
         else
             use_workspace = 0;
 
-        void *p_in_workspace = p_workspace;
+        size_t workspace_size = get_workspace_size(arg, tunable);
+        void *p_in_workspace;
+        if(workspace_size == 0)
+            p_in_workspace = nullptr;
+        else
+            HIP_CALL(hipMalloc(&p_in_workspace, workspace_size));
 
         size_t karg_size = 0;
         uint8_t karg_buffer[IGEMM_BWD_GTC_MAX_KARG_SIZE];
@@ -943,6 +948,7 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
+        hipFree(p_in_workspace);
         usleep(1000 * 5);
         return result;
     }

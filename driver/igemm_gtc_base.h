@@ -587,7 +587,7 @@ public:
         return igemm_gtc_encode_kernel_name(tunable);
     }
 
-    size_t get_workspace_size(const args_t *arg){
+    size_t get_workspace_size(const args_t *arg, const igemm_gtc_tunable_t *tunable){
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -607,26 +607,30 @@ public:
         int group = arg->get_int("group_count");
         int forw = arg->get_int("forw");
 
-        size_t workspace_size;
+        size_t workspace_size = 0;
         if(forw & 1) // forward ws size
         {
-            workspace_size = static_cast<size_t>(n) * k * ho * wo;
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
+                workspace_size = static_cast<size_t>(n) * k * ho * wo;
         }
         else if(forw & 2) // backward data ws size
         {
-            workspace_size = static_cast<size_t>(n) * c * hi * wi;
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
+                workspace_size = static_cast<size_t>(n) * c * hi * wi;
         }
         else if(forw & 4) // backward weights ws size
         {
-            workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+                workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
         }
         else if(forw == 0) // all dirs
         {
-            workspace_size = max(static_cast<size_t>(n) * k * ho * wo, static_cast<size_t>(n) * c * hi * wi);
-            workspace_size = max(workspace_size, static_cast<size_t>(group) * (k / group) * (c / group) * y * x);
+            std::cout << "not support direction" << std::endl;
+            assert(false);
         }
         else
         {
+            std::cout << "wrong direction" << std::endl;
             assert(false);
         }
         return workspace_size * sizeof(float);
@@ -635,7 +639,7 @@ public:
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
-    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, void *p_workspace, int current_gks) = 0;
+    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks) = 0;
     virtual std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
 
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
