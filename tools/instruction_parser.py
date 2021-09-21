@@ -167,7 +167,7 @@ def create_G_class_code(instr:instr_type, name) -> List:
 
         str_body_l.append(f"\t\targs_l = filter(None.__ne__, [{','.join(self_args_l)}]) \n")
 
-        str_join = "{','.join(map(str, args_l))}"
+        str_join = "{', '.join(map(str, args_l))}"
 
         str_body_end = f"\t\treturn f\"{str_label} {str_join} {str_mod}\" \n"
         str_body_l.append(str_body_end)
