@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Type
-from python.codegen.gpu_instruct import gpu_instructions_caller, inst_base, instruction_ctrl
+from python.codegen.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
 from python.codegen.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t, amdgpu_kernel_info_t, hsa_kernel_header
 from python.codegen.kernel_arg import _args_manager_t, karg_file_t
 from python.codegen.gpu_reg_block import sgpr_file_t, vgpr_file_t
@@ -26,7 +26,8 @@ class kernel_constructor(mc_base_t, ABC):
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
         self.instr_ctrl = instruction_ctrl()
-        self._gpr_init(self.instr_ctrl.instructions_caller)
+        self._instructions_init()
+        self._gpr_init(self.instructions_caller)
         self._set_kernel_karg_t()
         self.kernel_info = self._construct_kernel_info()
         
@@ -38,12 +39,17 @@ class kernel_constructor(mc_base_t, ABC):
             kernel_block_size=0, kernel_name=self.get_kernel_name())
     
     @abstractmethod
-    def _gpr_init(self, ic :gpu_instructions_caller):
+    def _gpr_init(self, ic :gpu_instructions_caller_base):
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
         self.sgpr = self._sgpr(ic)
         self.vgpr = self._vgpr(ic)
         self.agpr = self._agpr(ic)
+
+    @abstractmethod
+    def _instructions_init(self):
+        '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
+        self.instructions_caller = gpu_instructions_caller_base(self.instr_ctrl.instructions_list)
 
     class _sgpr(sgpr_file_t):
         def __init__(self, ic):

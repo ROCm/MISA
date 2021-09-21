@@ -20,11 +20,11 @@ class gpr_off_sequencer_t(object):
 
 
 
-from python.codegen.gpu_instruct import gpu_instructions_caller
+from python.codegen.gpu_instruct import gpu_instructions_caller_base
 
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic']
-    def __init__(self, ic:gpu_instructions_caller, reg_t:reg_type):
+    def __init__(self, ic:gpu_instructions_caller_base, reg_t:reg_type):
         #mc_base_t.__init__(self, mc)
         self._allocator = gpr_off_sequencer_t()
         self.reg_t = reg_t

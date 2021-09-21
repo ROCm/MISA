@@ -23,18 +23,5 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .symbol import *
-from .macro import *
-from .compile import *
-from .config_parser import *
-from .amdgpu import *
-from .mc import *
-from .mbb import *
-from .scheduler import *
-from .instruction import *
-from .kernel_driver import *
-from .gpu_reg_block import *
-from .gpu_instruct import *
-from .kernel_arg import *
-from .gpu_arch import *
-from .gpu_data_types import *
+from .GFX10 import *
+

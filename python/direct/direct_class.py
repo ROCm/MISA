@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
+from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.gpu_reg_block import * 
 from python.codegen.kernel_driver import base_config
 from ..codegen.config_parser import config_content_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
 from .kernel_constructor import *
-
+from python.codegen.gpu_instruct import gpu_instructions_caller_base, reg_allocator_caller
 
 class direct_navi_config(base_config):
     def __init__(self, config_content: config_content_t):
@@ -16,6 +17,10 @@ class conv_direct_navi(kernel_constructor):
 
     def get_kernel_name(self):
         return 'conv_direct_navi'
+
+    class custom_caller(gpu_instructions_caller_base, gfx10_instructions_caller):
+        def __init__(self, insturction_container) -> None:
+            super().__init__(insturction_container)
 
     class kernel_karg_t(karg_file_t):
         '''Define kernel arguments. Used in _set_kernel_karg_t'''
@@ -64,6 +69,7 @@ class conv_direct_navi(kernel_constructor):
     def _get_LDS_usage(self):
         return 0
 
+
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         super().__init__(mc_asm_printer, **kwargs)
                 
@@ -72,7 +78,7 @@ class conv_direct_navi(kernel_constructor):
         s = self.sgpr
         v = self.vgpr
         karg = self.kargs
-        ic = self.instr_ctrl.instructions_caller
+        ic = self.instructions_caller
 
         input_buffer_size = filter_buffer_size = output_buffer_size = literal(101)
 
@@ -134,3 +140,7 @@ class conv_direct_navi(kernel_constructor):
         self.sgpr = self._sgpr(mc)
         self.vgpr = self._vgpr(mc)
         self.agpr = self._agpr(mc)
+
+    def _instructions_init(self):
+        '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
+        self.instructions_caller = conv_direct_navi.custom_caller(self.instr_ctrl.instructions_list)
