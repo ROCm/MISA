@@ -101,7 +101,6 @@ class conv_direct_navi(kernel_constructor):
             ic.s_mov_b32(desc_reg[2], size)
             ic.s_mov_b32(desc_reg[3], 0x00027000)
             
-        
         input_buffer_size = 25
         filter_buffer_size = 50
         output_buffer_size = 100
@@ -109,6 +108,8 @@ class conv_direct_navi(kernel_constructor):
         fill_buff_desc(s.in_buff_ptr[:], input_buffer_size)
         fill_buff_desc(s.out_buff_ptr[:], filter_buffer_size)
         fill_buff_desc(s.wei_buff_ptr[:], output_buffer_size)
+
+        ic.v_dot2_i32_i16(s.wei_buff_ptr[0], s.karg_ptr[1],s.wei_buff_ptr[1], s.karg_ptr[0])
 
         H1O = s.add('H1O', 1, 4)
         H2O = s.add('H2O', 4, 4)

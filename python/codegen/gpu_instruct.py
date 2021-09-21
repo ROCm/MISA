@@ -63,13 +63,19 @@ class reg_allocator_caller(inst_caller_base):
 #class gpu_instructions_caller(VOP1_instr_caller, VMEM_instr_caller, SMEM_instr_caller, SOP1_instr_caller):
 
 from python.codegen.GFX10 import *
+from python.codegen.GFX1011 import *
+
+class gfx1011_1012(dpp16_instr_caller_gfx10Ex,dpp8_instr_caller_gfx10Ex,
+ vop2_instr_caller_gfx10Ex, vop3p_instr_caller_gfx10Ex):
+ def __init__(self, insturction_container) -> None:
+        super().__init__(insturction_container)
 
 class gpu_instructions_caller(dpp16_instr_caller, dpp8_instr_caller, ds_instr_caller,
     exp_instr_caller, flat_instr_caller, mimg_instr_caller, mtbuf_instr_caller,
     mubuf_instr_caller, sdwa_instr_caller, smem_instr_caller, sop1_instr_caller,
     sop2_instr_caller, sopc_instr_caller, sopk_instr_caller, sopp_instr_caller,
     vintrp_instr_caller, vop1_instr_caller, vop2_instr_caller, vop3_instr_caller,
-    vop3p_instr_caller, vopc_instr_caller, reg_allocator_caller):
+    vop3p_instr_caller, vopc_instr_caller, reg_allocator_caller, gfx1011_1012):
     def __init__(self, insturction_container) -> None:
         super().__init__(insturction_container)
 
