@@ -307,13 +307,16 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, gemm_msg
 
         # LDS size
-        self.lds_a             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
-        self.lds_b             = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
-        self.lds_a_np2         = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
-        self.lds_b_np2         = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
-        self.lds_single        = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
-        self.lds_buffer_num    = 2
-        self.lds_total         = self.lds_buffer_num * self.lds_single
+        self.lds_pad_m, self.lds_pad_n = self.get_lds_pad() # LDS pad
+        self.lds_a                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
+        self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
+        self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
+        self.lds_b_np2                 = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
+        lds_a_pad                      = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
+        lds_b_pad                      = self.lds_b_np2 // 32 * (32 + self.lds_pad_n)
+        self.lds_single                = igemm_next_pow2( self.lds_a_np2 + self.lds_b_np2) if (self.lds_a_np2 + self.lds_b_np2 != 0) else 0
+        self.lds_buffer_num            = 2
+        self.lds_total                 = self.lds_buffer_num * self.lds_single
 
         # for case whose tile size is like 128x128x32, the top priority is to keep the occupancy bigger than 2
         # TODO: need to make some compromise in occupancy and lds double buffer
@@ -337,10 +340,14 @@ class igemm_gtc_tunable_parameter_t(object):
         # self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
         #         (self.lds_buffer_num * igemm_next_pow2(igemm_next_pow2(self.gemm_k_per_block * self.gemm_m_per_block) + igemm_next_pow2(self.gemm_k_per_block * self.gemm_n_per_block) ))
         if self.direction == "wrw" and (self.tensor_b_thread_lengths[3] == 1 or self.vector_store == 1) and self.gemm_k_global_split == 1 and self.precision == 'fp16':
-            use_fp32_atomic_add = 1
+            self.use_fp32_atomic_add_for_fp16_data = 1
         else:
-            use_fp32_atomic_add = 0
-        self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if use_fp32_atomic_add == 0 else 4))
+            self.use_fp32_atomic_add_for_fp16_data = 0
+
+        if (self.direction == "fwd" or self.direction == "bwd") and self.vector_store == 1 and self.gemm_k_global_split == 1 and self.precision == 'fp16':
+            self.use_fp32_atomic_add_for_fp16_data = 1
+
+        self.coalescing_store_groups = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if self.use_fp32_atomic_add_for_fp16_data == 0 else 4))
         
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
@@ -362,6 +369,31 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+
+        if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            if self.lds_total >= lds_a_pad + lds_b_pad:
+                pass
+            else:
+                self.lds_total += (lds_a_pad - self.lds_a_np2 + lds_b_pad - self.lds_b_np2)
+
+    def get_lds_pad(self):
+        if self.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            return 0, 0
+        if self.direction == 'wrw' and self.precision == 'fp16':
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 4:
+                return 4, 4
+            else:
+                return 0, 0
+        if self.direction == 'bwd' and self.precision == 'fp16':
+            if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 8:
+                if self.gemm_m_per_block == 128 and self.gemm_n_per_block == 128:
+                    return 0, 0
+                else:
+                    return 0, 4
+            else:
+                return 0, 0
+        else:
+            return 0, 0
 
     def is_occupancy_decreased(self):
         is_decreased = False

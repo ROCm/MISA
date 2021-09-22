@@ -124,7 +124,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store_xdlops.precision = self.tunable.precision
-            ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
+            ctrl_coalescing_store_xdlops.accvgpr_unified = self.is_accvgpr_unified()
 
             def get_vector_write_out():
                 vector_write = 1
@@ -134,7 +134,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                     vector_write = 1                        # fp32 vector seems not much perf improvement
                 elif self.tunable.precision == 'fp16':
                     if self.tunable.gemm_k_global_split == 0:
-                        vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])
+                        vector_write = igemm_gcd(8, self.tunable.tensor_b_thread_lengths[3])
                     else:
                         if config_vs == 0:
                             vector_write = igemm_gcd(2, self.tunable.tensor_b_thread_lengths[3])
@@ -179,6 +179,10 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 self.dict_shifted_stride[gpr.label] = gpr
                 self._emit(f"s_lshl_b32 s[{gpr()}], s[{gpr()}], {shifter}")
         return self._get_deferred()
+
+    def is_accvgpr_unified(self):
+        return IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A \
+                and not (self.tunable.gemm_m_per_block == 256 and self.tunable.gemm_n_per_block == 256)
 
     class macro_igemm_wrw_gtc_in_out_update_os_t(macro_base_t):
         def __init__(self, mc, data_byte, inline = False):
@@ -636,7 +640,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             assert outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS, 'only xdlops can use agpr'
             self.outer         = outer
-            if IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+            if outer.is_accvgpr_unified():
                 vgpr = outer.kernel_vgpr_t(mc, outer)
                 aseq = gpr_sequencer_t(vgpr.get_accum_start())
             else:
@@ -1338,6 +1342,12 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
+        
+        if self.tunable.lds_pad_n > 0:
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sst_b_os()}]")
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
+            self._emit(f"v_add_u32 v[{v.v_sst_b_os()}], v[{v.v_tmp()}], v[{v.v_sst_b_os()}]")
+        
         self._emit_empty_line()
 
         self._emit(f"; LDS store, out: 1,nb,1,k: {1}x{ta_n}x{1}x{ta_k}, {1}x{ca_nb}x{1}x{ca_k}")
@@ -1354,12 +1364,27 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_gtc_inb_a()}], {igemm_log2(na_k)}, v[{v.v_gtc_ik()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit_empty_line()
+        if self.tunable.lds_pad_m > 0:
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sst_a_os()}]")
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_m * 4)}, v[{v.v_tmp()}]")
+            self._emit(f"v_add_u32 v[{v.v_sst_a_os()}], v[{v.v_tmp()}], v[{v.v_sst_a_os()}]")
+            self._emit_empty_line()
 
         self._emit(f"; LDS load")
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}]")
         self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
         self._emit_empty_line()
+        if self.tunable.lds_pad_n > 0:
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_b_os()}]")
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
+            self._emit(f"v_add_u32 v[{v.v_sld_b_os()}], v[{v.v_tmp()}], v[{v.v_sld_b_os()}]")
+            self._emit_empty_line()
+        if self.tunable.lds_pad_m > 0:
+            self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_a_os()}]")
+            self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_m * 4)}, v[{v.v_tmp()}]")
+            self._emit(f"v_add_u32 v[{v.v_sld_a_os()}], v[{v.v_tmp()}], v[{v.v_sld_a_os()}]")
+            self._emit_empty_line()
 
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
@@ -1552,7 +1577,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
             fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
             fctrl.interleave                  = self.tunable.fma_interleave
-            fctrl.accvgpr_unified             = IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
+            fctrl.accvgpr_unified             = self.is_accvgpr_unified()
 
             # functor
             fctrl.global_load_a_functor       = self.global_load_out
@@ -1561,6 +1586,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             fctrl.shared_store_b_functor      = self.shared_store_in
 
             fctrl.lds_k_pack                  = k_pack
+            fctrl.lds_pad_m, fctrl.lds_pad_n  = self.tunable.lds_pad_m, self.tunable.lds_pad_n
             share_load_packed                 = ctrl_xdlops_mapping.lanegroup_k_per_thread()
 
 
@@ -1568,13 +1594,19 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 fctrl.shared_load_a_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_m == 2, "currently only support wave_step_m is 2"
-                fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
+                if fctrl.lds_pad_m > 0:
+                    fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte // 32 * (32 + fctrl.lds_pad_m), sym_t(self.vgpr.v_tmp(4)))
+                else:
+                    fctrl.shared_load_a_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_m * data_byte, sym_t(self.vgpr.v_tmp(4)))
 
             if ctrl_xdlops_mapping.wave_step_n == 1:
                 fctrl.shared_load_b_functor   = inst_ds_read_t(data_byte * share_load_packed)   # xdlops load from LDS always single load
             else:
                 assert ctrl_xdlops_mapping.wave_step_n == 2, "currently only support wave_step_n is 2"
-                fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
+                if fctrl.lds_pad_n > 0:
+                    fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte // 32 * (32 + fctrl.lds_pad_n), sym_t(self.vgpr.v_tmp(5)))
+                else:
+                    fctrl.shared_load_b_functor   = inst_ds_read2_likely_accumulate_offset_t(self.mc, 2, data_byte * share_load_packed, k_pack * ctrl_xdlops_mapping.wave_tile_n * data_byte, sym_t(self.vgpr.v_tmp(5)))
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
 

@@ -3,28 +3,52 @@
 
 extern "C"
 __global__ __launch_bounds__(256,2)
-void tensor_cast_fp16_fp32_1d(half* output, float* input, int thread_length, int total_length)
+void tensor_cast_fp16_fp32_1d(half* output, float* input, int total_length)
 {
-    float in_data;
-    half out_data;
+    constexpr auto unroll_length = 8;
+    float vec_in_data[unroll_length];
+    half vec_out_data[unroll_length];
+    float *tmp_in;
+    half *tmp_out;
 
     unsigned int tid = threadIdx.x;
     unsigned int bid = blockIdx.x;
+    unsigned int block_size = blockDim.x;
 
-    int offset = bid * thread_length * 256 + tid * thread_length;
+    int offset = bid * unroll_length * 256;
+    int block_end = offset + unroll_length * 256; 
 
-    if(offset + thread_length > total_length){
-        for(int i = offset; i < total_length; i++){
-            in_data = input[i];
-            out_data = (half)(in_data);
-            *(output + i) = out_data;
+    if(block_end <= total_length)
+    {
+        tmp_in = input + offset + tid;
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            vec_in_data[i] = *(tmp_in);
+            tmp_in += 1 * 256;
+        }
+
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            vec_out_data[i] = (half)(vec_in_data[i]);
+        }
+        
+        tmp_out = output + offset + tid * 1;
+        #pragma unroll
+        for(int i = 0; i < unroll_length; i++){
+            *(tmp_out) = vec_out_data[i];
+            tmp_out += 1 * 256;
         }
     }
-    else{
-        for(int i = 0; i < thread_length; i++){
-            in_data = input[offset + i];
+    else
+    {
+        float in_data;
+        half out_data;
+        for(int i = offset; i < total_length; i += 256)
+        {
+            int index = min(i + tid, total_length - 1);
+            in_data = input[index];
             out_data = (half)(in_data);
-            *(output + offset + i) = out_data;
+            *(output + index) = out_data;
         }
     }
 }
