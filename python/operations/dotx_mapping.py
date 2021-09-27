@@ -148,7 +148,7 @@ class ctrl_dotx_mapping_t(object):
         return self.macro_tile_n // (self.wave_repeat_n * self.lanegroup_tile_n * self.wave_lanegroups_n)
 
     def block_size(self):
-        wave_size = wave_lanegroups_m * wave_lanegroups_n * LANEGROUP_SIZE
+        wave_size = self.wave_lanegroups_m * self.wave_lanegroups_n * LANEGROUP_SIZE
         return self.waves * wave_size
 
     def lanegroup_m_per_thread(self):
