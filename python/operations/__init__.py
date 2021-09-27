@@ -35,3 +35,5 @@ from .mfma import *
 from .xdlops_mapping import *
 from .mfma_main_loop import *
 from .nop import *
+from .dotx import *
+from .dotx_mapping import *

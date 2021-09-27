@@ -32,6 +32,11 @@ AMDGPU_PRECISION_FP32   = (0 << 20)
 AMDGPU_PRECISION_FP16   = (1 << 20)
 AMDGPU_PRECISION_BF16   = (2 << 20)
 AMDGPU_PRECISION_INT8   = (3 << 20)
+AMDGPU_PRECISION_UINT8  = (4 << 20)
+AMDGPU_PRECISION_INT4   = (5 << 20)
+AMDGPU_PRECISION_UINT4  = (6 << 20)
+AMDGPU_PRECISION_INT16  = (7 << 20)
+AMDGPU_PRECISION_UINT16 = (8 << 20)
 
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
@@ -105,6 +110,16 @@ def amdgpu_precision_to_string(amdgpu_precision):
         return 'bf16'
     if amdgpu_precision == AMDGPU_PRECISION_INT8:
         return 'int8'
+    if amdgpu_precision == AMDGPU_PRECISION_UINT8:
+        return 'uint8'
+    if amdgpu_precision == AMDGPU_PRECISION_INT4:
+        return 'int4'
+    if amdgpu_precision == AMDGPU_PRECISION_UINT4:
+        return 'uint4'
+    if amdgpu_precision == AMDGPU_PRECISION_INT16:
+        return 'int16'
+    if amdgpu_precision == AMDGPU_PRECISION_UINT16:
+        return 'uint16'
     assert False
 
 def amdgpu_string_to_precision(amdgpu_precision_string):
@@ -116,6 +131,16 @@ def amdgpu_string_to_precision(amdgpu_precision_string):
         return AMDGPU_PRECISION_BF16
     if amdgpu_precision_string == 'int8':
         return AMDGPU_PRECISION_INT8
+    if amdgpu_precision_string == 'uint8':
+        return AMDGPU_PRECISION_UINT8
+    if amdgpu_precision_string == 'int4':
+        return AMDGPU_PRECISION_INT4
+    if amdgpu_precision_string == 'uint4':
+        return AMDGPU_PRECISION_UINT4
+    if amdgpu_precision_string == 'int16':
+        return AMDGPU_PRECISION_INT16
+    if amdgpu_precision_string == 'uint16':
+        return AMDGPU_PRECISION_UINT16
     assert False
 
 def amdgpu_precision_data_byte(precision):
@@ -129,8 +154,12 @@ def amdgpu_precision_data_byte(precision):
         return 2
     if p == AMDGPU_PRECISION_BF16:
         return 2
-    if p == AMDGPU_PRECISION_INT8:
+    if p in (AMDGPU_PRECISION_INT8, AMDGPU_PRECISION_UINT8):
         return 1
+    if p in (AMDGPU_PRECISION_INT4, AMDGPU_PRECISION_UINT4):  # TODO: int4 is half byte
+        return 1
+    if p in (AMDGPU_PRECISION_INT16, AMDGPU_PRECISION_UINT16):
+        return 2
     assert False
 
 def amdgpu_wave_size(arch):

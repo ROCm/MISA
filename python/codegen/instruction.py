@@ -25,10 +25,40 @@
 ################################################################################
 
 from ..codegen import *
+from .mc import *
 
 MODIFIER_TYPE_NEG = 0
 MODIFIER_TYPE_ABS = 1
 
+INST_ENCODING_VOP2   = 'enc_vop2'
+INST_ENCODING_VOP1   = 'enc_vop1'
+INST_ENCODING_VOPC   = 'enc_vopc'
+INST_ENCODING_VOP3A  = 'enc_vop3a'
+INST_ENCODING_VOP3B  = 'enc_vop3b'
+INST_ENCODING_VOP3P  = 'enc_vop3p'
+
+INST_ENCODING_SOP2   = 'enc_sop2'
+INST_ENCODING_SOPK   = 'enc_sopk'
+INST_ENCODING_SOP1   = 'enc_sop1'
+INST_ENCODING_SOPC   = 'enc_sopc'
+INST_ENCODING_SOPP   = 'enc_sopp'
+
+INST_ENCODING_SMEM   = 'enc_smem'
+
+INST_ENCODING_MUBUF  = 'enc_mubuf'
+INST_ENCODING_GLOBAL = 'enc_global'
+INST_ENCODING_DS     = 'enc_ds'
+
+INST_ENCODING_DPP8   = 'enc_dpp8'
+INST_ENCODING_DPP16  = 'enc_dpp16'
+INST_ENCODING_SDWA   = 'enc_sdwa'
+
+class inst_base_t(object):
+    def __init__(self, encoding):
+        '''
+        encoding should be INST_ENCODING_xxx
+        '''
+        self.encoding = encoding
 
 class modifier_t(object):
     def __init__(self, operand, mtype):
@@ -79,105 +109,116 @@ class inst_mt_operand_t(object):
 def mt_opr(operand):
     return inst_mt_operand_t(operand)()
 
-class inst_v_madmk_t(mc_base_t):
+class inst_v_madmk_t(inst_base_t):
     '''
     v_madmk_f32, v_fmamk_f32
     '''
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOP2)
     def __call__(self, vdst, src0, imm32, vsrc1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_madmk_f32 v[{}], {}, {} v[{}]'.format(vdst, mt_opr(src0), imm32, vsrc1)
         else:
             # assume gfx10+
             return 'v_fmamk_f32 v[{}], {}, {} v[{}]'.format(vdst, mt_opr(src0), imm32, vsrc1)
+v_madmk = inst_v_madmk_t()
 
-class inst_v_add_nc_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_add_nc_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOP2)
     def __call__(self, vdst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_add_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
         else:
             return 'v_add_nc_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
+v_add_nc_u32 = inst_v_add_nc_u32_t()
 
-class inst_v_sub_nc_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_sub_nc_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOP2)
     def __call__(self, vdst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_sub_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
         else:
             return 'v_sub_nc_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
+v_sub_nc_u32 = inst_v_sub_nc_u32_t()
 
-class inst_v_subrev_nc_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_subrev_nc_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOP2)
     def __call__(self, vdst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_subrev_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
         else:
             return 'v_subrev_nc_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
+v_subrev_nc_u32 = inst_v_subrev_nc_u32_t()
 
-class inst_v_cmpx_eq_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_eq_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_eq_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_eq_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_eq_u32 = inst_v_cmpx_eq_u32_t()
 
-class inst_v_cmpx_ne_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_ne_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_ne_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_ne_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_ne_u32 = inst_v_cmpx_ne_u32_t()
 
-class inst_v_cmpx_gt_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_gt_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_gt_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_gt_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_gt_u32 = inst_v_cmpx_gt_u32_t()
 
-class inst_v_cmpx_ge_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_ge_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_ge_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_ge_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_ge_u32 = inst_v_cmpx_ge_u32_t()
 
-class inst_v_cmpx_lt_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_lt_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_lt_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_lt_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_lt_u32 = inst_v_cmpx_lt_u32_t()
 
-class inst_v_cmpx_le_u32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_le_u32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_le_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_le_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_le_u32 = inst_v_cmpx_le_u32_t()
 
-class inst_v_cmpx_eq_i32_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
+class inst_v_cmpx_eq_i32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
     def __call__(self, dst, src0, src1):
-        if self.mc.arch_config.arch < 1000:
+        if mc_get_current().arch_config.arch < 1000:
             return 'v_cmpx_eq_i32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
         else:
             return 'v_cmpx_eq_i32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_eq_i32 = inst_v_cmpx_eq_i32_t()

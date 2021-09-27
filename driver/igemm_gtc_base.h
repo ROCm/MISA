@@ -61,6 +61,12 @@ typedef enum {
                            (Partially supported) */
 } driverDataType_t;
 
+typedef struct {
+    void* output;
+    void* input;
+    int total_length;
+} __attribute__((packed)) tensor_cast_karg_t;
+
 static inline size_t get_data_byte(driverDataType_t dtype)
 {
     if(dtype == driverHalf)
@@ -301,7 +307,10 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC)
         kernel_name += "gtcm_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS)
-        kernel_name += "gtc_";
+        if(gcn_arch == 1030)
+            kernel_name += "gtcn2_";
+        else
+            kernel_name += "gtc_";
     else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
         if(gcn_arch == 908)
             kernel_name += "gtcx_";
@@ -473,8 +482,11 @@ static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_lau
     auto launch_kernels = [&]() -> float{
         float ms = .0;
         ms += prolog_kernel();
-        for(const auto & ker :  kernels)
-            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+        for(const auto & ker :  kernels){
+            float t = igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
+            //std::cout << ker.kernel_func << ": " << t << std::endl;
+            ms += t;
+        }
         return ms;
     };
 
@@ -562,8 +574,8 @@ static inline size_t igemm_split_batch_size(const args_t *arg, int data_byte)
 
 class igemm_driver_base_t{
 public:
-    igemm_driver_base_t(hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_) : 
-        module(module_), driver_mode(driver_mode_), data_type(data_type_), warmup(warmup_), repeat(repeat_), verbose(verbose_)
+    igemm_driver_base_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_) : 
+        module_tensor_cast(module_tensor_cast_), module(module_), driver_mode(driver_mode_), data_type(data_type_), warmup(warmup_), repeat(repeat_), verbose(verbose_)
     {
         hipDeviceProp_t dev_prop;
         hipDevice_t dev;
@@ -578,14 +590,65 @@ public:
         return igemm_gtc_encode_kernel_name(tunable);
     }
 
+    size_t get_workspace_size(const args_t *arg, const igemm_gtc_tunable_t *tunable){
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+        int forw = arg->get_int("forw");
+
+        size_t workspace_size = 0;
+        if(forw & 1) // forward ws size
+        {
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
+                workspace_size = static_cast<size_t>(n) * k * ho * wo;
+        }
+        else if(forw & 2) // backward data ws size
+        {
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
+                workspace_size = static_cast<size_t>(n) * c * hi * wi;
+        }
+        else if(forw & 4) // backward weights ws size
+        {
+            if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+                workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+        }
+        else if(forw == 0) // all dirs
+        {
+            std::cout << "not support direction" << std::endl;
+            assert(false);
+        }
+        else
+        {
+            std::cout << "wrong direction" << std::endl;
+            assert(false);
+        }
+        return workspace_size * sizeof(float);
+    }
+
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
-    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out) = 0;
+    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks) = 0;
+    virtual std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
 
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
     virtual int heuristic_select_gks(const args_t *arg, const igemm_gtc_tunable_t *tunable) {return 0; }
 
+    hipModule_t         module_tensor_cast;
     hipModule_t         module;         // not used in IGEMM_SPLIT_KERNEL case
     driver_mode_t       driver_mode;
     driverDataType_t    data_type;

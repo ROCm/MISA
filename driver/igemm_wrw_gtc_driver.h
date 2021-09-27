@@ -40,13 +40,6 @@
 #define WRW_MAX_GEMM_K_SPLITS 10
 
 typedef struct {
-    void* output;
-    void* input;
-    int thread_length;
-    int total_length;
-} __attribute__((packed)) tensor_cast_karg_t;
-
-typedef struct {
     void *p_in;
     void *p_wei;
     void *p_out;
@@ -97,9 +90,7 @@ static void dump_wrw_karg(igemm_wrw_gtc_karg_t * karg){
 class igemm_wrw_gtc_t : public igemm_driver_base_t {
 public:
     igemm_wrw_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
-        : igemm_driver_base_t(module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {
-            this->module_tensor_cast = module_tensor_cast_;
-        }
+        : igemm_driver_base_t(module_tensor_cast_, module_, driver_mode_, data_type_, warmup_, repeat_, verbose_) {}
     ~igemm_wrw_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
@@ -232,10 +223,6 @@ public:
 
         int gemm_k_global_split      = tunable->gemm_k_global_split;
         int gemmk_blocks             = 1 << gemm_k_global_split;
-        
-        if (n % gemmk_blocks != 0){
-            //return false;
-        }
 
         int n_per_block = n >> gemm_k_global_split;
 
@@ -252,6 +239,9 @@ public:
         }
 
         if(tunable->tensor_layout == "nchw"){
+            if (n % gemmk_blocks != 0){
+                return false;
+            }
             if(((c / group) % (gemm_n_per_block / nxe) != 0) || (((x * y) % nxe) != 0))
             {
                 return false;
@@ -586,8 +576,44 @@ public:
         }
     }
 
+    // get grid size without gks
+    size_t get_cur_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable){
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+        int k = arg->get_int("out_channels");
+        int c = arg->get_int("in_channels");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+        int group = arg->get_int("group_count");
+
+        int gemm_m_per_block         = tunable->gemm_m_per_block;
+        int gemm_n_per_block         = tunable->gemm_n_per_block;
+        int gemm_k_per_block         = tunable->gemm_k_per_block;
+
+        size_t block_size            = get_block_size(tunable);
+        int c_vec_min                = tunable->tensor_layout == "nchw" ? 1 : (tunable->tensor_b_thread_lengths[3]);
+
+        int gemm_m = k / group ;
+        int c_padded = ((c / group) + c_vec_min - 1) / c_vec_min * c_vec_min;
+        int gemm_n = (c_padded * y * x  + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block;
+        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+
+        return grid_size;
+    }
+
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
@@ -619,20 +645,12 @@ public:
         assert(splits != 0);
         n = n/splits;   // split batch size here
 
-        int gemm_m_per_block         = tunable->gemm_m_per_block;
-        int gemm_n_per_block         = tunable->gemm_n_per_block;
         int gemm_k_per_block         = tunable->gemm_k_per_block;
 
         size_t block_size            = get_block_size(tunable);
-        int c_vec_min                = tunable->tensor_layout == "nchw" ? 1 : (tunable->tensor_b_thread_lengths[3]);
-
         int gemm_k_global_split      = tunable->gemm_k_global_split;
 
-        int gemm_m = k / group ;
-        int c_padded = ((c / group) + c_vec_min - 1) / c_vec_min * c_vec_min;
-        int gemm_n = (c_padded * y * x  + gemm_n_per_block - 1) / gemm_n_per_block * gemm_n_per_block;
-        size_t cur_grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
-                                    utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
+        size_t cur_grid_size = get_cur_grid_size(arg, tunable);
 
         int b                        = ho * wo;
         if(tunable->tensor_layout == "nchw")
@@ -662,8 +680,12 @@ public:
         else
             use_workspace = 0;
 
-        void *p_wei_workspace = nullptr;
-        HIP_CALL(hipMalloc(&p_wei_workspace, 2 * group * (k / group) * (c / group) * y * x * sizeof(short)));
+        size_t workspace_size = get_workspace_size(arg, tunable);
+        void *p_wei_workspace;
+        if(workspace_size == 0)
+            p_wei_workspace = nullptr;
+        else
+            HIP_CALL(hipMalloc(&p_wei_workspace, workspace_size));
 
         igemm_wrw_gtc_karg_t karg;
         size_t karg_size = sizeof(karg);
@@ -698,11 +720,9 @@ public:
         //gemm_k_global_splits = (int)(ceil((n / min_n_per_block) * b / (float)(karg.gemm_k_per_wg)));
 
         // tensor cast kernel args
-        size_t cast_per_thread = 8;
         tensor_cast_karg_t karg_tensor_cast;
         karg_tensor_cast.output = p_wei;
         karg_tensor_cast.input = p_wei_workspace; 
-        karg_tensor_cast.thread_length = cast_per_thread;
         karg_tensor_cast.total_length = group * (k / group) * (c / group) * y * x;
 
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
@@ -746,12 +766,13 @@ public:
         int selected_gkgs = 0;
         int selected_grid_size = 0;
         //max_split_num = 1;
-        if(tunable->tensor_layout == "nhwc"){
-            for(int gkgs = 0; gkgs < max_split_num; gkgs++){
+        auto run_with_gks = [&](int _gks){
+            if(tunable->tensor_layout == "nhwc"){
+                //for(int gkgs = 0; gkgs < max_split_num; gkgs++){
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
-            
+
                 // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now. 
-                gemm_k_global_splits = gkgs == 0 ? 1 : compute_gemmk_global_splits(cur_grid_size, gkgs);
+                gemm_k_global_splits = _gks == 0 ? 1 : compute_gemmk_global_splits(cur_grid_size, _gks);
                 if(gemm_k_global_splits == 0){
                     gemm_k_global_splits = 1;
                 }
@@ -765,7 +786,8 @@ public:
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
                 if(use_workspace == 1){
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {group * (k / group) * (c / group) * y * x / cast_per_thread + 1, 1, 1}, {256, 1, 1}});
+                    size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
                 }
                 float duration = igemm_launch_kernels_with_prolog({
                         kernel_launchers
@@ -777,16 +799,25 @@ public:
                 }
                 // printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
                 // fflush(stdout);
-            }
-        }else{
-            // nchw do not search for gemmksplit
-            float duration = igemm_launch_kernels_with_prolog({
-                        {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
-                    }, wrw_prolog, this->warmup, this->repeat);
-            min_duration = duration;
-            selected_gkgs = gemm_k_global_splits;
-            selected_grid_size = grid_size;
 
+            }else{
+                // nchw do not search for gemmksplit
+                float duration = igemm_launch_kernels_with_prolog({
+                            {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
+                        }, wrw_prolog, this->warmup, this->repeat);
+                min_duration = duration;
+                selected_gkgs = gemm_k_global_splits;
+                selected_grid_size = grid_size;
+
+            }
+        };
+        if(current_gks != -1){
+            run_with_gks(current_gks);
+        }else{
+            std::vector<int> all_gks = get_gks_list(arg, tunable);
+            for(int gks : all_gks){
+                run_with_gks(gks);
+            }
         }
 
         result.return_code = 0;
@@ -824,9 +855,70 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
+        if(workspace_size > 0)
+            hipFree(p_wei_workspace);
         return result;
     }
-    hipModule_t         module_tensor_cast;
+    std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override
+    {
+        if (!tunable_is_valid(arg, tunable)) {
+            return std::vector<int>{0};
+        }
+        size_t cur_grid_size_t = get_cur_grid_size(arg, tunable);
+        int hi = arg->get_int("in_h");
+        int wi = arg->get_int("in_w");
+        int n = arg->get_int("batchsize");
+
+        int stride_h = arg->get_int("conv_stride_h");
+        int stride_w = arg->get_int("conv_stride_w");
+        int dilation_h = arg->get_int("dilation_h");
+        int dilation_w = arg->get_int("dilation_w");
+        int pad_h = arg->get_int("pad_h");
+        int pad_w = arg->get_int("pad_w");
+        int y = arg->get_int("fil_h");
+        int x = arg->get_int("fil_w");
+        int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+        int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+        int min_n_per_block = 1;
+        if(tunable->tensor_layout == "nhwc" && tunable->nxe == 1)
+            min_n_per_block = tunable->tensor_a_thread_lengths[1];
+
+        int nb_per_block = tunable->gemm_k_per_block;
+        if(tunable->tensor_layout == "nhwc" && tunable->nxe == 1)
+            nb_per_block = tunable->tensor_a_cluster_lengths[1];
+
+        int b = ho * wo;
+        if(tunable->tensor_layout == "nchw")
+            b = tunable->nxe == 0 ? (ho * wo) : ((ho * wo + tunable->nxb - 1) / tunable->nxb) * tunable->nxb;
+
+        if(tunable->gemm_k_global_split == 0)
+            return std::vector<int>{0};
+        else{
+            int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
+
+            std::vector<int> gks_list;
+            std::vector<int> real_gks_list;
+            for(int gks = 0; gks <= max_split_num; gks++){
+                auto real_gks = compute_gemmk_global_splits(cur_grid_size_t, gks);
+                if(real_gks == 0){
+                    real_gks = 1;
+                }
+                int tmp_gemm_k_per_wg = (int)(ceil(ceil(n / (float)min_n_per_block) * b / (float)real_gks));
+                tmp_gemm_k_per_wg = (tmp_gemm_k_per_wg + nb_per_block - 1) / nb_per_block * nb_per_block;
+                real_gks = (int)(ceil(ceil(n / (float)min_n_per_block) * b / (float)(tmp_gemm_k_per_wg)));
+                if(std::find(real_gks_list.begin(), real_gks_list.end(), real_gks) != real_gks_list.end()){
+                    continue;
+                }
+                else{
+                    real_gks_list.push_back(real_gks);
+                    gks_list.push_back(gks);
+                }
+            }
+            assert(gks_list.size() != 0);
+            return gks_list;
+        }
+    }
 };
 
 #endif

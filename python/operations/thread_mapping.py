@@ -26,6 +26,7 @@
 # pylint: disable=maybe-no-member
 from ..codegen import *
 from ..igemm import igemm_base
+from .utility import *
 
 class ctrl_thread_mapping_t(object):
     def __init__(self):
