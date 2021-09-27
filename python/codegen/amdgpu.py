@@ -170,6 +170,7 @@ def amdgpu_wave_size(arch):
     if a < 1000:
         return 64
     else:
+        assert "don't use this function for arch >= 1000. We may remove this function in the future"
         return 32
 
 def amdgpu_sgpr_limit(arch):
@@ -540,7 +541,7 @@ class amdgpu_metadata_t(mc_base_t):
         self._emit('    .kernarg_segment_size: {}'.format(          ki_.kernel_code.kernarg_segment_byte_size))
         self._emit('    .group_segment_fixed_size: {}'.format(      ki_.kernel_code.workgroup_group_segment_byte_size))
         self._emit('    .private_segment_fixed_size: {}'.format(    0))     # hard code to 0
-        self._emit('    .wavefront_size: {}'.format(                amdgpu_wave_size(self.mc.arch_config.arch)))
+        self._emit('    .wavefront_size: {}'.format(                ki_.kernel_code.wavefront_size))
         self._emit('    .reqd_workgroup_size : [{}]'.format(        '{}, 1, 1'.format( ki_.kernel_block_size) \
                                                                                 if type(ki_.kernel_block_size) is int else \
                                                                     '{}, {}, {}'.format(ki_.kernel_block_size[0],

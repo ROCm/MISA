@@ -42,14 +42,14 @@ class ctrl_dotx_mapping_t(object):
     m_dim   | thread_length                | cluster_length
     --------+------------------------------+------------------------------+
     level_0 | lanegroup_m_per_thread(), 8x | lanegroup_m_per_cluster(), 1 | -> lanegroup_tile_m
-    level_1 | 1                            | wave_m_per_lanegroup()       |
+    level_1 | 1                            | lanegroup_m_per_wave()       |
     level_2 | 1                            | waves_per_m()                |
     level_3 | wave_repeat_m                | 1                            |
 
     n_dim   | thread_length                | cluster_length
     --------+------------------------------+------------------------------+
     level_0 | lanegroup_n_per_thread()     | lanegroup_n_per_cluster(), 8 | -> lanegroup_tile_n
-    level_1 | 1                            | wave_n_per_lanegroup()       |
+    level_1 | 1                            | lanegroup_n_per_wave()       |
     level_2 | 1                            | waves_per_n()                |
     level_3 | wave_repeat_n                | 1                            |
 
@@ -60,14 +60,14 @@ class ctrl_dotx_mapping_t(object):
     m_dim   | thread_length                | cluster_length
     --------+------------------------------+------------------------------+
     level_0 | thread_m()                   | lanegroup_size_m(), 8        |
-    level_1 | 1                            | wave_m_per_lanegroup()       | same as C
+    level_1 | 1                            | lanegroup_m_per_wave()       | same as C
     level_2 | 1                            | waves_per_m()                | same as C
     level_3 | wave_repeat_m                | 1                            | same as C
 
     n_dim   | thread_length                | cluster_length
     --------+------------------------------+------------------------------+
     level_0 | thread_n()                   | lanegroup_size_n(), 8        |
-    level_1 | 1                            | wave_n_per_lanegroup()       | same as C
+    level_1 | 1                            | lanegroup_n_per_wave()       | same as C
     level_2 | 1                            | waves_per_n()                | same as C
     level_3 | wave_repeat_n                | 1                            | same as C
 
@@ -84,19 +84,19 @@ class ctrl_dotx_mapping_t(object):
 
     '''
     def __init__(self, macro_tile_m, macro_tile_n, lanegroup_tile_m, lanegroup_tile_n, 
-                        wave_lanegroups_m, wave_lanegroups_n, waves, wave_repeat_m, wave_repeat_n, inst_dotx):
+                        lanegroup_wave_m, lanegroup_wave_n, waves, wave_repeat_m, wave_repeat_n, inst_dotx):
         assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
-        wave_size = wave_lanegroups_m * wave_lanegroups_n * LANEGROUP_SIZE
-        assert wave_size in (32, 64), f'unsupported wave size config:{wave_size}, wl_m:{wave_lanegroups_m}, wl_n:{wave_lanegroups_n}'
-        assert macro_tile_m % (wave_repeat_m * lanegroup_tile_m * wave_lanegroups_m) == 0
-        assert macro_tile_n % (wave_repeat_n * lanegroup_tile_n * wave_lanegroups_n) == 0
+        wave_size = lanegroup_wave_m * lanegroup_wave_n * LANEGROUP_SIZE
+        assert wave_size in (32, 64), f'unsupported wave size config:{wave_size}, wl_m:{lanegroup_wave_m}, wl_n:{lanegroup_wave_n}'
+        assert macro_tile_m % (wave_repeat_m * lanegroup_tile_m * lanegroup_wave_m) == 0
+        assert macro_tile_n % (wave_repeat_n * lanegroup_tile_n * lanegroup_wave_n) == 0
 
         self.macro_tile_m = macro_tile_m
         self.macro_tile_n = macro_tile_n
         self.lanegroup_tile_m = lanegroup_tile_m
         self.lanegroup_tile_n = lanegroup_tile_n
-        self.wave_lanegroups_m = wave_lanegroups_m
-        self.wave_lanegroups_n = wave_lanegroups_n
+        self.lanegroup_wave_m = lanegroup_wave_m
+        self.lanegroup_wave_n = lanegroup_wave_n
         self.waves = waves
         self.wave_repeat_m = wave_repeat_m
         self.wave_repeat_n = wave_repeat_n
@@ -127,28 +127,28 @@ class ctrl_dotx_mapping_t(object):
         assert flatten(self.acc_c_per_thread_m()) * flatten(self.acc_c_per_thread_n()) == flatten(self.acc_c_lengths())
         return flatten(self.acc_c_lengths())
 
-    def wave_m_per_lanegroup(self):
+    def lanegroup_m_per_wave(self):
         '''
         how many lanegroups to form a single wave, in m direction
         '''
-        return self.wave_lanegroups_m
+        return self.lanegroup_wave_m
 
-    def wave_n_per_lanegroup(self):
+    def lanegroup_n_per_wave(self):
         '''
         how many lanegroups to form a single wave, in n direction
         '''
-        return self.wave_lanegroups_n
+        return self.lanegroup_wave_n
 
     def waves_per_m(self):
         ''' attention! not count repeat'''
-        return self.macro_tile_m // (self.wave_repeat_m * self.lanegroup_tile_m * self.wave_lanegroups_m)
+        return self.macro_tile_m // (self.wave_repeat_m * self.lanegroup_tile_m * self.lanegroup_wave_m)
 
     def waves_per_n(self):
         ''' attention! not count repeat'''
-        return self.macro_tile_n // (self.wave_repeat_n * self.lanegroup_tile_n * self.wave_lanegroups_n)
+        return self.macro_tile_n // (self.wave_repeat_n * self.lanegroup_tile_n * self.lanegroup_wave_n)
 
     def block_size(self):
-        wave_size = self.wave_lanegroups_m * self.wave_lanegroups_n * LANEGROUP_SIZE
+        wave_size = self.lanegroup_wave_m * self.lanegroup_wave_n * LANEGROUP_SIZE
         return self.waves * wave_size
 
     def lanegroup_m_per_thread(self):
@@ -182,14 +182,14 @@ class ctrl_dotx_mapping_t(object):
         return self.lanegroup_n_per_thread() // self.lanegroup_size_n()
 
     def macro_tile_validate(self):
-        assert self.macro_tile_m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.wave_m_per_lanegroup() * self.waves_per_m() * self.wave_repeat_m
-        assert self.macro_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.wave_n_per_lanegroup() * self.waves_per_n() * self.wave_repeat_n
+        assert self.macro_tile_m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_wave() * self.waves_per_m() * self.wave_repeat_m
+        assert self.macro_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_wave() * self.waves_per_n() * self.wave_repeat_n
         assert self.macro_tile_m * self.macro_tile_n == self.block_size() * self.lanegroup_m_per_thread() * self.wave_repeat_m * self.lanegroup_n_per_thread() * self.wave_repeat_n
 
     def serialize(self):
         self.macro_tile_validate()
-        s  = f"c_m:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}-1x{self.wave_m_per_lanegroup()}-1x{self.waves_per_m()}-{self.wave_repeat_m}x1, "
-        s += f"c_n:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}-1x{self.wave_n_per_lanegroup()}-1x{self.waves_per_n()}-{self.wave_repeat_n}x1, "
+        s  = f"c_m:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}-1x{self.lanegroup_m_per_wave()}-1x{self.waves_per_m()}-{self.wave_repeat_m}x1, "
+        s += f"c_n:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}-1x{self.lanegroup_n_per_wave()}-1x{self.waves_per_n()}-{self.wave_repeat_n}x1, "
         s += f"a_m:{self.thread_m()}x{self.lanegroup_size_m()}, a_n:{self.thread_n()}x{self.lanegroup_size_n()}, a_k:{self.lanegroup_k_per_thread()}x1"
         return s
 
@@ -202,7 +202,7 @@ class ctrl_dotx_mapping_t(object):
     #     packed_pixel_byte = self.inst_dotx.k * data_byte
     #     extra_k_pack = 1
 
-                        #  mt_m,mt_n,lt_m,lt_n,wl_m,wl_n,  ws, r_m, r_n, inst_mfma
+                        #  mt_m,mt_n,lt_m,lt_n,lw_m,lw_n,  ws, r_m, r_n, inst_mfma
 ctrl_dotx_mapping_fp16 = [
         ctrl_dotx_mapping_t(128, 128,   8,   8,   4,   2,   4,   2,   4, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
         ctrl_dotx_mapping_t(128, 128,   8,   8,   2,   4,   4,   4,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
