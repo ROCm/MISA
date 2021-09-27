@@ -233,7 +233,6 @@ igemm_fwd_gtc_nchwc_fp16_bx0_ex1_bt128x128x32_tt8x8_gm2x4x4_gn2x4x4_ta1x1x1x16_1
     ; wei(1, ce, 1, k-vec-c) thread_lengths: 1x1x1x16, cluster_length: 1x4x1x64, k_pack:8
     v_mov_b32 v[v_tmp], v0
     v_and_b32 v[v_wei_ik], 63, v[v_tmp]
-    ;v_lshlrev_b32 v[v_wei_ik], 3, v[v_wei_ik]
     v_lshrrev_b32 v[v_tmp], 6, v[v_tmp]
     v_and_b32 v[v_gtc_iec], 3, v[v_tmp]
 
@@ -241,7 +240,6 @@ igemm_fwd_gtc_nchwc_fp16_bx0_ex1_bt128x128x32_tt8x8_gm2x4x4_gn2x4x4_ta1x1x1x16_1
     ; inp(1, ce, nb0, nb1) thread_length: 1x1x2x8, cluster_length: 1x4x1x64, k_pack:8
     v_mov_b32 v[v_tmp], v0
     v_and_b32 v[v_in_inb], 63, v[v_tmp]
-    ;v_lshlrev_b32 v[v_in_inb], 3, v[v_in_inb]
 
     s_mov_b32 s[s_tmp], 16777215
     s_waitcnt lgkmcnt(0)
@@ -329,7 +327,6 @@ igemm_fwd_gtc_nchwc_fp16_bx0_ex1_bt128x128x32_tt8x8_gm2x4x4_gn2x4x4_ta1x1x1x16_1
     s_lshl_b32 s[s_block_gtc_ig], s[s_block_gtc_ig], 1
     ; calculate wei offset
     s_mul_i32 s[s_tmp], s[s_x], s[s_y]
-    ;s_mul_i32 s[s_tmp+3], s[s_k], s[s_group]
     s_mul_i32 s[s_tmp+2], s[s_k], 8
     s_mul_i32 s[s_tmp+2], s[s_tmp+2], s[s_c]
     s_mul_i32 s[s_tmp+2], s[s_tmp+2], s[s_tmp]
@@ -356,8 +353,6 @@ igemm_fwd_gtc_nchwc_fp16_bx0_ex1_bt128x128x32_tt8x8_gm2x4x4_gn2x4x4_ta1x1x1x16_1
     ; load weight
     buffer_load_dwordx4 v[v_gld_a+0:v_gld_a+0+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], 0 offen offset:0
     buffer_load_dwordx4 v[v_gld_a+4:v_gld_a+4+3], v[v_wei_os], s[s_p_wei:s_p_wei+3], 0 offen offset:1024
-
-;s_branch L_debug_igemm_fwd_gtc_nchwc_fp16_bx0_ex1_bt128x128x32_tt8x8_gm2x4x4_gn2x4x4_ta1x1x1x16_1x4x1x64_tb1x1x2x8_1x4x1x64_me
 
     ; calculate in offset
     s_mov_b32 s[s_in_offset], 0
