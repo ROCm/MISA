@@ -146,7 +146,7 @@ def igemm_use_lanegroup_thread_mapping(tunable):
         if all(key in tunable for key in attrs):
             return True
     elif type(tunable) is igemm_gtc_tunable_parameter_t:
-        if all(hasattr(tunable, attr) for attr in attrs)
+        if all(hasattr(tunable, attr) for attr in attrs):
             return True
     return False
 
