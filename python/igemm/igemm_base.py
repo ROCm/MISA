@@ -119,6 +119,8 @@ def get_igemm_gtc_fma_type(tunable_dict):
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
         assert tunable_dict['arch'] in ('gfx908', 'gfx90a')
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
+    if 'lanegroup_tile_m' in tunable_dict and 'lanegroup_tile_n' in tunable_dict:
+        return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     assert False
 
 def get_igemm_gtc_gemm_k_global_split(tunable_dict):
@@ -164,10 +166,10 @@ class igemm_gtc_tunable_parameter_t(object):
             if igemm_use_lanegroup_thread_mapping(tunable_dict):
                 self.lanegroup_tile_m           = tunable_dict['lanegroup_tile_m']
                 self.lanegroup_wave_m           = tunable_dict['lanegroup_wave_m']
-                self.wave_repeat_m              = tunable_dict['wave_repeat_m']
+                self.lanegroup_repeat_m         = tunable_dict['lanegroup_repeat_m']
                 self.lanegroup_tile_n           = tunable_dict['lanegroup_tile_n']
                 self.lanegroup_wave_n           = tunable_dict['lanegroup_wave_n']
-                self.wave_repeat_n              = tunable_dict['wave_repeat_n']
+                self.lanegroup_repeat_n         = tunable_dict['lanegroup_repeat_n']
             else:
                 self.gemm_m_per_thread          = tunable_dict['gemm_m_per_thread']
                 self.gemm_m_level0_cluster      = tunable_dict['gemm_m_level0_cluster']
@@ -234,10 +236,10 @@ class igemm_gtc_tunable_parameter_t(object):
             if igemm_use_lanegroup_thread_mapping(self):
                 self.wave_size                  = self.lanegroup_wave_m * self.lanegroup_wave_n * LANEGROUP_SIZE
                 assert self.wave_size in (32, 64)
-                assert self.gemm_m_per_block % (self.lanegroup_tile_m * self.lanegroup_wave_m * self.wave_repeat_m) == 0
-                assert self.gemm_n_per_block % (self.lanegroup_tile_n * self.lanegroup_wave_n * self.wave_repeat_n) == 0
-                waves_per_m = self.gemm_m_per_block // (self.lanegroup_tile_m * self.lanegroup_wave_m * self.wave_repeat_m)
-                waves_per_n = self.gemm_n_per_block // (self.lanegroup_tile_n * self.lanegroup_wave_n * self.wave_repeat_n)
+                assert self.gemm_m_per_block % (self.lanegroup_tile_m * self.lanegroup_wave_m * self.lanegroup_repeat_m) == 0
+                assert self.gemm_n_per_block % (self.lanegroup_tile_n * self.lanegroup_wave_n * self.lanegroup_repeat_n) == 0
+                waves_per_m = self.gemm_m_per_block // (self.lanegroup_tile_m * self.lanegroup_wave_m * self.lanegroup_repeat_m)
+                waves_per_n = self.gemm_n_per_block // (self.lanegroup_tile_n * self.lanegroup_wave_n * self.lanegroup_repeat_n)
                 self.block_size                 = waves_per_m * waves_per_n * self.wave_size
             else:
                 self.block_size                 = self.gemm_m_level0_cluster * self.gemm_n_level0_cluster * self.gemm_m_level1_cluster * self.gemm_n_level1_cluster
@@ -306,7 +308,17 @@ class igemm_gtc_tunable_parameter_t(object):
                 # self.num_vgpr_accumulate_c      = (self.gemm_m_repeat * self.gemm_m_per_thread * self.gemm_n_repeat * self.gemm_n_per_thread)
                 # self.num_vgpr_accumulate_a      = (self.gemm_m_repeat * self.gemm_m_per_thread)
                 # self.num_vgpr_accumulate_b      = (self.gemm_n_repeat * self.gemm_n_per_thread)
-                pass
+                dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block,
+                                        self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
+                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision)
+                self.local_prefetch_num         = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1 # TODO: other local prefetch
+                if self.direction == 'fwd':
+                    assert self.tensor_a_thread_lengths[1] == self.tensor_b_thread_lengths[1]
+                    self.num_vgpr_accumulate_a  = self.local_prefetch_num * self.lanegroup_repeat_m * dotx_mapping.thread_m() * \
+                            ((self.tensor_a_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
+                    self.num_vgpr_accumulate_b  = self.local_prefetch_num * self.lanegroup_repeat_n * dotx_mapping.thread_n() * \
+                            ((self.tensor_b_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
+                    self.num_vgpr_accumulate_c  = dotx_mapping.lanegroup_m_per_thread() * dotx_mapping.lanegroup_n_per_thread()
             else:
                 self.gemm_m_repeat              = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
                 self.gemm_n_repeat              = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
@@ -335,9 +347,9 @@ class igemm_gtc_tunable_parameter_t(object):
 
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             if igemm_use_lanegroup_thread_mapping(self):
-                gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.gemm_m_per_thread}x{self.gemm_m_level0_cluster}x{self.gemm_m_level1_cluster}, gemm_n_per_block:{self.gemm_n_per_block} - {self.gemm_n_per_thread}x{self.gemm_n_level0_cluster}x{self.gemm_n_level1_cluster}, gemm_k_per_block:{self.gemm_k_per_block}"
+                gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.lanegroup_tile_m}x{self.lanegroup_wave_m}x{self.lanegroup_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.lanegroup_tile_n}x{self.lanegroup_wave_n}x{self.lanegroup_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
             else:
-                gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.lanegroup_tile_m}x{self.lanegroup_wave_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.lanegroup_tile_n}x{self.lanegroup_wave_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
+                gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.gemm_m_per_thread}x{self.gemm_m_level0_cluster}x{self.gemm_m_level1_cluster}, gemm_n_per_block:{self.gemm_n_per_block} - {self.gemm_n_per_thread}x{self.gemm_n_level0_cluster}x{self.gemm_n_level1_cluster}, gemm_k_per_block:{self.gemm_k_per_block}"
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
@@ -369,10 +381,13 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # some parameter not in modular_conv
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
-            self.thread_tile_m                      = self.gemm_m_repeat * self.gemm_m_per_thread
-            self.thread_tile_n                      = self.gemm_n_repeat * self.gemm_n_per_thread
-            self.thread_sub_tile_m                  = self.gemm_m_per_thread
-            self.thread_sub_tile_n                  = self.gemm_n_per_thread
+            if igemm_use_lanegroup_thread_mapping(self):
+                pass
+            else:
+                self.thread_tile_m                  = self.gemm_m_repeat * self.gemm_m_per_thread
+                self.thread_tile_n                  = self.gemm_n_repeat * self.gemm_n_per_thread
+                self.thread_sub_tile_m              = self.gemm_m_per_thread
+                self.thread_sub_tile_n              = self.gemm_n_per_thread
 
         # number of loops at least needed for final coalescing store, dicided by LDS size
         # self.coalescing_store_groups            = (self.gemm_m_per_block * self.gemm_n_per_block) // \
@@ -514,10 +529,10 @@ class igemm_gtc_tunable_parameter_t(object):
             if igemm_use_lanegroup_thread_mapping(self):
                  tunable_dict['lanegroup_tile_m']       = self.lanegroup_tile_m
                  tunable_dict['lanegroup_wave_m']       = self.lanegroup_wave_m
-                 tunable_dict['wave_repeat_m']          = self.wave_repeat_m
+                 tunable_dict['lanegroup_repeat_n']     = self.lanegroup_repeat_n
                  tunable_dict['lanegroup_tile_n']       = self.lanegroup_tile_n
                  tunable_dict['lanegroup_wave_n']       = self.lanegroup_wave_n
-                 tunable_dict['wave_repeat_n']          = self.wave_repeat_n
+                 tunable_dict['lanegroup_repeat_n']     = self.lanegroup_repeat_n
             else:
                 tunable_dict['gemm_m_per_thread']       = self.gemm_m_per_thread
                 tunable_dict['gemm_m_level0_cluster']   = self.gemm_m_level0_cluster
@@ -590,10 +605,10 @@ class igemm_gtc_tunable_parameter_t(object):
                 sstr += \
                 line_start + 'lanegroup_tile_m           {} {}'.format(equal, self.lanegroup_tile_m) + new_line + \
                 line_start + 'lanegroup_wave_m           {} {}'.format(equal, self.lanegroup_wave_m) + new_line + \
-                line_start + 'wave_repeat_m              {} {}'.format(equal, self.wave_repeat_m) + new_line + \
+                line_start + 'lanegroup_repeat_m         {} {}'.format(equal, self.lanegroup_repeat_m) + new_line + \
                 line_start + 'lanegroup_tile_n           {} {}'.format(equal, self.lanegroup_tile_n) + new_line + \
                 line_start + 'lanegroup_wave_n           {} {}'.format(equal, self.lanegroup_wave_n) + new_line + \
-                line_start + 'wave_repeat_n              {} {}'.format(equal, self.wave_repeat_n) + new_line
+                line_start + 'lanegroup_repeat_n         {} {}'.format(equal, self.lanegroup_repeat_n) + new_line
             else:
                 sstr += \
                 line_start + 'gemm_m_per_thread          {} {}'.format(equal, self.gemm_m_per_thread) + new_line + \
@@ -696,7 +711,7 @@ def igemm_gtc_encode_kernel_name(tunable, arch):
         if igemm_use_lanegroup_thread_mapping(tunable):
             kernel_name += f'lt{tunable.lanegroup_tile_m}x{tunable.lanegroup_tile_n}_' +\
                             f'lw{tunable.lanegroup_wave_m}x{tunable.lanegroup_wave_n}_' +\
-                            f'ws{tunable.wave_repeat_m}x{tunable.wave_repeat_n}_'
+                            f'ws{tunable.lanegroup_repeat_m}x{tunable.lanegroup_repeat_n}_'
         else:
             kernel_name +=   f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
                          f"gm{tunable.gemm_m_repeat}x{tunable.gemm_m_level0_cluster}x{tunable.gemm_m_level1_cluster}_" +\
