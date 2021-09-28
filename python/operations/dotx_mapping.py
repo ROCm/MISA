@@ -103,6 +103,7 @@ class ctrl_dotx_mapping_t(object):
         self.inst_dotx = inst_dotx
 
         self.macro_tile_validate()
+        self.wave_tile_validate()
 
     def acc_c_lengths(self):
         '''
@@ -176,18 +177,29 @@ class ctrl_dotx_mapping_t(object):
         return LANEGROUP_SIZE
 
     def thread_m(self):
-        return self.lanegroup_m_per_thread() // self.lanegroup_size_m()
+        return self.lanegroup_tile_m // self.lanegroup_size_m()
 
     def thread_n(self):
-        return self.lanegroup_n_per_thread() // self.lanegroup_size_n()
+        return self.lanegroup_tile_n // self.lanegroup_size_n()
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_wave() * self.waves_per_m() * self.lanegroup_repeat_m
         assert self.macro_tile_n == self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_wave() * self.waves_per_n() * self.lanegroup_repeat_n
         assert self.macro_tile_m * self.macro_tile_n == self.block_size() * self.lanegroup_m_per_thread() * self.lanegroup_repeat_m * self.lanegroup_n_per_thread() * self.lanegroup_repeat_n
+        assert self.macro_tile_m == self.thread_m() * self.lanegroup_size_m() * self.lanegroup_m_per_wave() * self.waves_per_m() * self.lanegroup_repeat_m
+        assert self.macro_tile_n == self.thread_n() * self.lanegroup_size_n() * self.lanegroup_n_per_wave() * self.waves_per_n() * self.lanegroup_repeat_n
+
+    def wave_tile_validate(self):
+        wave_tile_m = self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_wave()
+        wave_tile_n = self.lanegroup_n_per_thread() * self.lanegroup_n_per_cluster() * self.lanegroup_n_per_wave()
+        assert wave_tile_m == self.macro_tile_m // (self.waves_per_m() * self.lanegroup_repeat_m)
+        assert wave_tile_n == self.macro_tile_n // (self.waves_per_n() * self.lanegroup_repeat_n)
+        assert wave_tile_m == self.thread_m() * self.lanegroup_size_m() * self.lanegroup_m_per_wave()
+        assert wave_tile_n == self.thread_n() * self.lanegroup_size_n() * self.lanegroup_n_per_wave()
 
     def serialize(self):
         self.macro_tile_validate()
+        self.wave_tile_validate()
         s  = f"c_m:{self.lanegroup_m_per_thread()}x{self.lanegroup_m_per_cluster()}-1x{self.lanegroup_m_per_wave()}-1x{self.waves_per_m()}-{self.lanegroup_repeat_m}x1, "
         s += f"c_n:{self.lanegroup_n_per_thread()}x{self.lanegroup_n_per_cluster()}-1x{self.lanegroup_n_per_wave()}-1x{self.waves_per_n()}-{self.lanegroup_repeat_n}x1, "
         s += f"a_m:{self.thread_m()}x{self.lanegroup_size_m()}, a_n:{self.thread_n()}x{self.lanegroup_size_n()}, a_k:{self.lanegroup_k_per_thread()}x1"
