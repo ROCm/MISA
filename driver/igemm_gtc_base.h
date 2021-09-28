@@ -150,6 +150,15 @@ typedef struct {
     std::string fma_type;
     union{
         struct{
+            int lanegroup_tile_m;
+            int lanegroup_wave_m;
+            int lanegroup_repeat_m;
+            int lanegroup_tile_n;
+            int lanegroup_wave_n;
+            int lanegroup_repeat_n;
+            int dummy_0;
+        };
+        struct{
             int gemm_m_per_thread;
             int gemm_m_level0_cluster;
             int gemm_m_level1_cluster;
