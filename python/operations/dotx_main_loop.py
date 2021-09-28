@@ -124,13 +124,36 @@ class dotx_main_loop_t(mc_base_t):
         lds_base_m = 0
         lds_base_n = 0
         unroll_k = self.ctrl.unroll_k
+        k_per_inst = cxm.lanegroup_k_per_thread()
+
+        pad_m = self.ctrl.lds_pad_m
+        pad_n = self.ctrl.lds_pad_n
 
         thread_m = self.ctrl.thread_m
         thread_n = self.ctrl.thread_n
         thread_sub_m = self.ctrl.thread_m // self.ctrl.gemm_m_repeat
         thread_sub_n = self.ctrl.thread_n // self.ctrl.gemm_n_repeat
 
-        v_fma = macro_dlops_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n, self.ctrl.precision)
+        def mapped_ioffset(i_k, width_byte, pad_pixel, offset = 0):
+            k_pack = self.ctrl.lds_k_pack
+            i_k0 = i_k // k_pack
+            i_kp = i_k % k_pack
+            return i_k0 * (width_byte * k_pack + pad_pixel * data_byte) + i_kp * data_byte + offset * k_pack
+
+        # mi = mapped_ioffset
+        def mi_m(i_k, offset = 0):
+            if pad_m > 0:
+                return mapped_ioffset(i_k, lds_width_m, 0, offset) // 32 * (32 + pad_m)
+            else:
+                return mapped_ioffset(i_k, lds_width_m, 0, offset)
+        
+        def mi_n(i_k, offset = 0):
+            if pad_n > 0:
+                return mapped_ioffset(i_k, lds_width_n, 0, offset) // 32 * (32 + pad_n)
+            else:
+                return mapped_ioffset(i_k, lds_width_n, 0, offset)
+
+        v_dotx_k = macro_dotx_mxnxk_t(self.mc, thread_sub_m, thread_sub_n, self.ctrl.lds_k_pack, thread_n, self.ctrl.precision)
 
         # start emit
         self._emit(f"; start FMA loop, {thread_m}x{thread_n} thread tile with {thread_sub_m}x{thread_sub_n} sub-tile")
@@ -175,23 +198,23 @@ class dotx_main_loop_t(mc_base_t):
         with self._indent_context():
             # 1st fma
             self._emit(f's_waitcnt lgkmcnt(2)')
-            self._emit(v_fma(v_c(), v_a(), v_b()))
+            self._emit(v_dotx_k(v_c(), v_a(), v_b()))
             #self._emit_empty_line()
 
             # 2nd fma
             self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(v_fma(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
+            self._emit(v_dotx_k(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
             #self._emit_empty_line()
 
             # 3rd fma
             self._emit(f_sld_a(v_a(), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}'))
             self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(v_fma(v_c(thread_sub_m * thread_n), v_a(thread_sub_m), v_b()))
+            self._emit(v_dotx_k(v_c(thread_sub_m * thread_n), v_a(thread_sub_m), v_b()))
             #self._emit_empty_line()
 
             # 4th fma
             self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
-            self._emit(v_fma(v_c(thread_sub_m * thread_n + thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
+            self._emit(v_dotx_k(v_c(thread_sub_m * thread_n + thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
             self._emit_empty_line()
 
             # last
@@ -207,12 +230,12 @@ class dotx_main_loop_t(mc_base_t):
 
         # 1st fma
         self._emit(f"s_waitcnt lgkmcnt(2)")
-        self._emit(v_fma(v_c(), v_a(), v_b()))
+        self._emit(v_dotx_k(v_c(), v_a(), v_b()))
         #self._emit_empty_line()
 
         # 2nd fma
         self._emit(f"s_waitcnt lgkmcnt(1)")
-        self._emit(v_fma(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
+        self._emit(v_dotx_k(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
         #self._emit_empty_line()
 
         #       wait global and store to LDS
@@ -231,7 +254,7 @@ class dotx_main_loop_t(mc_base_t):
 
         # 3rd fma
         self._emit(f"s_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_b.get_issues()})")
-        self._emit(v_fma(v_c(thread_sub_m * thread_n), v_a(thread_sub_m), v_b()))
+        self._emit(v_dotx_k(v_c(thread_sub_m * thread_n), v_a(thread_sub_m), v_b()))
         #self._emit_empty_line()
 
         self._emit(f"v_xor_b32 v[{v_sst_b_os()}], {lds_single_size}, v[{v_sst_b_os()}] ; switch double buffer b store")
@@ -245,15 +268,15 @@ class dotx_main_loop_t(mc_base_t):
         self._emit(f_gld_a())
 
         # 4th fma
-        self._emit(v_fma(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
+        self._emit(v_dotx_k(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
         self._emit_empty_line()
         self._emit(f"s_branch {label_fma_body}")
 
         # Label: finishing of fma body
         self._emit_front(f"{label_fma_finishing}:")
         self._emit(f"s_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_a.get_issues()})")
-        self._emit(v_fma(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
-        self._emit(v_fma(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
+        self._emit(v_dotx_k(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
+        self._emit(v_dotx_k(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
 
         # Label: end of fma body
         self._emit_front(f"{label_fma_end}:")
@@ -270,23 +293,23 @@ class dotx_main_loop_t(mc_base_t):
         with self._indent_context():
             # 1st fma
             self._emit('s_waitcnt lgkmcnt(2)')
-            self._emit(v_fma(v_c(), v_a(), v_b()))
+            self._emit(v_dotx_k(v_c(), v_a(), v_b()))
             #self._emit_empty_line()
 
             # 2nd fma
             self._emit('s_waitcnt lgkmcnt(1)')
-            self._emit(v_fma(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
+            self._emit(v_dotx_k(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
             #self._emit_empty_line()
 
             # 3rd fma
             self._emit(f_sld_a(v_a(), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}'))
             self._emit('s_waitcnt lgkmcnt(1)')
-            self._emit(v_fma(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
+            self._emit(v_dotx_k(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
             #self._emit_empty_line()
 
             # 4th fma
             self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
-            self._emit(v_fma(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
+            self._emit(v_dotx_k(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
             self._emit_empty_line()
 
             # last
@@ -298,19 +321,19 @@ class dotx_main_loop_t(mc_base_t):
         self._emit('; last unroll')
         # 1st fma
         self._emit('s_waitcnt lgkmcnt(2)')
-        self._emit(v_fma(v_c(), v_a(), v_b()))
+        self._emit(v_dotx_k(v_c(), v_a(), v_b()))
         #self._emit_empty_line()
 
         # 2nd fma
         self._emit('s_waitcnt lgkmcnt(1)')
-        self._emit(v_fma(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
+        self._emit(v_dotx_k(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
         #self._emit_empty_line()
 
         # 3rd fma
         self._emit('s_waitcnt lgkmcnt(0)')
-        self._emit(v_fma(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
+        self._emit(v_dotx_k(v_c(thread_sub_m*thread_n), v_a(thread_sub_m), v_b()))
         #self._emit_empty_line()
 
         # 4th fma
-        self._emit(v_fma(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
+        self._emit(v_dotx_k(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
         self._emit_empty_line()
