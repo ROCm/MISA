@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from python.codegen.kernel_func import macro_ctrl
 from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.gpu_reg_block import * 
 from python.codegen.kernel_driver import base_config
@@ -19,8 +20,8 @@ class conv_direct_navi(kernel_constructor):
         return 'conv_direct_navi'
 
     class custom_caller(gpu_instructions_caller_base, gfx10_instructions_caller):
-        def __init__(self, insturction_container) -> None:
-            super().__init__(insturction_container)
+        def __init__(self, insturction_list) -> None:
+            super().__init__(insturction_list)
 
     class kernel_karg_t(karg_file_t):
         '''Define kernel arguments. Used in _set_kernel_karg_t'''
@@ -40,8 +41,8 @@ class conv_direct_navi(kernel_constructor):
             self.G = pb_arg('G', arg_kind.value, arg_type.I32)
 
     class _sgpr(sgpr_file_t):
-        def __init__(self, mc):
-            super().__init__(mc)
+        def __init__(self, ic):
+            super().__init__(ic)
             add = self.add 
             self.karg_ptr = add('karg_ptr', 2)
             self.group_id = add('group_id', 1)
@@ -59,8 +60,8 @@ class conv_direct_navi(kernel_constructor):
             self.G = add('G', 1)
     
     class _vgpr(vgpr_file_t):
-        def __init__(self, mc):
-            super().__init__(mc)
+        def __init__(self, ic):
+            super().__init__(ic)
             add = self.add 
             self.tid = add('tid', 1)
             self.in_off = add('in_off', 1)
@@ -81,6 +82,8 @@ class conv_direct_navi(kernel_constructor):
         ic = self.instructions_caller
 
         input_buffer_size = filter_buffer_size = output_buffer_size = literal(101)
+
+        macro_ctrl(ic)
 
         ic.s_mov_b32(s.in_buff_ptr[2], input_buffer_size)
         ic.s_mov_b32(s.in_buff_ptr[3], 0x00027000)
@@ -133,13 +136,13 @@ class conv_direct_navi(kernel_constructor):
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
         self.kargs=self.kernel_karg_t(self.mc)
     
-    def _gpr_init(self, mc :mc_asm_printer_t) -> None:
+    def _gpr_init(self, ic) -> None:
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
         
-        self.sgpr = self._sgpr(mc)
-        self.vgpr = self._vgpr(mc)
-        self.agpr = self._agpr(mc)
+        self.sgpr = self._sgpr(ic)
+        self.vgpr = self._vgpr(ic)
+        self.agpr = self._agpr(ic)
 
     def _instructions_init(self):
         '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
