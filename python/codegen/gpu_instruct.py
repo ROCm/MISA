@@ -68,9 +68,10 @@ class reg_allocator_caller(inst_caller_base):
 #class gpu_instructions_caller(VOP1_instr_caller, VMEM_instr_caller, SMEM_instr_caller, SOP1_instr_caller):
 
 class flow_control_base(inst_base):
-    def __init__(self, label) -> None:
+    def __init__(self, label, func_ptr) -> None:
         super().__init__(instruction_type.FLOW_CONTROL, 'label')
         self.label = label
+        self.func_ptr = func_ptr
 
     def __str__(self) -> str:
         return f'//{self.label}'
@@ -79,11 +80,11 @@ class flow_control_caller(inst_caller_base):
     def __init__(self, insturction_list: List[inst_base]) -> None:
         super().__init__(insturction_list)
     
-    def kernel_func_begin(self, func_name):
-        return self.ic_pb(flow_control_base(f'{func_name}.begin()'))
+    def kernel_func_begin(self, func_ptr):
+        return self.ic_pb(flow_control_base(f'{func_ptr.func_name}.begin()', func_ptr))
     
-    def kernel_func_end(self, func_name):
-        return self.ic_pb(flow_control_base(f'{func_name}.end()'))
+    def kernel_func_end(self, func_ptr):
+        return self.ic_pb(flow_control_base(f'{func_ptr.func_name}.end()', func_ptr))
 
 
 class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller):

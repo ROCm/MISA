@@ -28,12 +28,10 @@ class kernel_func():
             self.func_name = func_name
 
     def _func_begin(self):
-        name = self.__class__.__name__
-        self.ic.kernel_func_begin(name)
+        self.ic.kernel_func_begin(self)
 
     def _func_end(self):
-        name = self.__class__.__name__
-        self.ic.kernel_func_end(name)
+        self.ic.kernel_func_end(self)
 
     def wrap_call(self, *args, **kwargs):
         self._func_begin()
