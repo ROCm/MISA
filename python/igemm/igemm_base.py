@@ -344,8 +344,11 @@ class igemm_gtc_tunable_parameter_t(object):
         if (self.direction == "fwd" or self.direction == "bwd") and self.vector_store == 1 and self.gemm_k_global_split == 1 and self.precision == 'fp16':
             self.use_fp32_atomic_add_for_fp16_data = 1
 
+        if self.gemm_k_global_split == 1 and self.precision == 'bf16':
+            self.use_fp32_atomic_add_for_fp16_data = 1
+
         self.coalescing_store_groups = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if self.use_fp32_atomic_add_for_fp16_data == 0 else 4))
-        
+
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
         #if self.coalescing_store_groups < 2:
@@ -376,12 +379,12 @@ class igemm_gtc_tunable_parameter_t(object):
     def get_lds_pad(self):
         if self.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             return 0, 0
-        if self.direction == 'wrw' and self.precision == 'fp16':
+        if self.direction == 'wrw' and self.precision in ('fp16', 'bf16'):
             if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 4:
                 return 4, 4
             else:
                 return 0, 0
-        if self.direction == 'bwd' and self.precision == 'fp16':
+        if self.direction == 'bwd' and self.precision in ('fp16', 'bf16'):
             if self.gemm_k_per_block == 32 and self.gemm_m_per_block >= 128 and self.gemm_n_per_block >= 128 and self.tensor_b_thread_lengths[1] >= 8:
                 if self.gemm_m_per_block == 128 and self.gemm_n_per_block == 128:
                     return 0, 0

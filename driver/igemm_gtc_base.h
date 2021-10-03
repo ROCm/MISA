@@ -612,15 +612,21 @@ public:
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * k * ho * wo;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * k * ho * wo;
         }
         else if(forw & 2) // backward data ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * c * hi * wi;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * c * hi * wi;
         }
         else if(forw & 4) // backward weights ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+                workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
                 workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
         }
         else if(forw == 0) // all dirs
