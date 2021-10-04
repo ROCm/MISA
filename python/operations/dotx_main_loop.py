@@ -116,8 +116,10 @@ class dotx_main_loop_t(mc_base_t):
 
         data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(self.ctrl.precision))
 
-        lds_width_m = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * self.ctrl.lds_k_pack
-        lds_width_n = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * self.ctrl.lds_k_pack
+        lds_width_m_per_read = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * self.ctrl.lds_k_pack
+        lds_width_n_per_read = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * self.ctrl.lds_k_pack
+        lds_width_m = data_byte * dotx_m.macro_tile_m * self.ctrl.lds_k_pack
+        lds_width_n = data_byte * dotx_m.macro_tile_n * self.ctrl.lds_k_pack
         lds_single_size = self.ctrl.lds_single_size
 
         # used as offset:x number. may some 
@@ -129,10 +131,10 @@ class dotx_main_loop_t(mc_base_t):
         pad_m = self.ctrl.lds_pad_m
         pad_n = self.ctrl.lds_pad_n
 
-        thread_m = self.ctrl.thread_m
-        thread_n = self.ctrl.thread_n
-        thread_sub_m = self.ctrl.thread_m // self.ctrl.gemm_m_repeat
-        thread_sub_n = self.ctrl.thread_n // self.ctrl.gemm_n_repeat
+        thread_m = self.ctrl.lanegroup_repeat_m
+        thread_n = self.ctrl.lanegroup_repeat_n * 8
+        local_buffer_m = self.ctrl.lds_k_pack // cxm.inst_dotx.k
+        local_buffer_n = self.ctrl.lds_k_pack // cxm.inst_dotx.k
 
         def mapped_ioffset(i_k, width_byte, pad_pixel, offset = 0):
             k_pack = self.ctrl.lds_k_pack
@@ -156,7 +158,7 @@ class dotx_main_loop_t(mc_base_t):
         v_dotx_k = macro_dotx_mxnxk_t(self.mc, thread_sub_m, thread_sub_n, self.ctrl.lds_k_pack, thread_n, self.ctrl.precision)
 
         # start emit
-        self._emit(f"; start FMA loop, {thread_m}x{thread_n} thread tile with {thread_sub_m}x{thread_sub_n} sub-tile")
+        self._emit(f"; start FMA loop, {thread_m}x{thread_n}")
         self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
 
         self._emit(f_sst_b())
@@ -190,12 +192,15 @@ class dotx_main_loop_t(mc_base_t):
         self._emit(f"; do fma accumulate with unroll {unroll_k}")
         self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-        self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
-        self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
+        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n_per_read))
+        self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + lds_width_m_per_read))
 
         self._emit(f".itr_k = 0")
         self._emit(f".rept {unroll_k-1}")
         with self._indent_context():
+            for i_rn in range(self.ctrl.lanegroup_repeat_n):
+                for i_rm in range(self.ctrl.lanegroup_repeat_m):
+                    pass
             # 1st fma
             self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(v_dotx_k(v_c(), v_a(), v_b()))
@@ -218,8 +223,8 @@ class dotx_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # last
-            self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n//2}'))
-            self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m//2}'))
+            self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n_per_read}'))
+            self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
             self._emit('.itr_k = .itr_k + 1')
 
         self._emit(f".endr")
@@ -285,8 +290,8 @@ class dotx_main_loop_t(mc_base_t):
 
         self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-        self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), lds_base_n + lds_width_n // 2 ))
-        self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), lds_base_m + lds_width_m // 2 ))
+        self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), lds_base_n + lds_width_n_per_read))
+        self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), lds_base_m + lds_width_m_per_read))
 
         self._emit(f".itr_k = 0")
         self._emit(f".rept {unroll_k - 1}")
@@ -313,8 +318,8 @@ class dotx_main_loop_t(mc_base_t):
             self._emit_empty_line()
 
             # last
-            self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n//2}'))
-            self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m//2}'))
+            self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n_per_read}'))
+            self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
             self._emit('.itr_k = .itr_k + 1')
         self._emit('.endr')
         self._emit_empty_line()
