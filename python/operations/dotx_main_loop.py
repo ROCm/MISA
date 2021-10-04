@@ -190,17 +190,18 @@ class dotx_main_loop_t(mc_base_t):
         # Label: start of fma body
         self._emit_front(f"{label_fma_body}:")
         self._emit(f"; do fma accumulate with unroll {unroll_k}")
-        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
-        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n_per_read))
+        self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
         self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + lds_width_m_per_read))
+        self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n_per_read))
 
         self._emit(f".itr_k = 0")
         self._emit(f".rept {unroll_k-1}")
         with self._indent_context():
             for i_rn in range(self.ctrl.lanegroup_repeat_n):
                 for i_rm in range(self.ctrl.lanegroup_repeat_m):
-                    pass
+                    self._emit(f's_waitcnt lgkmcnt(0)')
+                    self._emit(v_dotx_k(v_c(), v_a(), v_b()))
             # 1st fma
             self._emit(f's_waitcnt lgkmcnt(2)')
             self._emit(v_dotx_k(v_c(), v_a(), v_b()))
