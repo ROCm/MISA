@@ -66,13 +66,14 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-            assert (self.tunable.gemm_m_per_thread * self.tunable.gemm_m_repeat) % self.coalescing_store_groups == 0, \
-                f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
+            # TODO: add non dlops op
+            assert (self.tunable.lanegroup_tile_m * self.tunable.lanegroup_repeat_m) % self.coalescing_store_groups == 0, \
+                f"coalescing store groups should be divided by thread m {self.tunable.lanegroup_tile_m}x{self.tunable.lanegroup_repeat_m}"
 
             ctrl_thread_mapping = ctrl_thread_mapping_t()
                     #                        ->      MR x  NR x ML1 x NL1 x ML0 x NL0
-            ctrl_thread_mapping.thread_lengths = [self.tunable.gemm_m_repeat, self.tunable.gemm_n_repeat, 1, 1, self.tunable.gemm_m_per_thread, self.tunable.gemm_n_per_thread]
-            ctrl_thread_mapping.cluster_lengths = [1, 1, self.tunable.gemm_m_level1_cluster, self.tunable.gemm_n_level1_cluster, self.tunable.gemm_m_level0_cluster, self.tunable.gemm_n_level0_cluster]
+            ctrl_thread_mapping.thread_lengths = [self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n, 1, 1, self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n]
+            ctrl_thread_mapping.cluster_lengths = [1, 1, 2, 2, self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n]
             self.thread_mapping = igemm_thread_mapping_t(self.mc, ctrl_thread_mapping)
 
             ctrl_coalescing_store = ctrl_coalescing_store_t()
@@ -91,52 +92,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
 
         else:
-            def flatten(x):
-                from functools import reduce
-                return reduce(lambda a, b: a*b, x, 1)
-            ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
-            self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
-            assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
-                f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
-
-            ctrl_coalescing_store_xdlops = ctrl_coalescing_store_xdlops_t()
-            ctrl_coalescing_store_xdlops.cxm = ctrl_xdlops_mapping
-            ctrl_coalescing_store_xdlops.gemm_k_global_split = self.tunable.gemm_k_global_split
-            ctrl_coalescing_store_xdlops.coalescing_groups = self.coalescing_store_groups
-            ctrl_coalescing_store_xdlops.precision = self.tunable.precision
-            ctrl_coalescing_store_xdlops.block_size = self.tunable.block_size
-            # gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
-            na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
-            ctrl_coalescing_store_xdlops.gemm_m_m0_m1 = [na_k0, na_k1]
-            ctrl_coalescing_store_xdlops.accvgpr_unified = IGEMM_FWD_GTC_NCHW_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A
-
-            def get_vector_write_out():
-                if self.tunable.precision == 'fp32':
-                    max_vec_write = 4
-                elif self.tunable.precision == 'fp16':
-                    max_vec_write = 8
-                elif self.tunable.precision == 'int8':
-                    max_vec_write = 16
-
-                vector_write = utility_gcd(self.tunable.nxb, max_vec_write)
-
-                num_dword_per_group = ctrl_coalescing_store_xdlops.get_num_dword_per_group()
-                if vector_write > num_dword_per_group:
-                    '''
-                    each coalescing group dword can't smaller than vector write size. currently only int8 may going here
-                    '''
-                    # print(f'adjusted vector_write({vector_write}) out by num_dword_per_group({num_dword_per_group})')
-                    vector_write = num_dword_per_group
-                return vector_write
-
-            ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
-
-            #if gemm_m_order == IGEMM_FWD_GTC_NCHW_LDS_STORE_ORDER_GEMM_M_N1B_N0:
-            #    # we may consider not suppor this mode
-            #    ctrl_coalescing_store_xdlops.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
-            ctrl_coalescing_store_xdlops.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
-            self.coalescing_store = igemm_coalescing_store_xdlops_t(mc, ctrl_coalescing_store_xdlops)
+            assert False, "xdlops is not needed for now"
 
         self.label_out = f"L_{self.name()}_out"
         self.dict_shifted_stride = dict()
