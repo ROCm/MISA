@@ -661,8 +661,11 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_start + new_line + \
                 line_start + 'block_size                 {} {}'.format(equal, self.block_size) + new_line
             if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
-                sstr += \
-                line_start + 'thread_tile                {} {}x{}'.format(equal, self.thread_tile_m, self.thread_tile_n) + new_line
+                if igemm_use_lanegroup_thread_mapping(self):
+                    pass
+                else:
+                    sstr += \
+                    line_start + 'thread_tile                {} {}x{}'.format(equal, self.thread_tile_m, self.thread_tile_n) + new_line
             sstr += \
                 line_start + 'lds_total                  {} {}'.format(equal, self.lds_total) + new_line + \
                 line_start + 'lds_buffer_num             {} {}'.format(equal, self.lds_buffer_num) + new_line + \

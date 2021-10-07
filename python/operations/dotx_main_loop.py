@@ -126,15 +126,17 @@ class dotx_main_loop_t(mc_base_t):
         lds_base_m = 0
         lds_base_n = 0
         unroll_k = self.ctrl.unroll_k
-        k_per_inst = cxm.lanegroup_k_per_thread()
+        k_per_inst = dotx_m.lanegroup_k_per_thread()
 
         pad_m = self.ctrl.lds_pad_m
         pad_n = self.ctrl.lds_pad_n
 
-        thread_m = self.ctrl.lanegroup_repeat_m
-        thread_n = self.ctrl.lanegroup_repeat_n * 8
-        local_buffer_m = self.ctrl.lds_k_pack // cxm.inst_dotx.k
-        local_buffer_n = self.ctrl.lds_k_pack // cxm.inst_dotx.k
+        thread_m = dotx_m.lanegroup_repeat_m
+        thread_n = dotx_m.lanegroup_repeat_n * 8
+        local_buffer_m = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        local_buffer_n = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        thread_sub_n = 1
+        thread_sub_m = 1
 
         def mapped_ioffset(i_k, width_byte, pad_pixel, offset = 0):
             k_pack = self.ctrl.lds_k_pack
@@ -155,7 +157,7 @@ class dotx_main_loop_t(mc_base_t):
             else:
                 return mapped_ioffset(i_k, lds_width_n, 0, offset)
 
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, thread_sub_m, thread_sub_n, self.ctrl.lds_k_pack, thread_n, self.ctrl.precision)
+        v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, self.ctrl.lds_k_pack, thread_n, self.ctrl.precision)
 
         # start emit
         self._emit(f"; start FMA loop, {thread_m}x{thread_n}")
@@ -198,8 +200,8 @@ class dotx_main_loop_t(mc_base_t):
         self._emit(f".itr_k = 0")
         self._emit(f".rept {unroll_k-1}")
         with self._indent_context():
-            for i_rn in range(self.ctrl.lanegroup_repeat_n):
-                for i_rm in range(self.ctrl.lanegroup_repeat_m):
+            for i_rn in range(dotx_m.lanegroup_repeat_n):
+                for i_rm in range(dotx_m.lanegroup_repeat_m):
                     self._emit(f's_waitcnt lgkmcnt(0)')
                     self._emit(v_dotx_k(v_c(), v_a(), v_b()))
             # 1st fma

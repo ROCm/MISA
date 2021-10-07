@@ -37,3 +37,4 @@ from .mfma_main_loop import *
 from .nop import *
 from .dotx import *
 from .dotx_mapping import *
+from .dotx_main_loop import *

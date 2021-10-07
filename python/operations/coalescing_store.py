@@ -222,7 +222,7 @@ class igemm_coalescing_store_t(mc_base_t):
     def __init__(self, mc, ctrl):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_coalescing_store_t
-        assert ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 2
+        assert (ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 2) or (ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 4)
         assert ctrl.block_size % ctrl.ctm.n_n_total() == 0, f"block_size:{ctrl.block_size}, gemm_n:{ctrl.ctm.n_n_total()}"
         self.ctrl = ctrl
 
