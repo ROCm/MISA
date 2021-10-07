@@ -74,7 +74,7 @@ class gpr_file_t():#mc_base_t):
     def add_no_pos(self, label:str, dwords:int = 1):
         return reg_block.declare(label, self.reg_t, dwords=dwords)
 
-    def add_block(self, label:str, reg_list:List[reg_block], alignment:int = 0):
+    def add_block(self, label:str, reg_list:List[reg_block], alignment:int = 0) ->block_of_reg_blocks:
         in_block_define = gpr_off_sequencer_t()
         block_pos = []
         block_regs = []
@@ -82,16 +82,16 @@ class gpr_file_t():#mc_base_t):
             assert i.reg_t == self.reg_t, f" reg_t of element {i} doesn't match the block reg_t"
             block_pos.append(in_block_define(i.dwords))
 
-        block = reg_block.declare(label, self.reg_t, dwords=in_block_define.get_last_pos())
+        block = block_of_reg_blocks.declare(label, self.reg_t, reg_list, dwords=in_block_define.get_last_pos())
 
         self.ic.Block_alloc([block,*reg_list], block_pos, alignment, self._alloc_block)
         
-        return block[:]
+        return block
 
 class sgpr_file_t(gpr_file_t):
-    def __init__(self, mc):
-        super().__init__(mc, reg_type.sgpr)
+    def __init__(self, gpu_instructions_caller_base):
+        super().__init__(gpu_instructions_caller_base, 128, reg_type.sgpr)
     
 class vgpr_file_t(gpr_file_t):
-    def __init__(self, mc):
-        super().__init__(mc, reg_type.vgpr)
+    def __init__(self, gpu_instructions_caller_base):
+        super().__init__(gpu_instructions_caller_base, 128,reg_type.vgpr)

@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 
 #should be 1 symbol len
 class reg_type(Enum):
@@ -152,6 +153,16 @@ class reg_block(object):
         #send label without reg_type prefix
         view_slice = regVar('', self, new_offset, slice_size)
         return view_slice
+
+class block_of_reg_blocks(reg_block):
+    def __init__(self, label: str, reg_t: reg_type, reg_blocks:List[reg_block], position: int = 0, dwords: int = 1):
+        super().__init__(label, reg_t, position=position, dwords=dwords)
+        self._reg_blocks = reg_blocks
+    
+    @classmethod
+    def declare(cls, label:str, reg_t:reg_type, reg_blocks:List[reg_block], dwords:int = 1):
+        '''Declaration without definition, only block type, label and size will be defined'''
+        return block_of_reg_blocks(label, reg_t, reg_blocks, position=-1, dwords=dwords)
 
 class regVar(object):
     __slots__ = ['label', 'base_reg', 'reg_offset', 'right_index']
