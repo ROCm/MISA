@@ -21,18 +21,18 @@ class gpr_off_sequencer_t(object):
 
 
 from python.codegen.gpu_instruct import gpu_instructions_caller_base
+from python.codegen.gpu_arch.allocator import stack_allocator
 
 class gpr_file_t():#mc_base_t):
-    __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic']
-    def __init__(self, ic:gpu_instructions_caller_base, reg_t:reg_type):
+    def __init__(self, ic:gpu_instructions_caller_base, gpr_file_size, reg_t:reg_type):
         #mc_base_t.__init__(self, mc)
-        self._allocator = gpr_off_sequencer_t()
+        self._allocator = stack_allocator(gpr_file_size)
         self.reg_t = reg_t
         self.define_on_creation = False
         self.ic = ic
     
     def get_count(self):
-        return self._allocator.get_last_pos()
+        return self._allocator.get_required_size()
     
     #def emit(self):
     #    _end_val = self._allocator.get_last_pos()
@@ -44,7 +44,7 @@ class gpr_file_t():#mc_base_t):
     #    self.define_on_creation = True
     
     def _alloc(self, reg:reg_block, alignment):
-        reg.set_position(self._allocator(reg.dwords, alignment))
+        reg.set_position(self._allocator.malloc(reg.dwords, alignment))
         return f'.set {reg.label}, {reg.position}'
 
     def _alloc_block(self, block_info:tuple, alignment):
@@ -52,19 +52,24 @@ class gpr_file_t():#mc_base_t):
         regs:List[reg_block] = block_info[0]
         ofsets:List[int]  = block_info[1]
         base_reg = regs[0]
-        base_reg.set_position(self._allocator(base_reg.dwords, alignment))
+        base_reg.set_position(self._allocator.malloc(base_reg.dwords, alignment))
         s.append(f'.set {base_reg.label}, {base_reg.position}')
         base_reg_pos = base_reg.position
         
         for i in range(len(ofsets)):
             cur_reg = regs[i+1]
-            cur_reg.set_position(self._allocator(base_reg_pos + ofsets[i], alignment))
+            cur_reg.set_position(base_reg_pos + ofsets[i])
             s.append(f'.set {cur_reg.label}, {cur_reg.position}')
 
         return '\n'.join(s)
 
     def _dealloc(self, reg:reg_block, alignment):
+        self._allocator.mfree(reg.position)
         return f'#dealock .unset {reg.label}, {reg.position}'
+
+    def _dealloc_all(self):
+        dealoc = self._dealloc
+        return [dealoc(i,0) for i in blocks]
 
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
         ret = reg_block.declare(label, self.reg_t, dwords=dwords)
@@ -87,6 +92,22 @@ class gpr_file_t():#mc_base_t):
         self.ic.Block_alloc([block,*reg_list], block_pos, alignment, self._alloc_block)
         
         return block
+    
+    def _split_block(self, supper_block:block_of_reg_blocks, ):
+        supper_block_position = supper_block.position
+        sub_blocks = supper_block._reg_blocks
+        sub_units = []
+        for i in range(len(sub_blocks)):
+            
+            offset = sub_blocks[i].position - supper_block_position
+            sz = sub_blocks[i].dwords
+            sub_units.append((offset,sz))
+
+        self._allocator.unit_split(supper_block, sub_units)
+        
+
+    def split_block(self, block_of_reg_blocks):
+        self.ic.Block_split(block_of_reg_blocks, self._split_block)
 
 class sgpr_file_t(gpr_file_t):
     def __init__(self, gpu_instructions_caller_base):

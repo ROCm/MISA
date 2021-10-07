@@ -1,12 +1,12 @@
 
 
-from python.codegen.gpu_data_types import reg_block
+from python.codegen.gpu_data_types import block_of_reg_blocks, reg_block
 from python.codegen.gpu_instruct import inst_base, inst_caller_base, instruction_type
 from typing import List, Optional, Union
 
 class reg_allocator_base(inst_base):
-    def __init__(self, reg:Union[reg_block, List[reg_block], tuple], alignment, allocator_f) -> None:
-        super().__init__(instruction_type.REGALLOC, 'reg_alloc')
+    def __init__(self, inst_type:instruction_type, reg:Union[reg_block, List[reg_block], block_of_reg_blocks, tuple], alignment, allocator_f) -> None:
+        super().__init__(inst_type, 'reg_alloc')
         self.reg = reg
         self.allocator_f = allocator_f
         self.alignment = alignment
@@ -19,13 +19,16 @@ class reg_allocator_caller(inst_caller_base):
         super().__init__(insturction_list)
     
     def reg_alloc(self, dst:reg_block, alignment:int, alloc_f):
-        return self.ic_pb(reg_allocator_base(dst, alignment, alloc_f))
+        return self.ic_pb(reg_allocator_base(instruction_type.REGALLOC, dst, alignment, alloc_f))
     
     def Block_alloc(self, dst:List[reg_block], block_offsets:List[int], alignment:int, alloc_f):
-        return self.ic_pb(reg_allocator_base( (dst, block_offsets), alignment, alloc_f))
+        return self.ic_pb(reg_allocator_base( instruction_type.BLOCKALLOC, (dst, block_offsets), alignment, alloc_f))
+
+    def Block_split(self, block_of_reg_blocks, split_f):
+        return self.ic_pb(reg_allocator_base( instruction_type.BLOCKSPLIT, block_of_reg_blocks, 0, split_f))
 
     def reg_dealloc(self, dst:reg_block, dealloc_f):
-        return self.ic_pb(reg_allocator_base(dst, 0, dealloc_f))
+        return self.ic_pb(reg_allocator_base(instruction_type.REGDEALLOC, dst, 0, dealloc_f))
 
 class flow_control_base(inst_base):
     def __init__(self, label, func_ptr) -> None:

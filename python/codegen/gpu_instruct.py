@@ -15,7 +15,10 @@ class instruction_type(Enum):
     VMEM = 'VMEM'
     VOP1 = 'VOP1'
     REGALLOC = 'REGA'
-    REGDEALLOC = 'REGA'
+    REGDEALLOC = 'REGD'
+    BLOCKALLOC = 'BLCKA'
+    BLOCKSPLIT = 'BLCKS'
+    #BLOCKDEALLOC = 'BLCKD'
     FLOW_CONTROL = 'FC'
 
 class inst_base(ABC):
@@ -44,7 +47,7 @@ class inst_caller_base(ABC):
         self.il.append(inst)
         return inst
 
-
+from python.codegen.generator_instructions import flow_control_caller, reg_allocator_caller
 class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller):
     def __init__(self, insturction_list) -> None:
         super().__init__(insturction_list)

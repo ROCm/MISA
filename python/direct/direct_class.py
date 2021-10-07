@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from python.codegen.kernel_func import macro_ctrl
+from python.codegen.kernel_func import kernel_func, mfunc_func
 from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.gpu_reg_block import * 
 from python.codegen.kernel_driver import base_config
@@ -83,8 +83,6 @@ class conv_direct_navi(kernel_constructor):
 
         input_buffer_size = filter_buffer_size = output_buffer_size = literal(101)
 
-        macro_ctrl(ic)
-
         ic.s_mov_b32(s.in_buff_ptr[2], input_buffer_size)
         ic.s_mov_b32(s.in_buff_ptr[3], 0x00027000)
 
@@ -119,17 +117,23 @@ class conv_direct_navi(kernel_constructor):
         fill_buff_desc(s.wei_buff_ptr[:], output_buffer_size)
 
         ic.v_dot2_i32_i16(s.wei_buff_ptr[0], s.karg_ptr[1],s.wei_buff_ptr[1], s.karg_ptr[0])
+        
+        @mfunc_func
+        def func_x1(self:kernel_func):
+            s = self.sgpr_f
+            H1O = s.add('H1O', 1, 4)
+            H2O = s.add('H2O', 4, 4)
 
-        H1O = s.add('H1O', 1, 4)
-        H2O = s.add('H2O', 4, 4)
+            H4O = s.add_no_pos('H30', 4)
+            H31O = s.add_no_pos('H310', 1)
 
-        H4O = s.add_no_pos('H30', 4)
-        H31O = s.add_no_pos('H310', 1)
+            block = s.add_block('block', [H4O, H31O])
 
-        block = s.add_block('block', [H4O, H31O])
+            fill_buff_desc(H4O[:], 15)
 
-        fill_buff_desc(H4O[:], 15)
-
+        kf = kernel_func(ic)
+        func_x1(kf)
+        H33O = s.add('H33O', 4, 2)
 
     def _set_kernel_karg_t(self) -> None:
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
