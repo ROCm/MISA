@@ -64,13 +64,14 @@ export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
-export PER_PIXEL_CHECK=1
+export PER_PIXEL_CHECK=0
 
-export DBG_MODE=1
+export DBG_MODE=0
 export IGEMM_ASSERT_WHEN_INVALID=1
 export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
 export IGEMM_GKS_ITERATIVE=1
+export IGEMM_BENCH_CSV=1
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
@@ -84,7 +85,12 @@ else
     exit 1
 fi
 
-./out/conv_driver.exe $CONV -n 128 -c 256 -H 14 -W 14 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 2 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 256 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 256 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 256 -c 1024 -H 14 -W 14 -k 512 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 256 -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -F $FORW ${LAYOUT_ARG}
+
+./out/conv_driver.exe $CONV -n 256 -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 #./out/conv_driver.exe $CONV -n 64 -c 1024 -H 14 -W 14 -k 1024 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -l 1 -j 1 -g 32 -F ${FORW} ${LAYOUT_ARG}
 
 #./out/conv_driver.exe $CONV -n 64 -c 128 -H 56 -W 56 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 32 -F $FORW ${LAYOUT_ARG}

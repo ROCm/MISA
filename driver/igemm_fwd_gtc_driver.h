@@ -232,9 +232,11 @@ public:
     ~igemm_fwd_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
-        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
+        }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            return 256;
         }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
             int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
@@ -752,6 +754,10 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
+                if(tunable->tensor_layout == "nchwc"){
+                    splits = 1;
+                }
+                printf("block:%d, grid:%d\n", block_size, grid_size);
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
                 if(use_workspace == 1){
