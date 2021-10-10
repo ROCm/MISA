@@ -782,7 +782,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             assert nb_per_thread <= 16, "we pack flag into single vgpr"
 
             k_pack = outer.get_k_pack()
-            share_load_packed  = k_pack if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+            share_load_packed  = k_pack
 
             is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
@@ -790,8 +790,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
             num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
 
-            share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
-                                            if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+            share_load_packed_vgpr      = share_load_packed // (4 // data_byte)
 
             num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
             num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
@@ -991,8 +990,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         return in_thread_copy_index, wei_thread_copy_index
 
     def get_k_pack(self):
-        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
-        data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+        _, _, tb_nb_vec_c = self.get_thread_lengths()
         return tb_nb_vec_c
 
     def is_pad_c(self):
@@ -1064,6 +1062,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         #in_thread_copy_index, wei_thread_copy_index = self.get_thread_copy_index()
         na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
         ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
+        ca_k, ca_ce, cb_ce, cb_nb1 = self.get_cluster_lengths()
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         k_pack = self.get_k_pack()
@@ -1080,7 +1079,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             wei_sst_ctrl.length_dp = k_pack_gld_a
             wei_sst_ctrl.vector_dp = k_pack_gld_a
             wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = na_k_vec_c * data_byte
+            wei_sst_ctrl.stride_d1 = (ca_k * self.tunable.vector_c) * data_byte
 
         if not self.tunable.tensor_b_pass_through:
             # wei is gemm_k * gemm_n * k_pack
@@ -2092,6 +2091,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
                 fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
                 fctrl.precision                   = self.tunable.precision
+                fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
 
                 fctrl.lds_k_pack                  = self.tunable.vector_c
 

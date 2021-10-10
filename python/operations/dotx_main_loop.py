@@ -25,6 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 
+from re import S
 from ..codegen import *
 from .utility import *
 from .dlops_inst import *
@@ -40,6 +41,7 @@ class ctrl_dotx_main_loop_t(object):
         
         self.lds_single_size             = 0                    # in byte, should be power of 2
         self.lds_buffer_num              = 2
+        self.local_prefetch_num          = 1
 
         # functor
         self.global_load_a_functor       = None
@@ -72,6 +74,38 @@ class ctrl_dotx_main_loop_t(object):
         self.lds_k_pack                  = 1
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
+
+class ds_waitcnt_t(object):
+    '''
+    TODO: compute lds wait count num
+    '''
+    def __init__(self) -> None:
+        super().__init__()
+        self.max_num = 0
+        self.vpgr_num_dict = dict()
+        self.waited_vgprs = set()
+
+    def push_new_vgpr(self, vgpr):
+        self.vpgr_num_dict[vgpr] = self.max_num
+        self.max_num = self.max_num + 1
+        
+        self.waited_vgprs.discard(vgpr)
+
+    def get_max_num(self):
+        return max(self.vpgr_num_dict.values())
+
+    def compute_waitcnt(self, vgpr_list):
+        assert isinstance(vgpr_list, list)
+        do_not_need_swait = True
+        for vgpr in vgpr_list:
+            do_not_need_swait = do_not_need_swait and (vgpr in self.waited_vgprs)
+        if do_not_need_swait:
+            return -1
+        self.waited_vgprs.update(vgpr_list)
+        max_index = 0
+        for vgpr in vgpr_list:
+            max_index = max(max_index, self.vpgr_num_dict[vgpr])
+        return self.get_max_num() - max_index
 
 class dotx_main_loop_t(mc_base_t):
     '''
@@ -121,11 +155,12 @@ class dotx_main_loop_t(mc_base_t):
         lds_width_m = data_byte * dotx_m.macro_tile_m * self.ctrl.lds_k_pack
         lds_width_n = data_byte * dotx_m.macro_tile_n * self.ctrl.lds_k_pack
         lds_single_size = self.ctrl.lds_single_size
+        local_prefetch_num = self.ctrl.local_prefetch_num
 
         # used as offset:x number. may some 
         lds_base_m = 0
         lds_base_n = 0
-        unroll_k = self.ctrl.unroll_k
+        unroll_k = self.ctrl.unroll_k // self.ctrl.lds_k_pack
         k_per_inst = dotx_m.lanegroup_k_per_thread()
 
         pad_m = self.ctrl.lds_pad_m
@@ -135,8 +170,10 @@ class dotx_main_loop_t(mc_base_t):
         thread_n = dotx_m.lanegroup_repeat_n * 8
         local_buffer_m = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
-        thread_sub_n = 1
-        thread_sub_m = 1
+        thread_sub_n = local_buffer_n
+        thread_sub_m = local_buffer_m
+
+        ds_waitcnt = ds_waitcnt_t()
 
         def mapped_ioffset(i_k, width_byte, pad_pixel, offset = 0):
             k_pack = self.ctrl.lds_k_pack
@@ -157,16 +194,16 @@ class dotx_main_loop_t(mc_base_t):
             else:
                 return mapped_ioffset(i_k, lds_width_n, 0, offset)
 
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, self.ctrl.lds_k_pack, thread_n, self.ctrl.precision)
+        v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, self.ctrl.lds_k_pack, 1, self.ctrl.precision)
 
         # start emit
         self._emit(f"; start FMA loop, {thread_m}x{thread_n}")
-        self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
+        self._emit(f"s_waitcnt vmcnt({f_gld_b.get_issues()})")
 
-        self._emit(f_sst_b())
+        self._emit(f_sst_a())
         self._emit_empty_line()
         self._emit(f"s_waitcnt vmcnt(0)")
-        self._emit(f_sst_a())
+        self._emit(f_sst_b())
         self._emit_empty_line()
 
         self._emit(f".v_clear_nc {v_c()}, {thread_m * thread_n}")
@@ -185,49 +222,53 @@ class dotx_main_loop_t(mc_base_t):
         self._emit(f"s_waitcnt lgkmcnt(0)")
         self._emit(f"s_barrier")
         self._emit_empty_line()
-        self._emit(f_gld_b())
         self._emit(f_gld_a())
+        self._emit(f_gld_b())
         self._emit_empty_line()
 
         # Label: start of fma body
         self._emit_front(f"{label_fma_body}:")
         self._emit(f"; do fma accumulate with unroll {unroll_k}")
         self._emit(f_sld_b(v_b(), v_sld_b_os(), lds_base_n))
+        ds_waitcnt.push_new_vgpr(v_b())
         self._emit(f_sld_a(v_a(), v_sld_a_os(), lds_base_m))
+        ds_waitcnt.push_new_vgpr(v_a())
         self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), lds_base_m + lds_width_m_per_read))
+        ds_waitcnt.push_new_vgpr(v_a(local_buffer_m))
         self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), lds_base_n + lds_width_n_per_read))
+        ds_waitcnt.push_new_vgpr(v_b(local_buffer_n))
+        self._emit_empty_line()
 
         self._emit(f".itr_k = 0")
         self._emit(f".rept {unroll_k-1}")
         with self._indent_context():
             for i_rn in range(dotx_m.lanegroup_repeat_n):
                 for i_rm in range(dotx_m.lanegroup_repeat_m):
-                    self._emit(f's_waitcnt lgkmcnt(0)')
-                    self._emit(v_dotx_k(v_c(), v_a(), v_b()))
-            # 1st fma
-            self._emit(f's_waitcnt lgkmcnt(2)')
-            self._emit(v_dotx_k(v_c(), v_a(), v_b()))
-            #self._emit_empty_line()
+                    # compute index for three matrice
+                    c_index = i_rm * thread_n + i_rn * 8
+                    a_index = (i_rm % local_prefetch_num) * local_buffer_m
+                    b_index = (i_rn % local_prefetch_num) * local_buffer_n 
+                    lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
+                    if lgkmcnt != -1:
+                        self._emit(f's_waitcnt lgkmcnt({lgkmcnt})')
+                    if i_rn == dotx_m.lanegroup_repeat_n - 1 and i_rm == dotx_m.lanegroup_repeat_m - 1:
+                        self._emit(f_sld_a(v_a(), v_sld_a_os(), f'{lds_base_m} + (.itr_k+1)*{lds_width_m}'))
+                        ds_waitcnt.push_new_vgpr(v_a())
+                    self._emit(v_dotx_k(v_c(c_index), v_a(a_index), v_b(b_index)))
+                if i_rn + local_prefetch_num < dotx_m.lanegroup_repeat_n:
+                    self._emit(f_sld_b(v_b((i_rn % local_prefetch_num) * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+.itr_k*{lds_width_n}+{(i_rn + local_prefetch_num) * lds_width_n_per_read}'))
+                    ds_waitcnt.push_new_vgpr(v_b((i_rn % local_prefetch_num) * local_buffer_n))
+                
+                if i_rn == dotx_m.lanegroup_repeat_n - 2:
+                    self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
+                    ds_waitcnt.push_new_vgpr(v_b())
 
-            # 2nd fma
-            self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(v_dotx_k(v_c(thread_sub_n), v_a(), v_b(thread_sub_n)))
-            #self._emit_empty_line()
+                if i_rn == dotx_m.lanegroup_repeat_n - 1:
+                    self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
+                    ds_waitcnt.push_new_vgpr(v_a(local_buffer_m))
+                    self._emit(f_sld_b(v_b(local_buffer_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n_per_read}'))
+                    ds_waitcnt.push_new_vgpr(v_b(local_buffer_n))
 
-            # 3rd fma
-            self._emit(f_sld_a(v_a(), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}'))
-            self._emit(f's_waitcnt lgkmcnt(1)')
-            self._emit(v_dotx_k(v_c(thread_sub_m * thread_n), v_a(thread_sub_m), v_b()))
-            #self._emit_empty_line()
-
-            # 4th fma
-            self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
-            self._emit(v_dotx_k(v_c(thread_sub_m * thread_n + thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))
-            self._emit_empty_line()
-
-            # last
-            self._emit(f_sld_b(v_b(thread_sub_n), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}+{lds_width_n_per_read}'))
-            self._emit(f_sld_a(v_a(thread_sub_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
             self._emit('.itr_k = .itr_k + 1')
 
         self._emit(f".endr")
@@ -247,10 +288,10 @@ class dotx_main_loop_t(mc_base_t):
         #self._emit_empty_line()
 
         #       wait global and store to LDS
-        self._emit(f"s_waitcnt vmcnt({f_gld_a.get_issues()})")
-        self._emit(f_sst_b())
-        self._emit(f"s_waitcnt vmcnt(0)")
+        self._emit(f"s_waitcnt vmcnt({f_gld_b.get_issues()})")
         self._emit(f_sst_a())
+        self._emit(f"s_waitcnt vmcnt(0)")
+        self._emit(f_sst_b())
 
         #       iteration--
         self._emit(f"s_sub_i32 s[{s_kitr()}], s[{s_kitr()}], {unroll_k}")
@@ -272,8 +313,8 @@ class dotx_main_loop_t(mc_base_t):
         self._emit(f"s_barrier")
 
         #       load next from global
-        self._emit(f_gld_b())
         self._emit(f_gld_a())
+        self._emit(f_gld_b())
 
         # 4th fma
         self._emit(v_dotx_k(v_c(thread_sub_m*thread_n+thread_sub_n), v_a(thread_sub_m), v_b(thread_sub_n)))

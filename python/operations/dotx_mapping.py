@@ -179,7 +179,7 @@ class ctrl_dotx_mapping_t(object):
         return self.lanegroup_m_per_thread() // self.lanegroup_size_m()
 
     def thread_n(self):
-        return self.lanegroup_n_per_thread() // self.lanegroup_size_n()
+        return self.lanegroup_n_per_thread() # // self.lanegroup_size_n()
 
     def macro_tile_validate(self):
         assert self.macro_tile_m == self.lanegroup_m_per_thread() * self.lanegroup_m_per_cluster() * self.lanegroup_m_per_wave() * self.waves_per_m() * self.lanegroup_repeat_m

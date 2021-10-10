@@ -80,14 +80,14 @@ class macro_dotx_mxn_t(macro_base_t):
     def __call__(self, c, a, b):
         return '{} {},{},{}'.format(self.name(), c, a, b)
     def emit(self):
-        fma = inst_dlops_t(self.precision)
         reg_a = msym_t(sym_t('a'))
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
             for idx_m in range(self.m):
                 for idx_n in range(self.n):
-                    self._emit(v_dot2_f32_f16(reg_c(idx_m * self.stride + idx_n), reg_a(idx_m), reg_b(idx_n)))
+                    for idx_dpp in range(8):
+                        self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
 
 class macro_dotx_mxnxk_t(macro_base_t):
     '''
@@ -109,12 +109,11 @@ class macro_dotx_mxnxk_t(macro_base_t):
     def __call__(self, c, a, b):
         return '{} {},{},{}'.format(self.name(), c, a, b)
     def emit(self):
-        fma = inst_dlops_t(self.precision)
         reg_a = msym_t(sym_t('a'))
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))
         v_dotx_mxn = macro_dotx_mxn_t(self.mc, self.m, self.n, self.stride, self.precision)
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
             for idx_k in range(self.k // v_dot2c_f32_f16.k):
-                self._emit(v_dotx_mxn(reg_c, reg_a(idx_k), reg_b(idx_k)))
+                self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k), reg_b(idx_k)))
                 

@@ -96,6 +96,10 @@ class codegen_driver_t(mc_base_t):
         macro_dlops_mxn_t(self.mc, 4, 2, 4, 'fp16').emit()
         macro_dlops_mxn_t(self.mc, 2, 2, 4, 'fp16').emit()
 
+    def _emit_dotx_macro(self):
+        macro_dotx_mxn_t(self.mc, 1, 1, 1, 'fp16').emit()
+        macro_dotx_mxnxk_t(self.mc, 1, 1, 8, 1, 'fp16').emit()
+
     def emit_global_macro(self):
         # emit global macro, independent of tunable
         macro_int_div_vv_t(self.mc).emit()
@@ -116,7 +120,7 @@ class codegen_driver_t(mc_base_t):
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
-            self._emit_dlops_macro()
+            self._emit_dotx_macro()
         else:
             self._emit_fma_macro()
 
