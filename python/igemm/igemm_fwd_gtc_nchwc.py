@@ -1916,7 +1916,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         if w_flag_cnt < nk_per_thread:
             self._emit(f"v_bfe_u32 v[{v.v_wei_flag(w_flag_cnt)}], v[{v.v_wei_tmp_pack()}], {w_flag_cnt}, 1")
             w_flag_cnt = w_flag_cnt + 1
-        self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
+        self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x31014000")
         for i_w in range(w_flag_cnt, nk_per_thread):
             self._emit(f"v_bfe_u32 v[{v.v_wei_flag(i_w)}], v[{v.v_wei_tmp_pack()}], {i_w}, 1")
 
