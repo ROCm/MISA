@@ -1,4 +1,4 @@
-from igemm import *
+from python import *
 import math
 
 def get_default_mc():
@@ -260,7 +260,6 @@ def unittest_macro():
     mc.emit(igemm_bwd_gtc_out_update_hw(sym_t('v_out_ihoabab')(), 'v_out_iwo', 'v_out_dslice_ih222', 'v_out_dslice_iw222', 'v_out_dslice_iy', 'v_out_dslice_ix', 's_dtile_dy_neg', 's_dtile_dx_neg'))
     print(mc.emitter.get_buffer())
 
-
 def unittest_thread_mapping():
     mc = get_default_mc()
     ctm = ctrl_thread_mapping_t()
@@ -270,6 +269,10 @@ def unittest_thread_mapping():
     mc.emit(thread_mapping( 'v_gemm_in', 'v_gemm_im', 'v_tid_shifter', 'v_tmp'))
     print(mc.emitter.get_buffer())
 
+def unittest_dotx_mapping():
+    for ctrl in ctrl_dotx_mapping_fp16:
+        print(ctrl.serialize())
+
 def run_all_unittest():
     # unittest_share_memory()
     #unittest_coalescing_store()
@@ -278,7 +281,8 @@ def run_all_unittest():
     #unittest_xdlops_mapping()
     #unittest_coalescing_store_m1_m0_xdlops_iterate()
     # unittest_thread_mapping()
-    unittest_macro()
+    #unittest_macro()
+    unittest_dotx_mapping()
 
 if __name__ == '__main__':
     run_all_unittest()
