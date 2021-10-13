@@ -1068,6 +1068,9 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
 
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
+        use_workspace_for_weight = (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16'
+        use_workspace_for_weight = use_workspace_for_weight or (self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'bf16')
+
         m_in_update_os   = self.get_macro_in_out_update_os()
         m_in_update_hw   = self.get_macro_in_update_hw()
         m_set_flag_hw    = self.get_macro_set_flag_hw()
@@ -1402,7 +1405,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit_empty_line()
 
         self._emit(f"; weight offset")
-        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision in ('fp16', 'bf16'):
+        if use_workspace_for_weight:
             # s_block_gtc_ig = ig*2, but for wei workspace, s_block_gtc_ig need to be ig*4, so here we give it a (*2)
             self._emit(f"s_mul_i32 s[{s.s_block_gtc_ig()}], s[{s.s_block_gtc_ig()}], 2")
         self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], s[{s.s_wei_stride_k()}]")
@@ -1412,7 +1415,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_addc_u32 s[{s.s_p_wei(1)}], s[{s.s_p_wei(1)}], s[{s.s_tmp(1)}]")
 
         self._emit_empty_line()
-        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision in ('fp16', 'bf16'):
+        if use_workspace_for_weight:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], 2")
         else:
             self._emit(f"s_lshl_b32 s[{s.s_tmp(3)}], s[{s.s_block_gtc_ik()}], {igemm_log2(data_byte)}")
@@ -1448,7 +1451,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         self._emit(f"; add i_k")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_wei_stride_k()}], v[{v.v_co_sub_m_index()}]")
         self._emit(f"v_add_u32 v[{v.v_wei_os()}], v[{v.v_wei_os()}], v[{v.v_tmp()}]")
-        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision in ('fp16', 'bf16'):
+        if use_workspace_for_weight:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {2}, v[{v.v_wei_os()}]")
         else:
             self._emit(f"v_lshlrev_b32 v[{v.v_wei_os()}], {igemm_log2(data_byte)}, v[{v.v_wei_os()}]")
@@ -1487,7 +1490,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_lshl_b32 s[{s.s_in_stride_move_n()}], s[{s.s_in_stride_n()}], {igemm_log2(ta_n)}")
             self._emit(f"s_mul_i32 s[{s.s_out_stride_move_n()}], s[{s.s_out_stride_n()}], {ta_n - 1}")
 
-        if (self.tunable.tensor_b_thread_lengths[3] == 1 or self.tunable.vector_store == 1) and self.tunable.gemm_k_global_split == 1 and self.tunable.precision in ('fp16', 'bf16'):
+        if use_workspace_for_weight:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, 2)) # as we use atomic add fp32 type
         else:
             self._emit(self.try_shift_stride(s.s_wei_stride_k, igemm_log2(data_byte)))
