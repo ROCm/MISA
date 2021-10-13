@@ -668,6 +668,16 @@ public:
                 return .0;
             }};
 
+        auto fwd_postlog = use_workspace == 1 ?
+            std::function<float()>{[&]() -> float{
+                size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                igemm_launch_kernel_single(tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1});
+                return .0;
+            }} :
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
+
         result_t result;
         result.kernel_name = kernel_name;
         if(this->driver_mode == driver_mode_normal){
@@ -685,11 +695,11 @@ public:
                 }
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
-                if(use_workspace == 1){
-                    size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                }
-                float duration = igemm_launch_kernels_with_prolog(kernel_launchers, fwd_prolog, this->warmup, this->repeat);
+                // if(use_workspace == 1){
+                //     size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                //     kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                // }
+                float duration = igemm_launch_kernels(kernel_launchers, fwd_prolog, fwd_postlog, this->warmup, this->repeat);
 
                 if(min_duration > duration){
                     min_duration = duration;
@@ -712,9 +722,9 @@ public:
             int gks   = heuristic_select_gks(arg, tunable);
             size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
 
-            float duration = igemm_launch_kernels_with_prolog({
+            float duration = igemm_launch_kernels({
                     {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                }, fwd_prolog, this->warmup, this->repeat);
+                }, fwd_prolog, fwd_postlog, this->warmup, this->repeat);
 
             result.return_code = 0;
             result.duration_ms = duration;

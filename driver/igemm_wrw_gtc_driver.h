@@ -763,6 +763,15 @@ public:
             std::function<float()>{[&]() -> float{
                 return .0;
             }};
+        auto wrw_postlog = use_workspace == 1 ?
+            std::function<float()>{[&]() -> float{
+                size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                igemm_launch_kernel_single(tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1});
+                return .0;
+            }} :
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
 
         result_t result;
 
@@ -790,13 +799,13 @@ public:
                 // fflush(stdout);
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
-                if(use_workspace == 1){
-                    size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                }
-                float duration = igemm_launch_kernels_with_prolog({
+                // if(use_workspace == 1){
+                //     size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                //     kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                // }
+                float duration = igemm_launch_kernels({
                         kernel_launchers
-                    }, wrw_prolog, this->warmup, this->repeat);
+                    }, wrw_prolog, wrw_postlog, this->warmup, this->repeat);
                 if(min_duration > duration){
                     min_duration = duration;
                     selected_gkgs = gemm_k_global_splits;
@@ -807,9 +816,9 @@ public:
 
             }else{
                 // nchw do not search for gemmksplit
-                float duration = igemm_launch_kernels_with_prolog({
+                float duration = igemm_launch_kernels({
                             {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
-                        }, wrw_prolog, this->warmup, this->repeat);
+                        }, wrw_prolog, wrw_postlog, this->warmup, this->repeat);
                 min_duration = duration;
                 selected_gkgs = gemm_k_global_splits;
                 selected_grid_size = grid_size;
