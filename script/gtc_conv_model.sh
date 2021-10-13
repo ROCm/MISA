@@ -46,7 +46,7 @@ elif [ "${PREC}" = "int8" ] ; then
     CONV="convint8"
 elif [ "${PREC}" = "bf16" ] ; then
     PREC_HSACO="_bf16"
-    CONV="convbf16"
+    CONV="convbfp16"
 else
     echo "wrong precision: ${PREC}"
     exit 1
