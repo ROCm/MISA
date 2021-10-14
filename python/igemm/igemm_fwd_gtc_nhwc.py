@@ -136,6 +136,14 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                         else:
                             vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
+                elif self.tunable.precision == 'bf16':
+                    if self.tunable.gemm_k_global_split:
+                        vector_write = 1
+                    else:
+                        if self.is_pad_c():
+                            vector_write = 1
+                        else:
+                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                 elif self.tunable.precision == 'int8':
                     if self.is_pad_c():
                         vector_write = 1
@@ -156,6 +164,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
 
             if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+                ctrl_coalescing_store_xdlops.precision = 'fp32'
+
+            elif self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'bf16':
                 ctrl_coalescing_store_xdlops.precision = 'fp32'
 
             #if gemm_m_order == IGEMM_FWD_GTC_NHWC_LDS_STORE_ORDER_GEMM_M_N1B_N0:

@@ -163,6 +163,14 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                         else:
                             vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
+                elif self.tunable.precision == 'bf16':
+                    if self.tunable.gemm_k_global_split:
+                        vector_write = 1
+                    else:
+                        if self.is_pad_k():
+                            vector_write = 1
+                        else:
+                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                 elif self.tunable.precision == 'int8':
                     assert False, "currently bwd not need int8"
                     if self.is_pad_k():
@@ -184,6 +192,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store_xdlops.vector_write_out = get_vector_write_out()
 
             if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
+                ctrl_coalescing_store_xdlops.precision = 'fp32'
+            elif self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'bf16':
                 ctrl_coalescing_store_xdlops.precision = 'fp32'
 
             #if gemm_m_order == IGEMM_BWD_GTC_NHWC_LDS_STORE_ORDER_GEMM_M_N1B_N0:
@@ -742,7 +752,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.outer.get_thread_lengths()
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
-                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' and tb_k % 2 == 0 else ()))
+                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision in ('fp16', 'bf16') and tb_k % 2 == 0 else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -1190,7 +1200,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
         if self.tunable.precision == 'fp32':
             pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
-        elif self.tunable.precision == 'fp16':
+        elif self.tunable.precision in ('fp16', 'bf16'):
             pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c1 != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 

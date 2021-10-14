@@ -675,7 +675,9 @@ public:
 
         int use_workspace = 0;
 
-        if(gemm_k_global_split == 1 && data_byte == 2 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+        if(gemm_k_global_split == 1 && tunable->precision == "fp16" && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+            use_workspace = 1;
+        else if(gemm_k_global_split == 1 && tunable->precision == "bf16")
             use_workspace = 1;
         else
             use_workspace = 0;
@@ -745,7 +747,10 @@ public:
 #endif
 
         hipFunction_t tensor_cast_func;
-        HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
+        if(use_workspace == 1){
+            std::string tensor_cast_kernel_name = tunable->precision == "fp16" ? "tensor_cast_fp16_fp32_1d" : "tensor_cast_bf16_fp32_1d";
+            HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, tensor_cast_kernel_name.c_str()));
+        }
 
         auto wrw_prolog = gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
@@ -755,6 +760,15 @@ public:
                     hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * data_byte);
                 return .0;
             }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
+        auto wrw_postlog = use_workspace == 1 ?
+            std::function<float()>{[&]() -> float{
+                size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                igemm_launch_kernel_single(tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1});
+                return .0;
+            }} :
             std::function<float()>{[&]() -> float{
                 return .0;
             }};
@@ -785,13 +799,13 @@ public:
                 // fflush(stdout);
 
                 kernel_launchers.push_back({kernel_func, &karg, karg_size, {grid_size * block_size, splits, gemm_k_global_splits}, {block_size, 1, 1}});
-                if(use_workspace == 1){
-                    size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                }
-                float duration = igemm_launch_kernels_with_prolog({
+                // if(use_workspace == 1){
+                //     size_t thread_length_cast = (static_cast<size_t>(group) * (k / group) * (c / group) * y * x + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                //     kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                // }
+                float duration = igemm_launch_kernels({
                         kernel_launchers
-                    }, wrw_prolog, this->warmup, this->repeat);
+                    }, wrw_prolog, wrw_postlog, this->warmup, this->repeat);
                 if(min_duration > duration){
                     min_duration = duration;
                     selected_gkgs = gemm_k_global_splits;
@@ -802,9 +816,9 @@ public:
 
             }else{
                 // nchw do not search for gemmksplit
-                float duration = igemm_launch_kernels_with_prolog({
+                float duration = igemm_launch_kernels({
                             {kernel_func, &karg, karg_size, {grid_size * block_size, 1, 1}, {block_size, 1, 1}}
-                        }, wrw_prolog, this->warmup, this->repeat);
+                        }, wrw_prolog, wrw_postlog, this->warmup, this->repeat);
                 min_duration = duration;
                 selected_gkgs = gemm_k_global_splits;
                 selected_grid_size = grid_size;

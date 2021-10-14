@@ -590,7 +590,9 @@ public:
 
         int use_workspace = 0;
 
-        if(tunable->gemm_k_global_split == 1 && data_byte == 2 && tunable->vector_store == 1)
+        if(tunable->gemm_k_global_split == 1 && tunable->precision == "fp16" && tunable->vector_store == 1)
+            use_workspace = 1;
+        else if(tunable->gemm_k_global_split == 1 && tunable->precision == "bf16")
             use_workspace = 1;
         else
             use_workspace = 0;
@@ -809,7 +811,10 @@ public:
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
 
         hipFunction_t tensor_cast_func;
-        HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
+        if(use_workspace == 1){
+            std::string tensor_cast_kernel_name = tunable->precision == "fp16" ? "tensor_cast_fp16_fp32_1d" : "tensor_cast_bf16_fp32_1d";
+            HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, tensor_cast_kernel_name.c_str()));
+        }
 
         auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
             std::function<float()>{[&]() -> float{
@@ -819,6 +824,15 @@ public:
                     hipMemset(p_in, 0, static_cast<size_t>(splits)*n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
+        auto bwd_postlog = use_workspace == 1 ?
+            std::function<float()>{[&]() -> float{
+                size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                igemm_launch_kernel_single(tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1});
+                return .0;
+            }} :
             std::function<float()>{[&]() -> float{
                 return .0;
             }};
@@ -852,16 +866,16 @@ public:
                         karg->ks       = _gks;
 
                         kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
-                        if(use_workspace == 1){
-                            size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                            kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                        }
+                        // if(use_workspace == 1){
+                        //     size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                        //     kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                        // }
                     }else{
                         assert(0);
                     }
 
                     // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]));
-                    duration = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
+                    duration = igemm_launch_kernels(kernels, bwd_prolog, bwd_postlog, warmup, repeat);
 
                     if(min_duration > duration){
                         min_duration = duration;
@@ -911,16 +925,16 @@ public:
                             valid_kernel_index++;
                         }
                     }
-                    if(use_workspace == 1){
-                        size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                            kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                        valid_kernel_index++;
-                    }
+                    //if(use_workspace == 1){
+                    //    size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                    //        kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                    //    valid_kernel_index++;
+                    //}
                     // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[0]));
 
                     assert(kernels.size() == valid_kernel_index);
                     
-                    duration = igemm_launch_kernels_with_prolog(kernels, bwd_prolog, warmup, repeat);
+                    duration = igemm_launch_kernels(kernels, bwd_prolog, bwd_postlog, warmup, repeat);
 
                     if(min_duration > duration){
                         min_duration = duration;
