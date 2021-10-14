@@ -434,6 +434,10 @@ class igemm_gtc_tunable_parameter_t(object):
                 return 'miopenFloat'
             if precision == 'fp16':
                 return 'miopenHalf'
+            if precision == 'bf16':
+                return 'miopenBFloat16'
+            else:
+                assert False, "unkown data type"
 
         if False:
             brace_left='   {'
