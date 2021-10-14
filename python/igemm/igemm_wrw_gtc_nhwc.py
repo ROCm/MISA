@@ -33,6 +33,7 @@ IGEMM_WRW_GTC_DEBUG = 0
 IGEMM_WRW_GTC_N_SPLIT_FIRST = 1
 
 IGEMM_WRW_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
+IGEMM_WRW_GTC_NHWC_USE_BF16_1K_IN_FP16 = True   # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -114,7 +115,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
             ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k, 
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision, bf16_1k = self.use_bf16_1k_in_fp16())
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
@@ -168,6 +169,17 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.agpr = self.kernel_agpr_t(mc, self)
 
+    def use_bf16_1k_in_fp16(self):
+        if self.tunable.precision == 'fp16' and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and IGEMM_WRW_GTC_NHWC_USE_BF16_1K_IN_FP16:
+            return True
+        else:
+            return False
+
+    def get_predefine_for_bf16_1k_in_fp16(self):
+        return 'igemm_wrw_fp16_alt_impl'
+
+    def get_predefine_for_bf16_1k_in_fp16_default_value(self):
+        return 1
 
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
@@ -370,9 +382,16 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             s = self.outer.sgpr
             v = self.outer.vgpr
             _, m_in_2d_shared_store = self.outer.get_macro_shared_store()
+            ta_k, ta_n, tb_n, tb_c  = self.outer.get_thread_lengths()
             with self._deferred_context():
+                if self.outer.use_bf16_1k_in_fp16() and (self.outer.tunable.precision == 'fp16' and ta_n == 1):
+                    m_packed_fp16_to_bf16 = macro_packed_fp16_to_bf16_t(self.mc, num_vgpr = self.outer.get_num_vgpr_global_load_b())
+                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                    self._emit(m_packed_fp16_to_bf16(v.v_gld_b(), v.v_tmp(5)))
+                    self._emit(f'.endif')
                 need_swizzle = self.outer.tunable.precision == 'fp16' and self.outer.tunable.tensor_b_thread_lengths[1] > 1
-                self._emit(m_in_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_tmp(),) if need_swizzle else ()))
+                self._emit(m_in_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_tmp(),v.v_tmp(6)) if need_swizzle else ()))
             return self._get_deferred()
 
     class shared_store_out_t(mc_base_t):
@@ -387,9 +406,16 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             s = self.outer.sgpr
             v = self.outer.vgpr
             m_out_2d_shared_store, _ = self.outer.get_macro_shared_store()
+            ta_k, ta_n, tb_n, tb_c  = self.outer.get_thread_lengths()
             with self._deferred_context():
+                if self.outer.use_bf16_1k_in_fp16() and (self.outer.tunable.precision == 'fp16' and ta_n == 1):
+                    m_packed_fp16_to_bf16 = macro_packed_fp16_to_bf16_t(self.mc, num_vgpr = self.outer.get_num_vgpr_global_load_a())
+                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                    self._emit(m_packed_fp16_to_bf16(v.v_gld_a(), v.v_tmp(5)))
+                    self._emit(f'.endif')
                 need_swizzle = self.outer.tunable.precision == 'fp16' and self.outer.tunable.tensor_b_thread_lengths[1] > 1
-                self._emit(m_out_2d_shared_store(v.v_gld_a(), v.v_sst_a_os(), *(v.v_tmp(),) if need_swizzle else ()))
+                self._emit(m_out_2d_shared_store(v.v_gld_a(), v.v_sst_a_os(), *(v.v_tmp(),v.v_tmp(6)) if need_swizzle else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -803,14 +829,16 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             vector_dp_b = length_dp_b
 
         class macro_swizzle_sst_t(macro_base_t):
-            def __init__(self, mc, t_mn):
+            def __init__(self, mc, t_mn, outer):
                 macro_base_t.__init__(self, mc, True)
                 self.issue_cnt = 0
                 self.t_mn = t_mn
+                self.outer = outer
                 self.declare_arg("v_src")
                 self.declare_arg("v_sst_os")
                 if data_byte == 2:
                     self.declare_arg("v_pack_k_tmp")    # need tb_k // 2
+                    self.declare_arg("v_tmp2")
 
             def name(self):
                 return ''
@@ -837,9 +865,21 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
                                 for i_pk in range(packed_gemmk_dword):
                                     idx_0 = 2 * i_pk * dwords_per_mn + (i_gemmk * num_ds_write_pack + i_ds_write_pack) // 2
                                     idx_1 = 2 * i_pk * dwords_per_mn + (i_gemmk * num_ds_write_pack + i_ds_write_pack) // 2 + dwords_per_mn
-                                    op_sel = '' if (i_gemmk * num_ds_write_pack + i_ds_write_pack) % 2 == 0 else ' op_sel:[1, 1]'
-                                    # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
-                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                                    if self.outer.use_bf16_1k_in_fp16():
+                                        src0_sel = '' if (i_gemmk * num_ds_write_pack + i_ds_write_pack) % 2 == 0 else ' src0_sel:WORD_1'
+                                        fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                                        self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                                        self._emit(f"v_cvt_f32_f16 v[{self.v_tmp2(0)}], v[{self.v_src(idx_0)}]{src0_sel}")
+                                        self._emit(f"v_cvt_f32_f16 v[{self.v_tmp2(1)}], v[{self.v_src(idx_1)}]{src0_sel}")
+                                        self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_tmp2(0)}], v[{self.v_tmp2(1)}]  op_sel:[1, 1]")
+                                        self._emit(f'.else')
+                                        op_sel = '' if (i_gemmk * num_ds_write_pack + i_ds_write_pack) % 2 == 0 else ' op_sel:[1, 1]'
+                                        self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                                        self._emit(f'.endif')
+                                    else:
+                                        op_sel = '' if (i_gemmk * num_ds_write_pack + i_ds_write_pack) % 2 == 0 else ' op_sel:[1, 1]'
+                                        # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                        self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_ds_write_pack * 2 + i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
                             self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_gemmk * stride_d_mn))
                             self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_gemmk * stride_d_mn)
 
@@ -890,8 +930,8 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             return macro_igemm_3d_shared_store_t(self.mc, out_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
                 macro_igemm_3d_shared_store_t(self.mc, in_sst_ctrl, inline) if not self.tunable.tensor_b_pass_through else None
         else:
-            return macro_swizzle_sst_t(self.mc, ta_k) if not self.tunable.tensor_a_pass_through else None, \
-                macro_swizzle_sst_t(self.mc, tb_c) if not self.tunable.tensor_a_pass_through else None
+            return macro_swizzle_sst_t(self.mc, ta_k, self) if not self.tunable.tensor_a_pass_through else None, \
+                macro_swizzle_sst_t(self.mc, tb_c, self) if not self.tunable.tensor_a_pass_through else None
 
     def get_macro_in_out_update_os(self):
         inline = True if self.tunable.fma_interleave else False
@@ -1569,7 +1609,7 @@ class igemm_wrw_gtc_nhwc_t(mc_base_t):
             ctrl_xdlops_mapping               = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
                                                                         self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
-                                                                        self.tunable.precision)
+                                                                        self.tunable.precision, bf16_1k = self.use_bf16_1k_in_fp16())
             fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()
