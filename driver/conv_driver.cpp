@@ -743,9 +743,8 @@ int main(int argc, char **argv) {
     else if(base_arg == "convfp16"){
         driver_data_type = driverHalf;
     }
-    else if(base_arg == "convbf16") {
+    else if(base_arg == "convbfp16") {
         driver_data_type = driverBFloat16;
-        exit(0);
     }
     else if(base_arg == "convint8") {
         driver_data_type = driverInt8;
@@ -806,7 +805,7 @@ int main(int argc, char **argv) {
     void *device_input_dtype;
     void *device_weight_dtype;
     void *device_output_dtype;
-#if defined(USE_HALF) || defined(USE_INT8)
+#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16)
     host_input_dtype  = malloc(n * c * hi * wi * data_byte);
     host_weight_dtype = malloc(k * c * y * x * data_byte);
     host_output_dtype = malloc(n * k * ho * wo * data_byte);
@@ -854,6 +853,10 @@ int main(int argc, char **argv) {
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float16, float>(static_cast<float16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
             }
+            else if(driver_data_type == driverBFloat16){
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
             else if(driver_data_type == driverInt8){
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
@@ -893,7 +896,7 @@ int main(int argc, char **argv) {
             else
                 assert(0);
 #endif
-            if(driver_data_type == driverHalf || driver_data_type == driverInt8){
+            if(driver_data_type != driverHalf){
                 device_output_to_host = malloc((static_cast<size_t>(n) * k * ho * wo * data_byte + 3) / 4 * 4);
             }
             else{
@@ -938,6 +941,9 @@ int main(int argc, char **argv) {
                     if(driver_data_type == driverHalf)
                         is_valid = valid_vector<float16>(host_output, static_cast<float16*>(device_output_to_host),
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
+                    else if(driver_data_type == driverBFloat16)
+                        is_valid = valid_vector<bfloat16>(host_output, static_cast<bfloat16*>(device_output_to_host),
+                                            static_cast<size_t>(n) * k * ho * wo, nrms);
                     else if (driver_data_type == driverInt8)
                         is_valid = valid_vector<int8_t>(host_output, static_cast<int8_t*>(device_output_to_host),
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
@@ -979,6 +985,10 @@ int main(int argc, char **argv) {
                 tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
                 tensor_copy<float16, float>(static_cast<float16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
             }
+            else if(driver_data_type == driverBFloat16){
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
             else if(driver_data_type == driverInt8){
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
@@ -1017,7 +1027,7 @@ int main(int argc, char **argv) {
             else
                 assert(0);
 #endif
-            if(driver_data_type == driverHalf || driver_data_type == driverInt8){
+            if(driver_data_type != driverFloat){
                 device_input_to_host = malloc((static_cast<size_t>(n) * c * hi * wi * data_byte + 3) / 4 * 4 );
             }
             else{
@@ -1063,6 +1073,9 @@ int main(int argc, char **argv) {
                     if(driver_data_type == driverHalf)
                         is_valid = valid_vector<float16>(host_input, static_cast<float16*>(device_input_to_host),
                                                 static_cast<size_t>(n) * c * hi * wi, nrms);
+                    else if (driver_data_type == driverBFloat16)
+                        is_valid = valid_vector<bfloat16>(host_input, static_cast<bfloat16*>(device_input_to_host),
+                                                static_cast<size_t>(n) * c * hi * wi, nrms);
                     else if (driver_data_type == driverInt8)
                         is_valid = valid_vector<int8_t>(host_input, static_cast<int8_t*>(device_input_to_host),
                                                 static_cast<size_t>(n) * c * hi * wi, nrms);
@@ -1101,6 +1114,10 @@ int main(int argc, char **argv) {
             if(driver_data_type == driverHalf){
                 tensor_copy<float16, float>(static_cast<float16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<float16, float>(static_cast<float16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
+            }
+            else if(driver_data_type == driverBFloat16){
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<bfloat16, float>(static_cast<bfloat16*>(host_output_dtype), host_output, static_cast<size_t>(n) * k * ho * wo);
             }
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -1205,6 +1222,9 @@ int main(int argc, char **argv) {
                     if(driver_data_type == driverHalf)
                         is_valid = valid_vector<float16>(host_weight, static_cast<float16*>(device_weight_to_host),
                                     static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
+                    else if(driver_data_type == driverBFloat16)
+                        is_valid = valid_vector<bfloat16>(host_weight, static_cast<bfloat16*>(device_weight_to_host),
+                                    static_cast<size_t>(ngroups) * (k / ngroups) * (c / ngroups) * y * x, nrms);
                 }
                 printf(", valid:%s", is_valid ? "y" : "n");
                 if(assert_when_invalid) assert(is_valid);
@@ -1231,7 +1251,7 @@ int main(int argc, char **argv) {
     hipFree(device_weight);
     hipFree(device_output);
 
-#if defined(USE_HALF) || defined(USE_INT8)
+#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16)
     free(host_input_dtype);
     free(host_weight_dtype);
     free(host_output_dtype);

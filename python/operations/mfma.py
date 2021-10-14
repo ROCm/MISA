@@ -154,7 +154,6 @@ def inst_mfma_emit_macro_mfma_16f(mc, predefined_symbol_bf16_enable, default_val
         mc.emit(f'.endm')
         mc.emit_empty_line()
 
-
 # class inst_composed_mfma_t(object):
 #     '''
 #     handy class to issue several mfma to form a wave wise mxn

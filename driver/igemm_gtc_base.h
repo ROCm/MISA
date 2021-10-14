@@ -444,37 +444,9 @@ typedef struct{
     std::vector<size_t>     grid_size;
     std::vector<size_t>     block_size;
 }igemm_launch_kernel_t;
-static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t> & kernels, int warmup, int repeat)
-{
-    auto launch_kernels = [&]() -> float{
-        float ms = .0;
-        for(const auto ker :  kernels)
-            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
-        return ms;
-    };
 
-    assert(repeat > 2);
-    std::vector<float> duration_list;
-    for (int i = 0; i < warmup; i++) {
-        launch_kernels();
-    }
-
-    for (int i = 0; i < repeat; i++) {
-        float d = launch_kernels();
-        duration_list.push_back(d);
-    }
-    // remove min and max from list, then do average
-    auto imin = std::min_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imin);
-    auto imax = std::max_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imax);
-
-    assert(duration_list.size() == (repeat - 2));
-    float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
-    return avg_duration;
-}
-template<typename prolog_kernel_t>
-static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, int warmup, int repeat)
+template<typename prolog_kernel_t, typename postlog_kernel_t>
+static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, postlog_kernel_t postlog_kernel, int warmup, int repeat)
 {
     auto launch_kernels = [&]() -> float{
         float ms = .0;
@@ -484,6 +456,7 @@ static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_lau
             //std::cout << ker.kernel_func << ": " << t << std::endl;
             ms += t;
         }
+        ms += postlog_kernel();
         return ms;
     };
 
@@ -612,15 +585,21 @@ public:
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * k * ho * wo;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * k * ho * wo;
         }
         else if(forw & 2) // backward data ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * c * hi * wi;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * c * hi * wi;
         }
         else if(forw & 4) // backward weights ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+                workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
                 workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
         }
         else if(forw == 0) // all dirs

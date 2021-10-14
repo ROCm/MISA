@@ -570,7 +570,7 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
     elif precision == AMDGPU_PRECISION_INT8:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_int8
     elif precision == AMDGPU_PRECISION_BF16:
-        assert False, f"not support bf16 now"
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_bf16_1k   # TODO: this is limited to gpu arch
     else:
         assert False, f"wrong data type"
     target_mfma_tiling = list()
