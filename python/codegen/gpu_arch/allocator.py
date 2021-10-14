@@ -1,4 +1,4 @@
-from abc import abstractclassmethod
+from abc import ABC, abstractclassmethod
 from typing import Dict, OrderedDict
 from python.codegen.gpu_data_types import reg_block
 from python.codegen.gpu_instruct import instruction_type, inst_base
@@ -10,19 +10,19 @@ class alloc_unit():
         self.pos = pos
         self.r_offset = r_offset
 
-class base_allocator():
+class base_allocator(ABC):
     def __init__(self, mem_size, mem_granularity=1) -> None:
         self.mem_size = mem_size
         self.mem_granularity = mem_granularity
         self.r_pos = 0
     @abstractclassmethod
-    def malloc(self, size, alignment):
+    def malloc(self, size, alignment) -> int:
         pass
 
-    def malloc_opt(self, size, **options):
+    def malloc_opt(self, size, **options) -> int:
         pass
 
-    def malloc_at_pos(self, size, position, **options):
+    def malloc_at_fixed_pos(self, size, position, **options):
         pass
 
     @abstractclassmethod
@@ -67,7 +67,7 @@ class stack_allocator(base_allocator):
 
         return position
 
-    def malloc_at_pos(self, size, position):
+    def malloc_at_fixed_pos(self, size, position):
         _cur_last_pos = self._cur_last_pos
 
         if(position < _cur_last_pos):
