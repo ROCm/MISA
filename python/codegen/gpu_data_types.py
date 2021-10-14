@@ -243,3 +243,186 @@ def abs(reg:regVar):
 
 def neg(reg:regVar):
     return regAbs
+
+class  _VCC_reg(regVar):
+    def __init__(self):
+        self.label = 'vcc'
+        self.dwords = 2
+
+        self.lo = _VCC_LO()
+        self.hi = _VCC_HI()
+    
+    def set_lable(self, label:str):
+        raise AttributeError( "'VCC' object has no attribute 'set_lable'" )
+
+    def define(self):
+        raise AttributeError( "'VCC' object has no attribute 'define'" )
+
+    def define_as(self, label:str):
+        raise AttributeError( "'VCC' object has no attribute 'define_as'" )
+
+    def __getitem__(self, key):
+        slice_size = 1
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        slice_size = r - l
+        assert(slice_size <= 1 and slice_size >= 0)
+        if(slice_size > 0):
+            return self
+        else:
+            if(l == 0):
+                return self.lo
+            else:
+                return self.hi
+
+    def __str__(self) -> str:
+        return f'{self.label}'
+
+class  _VCC_LO(_VCC_reg):
+    def __init__(self):
+        self.label = 'vcc_lo'
+        self.dwords = 1
+    
+    def __getitem__(self, key):
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        assert(l == r)
+        
+        return self
+        
+class  _VCC_HI(_VCC_reg):
+    def __init__(self):
+        self.label = 'vcc_hi'
+        self.dwords = 1
+    
+    def __getitem__(self, key):
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        assert(l == r)
+        
+        return self
+
+class  _EXEC_reg(regVar):
+    def __init__(self):
+        self.label = 'exec'
+        self.dwords = 2
+
+        self.lo = _EXEC_LO()
+        self.hi = _EXEC_HI()
+    
+    def set_lable(self, label:str):
+        raise AttributeError( "'EXEC' object has no attribute 'set_lable'" )
+
+    def define(self):
+        raise AttributeError( "'EXEC' object has no attribute 'define'" )
+
+    def define_as(self, label:str):
+        raise AttributeError( "'EXEC' object has no attribute 'define_as'" )
+
+    def __getitem__(self, key):
+        slice_size = 1
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        slice_size = r - l
+        assert(slice_size <= 1 and slice_size >= 0)
+        if(slice_size > 0):
+            return self
+        else:
+            if(l == 0):
+                return self.lo
+            else:
+                return self.hi
+
+    def __str__(self) -> str:
+        return f'{self.label}'
+
+class  _EXEC_LO(_EXEC_reg):
+    def __init__(self):
+        self.label = 'exec_lo'
+        self.dwords = 1
+    
+    def __getitem__(self, key):
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        assert(l == r)
+        
+        return self
+        
+class  _EXEC_HI(_EXEC_reg):
+    def __init__(self):
+        self.label = 'exec_hi'
+        self.dwords = 1
+    
+    def __getitem__(self, key):
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        assert(l == r)
+        
+        return self
+
