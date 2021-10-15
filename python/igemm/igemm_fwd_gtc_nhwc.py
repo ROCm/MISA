@@ -32,6 +32,7 @@ from .igemm_base import *
 IGEMM_FWD_GTC_NHWC_PACK_IN_FLAG = 0
 # IGEMM_FWD_GTC_NHWC_P_INTERLEAVE_GLD = False     # p tensor interleave
 IGEMM_FWD_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
+IGEMM_FWD_GTC_NHWC_USE_BF16_1K_IN_FP16  = True   # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -102,7 +103,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
             ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision, bf16_1k_in_fp16 = self.use_bf16_1k_in_fp16())
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
@@ -183,6 +184,18 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self.vgpr = self.kernel_vgpr_t(mc, self)
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.agpr = self.kernel_agpr_t(mc, self)
+
+    def use_bf16_1k_in_fp16(self):
+        if self.tunable.precision == 'fp16' and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and IGEMM_FWD_GTC_NHWC_USE_BF16_1K_IN_FP16:
+            return True
+        else:
+            return False
+
+    def get_predefine_for_bf16_1k_in_fp16(self):
+        return 'igemm_fwd_fp16_alt_impl'
+
+    def get_predefine_for_bf16_1k_in_fp16_default_value(self):
+        return 0
 
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
@@ -646,6 +659,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
+                if self.outer.use_bf16_1k_in_fp16():
+                    m_packed_fp16_to_bf16 = macro_packed_fp16_to_bf16_t(self.mc, num_vgpr = self.outer.get_num_vgpr_global_load_a())
+                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                    self._emit(m_packed_fp16_to_bf16(v.v_gld_a(), v.v_tmp(5)))
+                    self._emit(f'.endif')
                 self._emit(m_in_2d_shared_store(v.v_gld_a(), v.v_sst_a_os()))
             return self._get_deferred()
 
@@ -662,6 +681,12 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
+                if self.outer.use_bf16_1k_in_fp16():
+                    m_packed_fp16_to_bf16 = macro_packed_fp16_to_bf16_t(self.mc, num_vgpr = self.outer.get_num_vgpr_global_load_b())
+                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                    self._emit(m_packed_fp16_to_bf16(v.v_gld_b(), v.v_tmp(5)))
+                    self._emit(f'.endif')
                 self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os()))
             return self._get_deferred()
 
@@ -2287,7 +2312,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
                                                                         self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
-                                                                        self.tunable.precision)
+                                                                        self.tunable.precision, bf16_1k_in_fp16 = self.use_bf16_1k_in_fp16())
             fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()
@@ -2347,6 +2372,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.pass_through_b              = self.tunable.tensor_b_pass_through
             fctrl.pass_through_a_v_pack       = self.get_k_pack()
             fctrl.pass_through_b_v_pack       = self.get_k_pack()
+            fctrl.pass_through_bf16_1k_in_fp16  = self.use_bf16_1k_in_fp16()
+            fctrl.pass_through_bf16_1k_in_fp16_predefine = self.get_predefine_for_bf16_1k_in_fp16()
 
             fctrl.pass_through_a_interleave_gld = 1 if self.tunable.tensor_a_pass_through_interleave_gld else 0
             fctrl.pass_through_b_interleave_gld = 1 if self.tunable.tensor_b_pass_through_interleave_gld else 0

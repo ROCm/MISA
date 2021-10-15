@@ -470,6 +470,25 @@ ctrl_xdlops_mapping_bf16_1k = [ctrl_xdlops_mapping_t(item.macro_tile_m, item.mac
                                     item.wave_repeat_m, item.wave_repeat_n, item.wave_step_m, item.wave_step_n,
                                     fp16_mfma_to_bf16_1k(item.inst_mfma))  for item in ctrl_xdlops_mapping_fp16 ]
 
+def fp16_mfma_to_16f(fp16_mfma):
+    if fp16_mfma.name() == 'v_mfma_f32_4x4x4f16':
+        return v_mfma_f32_4x4x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x4f16':
+        return v_mfma_f32_16x16x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x16f16':
+        return v_mfma_f32_16x16x16_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x4f16':
+        return v_mfma_f32_32x32x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x8f16':
+        return v_mfma_f32_32x32x8_16f_m
+    assert False, 'no such fp16 inst ' + fp16_mfma.name()
+    return None
+
+ctrl_xdlops_mapping_16f = [ctrl_xdlops_mapping_t(item.macro_tile_m, item.macro_tile_n,
+                                    item.wave_tile_m, item.wave_tile_n, item.wave_tile_k, item.waves,
+                                    item.wave_repeat_m, item.wave_repeat_n, item.wave_step_m, item.wave_step_n,
+                                    fp16_mfma_to_16f(item.inst_mfma))  for item in ctrl_xdlops_mapping_fp16 ]
+
 ctrl_xdlops_mapping_int8 = [
         ctrl_xdlops_mapping_t( 256, 256,  64,  32,  4, 4,  2,  2,  1,  2,  v_mfma_i32_32x32x4i8),
         ctrl_xdlops_mapping_t( 256, 256,  32,  32,  8, 4,  2,  2,  2,  2,  v_mfma_i32_32x32x8i8),
@@ -544,8 +563,8 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
     if precision == AMDGPU_PRECISION_FP32:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
     elif precision == AMDGPU_PRECISION_FP16:
-        if 'bf16_1k' in options and options['bf16_1k']:
-            ctrl_xdlops_mapping = ctrl_xdlops_mapping_bf16_1k
+        if 'bf16_1k_in_fp16' in options and options['bf16_1k_in_fp16']:
+            ctrl_xdlops_mapping = ctrl_xdlops_mapping_16f
         else:
             ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
     elif precision == AMDGPU_PRECISION_INT8:
@@ -576,7 +595,7 @@ def set_ctrl_xdlops_mapping_accvgpr_unified(accvgpr_unified):
     if set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified == accvgpr_unified:
         return
     set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified = accvgpr_unified
-    for ctrl in (ctrl_xdlops_mapping_fp32, ctrl_xdlops_mapping_fp16, ctrl_xdlops_mapping_int8, ctrl_xdlops_mapping_bf16_1k):
+    for ctrl in (ctrl_xdlops_mapping_fp32, ctrl_xdlops_mapping_fp16, ctrl_xdlops_mapping_int8, ctrl_xdlops_mapping_bf16_1k, ctrl_xdlops_mapping_16f):
         for x in ctrl:
             x.inst_mfma.accvgpr_unified = accvgpr_unified
 

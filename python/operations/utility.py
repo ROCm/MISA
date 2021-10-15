@@ -314,6 +314,23 @@ class gpr_sequencer_t(object):
     def get(self):
         return self.cnt
 
+class macro_packed_fp16_to_bf16_t(macro_base_t):
+    def __init__(self, mc, **options):
+        macro_base_t.__init__(self, mc, True)
+        self.options = options
+        self.declare_arg("v_packed_f16")
+        self.declare_arg("v_tmp")
+        assert 'num_vgpr' in options
+
+    def name(self):
+        return '.v_packed_fp16_to_bf16'
+
+    def expr(self):
+        num_vgpr = self.options["num_vgpr"]
+        for i in range(num_vgpr):
+            self._emit(f"v_cvt_f32_f16 v[{self.v_tmp()}], v[{self.v_packed_f16(i)}]")
+            self._emit(f"v_cvt_f32_f16 v[{self.v_packed_f16(i)}], v[{self.v_packed_f16(i)}] src0_sel:WORD_1")
+            self._emit(f"v_pack_b32_f16 v[{self.v_packed_f16(i)}], v[{self.v_tmp()}], v[{self.v_packed_f16(i)}] op_sel:[1,1]")
 
 def utility_list_to_string(arr):
     assert type(arr) is list

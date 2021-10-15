@@ -25,6 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
+import copy
 
 def inst_mfma_data_type_to_string(data_type):
     if data_type == AMDGPU_PRECISION_FP32:
@@ -58,6 +59,8 @@ class inst_mfma_t(object):
         #assert arch_config.arch == AMDGPU_ARCH_GFX908 and arch_config.use_xdlops
 
     def name(self):
+        if 'name' in self.options and self.options['name'] != None:
+            return self.options['name']
         def src_datatype_string(data_type_string):
             if data_type_string == 'fp32':
                 return 'f32'
@@ -71,7 +74,7 @@ class inst_mfma_t(object):
         mfma_acc_type = 'i32' if self.data_type == AMDGPU_PRECISION_INT8 else 'f32' # TODO: int8 mfma accumulate type is i32
         mfma_trait = f'{self.m}x{self.n}x{self.k}' + src_datatype_string(inst_mfma_data_type_to_string(self.data_type))
         mfma_inst = f'v_mfma_{mfma_acc_type}_{mfma_trait}'
-        if 'bf16_1k' in self.options and self.options['bf16_1k']:
+        if 'bf16_1k' in self.options and self.options['bf16_1k'] and self.data_type == AMDGPU_PRECISION_BF16:
             mfma_inst += '_1k'
         return mfma_inst
 
@@ -120,6 +123,36 @@ v_mfma_f32_16x16x4bf16_1k   = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_BF16,  32
 v_mfma_f32_16x16x16bf16_1k  = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_BF16,  32,   2,   2,  4,    1 , bf16_1k=True)
 v_mfma_f32_32x32x4bf16_1k   = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   2,   2,  32,   2 , bf16_1k=True)
 v_mfma_f32_32x32x8bf16_1k   = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_BF16,  64,   2,   2,  16,   1 , bf16_1k=True)
+
+v_mfma_f32_4x4x4_16f_m      = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_BF16,   8,   2,   2,  4,    16, bf16_1k=True, name='v_mfma_f32_4x4x4_16f_m')
+v_mfma_f32_16x16x4_16f_m    = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_BF16,  32,   2,   2,  16,   4 , bf16_1k=True, name='v_mfma_f32_16x16x4_16f_m')
+v_mfma_f32_16x16x16_16f_m   = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_BF16,  32,   2,   2,  4,    1 , bf16_1k=True, name='v_mfma_f32_16x16x16_16f_m')
+v_mfma_f32_32x32x4_16f_m    = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   2,   2,  32,   2 , bf16_1k=True, name='v_mfma_f32_32x32x4_16f_m')
+v_mfma_f32_32x32x8_16f_m    = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_BF16,  64,   2,   2,  16,   1 , bf16_1k=True, name='v_mfma_f32_32x32x8_16f_m')
+
+def inst_mfma_emit_macro_mfma_16f(mc, predefined_symbol_bf16_enable, default_value):
+    mc.emit(f'.ifndef {predefined_symbol_bf16_enable}')
+    mc.emit(f'.set {predefined_symbol_bf16_enable}, {default_value}')
+    mc.emit(f'.endif')
+    mc.emit_empty_line()
+
+    the_list = [v_mfma_f32_4x4x4_16f_m, v_mfma_f32_16x16x4_16f_m, v_mfma_f32_16x16x16_16f_m, v_mfma_f32_32x32x4_16f_m, v_mfma_f32_32x32x8_16f_m]
+
+    for inst in the_list:
+        inst_16f = copy.deepcopy(inst)
+        inst_16f.options['name'] = None
+        # print(f'{inst.options}')
+        inst_16f.data_type = AMDGPU_PRECISION_BF16
+        macro_name = inst.options['name']
+        mc.emit(f'.macro {macro_name} d, a, b, c')
+        mc.emit(f'.if {predefined_symbol_bf16_enable} == 1')
+        mc.emit(f'    {inst_16f.name()} \\d, \\a, \\b, \\c')
+        mc.emit(f'.else')
+        inst_16f.data_type = AMDGPU_PRECISION_FP16
+        mc.emit(f'    {inst_16f.name()} \\d, \\a, \\b, \\c')
+        mc.emit(f'.endif')
+        mc.emit(f'.endm')
+        mc.emit_empty_line()
 
 # class inst_composed_mfma_t(object):
 #     '''
