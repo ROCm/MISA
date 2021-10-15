@@ -124,11 +124,11 @@ v_mfma_f32_16x16x16bf16_1k  = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_BF16,  32
 v_mfma_f32_32x32x4bf16_1k   = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   2,   2,  32,   2 , bf16_1k=True)
 v_mfma_f32_32x32x8bf16_1k   = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_BF16,  64,   2,   2,  16,   1 , bf16_1k=True)
 
-v_mfma_f32_4x4x4_16f      = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_BF16,   8,   2,   2,  4,    16, bf16_1k=True, name='v_mfma_f32_4x4x4_16f__')
-v_mfma_f32_16x16x4_16f    = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_BF16,  32,   2,   2,  16,   4 , bf16_1k=True, name='v_mfma_f32_16x16x4_16f__')
-v_mfma_f32_16x16x16_16f   = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_BF16,  32,   2,   2,  4,    1 , bf16_1k=True, name='v_mfma_f32_16x16x16_16f__')
-v_mfma_f32_32x32x4_16f    = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   2,   2,  32,   2 , bf16_1k=True, name='v_mfma_f32_32x32x4_16f__')
-v_mfma_f32_32x32x8_16f    = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_BF16,  64,   2,   2,  16,   1 , bf16_1k=True, name='v_mfma_f32_32x32x8_16f__')
+v_mfma_f32_4x4x4_16f_m      = inst_mfma_t(4,  4,  4,  AMDGPU_PRECISION_BF16,   8,   2,   2,  4,    16, bf16_1k=True, name='v_mfma_f32_4x4x4_16f_m')
+v_mfma_f32_16x16x4_16f_m    = inst_mfma_t(16, 16, 4,  AMDGPU_PRECISION_BF16,  32,   2,   2,  16,   4 , bf16_1k=True, name='v_mfma_f32_16x16x4_16f_m')
+v_mfma_f32_16x16x16_16f_m   = inst_mfma_t(16, 16, 16, AMDGPU_PRECISION_BF16,  32,   2,   2,  4,    1 , bf16_1k=True, name='v_mfma_f32_16x16x16_16f_m')
+v_mfma_f32_32x32x4_16f_m    = inst_mfma_t(32, 32, 4,  AMDGPU_PRECISION_BF16,  64,   2,   2,  32,   2 , bf16_1k=True, name='v_mfma_f32_32x32x4_16f_m')
+v_mfma_f32_32x32x8_16f_m    = inst_mfma_t(32, 32, 8,  AMDGPU_PRECISION_BF16,  64,   2,   2,  16,   1 , bf16_1k=True, name='v_mfma_f32_32x32x8_16f_m')
 
 def inst_mfma_emit_macro_mfma_16f(mc, predefined_symbol_bf16_enable, default_value):
     mc.emit(f'.ifndef {predefined_symbol_bf16_enable}')
@@ -136,7 +136,7 @@ def inst_mfma_emit_macro_mfma_16f(mc, predefined_symbol_bf16_enable, default_val
     mc.emit(f'.endif')
     mc.emit_empty_line()
 
-    the_list = [v_mfma_f32_4x4x4_16f, v_mfma_f32_16x16x4_16f, v_mfma_f32_16x16x16_16f, v_mfma_f32_32x32x4_16f, v_mfma_f32_32x32x8_16f]
+    the_list = [v_mfma_f32_4x4x4_16f_m, v_mfma_f32_16x16x4_16f_m, v_mfma_f32_16x16x16_16f_m, v_mfma_f32_32x32x4_16f_m, v_mfma_f32_32x32x8_16f_m]
 
     for inst in the_list:
         inst_16f = copy.deepcopy(inst)

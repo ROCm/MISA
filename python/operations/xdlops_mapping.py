@@ -472,15 +472,15 @@ ctrl_xdlops_mapping_bf16_1k = [ctrl_xdlops_mapping_t(item.macro_tile_m, item.mac
 
 def fp16_mfma_to_16f(fp16_mfma):
     if fp16_mfma.name() == 'v_mfma_f32_4x4x4f16':
-        return v_mfma_f32_4x4x4_16f
+        return v_mfma_f32_4x4x4_16f_m
     if fp16_mfma.name() == 'v_mfma_f32_16x16x4f16':
-        return v_mfma_f32_16x16x4_16f
+        return v_mfma_f32_16x16x4_16f_m
     if fp16_mfma.name() == 'v_mfma_f32_16x16x16f16':
-        return v_mfma_f32_16x16x16_16f
+        return v_mfma_f32_16x16x16_16f_m
     if fp16_mfma.name() == 'v_mfma_f32_32x32x4f16':
-        return v_mfma_f32_32x32x4_16f
+        return v_mfma_f32_32x32x4_16f_m
     if fp16_mfma.name() == 'v_mfma_f32_32x32x8f16':
-        return v_mfma_f32_32x32x8_16f
+        return v_mfma_f32_32x32x8_16f_m
     assert False, 'no such fp16 inst ' + fp16_mfma.name()
     return None
 
@@ -563,7 +563,7 @@ def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile
     if precision == AMDGPU_PRECISION_FP32:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
     elif precision == AMDGPU_PRECISION_FP16:
-        if 'bf16_1k' in options and options['bf16_1k']:
+        if 'bf16_1k_in_fp16' in options and options['bf16_1k_in_fp16']:
             ctrl_xdlops_mapping = ctrl_xdlops_mapping_16f
         else:
             ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
