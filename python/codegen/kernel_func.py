@@ -1,28 +1,25 @@
 
 from os import name
-from typing import List
+from python.codegen.gpu_arch.HW_components import base_HW, sgpr_file_t, vgpr_file_t
+from python.codegen.gpu_arch.allocator import base_allocator
+from typing import Generic, List, Type, TypeVar
 from python.codegen.gpu_data_types import block_of_reg_blocks, reg_block, reg_type
 from python.codegen.generator_instructions import reg_allocator_base
-from python.codegen.gpu_instruct import gpu_instructions_caller_base, instruction_type
-from python.codegen.gpu_reg_block import gpr_file_t, sgpr_file_t, vgpr_file_t
+from python.codegen.gpu_instruct import gpu_instructions_caller_base, inst_caller_base, instruction_type
+
 import inspect
 
-class kernel_func():
-    def __init__(self, instructions_caller_base:gpu_instructions_caller_base, func_name:str=None, sgpr_f:gpr_file_t=None, vgpr_f:gpr_file_t=None, agpr_f:gpr_file_t=None) -> None:
-        if(sgpr_f == None):
-            self.sgpr_f = sgpr_file_t(instructions_caller_base)
-        else:
-            self.sgpr_f = sgpr_f
+T = TypeVar('T')
+class kernel_func(Generic[T]):
+    def __init__(self, instructions_caller_base:T, func_name:str=None, sgpr_a:base_allocator=None, vgpr_a:base_allocator=None, agpr_a:base_allocator=None) -> None:
+        
+        if(sgpr_a != None ):#and issubclass(type(sgpr_a), base_allocator)):
+            self.sgpr_f = sgpr_file_t(instructions_caller_base, sgpr_a)
+        
+        if(vgpr_a != None ):#and issubclass(type(sgpr_a), base_allocator)):
+            self.vgpr_f = vgpr_file_t(instructions_caller_base, vgpr_a)
 
-        if(vgpr_f == None):
-            self.vgpr_f = vgpr_file_t(instructions_caller_base)
-        else:
-            self.vgpr_f = vgpr_f
-
-        if(agpr_f == None):
-            self.agpr_f = vgpr_file_t(instructions_caller_base)
-        else:
-            self.agpr_f = agpr_f
+        self.agpr_f = None
 
         self.ic = instructions_caller_base
         if(func_name == None):
@@ -31,6 +28,20 @@ class kernel_func():
             self.func_name = func_name
         
         self.ic_begin_pos = -1
+    
+    @classmethod
+    def create_from_other_inst(cls, other, func_name: str = None):
+        
+        sgpr_f = getattr(other, 'sgpr_f', None)
+        sgpr_a = getattr(sgpr_f, '_allocator', None)
+
+        vgpr_f = getattr(other, 'vgpr_f', None)
+        vgpr_a = getattr(vgpr_f, '_allocator', None)
+
+        agpr_f = getattr(other, 'agpr_f', None)
+        agpr_a = getattr(agpr_f, '_allocator', None)
+
+        return cls(other.ic, func_name, sgpr_a = sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
 
     def _func_begin(self):
         self.ic.kernel_func_begin(self)
@@ -62,7 +73,7 @@ class kernel_func():
         sgpr_dealloc = self.sgpr_f._dealloc
         vgpr_dealloc = self.vgpr_f._dealloc
         
-        for i in not_dealocated_list:
+        for i in reversed(not_dealocated_list):
             assert(type(i) is reg_block or block_of_reg_blocks)
             if(i.reg_t is reg_type.sgpr):
                 self.ic.reg_dealloc(i,sgpr_dealloc)
@@ -81,6 +92,20 @@ class kernel_func():
     
     def wrapped_call(self, *args, **kwargs):
         pass
+class kernel_launcher(kernel_func[T]):
+    
+    def __init__(self, instructions_caller_base: T, gpu_HW:base_HW, func_name: str = None):
+        sgpr_a = getattr(gpu_HW, 'sgpr_alloc', None)
+        vgpr_a = getattr(gpu_HW, 'vgpr_alloc', None)
+        agpr_a = getattr(gpu_HW, 'agpr_alloc', None)
+        
+        super().__init__(instructions_caller_base, func_name=func_name, sgpr_a=sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
+        self.HW = gpu_HW
+    
+    @classmethod
+    def create_from_other_inst(cls, other, func_name: str = None):
+        return cls(other.ic, other.HW, func_name)
+
 
 def mfunc_class(cls):
     def wrapped_class(*args, **kwargs):
@@ -94,11 +119,21 @@ def mfunc_class(cls):
 def mfunc_func(src_func):    
     def func(kf:kernel_func, *args, **kwargs):
         name = src_func.__name__
-        save = kernel_func(kf.ic, name)
+        save = kernel_func.create_from_other_inst(kf, name)
         save.wrapped_call = src_func
         save.func(*args, **kwargs)
     func.__signature__ = inspect.signature(src_func)
     return func
+
+def launcher_kernel(src_func):
+    def func(kf, *args, **kwargs):
+        name = src_func.__name__
+        save = kernel_launcher.create_from_other_inst(kf, name)
+        save.wrapped_call = src_func
+        save.func(*args, **kwargs)
+    #func.__signature__ = inspect.signature(src_func)
+    return func
+
 
 #sample
 @mfunc_class
@@ -109,7 +144,7 @@ class __maccro_1(kernel_func):
 
 @mfunc_func
 def __maccro_2(self:kernel_func, arg1, arg2:str):
-    sgpr_f = sgpr_file_t(self.ic)
+    sgpr_f = self.sgpr_f
     sgpr_f.add('s', 2)
 
 
