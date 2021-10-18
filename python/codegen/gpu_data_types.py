@@ -244,7 +244,7 @@ def abs(reg:regVar):
 def neg(reg:regVar):
     return regAbs
 
-class  _VCC_reg(regVar):
+class  VCC_reg(regVar):
     def __init__(self):
         self.label = 'vcc'
         self.dwords = 2
@@ -289,7 +289,7 @@ class  _VCC_reg(regVar):
     def __str__(self) -> str:
         return f'{self.label}'
 
-class  _VCC_LO(_VCC_reg):
+class  _VCC_LO(VCC_reg):
     def __init__(self):
         self.label = 'vcc_lo'
         self.dwords = 1
@@ -312,7 +312,7 @@ class  _VCC_LO(_VCC_reg):
         
         return self
         
-class  _VCC_HI(_VCC_reg):
+class  _VCC_HI(VCC_reg):
     def __init__(self):
         self.label = 'vcc_hi'
         self.dwords = 1
@@ -335,7 +335,7 @@ class  _VCC_HI(_VCC_reg):
         
         return self
 
-class  _EXEC_reg(regVar):
+class  EXEC_reg(regVar):
     def __init__(self):
         self.label = 'exec'
         self.dwords = 2
@@ -380,7 +380,7 @@ class  _EXEC_reg(regVar):
     def __str__(self) -> str:
         return f'{self.label}'
 
-class  _EXEC_LO(_EXEC_reg):
+class  _EXEC_LO(EXEC_reg):
     def __init__(self):
         self.label = 'exec_lo'
         self.dwords = 1
@@ -403,7 +403,7 @@ class  _EXEC_LO(_EXEC_reg):
         
         return self
         
-class  _EXEC_HI(_EXEC_reg):
+class  _EXEC_HI(EXEC_reg):
     def __init__(self):
         self.label = 'exec_hi'
         self.dwords = 1

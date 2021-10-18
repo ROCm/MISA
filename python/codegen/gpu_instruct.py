@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
 import inspect
-from python.codegen.generator_instructions import flow_control_caller, reg_allocator_caller
 from typing import List
-from python.codegen.gpu_data_types import reg_block, abs, neg
+#from python.codegen.gpu_data_types import abs, neg
 
 class inst_mode(Enum):
     allocation: auto
@@ -45,6 +44,7 @@ class inst_caller_base(ABC):
 
     def ic_pb(self, inst):
         self.il.append(inst)
+        st = inspect.stack()
         return inst
 
 from python.codegen.generator_instructions import flow_control_caller, reg_allocator_caller
@@ -53,17 +53,27 @@ class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller):
         super().__init__(insturction_list)
 
 class instruction_ctrl():
-    __slots__ = ['instructions_list']
+    __slots__ = ['instructions_list', 'code_str']
 
     def __init__(self) -> None:
         instructions_list:List[inst_base] = []
         self.instructions_list = instructions_list
+
+        self.code_str = []
     
+    def execute_all(self):
+        self._emmit_all(self.code_str.append)
+
     def _emmit_all(self, emmiter):
         e = emmiter
         for i in self.instructions_list:
             e(f'{i}')
     
+    def _emmit_created_code(self, emmiter):
+        e = emmiter
+        for i in self.code_str:
+            e(i)
+
     def _emmit_range(self, emmiter, strt:int, end:int):
         e = emmiter
         i_list = self.instructions_list

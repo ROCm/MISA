@@ -22,13 +22,15 @@ class base_allocator(ABC):
     def malloc_opt(self, size, **options) -> int:
         pass
 
+    @abstractclassmethod
     def malloc_at_fixed_pos(self, size, position, **options):
         pass
 
-    @abstractclassmethod
-    def realloc_dec(self, ptr, size):
-        pass
+    #@abstractclassmethod
+    #def realloc_dec(self, ptr, size):
+    #    pass
 
+    @abstractclassmethod
     def mfree(self, ptr):
         pass
 
@@ -97,3 +99,12 @@ class stack_allocator(base_allocator):
 
     def mfree(self, pos):
         self.stack.pop(pos)
+        try:
+            last:alloc_unit =  self.stack.peekitem()[1]
+            self._cur_last_pos = last.r_offset
+        except IndexError:
+            self._cur_last_pos = 0
+
+    def get_required_size(self):
+        'registers required for curent allocation'
+        return self.r_pos

@@ -27,17 +27,18 @@ from python.codegen.gpu_arch.allocator import base_allocator
 
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks']
-    def __init__(self, ic:gpu_instructions_caller_base, gpr_file_size, reg_t:reg_type, gpr_allocator:base_allocator=None):
+    def __init__(self, ic:gpu_instructions_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None):
         #mc_base_t.__init__(self, mc)
-        if(gpr_allocator == None):
-            self._allocator = stack_allocator(gpr_file_size)
-        else:
-            self._allocator = gpr_allocator
+        self._allocator = gpr_allocator
         self.reg_t = reg_t
         self.define_on_creation = False
         self.ic = ic
         self.active_blocks:List[reg_block] = []
     
+    @classmethod
+    def create_from_other_inst(cls, other):
+        return cls(other.ic, other.reg_t, other.gpr_allocator)
+
     def get_count(self):
         return self._allocator.get_required_size()
        
@@ -64,7 +65,7 @@ class gpr_file_t():#mc_base_t):
     def _dealloc(self, reg:reg_block, alignment):
         #self.active_blocks.remove(reg)
         self._allocator.mfree(reg.position)
-        return f'#dealock .unset {reg.label}, {reg.position}'
+        return f'//dealock .unset {reg.label}, {reg.position}'
 
     def _dealloc_all(self):
         blocks = self.active_blocks
@@ -111,21 +112,28 @@ class gpr_file_t():#mc_base_t):
         self.ic.Block_split(block_of_reg_blocks, self._split_block)
 
 class sgpr_file_t(gpr_file_t):
-    def __init__(self, gpu_instructions_caller_base, reg_cnt, gpr_allocator:base_allocator):
-        super().__init__(gpu_instructions_caller_base, reg_cnt, reg_type.sgpr, gpr_allocator)
+    def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):
+        super().__init__(gpu_instructions_caller_base, reg_type.sgpr, gpr_allocator)
         
-        vcc = _VCC_reg()
+        vcc = VCC_reg()
         self.vcc = vcc
         self.vcc_lo = vcc.lo
         self.vcc_hi = vcc.hi
 
-        exec = _EXEC_reg()
+        exec = EXEC_reg()
         self.exec = exec
         self.vcc_lo = exec.lo
         self.vcc_hi = exec.hi
+    
+
+class vgpr_file_t(gpr_file_t):
+    def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):
+        super().__init__(gpu_instructions_caller_base, reg_type.vgpr, gpr_allocator)
+    
+
 
 class special_regs_base():
-    def __init__(self, reg_t:reg_type) -> None:
+    def __init__(self) -> None:
         self._special_regs_storage:Dict[str,reg_block] = {}
         self._special_reg_dirty = {}
         self._special_reg_used = {}
@@ -145,9 +153,8 @@ class special_regs_base():
         self._special_reg_dirty[name] = False
 
 class sgpr_hw_component(special_regs_base):
-    def __init__(self, gpu_instructions_caller_base, sgpr_size, sgpr_alloc:Type[base_allocator]) -> None:
-        
-        special_regs_base(reg_type.sgpr)
+    def __init__(self, gpu_instructions_caller_base, sgpr_size, sgpr_alloc:Type[base_allocator], *args, **kwargs) -> None:
+        super().__init__(gpu_instructions_caller_base=gpu_instructions_caller_base, *args, **kwargs)
         self.sgpr_alloc = sgpr_alloc(sgpr_size)
         s_type = reg_type.sgpr
         self.create_special_reg('karg_segment_ptr', 2, s_type)
@@ -179,9 +186,9 @@ class sgpr_hw_component(special_regs_base):
                 off_seq += reg.dwords
         
 class vgpr_hw_component(special_regs_base):
-    def __init__(self, gpu_instructions_caller_base, vgpr_size, vgpr_alloc:Type[base_allocator]) -> None:
+    def __init__(self, gpu_instructions_caller_base, vgpr_size, vgpr_alloc:Type[base_allocator], *args, **kwargs) -> None:
         
-        special_regs_base(reg_type.sgpr)
+        super().__init__(*args, **kwargs)
         self.vgpr_alloc = vgpr_alloc(vgpr_size)
         v_type = reg_type.vgpr
         self.create_special_reg('tid_x', 1, v_type)
@@ -196,7 +203,7 @@ class vgpr_hw_component(special_regs_base):
     def get_tid_z(self):
         self.get_special_reg('tid_z')
 
-    def ABI_sgpr_setregs(self):
+    def ABI_vgpr_setregs(self):
         off_seq = 0
         alloc = self.vgpr_alloc
         ABI_reg_list = ['tid_x', 'tid_y', 'tid_z']
@@ -209,7 +216,19 @@ class vgpr_hw_component(special_regs_base):
 
 class base_HW(sgpr_hw_component, vgpr_hw_component):
     def __init__(self, gpu_instructions_caller_base,sgpr_alloc:Type[base_allocator], vgpr_alloc:Type[base_allocator], sgpr_size, vgpr_size, LDS_size) -> None:
-        sgpr_hw_component(gpu_instructions_caller_base, sgpr_size, sgpr_alloc)
-        vgpr_hw_component(gpu_instructions_caller_base, vgpr_size, vgpr_alloc)
+        super().__init__(
+            gpu_instructions_caller_base=gpu_instructions_caller_base,
+            sgpr_size=sgpr_size,
+            sgpr_alloc=sgpr_alloc,
+            vgpr_size=vgpr_size, vgpr_alloc=vgpr_alloc)
+        #super(sgpr_hw_component, self).__init__(gpu_instructions_caller_base, vgpr_size, vgpr_alloc)
+        
         self.LDS_size = LDS_size
 
+    def ABI_HW_setregs(self):
+        self.ABI_sgpr_setregs()
+        self.ABI_vgpr_setregs()
+
+class HW_gfx9(base_HW):
+    def __init__(self, gpu_instructions_caller_base, sgpr_alloc: Type[base_allocator], vgpr_alloc: Type[base_allocator]) -> None:
+        super().__init__(gpu_instructions_caller_base, sgpr_alloc, vgpr_alloc, 104, 256, 65536)
