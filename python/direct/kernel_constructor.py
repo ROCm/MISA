@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
+from python.codegen.kernel_func import kernel_launcher
+from python.codegen.gpu_arch.allocator import stack_allocator
+from python.codegen.gpu_arch.HW_components import base_HW
 from typing import List, Type
 from python.codegen.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
 from python.codegen.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t, amdgpu_kernel_info_t, hsa_kernel_header
 from python.codegen.kernel_arg import _args_manager_t, karg_file_t
-from python.codegen.gpu_reg_block import sgpr_file_t, vgpr_file_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
 
 #public dep
@@ -23,14 +25,26 @@ class kernel_constructor(mc_base_t, ABC):
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
         self.kargs=self.kernel_karg_t(self.mc)
 
+    def generate_kernel_body(self):
+        self._emit_kernel_body()
+        self.HW.ABI_HW_setregs()
+        self.instr_ctrl.execute_all()
+        #some optimize
+
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
         self.instr_ctrl = instruction_ctrl()
         self._instructions_init()
-        self._gpr_init(self.instructions_caller)
+        self.set_GPU_HW()
+        t = type(self.instructions_caller)
+        self.k_config = kernel_launcher[t](self.instructions_caller, self.HW)
         self._set_kernel_karg_t()
+        self.generate_kernel_body()
         self.kernel_info = self._construct_kernel_info()
-        
+
+    @abstractmethod    
+    def set_GPU_HW(self):
+        self.HW = base_HW(self.instructions_caller, stack_allocator, stack_allocator, 104, 256, 65000)
         
     def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
         return amdgpu_kernel_info_t(
@@ -39,29 +53,9 @@ class kernel_constructor(mc_base_t, ABC):
             kernel_block_size=0, kernel_name=self.get_kernel_name())
     
     @abstractmethod
-    def _gpr_init(self, ic :gpu_instructions_caller_base):
-        '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
-        Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
-        self.sgpr = self._sgpr(ic)
-        self.vgpr = self._vgpr(ic)
-        self.agpr = self._agpr(ic)
-
-    @abstractmethod
     def _instructions_init(self):
         '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
         self.instructions_caller = gpu_instructions_caller_base(self.instr_ctrl.instructions_list)
-
-    class _sgpr(sgpr_file_t):
-        def __init__(self, ic):
-            super().__init__(ic)
-            
-    class _vgpr(vgpr_file_t):
-        def __init__(self, ic):
-            super().__init__(ic)
-    
-    class _agpr(vgpr_file_t):
-        def __init__(self, ic):
-            super().__init__(ic)
 
     def _get_kernel_code_obj_t(self) -> amdgpu_kernel_code_t:
         ''' 
@@ -74,10 +68,10 @@ class kernel_constructor(mc_base_t, ABC):
                 'enable_vgpr_workitem_id'           :   0,
                 'workgroup_group_segment_byte_size' :   self._get_LDS_usage(),
                 'kernarg_segment_byte_size'         :   self.kargs._get_arg_byte_size(),
-                'wavefront_sgpr_count'              :   self.sgpr.get_count() + 2*3,
-                'workitem_vgpr_count'               :   self.vgpr.get_count()}
+                'wavefront_sgpr_count'              :   self.HW.sgpr_alloc.get_required_size() + 2*3,
+                'workitem_vgpr_count'               :   self.HW.vgpr_alloc.get_required_size()}
         
-        kernel_code_dict['accum_offset']        =   self.vgpr.get_count()
+        kernel_code_dict['accum_offset']        =   self.HW.vgpr_alloc.get_required_size()
         kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
@@ -109,8 +103,7 @@ class kernel_constructor(mc_base_t, ABC):
     def emit_kernel_code(self):
         self._emit_kernel_header()
         self._emit_kernel_symbols()
-        self._emit_kernel_body()
-        self.instr_ctrl._emmit_all(self._emit)
+        self.instr_ctrl._emmit_created_code(self._emit)
         self._emit_kernel_end()
 
     def emit_kernel_amd_kernel_code_t(self):
