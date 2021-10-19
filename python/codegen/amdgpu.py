@@ -374,6 +374,12 @@ class amdgpu_kernel_code_t(object):
             count += 2
         if self.enable_sgpr_dispatch_id:
             count += 2
+        if self.enable_sgpr_workgroup_id_x:
+            count += 1
+        if self.enable_sgpr_workgroup_id_y:
+            count += 1
+        if self.enable_sgpr_workgroup_id_z:
+            count += 1
         # other sgpr related to be implemented
 
         return count
