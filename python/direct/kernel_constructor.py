@@ -62,12 +62,19 @@ class kernel_constructor(mc_base_t, ABC):
         Set .amd_kernel_code_t for kernel metadata
         '''
         kernel_code_dict = {
-                'enable_sgpr_kernarg_segment_ptr'   :   1,
-                'enable_sgpr_workgroup_id_x'        :   1,
-                'enable_sgpr_workgroup_id_y'        :   1,
-                'enable_vgpr_workitem_id'           :   0,
+                'enable_sgpr_kernarg_segment_ptr'   :   self.HW._special_reg_used.get('karg_segment_ptr', 0),
+                'enable_sgpr_workgroup_id_x'        :   self.HW._special_reg_used.get('gid_x', 0),
+                'enable_sgpr_workgroup_id_y'        :   self.HW._special_reg_used.get('gid_y', 0),
+                'enable_sgpr_workgroup_id_z'        :   self.HW._special_reg_used.get('gid_z', 0),
+                'enable_vgpr_workitem_id'           :   sum(
+                                                            map(
+                                                                lambda x: self.HW._special_reg_used.get(x, 0),
+                                                                ['tid_x', 'tid_y', 'tid_z']
+                                                            )
+                                                        ) - 1,
                 'workgroup_group_segment_byte_size' :   self._get_LDS_usage(),
                 'kernarg_segment_byte_size'         :   self.kargs._get_arg_byte_size(),
+                # self.HW.sgpr_alloc.get_required_size() + VCC, FLAT_SCRATCH and XNACK 
                 'wavefront_sgpr_count'              :   self.HW.sgpr_alloc.get_required_size() + 2*3,
                 'workitem_vgpr_count'               :   self.HW.vgpr_alloc.get_required_size()}
         

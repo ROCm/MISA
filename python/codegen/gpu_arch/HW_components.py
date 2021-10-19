@@ -125,13 +125,10 @@ class sgpr_file_t(gpr_file_t):
         self.vcc_lo = exec.lo
         self.vcc_hi = exec.hi
     
-
 class vgpr_file_t(gpr_file_t):
     def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):
         super().__init__(gpu_instructions_caller_base, reg_type.vgpr, gpr_allocator)
     
-
-
 class special_regs_base():
     def __init__(self) -> None:
         self._special_regs_storage:Dict[str,reg_block] = {}
@@ -164,6 +161,7 @@ class sgpr_hw_component(special_regs_base):
 
     def get_gid_x(self):
         self.get_special_reg('gid_x')
+
     def get_gid_y(self):
         self.get_special_reg('gid_y')
     def get_gid_z(self):
@@ -201,12 +199,14 @@ class vgpr_hw_component(special_regs_base):
     def get_tid_y(self):
         self.get_special_reg('tid_y')
     def get_tid_z(self):
+        self._special_reg_used['tid_y'] = True
         self.get_special_reg('tid_z')
 
     def ABI_vgpr_setregs(self):
         off_seq = 0
         alloc = self.vgpr_alloc
         ABI_reg_list = ['tid_x', 'tid_y', 'tid_z']
+
         for i in ABI_reg_list:
             if(self._special_reg_used[i]):
                 reg = self._special_regs_storage[i]
