@@ -50,8 +50,10 @@ static struct {
     hipFunction_t   kernel_gpu_batched_transpose_16x16_dword;
     hipFunction_t   kernel_gpu_batched_transpose_16x16_half;
     hipFunction_t   kernel_gpu_batched_transpose_16x16_byte;
-} the_transpose_gpu_handle;
 
+    hipFunction_t   kernel_gpu_batched_transpose_32x32_pack_2x2_half;
+    hipFunction_t   kernel_gpu_batched_transpose_64x32_pack_4x2_half;
+} the_transpose_gpu_handle;
 
 static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
     static int inited = 0;
@@ -60,6 +62,10 @@ static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_dword,  the_transpose_gpu_handle.module, "gpu_batched_transpose_16x16_dword"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_16x16_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_byte,   the_transpose_gpu_handle.module, "gpu_batched_transpose_16x16_byte"));
+
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x32_pack_2x2_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_32x32_pack_2x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_64x32_pack_4x2_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_64x32_pack_4x2_half"));
+
         inited = 1;
     }
 }
@@ -93,27 +99,87 @@ static inline void dump_transpose_kernel_arg(transpose_kernel_t * karg)
     fflush(stdout);
 }
 
+typedef struct{
+    int tile_x;
+    int tile_y;
+    int pack_x;
+    int pack_y;
+}transpose_kernel_param_t;
+
+template<size_t type_size>
+struct transpose_kernel_get_all_param_t{
+};
+
+template<>
+struct transpose_kernel_get_all_param_t<4>{
+    static std::vector<transpose_kernel_param_t> get(){
+        std::vector<transpose_kernel_param_t> the_list {
+            {16, 16, 1, 1},
+        };
+        return the_list;
+    }
+};
+
+template<>
+struct transpose_kernel_get_all_param_t<2>{
+    static std::vector<transpose_kernel_param_t> get(){
+        std::vector<transpose_kernel_param_t> the_list {
+            {16, 16, 1, 1},
+            {32, 32, 2, 2},
+            {64, 32, 4, 2},
+        };
+        return the_list;
+    }
+};
+
+template<>
+struct transpose_kernel_get_all_param_t<1>{
+    static std::vector<transpose_kernel_param_t> get(){
+        std::vector<transpose_kernel_param_t> the_list {
+            {16, 16, 1, 1},
+        };
+        return the_list;
+    }
+};
+
 template<size_t type_size>
 struct transpose_kernel_select_t{
 };
 
 template<>
 struct transpose_kernel_select_t<4>{
-    static hipFunction_t get(){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_dword;}
+    static hipFunction_t get(const transpose_kernel_param_t * kparam){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_dword;}
 };
 
 template<>
 struct transpose_kernel_select_t<2>{
-    static hipFunction_t get(){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_half;}
+    static hipFunction_t get(const transpose_kernel_param_t * kparam){
+        if(kparam->tile_x == 16 && kparam->tile_y == 16){
+            return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_half;
+        }
+        else if(kparam->tile_x == 32 && kparam->tile_y == 32){
+            if(kparam->pack_x == 2 && kparam->pack_y == 2)
+                return the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x32_pack_2x2_half;
+        }
+        // else if(tile_x == 32 && tile_y == 64){
+        //     if(pack_x == 2 && pack_y == 4)
+        //         return the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x64_pack_2x4_half;
+        // }
+        else if(kparam->tile_x == 64 && kparam->tile_y == 32){
+            if(kparam->pack_x == 4 && kparam->pack_y == 2)
+                return the_transpose_gpu_handle.kernel_gpu_batched_transpose_64x32_pack_4x2_half;
+        }
+        assert(false);
+    }
 };
 
 template<>
 struct transpose_kernel_select_t<1>{
-    static hipFunction_t get(){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_byte;}
+    static hipFunction_t get(const transpose_kernel_param_t * kparam){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_byte;}
 };
 
 template<typename T>
-void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, uint32_t width)
+void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, uint32_t width, const transpose_kernel_param_t * kparam)
 {
     hipDeviceProp_t dev_prop;
     hipDevice_t dev;
@@ -122,20 +188,19 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
     int num_cu = dev_prop.multiProcessorCount;
 
     // TODO: need find better way to decide transpose tile size
-    const int tile_h = 16;
-    const int tile_w = 16;
+
     const int occupancy = 4;
     size_t block_size = 256;
     size_t grid_size = num_cu * occupancy;
 
-    uint32_t dim_h = (height + tile_h - 1) / tile_h;
-    uint32_t dim_w = (width + tile_w - 1) / tile_w;
+    uint32_t dim_h = (height + kparam->tile_y - 1) / kparam->tile_y;
+    uint32_t dim_w = (width + kparam->tile_x - 1) / kparam->tile_x;
     uint32_t dim_total = batch * dim_h * dim_w;
 
     magic_div_u32_t magic_h = magic_div_u32_gen(dim_h);
     magic_div_u32_t magic_w = magic_div_u32_gen(dim_w);
 
-    hipFunction_t kernel = transpose_kernel_select_t<sizeof(T)>::get();
+    hipFunction_t kernel = transpose_kernel_select_t<sizeof(T)>::get(kparam);
 
     transpose_kernel_t karg;
     karg.p_dst          = reinterpret_cast<void*>(dst);
@@ -162,14 +227,14 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
 }
 
 template<typename T>
-void gpu_nchw2nhwc(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, uint32_t w)
+void gpu_nchw2nhwc(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
 {
-    gpu_batched_transpose(dst, src, n, c, h * w);
+    gpu_batched_transpose(dst, src, n, c, h * w, kparam);
 }
 
 template<typename T>
-void gpu_nhwc2nchw(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, uint32_t w)
+void gpu_nhwc2nchw(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
 {
-    gpu_batched_transpose(dst, src, n, h * w, c);
+    gpu_batched_transpose(dst, src, n, h * w, c, kparam);
 }
 #endif
