@@ -328,6 +328,14 @@ gpu_batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src
         uint32_t g_src_h = (dim_ih << 6) + (i_src_h << 2);
 
         __syncthreads();
+        /*
+        * 4x2 -> 2x4 transpose: (0, 1, 2, 3 is in float)
+        *        lo hi
+        *      0 |_|_|      lo |0|2| 
+        *      1 |_|_|  ->  hi |_|_| 
+        *      2 |_|_|      lo |1|3| 
+        *      3 |_|_|      hi |_|_|
+        */
         if(g_src_h < height && g_src_w < width_2)
         {
 #if 0
@@ -472,6 +480,95 @@ gpu_batched_transpose_32x64_pack_2x4_smod_2x2<ushort>(ushort * dst, ushort * src
 }
 
 
+template <typename T>
+inline __device__ void
+gpu_batched_transpose_64x64_pack_4x4_smod_4x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+}
+
+template <>
+inline __device__ void
+gpu_batched_transpose_64x64_pack_4x4_smod_4x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    constexpr auto smem_stride = 17;
+    //__shared__ float smem[64 * smem_stride];
+    __shared__ float4 smem[32 * smem_stride];
+
+    float2 * p_dst = reinterpret_cast<float2*>(dst);
+    float2 * p_src = reinterpret_cast<float2*>(src);
+
+    uint32_t height_4 = height >> 2;
+    uint32_t width_4 = width >> 2;
+
+    uint32_t h_dim = (height + 63) >> 6;
+    uint32_t w_dim = (width + 63) >> 6;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 4) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 6) + (i_src_h << 2);
+
+        __syncthreads();
+        /*
+        * 4x2 -> 2x4 transpose: (0, 1, 2, 3 is in float2)
+        *        lo hi
+        *      0 |_|_|_|_|      lo |0|1|2|3| 
+        *      1 |_|_|_|_|  ->  hi |_|_|_|_| 
+        *      2 |_|_|_|_|      lo | | | | | 
+        *      3 |_|_|_|_|      hi |_|_|_|_|
+        */
+
+        float2 v_src[4];
+        size_t src_index = static_cast<size_t>(dim_in) * height * width_4 + static_cast<size_t>(g_src_h) * width_4 + static_cast<size_t>(g_src_w);
+        if(g_src_h < height && g_src_w < width_4)
+        {
+            v_src[0] = p_src[src_index];
+            v_src[1] = p_src[src_index + width_4];
+            v_src[2] = p_src[src_index + 2 * width_4];
+            v_src[3] = p_src[src_index + 3 * width_4];
+        }
+
+        float2 v_pack[4];
+        v_pack_b32_f16_2x2(v_pack[0].x, v_pack[1].x, v_src[0].x, v_src[1].x);
+        v_pack_b32_f16_2x2(v_pack[2].x, v_pack[3].x, v_src[0].y, v_src[1].y);
+        v_pack_b32_f16_2x2(v_pack[0].y, v_pack[1].y, v_src[2].x, v_src[3].x);
+        v_pack_b32_f16_2x2(v_pack[2].y, v_pack[3].y, v_src[2].y, v_src[3].y);
+
+        smem[i_src_w * smem_stride + i_src_h] =
+                make_float4(v_pack[0].x, v_pack[0].y, v_pack[1].x, v_pack[1].y);
+        smem[i_src_w * smem_stride + i_src_h + 16 * smem_stride] =
+                make_float4(v_pack[2].x, v_pack[2].y, v_pack[3].x, v_pack[3].y);
+
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 4) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 6) + (i_dst_w << 2);
+
+        size_t dst_index = static_cast<size_t>(dim_in) * width * height_4 + static_cast<size_t>(g_dst_w) * height_4 + static_cast<size_t>(g_dst_h);
+
+        float4 v_dst[2];
+        v_dst[0] = smem[i_dst_w * smem_stride + i_dst_h];
+        v_dst[1] = smem[i_dst_w * smem_stride + i_dst_h + 16 * smem_stride];
+        if(g_dst_h < height_4 && g_dst_w < width){
+            p_dst[dst_index] = make_float2(v_dst[0].x, v_dst[0].y);
+            p_dst[dst_index + height_4] = make_float2(v_dst[0].z, v_dst[0].w);
+            p_dst[dst_index + 2 * height_4] = make_float2(v_dst[1].x, v_dst[1].y);
+            p_dst[dst_index + 3 * height_4] = make_float2(v_dst[1].z, v_dst[1].w);
+        }
+    }
+}
+
+
 #define DEFINE_BATCHED_TRANSPOSE_KERNEL(tile_trait, accept_data_type, cast_data_type, lb_threads_per_block, lb_blocks_per_cu)   \
     extern "C" __global__ void __launch_bounds__(lb_threads_per_block, lb_blocks_per_cu)                    \
     gpu_batched_transpose_ ## tile_trait ## _ ## accept_data_type(void * dst, void * src,                   \
@@ -492,3 +589,4 @@ DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x2,   half, ushort,  256,  
 DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2_smod_4x2,   half, ushort,  256,    4)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x4,   half, ushort,  256,    4)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x2,   half, ushort,  256,    4)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_4x4,   half, ushort,  256,    4)
