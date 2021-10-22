@@ -54,6 +54,7 @@ static struct {
     hipFunction_t   kernel_gpu_batched_transpose_32x32_pack_2x2_smod_2x2_half;
     hipFunction_t   kernel_gpu_batched_transpose_64x32_pack_4x2_smod_4x2_half;
     hipFunction_t   kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x4_half;
+    hipFunction_t   kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x2_half;
 } the_transpose_gpu_handle;
 
 static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
@@ -67,6 +68,7 @@ static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x32_pack_2x2_smod_2x2_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_32x32_pack_2x2_smod_2x2_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_64x32_pack_4x2_smod_4x2_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_64x32_pack_4x2_smod_4x2_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x4_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_32x64_pack_2x4_smod_2x4_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x2_half,   the_transpose_gpu_handle.module, "gpu_batched_transpose_32x64_pack_2x4_smod_2x2_half"));
 
         inited = 1;
     }
@@ -132,6 +134,7 @@ struct transpose_kernel_get_all_param_t<2>{
             {32, 32, 2, 2, 2, 2},
             {64, 32, 4, 2, 4, 2},
             {32, 64, 2, 4, 2, 4},
+            {32, 64, 2, 4, 2, 2},
         };
         return the_list;
     }
@@ -185,6 +188,9 @@ struct transpose_kernel_select_t<2>{
                 if(kparam->smod_x == 2 && kparam->smod_y == 4){
                     return the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x4_half;
                 }
+                else if(kparam->smod_x == 2 && kparam->smod_y == 2){
+                    return the_transpose_gpu_handle.kernel_gpu_batched_transpose_32x64_pack_2x4_smod_2x2_half;
+                }
             }
         }
         assert(false);
@@ -195,6 +201,12 @@ template<>
 struct transpose_kernel_select_t<1>{
     static hipFunction_t get(const transpose_kernel_param_t * kparam){return the_transpose_gpu_handle.kernel_gpu_batched_transpose_16x16_byte;}
 };
+
+bool transpose_kernel_is_valid(uint32_t batch, uint32_t height, uint32_t width, const transpose_kernel_param_t * kparam)
+{
+    (void)batch;
+    return width % kparam->smod_x == 0 && height % kparam->smod_y == 0;
+}
 
 template<typename T>
 void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, uint32_t width, const transpose_kernel_param_t * kparam)
@@ -242,6 +254,16 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
     HIP_CALL(hipHccModuleLaunchKernel(kernel, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, NULL, NULL));
+}
+
+static inline bool gpu_nchw2nhwc_is_kernel_valid(uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
+{
+    return transpose_kernel_is_valid(n, c, h * w, kparam);
+}
+
+static inline bool gpu_nhwc2nchw_is_kernel_valid(uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
+{
+    return transpose_kernel_is_valid(n, h * w, c, kparam);
 }
 
 template<typename T>

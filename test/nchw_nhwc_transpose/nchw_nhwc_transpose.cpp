@@ -308,41 +308,46 @@ int main(int argc, char ** argv){
         // nchw2nhwc
         float kernel_time;
         hipEvent_t start, stop;
+        bool valid;
 
-        HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
+        bool is_kernel_valid = gpu_nchw2nhwc_is_kernel_valid(N, C, H, W, transpose_kparam);
 
-        for(int i=0; i< warmup; i++){
-            launch_gpu_nchw2nhwc(transpose_kparam);
+        if(is_kernel_valid){
+            HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
+
+            for(int i=0; i< warmup; i++){
+                launch_gpu_nchw2nhwc(transpose_kparam);
+            }
+
+            HIP_CALL(hipEventCreate(&start));
+            HIP_CALL(hipEventCreate(&stop));
+            HIP_CALL(hipDeviceSynchronize());
+            HIP_CALL(hipEventRecord(start, 0) );
+
+            for(int i=0; i< repeat; i++){
+                launch_gpu_nchw2nhwc(transpose_kparam);
+            }
+            
+            HIP_CALL(hipEventRecord(stop, 0) );
+            HIP_CALL(hipEventSynchronize(stop) );
+            HIP_CALL(hipEventElapsedTime(&kernel_time, start, stop) );
+            HIP_CALL(hipEventDestroy(start) );
+            HIP_CALL(hipEventDestroy(stop) );
+
+            kernel_time = kernel_time / repeat;
+
+            launch_cpu_nchw2nhwc();
+
+            HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
+
+            valid = valid_vector_binary(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(dst_gpu_valid), N*C*H*W*size_byte);
         }
-
-        HIP_CALL(hipEventCreate(&start));
-        HIP_CALL(hipEventCreate(&stop));
-        HIP_CALL(hipDeviceSynchronize());
-        HIP_CALL(hipEventRecord(start, 0) );
-
-        for(int i=0; i< repeat; i++){
-            launch_gpu_nchw2nhwc(transpose_kparam);
-        }
-        
-        HIP_CALL(hipEventRecord(stop, 0) );
-        HIP_CALL(hipEventSynchronize(stop) );
-        HIP_CALL(hipEventElapsedTime(&kernel_time, start, stop) );
-        HIP_CALL(hipEventDestroy(start) );
-        HIP_CALL(hipEventDestroy(stop) );
-
-        kernel_time = kernel_time / repeat;
-
-        launch_cpu_nchw2nhwc();
-
-        HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
-
-        bool valid = valid_vector_binary(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(dst_gpu_valid), N*C*H*W*size_byte);
 
         double flop_cnt = 2 * N*C*H*W*size_byte;
-        double bw = flop_cnt / kernel_time / 1e6;
+        double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
-            fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, valid?"y":"n",
+        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+            fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->smod_x, transpose_kparam->smod_y);
     };
 
@@ -350,41 +355,46 @@ int main(int argc, char ** argv){
         // nhwc2nchw
         float kernel_time;
         hipEvent_t start, stop;
+        bool valid;
 
-        HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
+        bool is_kernel_valid = gpu_nhwc2nchw_is_kernel_valid(N, C, H, W, transpose_kparam);
 
-        for(int i=0; i< warmup; i++){
-            launch_gpu_nhwc2nchw(transpose_kparam);
+        if(is_kernel_valid){
+            HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
+
+            for(int i=0; i< warmup; i++){
+                launch_gpu_nhwc2nchw(transpose_kparam);
+            }
+
+            HIP_CALL(hipEventCreate(&start));
+            HIP_CALL(hipEventCreate(&stop));
+            HIP_CALL(hipDeviceSynchronize());
+            HIP_CALL(hipEventRecord(start, 0) );
+
+            for(int i=0; i< repeat; i++){
+                launch_gpu_nhwc2nchw(transpose_kparam);
+            }
+
+            HIP_CALL(hipEventRecord(stop, 0) );
+            HIP_CALL(hipEventSynchronize(stop) );
+            HIP_CALL(hipEventElapsedTime(&kernel_time, start, stop) );
+            HIP_CALL(hipEventDestroy(start) );
+            HIP_CALL(hipEventDestroy(stop) );
+
+            kernel_time = kernel_time / repeat;
+
+            launch_cpu_nhwc2nchw();
+
+            HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
+
+            valid = valid_vector_binary(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(dst_gpu_valid), N*C*H*W*size_byte);
         }
-
-        HIP_CALL(hipEventCreate(&start));
-        HIP_CALL(hipEventCreate(&stop));
-        HIP_CALL(hipDeviceSynchronize());
-        HIP_CALL(hipEventRecord(start, 0) );
-
-        for(int i=0; i< repeat; i++){
-            launch_gpu_nhwc2nchw(transpose_kparam);
-        }
-
-        HIP_CALL(hipEventRecord(stop, 0) );
-        HIP_CALL(hipEventSynchronize(stop) );
-        HIP_CALL(hipEventElapsedTime(&kernel_time, start, stop) );
-        HIP_CALL(hipEventDestroy(start) );
-        HIP_CALL(hipEventDestroy(stop) );
-
-        kernel_time = kernel_time / repeat;
-
-        launch_cpu_nhwc2nchw();
-
-        HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
-
-        bool valid = valid_vector_binary(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(dst_gpu_valid), N*C*H*W*size_byte);
 
         double flop_cnt = 2 * N*C*H*W*size_byte;
-        double bw = flop_cnt / kernel_time / 1e6;
+        double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
-            fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, valid?"y":"n",
+        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+            fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->smod_x, transpose_kparam->smod_y);
     };
 
