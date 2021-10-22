@@ -130,14 +130,14 @@ gpu_batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, u
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+gpu_batched_transpose_32x32_pack_2x2_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+gpu_batched_transpose_32x32_pack_2x2_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -194,17 +194,16 @@ gpu_batched_transpose_32x32_pack_2x2<ushort>(ushort * dst, ushort * src, uint32_
     }
 }
 
-
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_64x32_pack_4x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+gpu_batched_transpose_64x32_pack_4x2_smod_4x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_64x32_pack_4x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+gpu_batched_transpose_64x32_pack_4x2_smod_4x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -294,9 +293,101 @@ gpu_batched_transpose_64x32_pack_4x2<ushort>(ushort * dst, ushort * src, uint32_
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x64_pack_2x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+gpu_batched_transpose_32x64_pack_2x4_smod_2x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
+}
+
+template <>
+inline __device__ void
+gpu_batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    constexpr auto smem_stride = 17;
+    //__shared__ float smem[64 * smem_stride];
+    __shared__ float4 smem[16 * smem_stride];
+
+    float2 * p_dst = reinterpret_cast<float2*>(dst);
+    float * p_src = reinterpret_cast<float*>(src);
+
+    uint32_t height_4 = height >> 2;
+    uint32_t width_2 = width >> 1;
+
+    uint32_t h_dim = (height + 63) >> 6;
+    uint32_t w_dim = (width + 31) >> 5;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 4) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 6) + (i_src_h << 2);
+
+        __syncthreads();
+        if(g_src_h < height && g_src_w < width_2)
+        {
+#if 0
+            float v[4];
+            float v_pack[4];
+            size_t src_index = static_cast<size_t>(dim_in) * height * width_2 + static_cast<size_t>(g_src_h) * width_2 + static_cast<size_t>(g_src_w);
+            v[0] = p_src[src_index];
+            v[1] = p_src[src_index + width_2];
+            v[2] = p_src[src_index + 2 * width_2];
+            v[3] = p_src[src_index + 3 * width_2];
+            v_pack_b32_f16_2x2(v_pack[0], v_pack[2], v[0], v[1]);
+            v_pack_b32_f16_2x2(v_pack[1], v_pack[3], v[2], v[3]);
+
+            smem[i_src_w * smem_stride + i_src_h] = v_pack[0];
+            smem[i_src_w * smem_stride + i_src_h + 16 * smem_stride] = v_pack[1];
+            smem[i_src_w * smem_stride + i_src_h + 32 * smem_stride] = v_pack[2];
+            smem[i_src_w * smem_stride + i_src_h + 48 * smem_stride] = v_pack[3];
+#else
+            float v[4];
+            float4 v_pack;
+            size_t src_index = static_cast<size_t>(dim_in) * height * width_2 + static_cast<size_t>(g_src_h) * width_2 + static_cast<size_t>(g_src_w);
+            v[0] = p_src[src_index];
+            v[1] = p_src[src_index + width_2];
+            v[2] = p_src[src_index + 2 * width_2];
+            v[3] = p_src[src_index + 3 * width_2];
+            v_pack_b32_f16_2x2(v_pack.x, v_pack.z, v[0], v[1]);
+            v_pack_b32_f16_2x2(v_pack.y, v_pack.w, v[2], v[3]);
+
+            smem[i_src_w * smem_stride + i_src_h] = v_pack;
+#endif
+        }
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 4) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 5) + (i_dst_w << 1);
+
+        if(g_dst_h < height_4 && g_dst_w < width)
+        {
+#if 0
+            float v[4];
+            v[0] = smem[i_dst_w * smem_stride + i_dst_h];
+            v[1] = smem[i_dst_w * smem_stride + i_dst_h + 16 * smem_stride];
+            v[2] = smem[i_dst_w * smem_stride + i_dst_h + 32 * smem_stride];
+            v[3] = smem[i_dst_w * smem_stride + i_dst_h + 48 * smem_stride];
+            size_t dst_index = static_cast<size_t>(dim_in) * width * height_4 + static_cast<size_t>(g_dst_w) * height_4 + static_cast<size_t>(g_dst_h);
+            p_dst[dst_index] = v[0];
+            p_dst[dst_index + height_4] = v[1];
+            p_dst[dst_index + 2 * height_4] = v[2];
+            p_dst[dst_index + 3 * height_4] = v[3];
+#else
+            float4 v;
+            v = smem[i_dst_w * smem_stride + i_dst_h];
+            size_t dst_index = static_cast<size_t>(dim_in) * width * height_4 + static_cast<size_t>(g_dst_w) * height_4 + static_cast<size_t>(g_dst_h);
+            p_dst[dst_index] = make_float2(v.x, v.y);
+            p_dst[dst_index + height_4] = make_float2(v.z, v.w);
+#endif
+        }
+    }
 }
 
 
@@ -316,7 +407,7 @@ DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,  dword,   float,  256,    4)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   half,  ushort,  256,    4)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   byte, uint8_t,  256,    4)
 
-DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2,   half, ushort,  256,    4)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2,   half, ushort,  256,    4)
-
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x2,   half, ushort,  256,    4)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2_smod_4x2,   half, ushort,  256,    4)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x4,   half, ushort,  256,    4)
 

@@ -341,9 +341,9 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = flop_cnt / kernel_time / 1e6;
 
-        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d)\n",
+        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, valid?"y":"n",
-            transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y);
+            transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->smod_x, transpose_kparam->smod_y);
     };
 
     auto test_nhwc2nchw = [&](const transpose_kernel_param_t *transpose_kparam){
@@ -383,9 +383,9 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = flop_cnt / kernel_time / 1e6;
 
-        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d)\n",
+        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, valid?"y":"n",
-            transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y);
+            transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->smod_x, transpose_kparam->smod_y);
     };
 
     auto get_transpose_all_kernel = [&](){
