@@ -696,9 +696,6 @@ batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src, ui
     }
 }
 
-
-
-
 template <typename T>
 inline __device__ void
 batched_transpose_32x64_pack_2x4_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
@@ -777,6 +774,105 @@ batched_transpose_32x64_pack_2x4_smod_2x2<ushort>(ushort * dst, ushort * src, ui
     }
 }
 
+
+template <typename T>
+inline __device__ void
+batched_transpose_32x64_pack_2x4_smod_1x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+}
+
+template <>
+inline __device__ void
+batched_transpose_32x64_pack_2x4_smod_1x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    constexpr auto smem_stride = 17;
+    //__shared__ float smem[64 * smem_stride];
+    __shared__ float4 smem[16 * smem_stride];
+
+    float * p_dst = reinterpret_cast<float*>(dst);
+    ushort * p_src = src;
+
+    uint32_t height_2 = height >> 1;
+
+    uint32_t h_dim = (height + 63) >> 6;
+    uint32_t w_dim = (width + 31) >> 5;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 5) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 6) + (i_src_h << 1);
+
+        __syncthreads();
+        /*
+        * 4x2 -> 2x4 transpose:
+        *        lo hi
+        *        |0|1|      lo |0|2| 
+        *        |2|3|  ->  hi |_|_| 
+        *        |4|5|      lo |1|3| 
+        *        |6|7|      hi |_|_|
+        */
+
+        ushort v_src[8];
+        size_t src_index = static_cast<size_t>(dim_in) * height * width + static_cast<size_t>(g_src_h) * width + static_cast<size_t>(g_src_w);
+        if(g_src_h < height && g_src_w < width)
+        {
+            v_src[0] = p_src[src_index];
+            v_src[2] = p_src[src_index + width];
+        }
+        if(g_src_h < height && (g_src_w + 16) < width)
+        {
+            v_src[1] = p_src[src_index + 16];
+            v_src[3] = p_src[src_index + width + 16];
+        }
+        if((g_src_h + 32) < height && g_src_w < width)
+        {
+            v_src[4] = p_src[src_index + 32 * width];
+            v_src[6] = p_src[src_index + 33 * width];
+        }
+        if((g_src_h + 32) < height && (g_src_w + 16) < width)
+        {
+            v_src[5] = p_src[src_index + 32 * width + 16];
+            v_src[7] = p_src[src_index + 33 * width + 16];
+        }
+
+        float4 v_pack;
+        v_pack_b32_f16_2x2_half_x0_half_x1(v_pack.x, v_pack.z, v_src[0], v_src[1], v_src[2], v_src[3]);
+        v_pack_b32_f16_2x2_half_x0_half_x1(v_pack.y, v_pack.w, v_src[4], v_src[5], v_src[6], v_src[7]);
+
+        smem[i_src_w * smem_stride + i_src_h] = v_pack;
+
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 5) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 5) + i_dst_w;
+
+        size_t dst_index = static_cast<size_t>(dim_in) * width * height_2 + static_cast<size_t>(g_dst_w) * height_2 + static_cast<size_t>(g_dst_h);
+
+        float4 v_dst = smem[i_dst_w * smem_stride + i_dst_h];
+        if(g_dst_h < height_2 && g_dst_w < width){
+            p_dst[dst_index] = v_dst.x;
+        }
+        if((g_dst_h + 16) < height_2 && g_dst_w < width){
+            p_dst[dst_index + 16] = v_dst.y;
+        }
+        if(g_dst_h < height_2 && (g_dst_w + 16) < width){
+            p_dst[dst_index + 16 * height_2] = v_dst.z;
+        }
+        if((g_dst_h + 16) < height_2 && (g_dst_w + 16) < width){
+            p_dst[dst_index + 16 * height_2 + 16] = v_dst.w;
+        }
+    }
+}
 
 template <typename T>
 inline __device__ void
@@ -1000,7 +1096,10 @@ DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x1,   half, ushort,  256,  
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_1x1,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 
 DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2_smod_4x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x4,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_1x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+
 DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_4x4,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
