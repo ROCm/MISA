@@ -115,18 +115,6 @@ v_pack_b32_f16_2x2_half_x0_half_x1(float & y0, float & y1, const ushort & x0_lo,
     y1 = *reinterpret_cast<float*>(&b1);
 }
 
-struct ushort2_t{
-    union
-    {
-        float data;
-        struct{
-            ushort lo;
-            ushort hi;
-        };
-    };
-    __host__ __device__ constexpr ushort2_t() : data{0} {}
-};
-
 template <typename T>
 inline __device__ void
 batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
@@ -319,7 +307,6 @@ batched_transpose_32x32_pack_2x2_smod_1x2<ushort>(ushort * dst, ushort * src, ui
 }
 
 
-
 template <typename T>
 inline __device__ void
 batched_transpose_32x32_pack_2x2_smod_2x1(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
@@ -338,7 +325,7 @@ batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src, ui
     float * p_src = reinterpret_cast<float*>(src);
     ushort * p_dst = dst;
 
-    uint32_t width_2 = width_2 >> 1;
+    uint32_t width_2 = width >> 1;
 
     uint32_t h_dim = (height + 31) >> 5;
     uint32_t w_dim = (width + 31) >> 5;
@@ -387,8 +374,8 @@ batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src, ui
         v_dst[1] = smem[i_dst_w * smem_stride + i_dst_h + 16 * smem_stride];
 
         ushort2 v_dst_buf[2];
-        v_dst_buf[0] = make_ushort2(*reinterpret_cast<ushort*>(&v_dst[0]), *(reinterpret_cast<ushort*>(&v_dst[0]) + 1));
-        v_dst_buf[1] = make_ushort2(*reinterpret_cast<ushort*>(&v_dst[1]), *(reinterpret_cast<ushort*>(&v_dst[1]) + 1));
+        v_dst_buf[0] = *reinterpret_cast<ushort2*>(&v_dst[0]);
+        v_dst_buf[1] = *reinterpret_cast<ushort2*>(&v_dst[1]);
         if(g_dst_h < height && g_dst_w < width)
         {
             p_dst[dst_index] = v_dst_buf[0].x;
