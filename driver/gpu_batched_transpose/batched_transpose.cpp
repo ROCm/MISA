@@ -26,8 +26,8 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
 
-#ifndef GPU_BATCHED_TRANSPOSE_OCCUPANCY
-#define GPU_BATCHED_TRANSPOSE_OCCUPANCY 4
+#ifndef BATCHED_TRANSPOSE_OCCUPANCY
+#define BATCHED_TRANSPOSE_OCCUPANCY 4
 #endif
 
 inline __device__ uint32_t
@@ -115,7 +115,7 @@ v_pack_b32_f16_2x2_half_x0_half_x1(float & y0, float & y1, const ushort & x0_lo,
     y1 = *reinterpret_cast<float*>(&b1);
 }
 
-typedef struct {
+struct ushort2_t{
     union
     {
         float data;
@@ -125,11 +125,11 @@ typedef struct {
         };
     };
     __host__ __device__ constexpr ushort2_t() : data{0} {}
-} ushort2_t;
+};
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     /*
@@ -175,14 +175,14 @@ gpu_batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, u
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -242,14 +242,14 @@ gpu_batched_transpose_32x32_pack_2x2_smod_2x2<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_1x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_1x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_1x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_1x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -322,14 +322,14 @@ gpu_batched_transpose_32x32_pack_2x2_smod_1x2<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_2x1(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_2x1(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -357,17 +357,18 @@ gpu_batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src
         float v_src[2];
         size_t src_index = static_cast<size_t>(dim_in) * height * width_2 + static_cast<size_t>(g_src_h) * width_2 + static_cast<size_t>(g_src_w);
         __syncthreads();
+
         if(g_src_h < height && g_src_w < width_2)
         {
             v_src[0] = p_src[src_index];
         }
         if((g_src_h + 16) < height && g_src_w < width_2)
         {
-            v_src[1] = p_src[src_index + width_2];
+            v_src[1] = p_src[src_index + 16 * width_2];
         }
 
         float v_pack[2];
-        v_pack_b32_f16_2x2((v_pack[0], v_pack[1], v_src[0], v_src[1]);
+        v_pack_b32_f16_2x2(v_pack[0], v_pack[1], v_src[0], v_src[1]);
 
         smem[i_src_w * smem_stride + i_src_h] = v_pack[0];
         smem[i_src_w * smem_stride + i_src_h + 16 * smem_stride] = v_pack[1];
@@ -377,37 +378,41 @@ gpu_batched_transpose_32x32_pack_2x2_smod_2x1<ushort>(ushort * dst, ushort * src
         uint32_t i_dst_h = threadIdx.x & 15;
         uint32_t i_dst_w = threadIdx.x >> 4;
         uint32_t g_dst_h = (dim_ih << 5) + i_dst_h;
-        uint32_t g_dst_w = (dim_iw << 5) + i_dst_w;
+        uint32_t g_dst_w = (dim_iw << 5) + (i_dst_w << 1);
 
         size_t dst_index = static_cast<size_t>(dim_in) * width * height + static_cast<size_t>(g_dst_w) * height + static_cast<size_t>(g_dst_h);
 
-        ushort2_t v_dst[2];
-        v_dst[0].data = smem[i_dst_w * smem_stride + i_dst_h];
-        v_dst[1].data = smem[i_dst_w * smem_stride + i_dst_h + 16 * smem_stride];
+        float v_dst[2];
+        v_dst[0] = smem[i_dst_w * smem_stride + i_dst_h];
+        v_dst[1] = smem[i_dst_w * smem_stride + i_dst_h + 16 * smem_stride];
+
+        ushort2 v_dst_buf[2];
+        v_dst_buf[0] = make_ushort2(*reinterpret_cast<ushort*>(&v_dst[0]), *(reinterpret_cast<ushort*>(&v_dst[0]) + 1));
+        v_dst_buf[1] = make_ushort2(*reinterpret_cast<ushort*>(&v_dst[1]), *(reinterpret_cast<ushort*>(&v_dst[1]) + 1));
         if(g_dst_h < height && g_dst_w < width)
         {
-            p_dst[dst_index] = v_dst[0].lo;
-            p_dst[dst_index + height] = v_dst[1].lo;
+            p_dst[dst_index] = v_dst_buf[0].x;
+            p_dst[dst_index + height] = v_dst_buf[1].x;
         }
 
         if((g_dst_h + 16) < height && g_dst_w < width)
         {
-            p_dst[dst_index + 16] = v_dst[0].hi;
-            p_dst[dst_index + height + 16] = v_dst[1].hi;
+            p_dst[dst_index + 16] = v_dst_buf[0].y;
+            p_dst[dst_index + height + 16] = v_dst_buf[1].y;
         }
     }
 }
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_64x32_pack_4x2_smod_4x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x32_pack_4x2_smod_4x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_64x32_pack_4x2_smod_4x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x32_pack_4x2_smod_4x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -497,14 +502,14 @@ gpu_batched_transpose_64x32_pack_4x2_smod_4x2<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x64_pack_2x4_smod_2x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x64_pack_2x4_smod_2x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -607,14 +612,14 @@ gpu_batched_transpose_32x64_pack_2x4_smod_2x4<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_32x64_pack_2x4_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x64_pack_2x4_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_32x64_pack_2x4_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_32x64_pack_2x4_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -686,14 +691,14 @@ gpu_batched_transpose_32x64_pack_2x4_smod_2x2<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_64x64_pack_4x4_smod_4x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x64_pack_4x4_smod_4x4(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_64x64_pack_4x4_smod_4x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x64_pack_4x4_smod_4x4<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -775,14 +780,14 @@ gpu_batched_transpose_64x64_pack_4x4_smod_4x4<ushort>(ushort * dst, ushort * src
 
 template <typename T>
 inline __device__ void
-gpu_batched_transpose_64x64_pack_4x4_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x64_pack_4x4_smod_2x2(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
 }
 
 template <>
 inline __device__ void
-gpu_batched_transpose_64x64_pack_4x4_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+batched_transpose_64x64_pack_4x4_smod_2x2<ushort>(ushort * dst, ushort * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
     uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
 {
     constexpr auto smem_stride = 17;
@@ -886,24 +891,25 @@ gpu_batched_transpose_64x64_pack_4x4_smod_2x2<ushort>(ushort * dst, ushort * src
 
 #define DEFINE_BATCHED_TRANSPOSE_KERNEL(tile_trait, accept_data_type, cast_data_type, lb_threads_per_block, lb_blocks_per_cu)   \
     extern "C" __global__ void __launch_bounds__(lb_threads_per_block, lb_blocks_per_cu)                    \
-    gpu_batched_transpose_ ## tile_trait ## _ ## accept_data_type(void * dst, void * src,                   \
+    batched_transpose_ ## tile_trait ## _ ## accept_data_type(void * dst, void * src,                   \
                 uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,                   \
                 uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)                     \
     {                                                                                                       \
-        gpu_batched_transpose_ ## tile_trait<cast_data_type>(                                               \
+        batched_transpose_ ## tile_trait<cast_data_type>(                                               \
                 reinterpret_cast<cast_data_type*>(dst),                                                     \
                 reinterpret_cast<cast_data_type*>(src),                                                     \
                 height, width, dim_stride, dim_total, magic_h, shift_h, magic_w, shift_w);                  \
     }
 
-DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,  dword,   float,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   half,  ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   byte, uint8_t,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,  dword,   float,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   half,  ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   byte, uint8_t,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 
-DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x2,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_1x2,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2_smod_4x2,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x4,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x2,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_4x4,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_2x2,   half, ushort,  256,    GPU_BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_1x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_smod_2x1,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(64x32_pack_4x2_smod_4x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x4,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x64_pack_2x4_smod_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_4x4,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(64x64_pack_4x4_smod_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)

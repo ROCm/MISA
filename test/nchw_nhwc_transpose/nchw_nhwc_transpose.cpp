@@ -221,7 +221,7 @@ void cpu_nhwc2nchw(T * dst, T * src, uint64_t N, uint64_t C, uint64_t H, uint64_
 
 #define WARMUP 3
 #define REPEAT 7
-#define     TRANSPOSE_HSACO    "nchw_nhwc_transpose.hsaco"
+#define     TRANSPOSE_HSACO    "batched_transpose.hsaco"
 
 int main(int argc, char ** argv){
     if(argc < 5){
