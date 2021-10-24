@@ -56,6 +56,9 @@ static struct {
     hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_ediv_1x1_half;
 
     hipFunction_t   kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half;
+    hipFunction_t   kernel_batched_transpose_64x32_pack_4x2_ediv_2x2_half;
+    hipFunction_t   kernel_batched_transpose_64x32_pack_4x2_ediv_2x1_half;
+
     hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_2x4_half;
     hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_2x2_half;
     hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_1x2_half;
@@ -81,6 +84,9 @@ static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_1x1_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_ediv_1x1_half"));
 
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x32_pack_4x2_ediv_4x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x32_pack_4x2_ediv_2x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_2x1_half,   the_transpose_gpu_handle.module, "batched_transpose_64x32_pack_4x2_ediv_2x1_half"));
+
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x4_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_2x4_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_2x2_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_1x2_half"));
@@ -155,7 +161,11 @@ struct transpose_kernel_get_all_param_t<2>{
             {32, 32, 2, 2, 1, 2},
             {32, 32, 2, 2, 2, 1},
             {32, 32, 2, 2, 1, 1},
+
             {64, 32, 4, 2, 4, 2},
+            {64, 32, 4, 2, 2, 2},
+            {64, 32, 4, 2, 2, 1},
+
             {32, 64, 2, 4, 2, 4},
             {32, 64, 2, 4, 2, 2},
             {32, 64, 2, 4, 1, 2},
@@ -219,6 +229,12 @@ struct transpose_kernel_select_t<2>{
             if(kparam->pack_x == 4 && kparam->pack_y == 2){
                 if(kparam->ediv_x == 4 && kparam->ediv_y == 2){
                     return the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half;
+                }
+                else if(kparam->ediv_x == 2 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_2x2_half;
+                }
+                else if(kparam->ediv_x == 2 && kparam->ediv_y == 1){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_2x1_half;
                 }
             }
         }

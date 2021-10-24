@@ -306,13 +306,13 @@ int main(int argc, char ** argv){
 
     auto test_nchw2nhwc = [&](const transpose_kernel_param_t *transpose_kparam){
         // nchw2nhwc
-        float kernel_time;
-        hipEvent_t start, stop;
-        bool valid;
+        float kernel_time = 0;
+        bool valid = false;
 
         bool is_kernel_valid = gpu_nchw2nhwc_is_kernel_valid(N, C, H, W, transpose_kparam);
 
         if(is_kernel_valid){
+            hipEvent_t start, stop;
             HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
 
             for(int i=0; i< warmup; i++){
@@ -346,21 +346,23 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->ediv_x, transpose_kparam->ediv_y);
         fflush(stdout);
+
+        return valid && is_kernel_valid ? kernel_time : FLT_MAX;
     };
 
     auto test_nhwc2nchw = [&](const transpose_kernel_param_t *transpose_kparam){
         // nhwc2nchw
-        float kernel_time;
-        hipEvent_t start, stop;
-        bool valid;
+        float kernel_time = 0;
+        bool valid = false;
 
         bool is_kernel_valid = gpu_nhwc2nchw_is_kernel_valid(N, C, H, W, transpose_kparam);
 
         if(is_kernel_valid){
+            hipEvent_t start, stop;
             HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
 
             for(int i=0; i< warmup; i++){
@@ -394,10 +396,12 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->ediv_x, transpose_kparam->ediv_y);
         fflush(stdout);
+
+        return valid && is_kernel_valid ? kernel_time : FLT_MAX;
     };
 
     auto get_transpose_all_kernel = [&](){
@@ -411,15 +415,33 @@ int main(int argc, char ** argv){
             assert(false);
     };
 
-    for(auto kparam : get_transpose_all_kernel()){
-        test_nchw2nhwc(&kparam);
-    }
 
+    float min_nchw2nhwc_time = FLT_MAX;
+    transpose_kernel_param_t min_nchw2nhwc_kparam;
+    for(auto kparam : get_transpose_all_kernel()){
+        float current_time = test_nchw2nhwc(&kparam);
+        if(current_time < min_nchw2nhwc_time){
+            min_nchw2nhwc_time = current_time;
+            min_nchw2nhwc_kparam = kparam;
+        }
+    }
+    printf("                    -> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_nchw2nhwc_time,
+        min_nchw2nhwc_kparam.tile_x, min_nchw2nhwc_kparam.tile_y, min_nchw2nhwc_kparam.pack_x, min_nchw2nhwc_kparam.pack_y, min_nchw2nhwc_kparam.ediv_x, min_nchw2nhwc_kparam.ediv_y);
+    fflush(stdout);
     printf("-------------------------\n");
 
+    float min_nhwc2nchw_time = FLT_MAX;
+    transpose_kernel_param_t min_nhwc2nchw_kparam;
     for(auto kparam : get_transpose_all_kernel()){
-        test_nhwc2nchw(&kparam);
+        float current_time = test_nhwc2nchw(&kparam);
+        if(current_time < min_nhwc2nchw_time){
+            min_nhwc2nchw_time = current_time;
+            min_nhwc2nchw_kparam = kparam;
+        }
     }
+    printf("                    -> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_nhwc2nchw_time,
+        min_nhwc2nchw_kparam.tile_x, min_nhwc2nchw_kparam.tile_y, min_nhwc2nchw_kparam.pack_x, min_nhwc2nchw_kparam.pack_y, min_nhwc2nchw_kparam.ediv_x, min_nhwc2nchw_kparam.ediv_y);
+    fflush(stdout);
 
     free(src_cpu);
     free(dst_cpu);
