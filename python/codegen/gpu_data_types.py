@@ -9,6 +9,7 @@ class reg_type(Enum):
 
 class const():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) is int):
             if(val <= 64 and val >= -16):
                 self.val = val
@@ -27,6 +28,7 @@ class const():
 
 class literal():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) in [int, float]):
             self.val = val
         else:
@@ -37,6 +39,7 @@ class literal():
 
 class imm16_t():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) is int and (val <= 65535) and (val >= -32768)):
             self.val = val
         else:
@@ -47,6 +50,7 @@ class imm16_t():
 
 class simm32_t():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) is int and (val < 1**32) and (val >= -(1**32))):
             self.val = val
         else:
@@ -57,6 +61,7 @@ class simm32_t():
 
 class simm21_t():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) is int and (val < 1**20) and (val >= -(1**20) )):
             self.val = val
         else:
@@ -67,6 +72,7 @@ class simm21_t():
 
 class uimm20_t():
     def __init__(self, val) -> None:
+        self.label = val
         if(type(val) is int and (val < 1**20) and (val >= 0)):
             self.val = val
         else:
@@ -77,6 +83,7 @@ class uimm20_t():
 
 class label_t():
     def __init__(self, val:str) -> None:
+        self.label = val
         if(type(val) is str):
             self.val = val
         else:

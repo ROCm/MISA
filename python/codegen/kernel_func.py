@@ -22,6 +22,7 @@ class kernel_func(Generic[T]):
         self.agpr_f = None
 
         self.ic = instructions_caller_base
+        self.PIc = gpu_instructions_caller_base(instructions_caller_base.il)
         if(func_name == None):
             self.func_name = self.__class__.__name__
         else:
@@ -44,12 +45,12 @@ class kernel_func(Generic[T]):
         return cls(other.ic, func_name, sgpr_a = sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
 
     def _func_begin(self):
-        self.ic.kernel_func_begin(self)
-        self.ic_begin_pos = len(self.ic.il)
+        self.PIc.kernel_func_begin(self)
+        self.ic_begin_pos = len(self.PIc.il)
 
     def _func_end(self):
-        ic_end_pos = len(self.ic.il)
-        il = self.ic.il
+        ic_end_pos = len(self.PIc.il)
+        il = self.PIc.il
         not_dealocated_list = []
 
         for i in range(self.ic_begin_pos, ic_end_pos, 1):
@@ -76,11 +77,11 @@ class kernel_func(Generic[T]):
         for i in reversed(not_dealocated_list):
             assert(type(i) is reg_block or block_of_reg_blocks)
             if(i.reg_t is reg_type.sgpr):
-                self.ic.reg_dealloc(i,sgpr_dealloc)
+                self.PIc.reg_dealloc(i,sgpr_dealloc)
             else:
-                self.ic.reg_dealloc(i,vgpr_dealloc)
+                self.PIc.reg_dealloc(i,vgpr_dealloc)
 
-        self.ic.kernel_func_end(self)
+        self.PIc.kernel_func_end(self)
 
     def wrap_call(self, *args, **kwargs):
         self._func_begin()

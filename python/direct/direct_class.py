@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from python.codegen.gpu_data_types import regVar
+from python.codegen.gpu_data_types import *
 from python.codegen.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, vgpr_file_t
 from python.codegen.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
 from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
@@ -41,9 +41,9 @@ class conv_direct_navi(kernel_constructor):
         return 0
 
     def _emit_kernel_body(self):
-        k_args = self.kargs
+
         @launcher_kernel
-        def launch_k(self:kernel_launcher[gfx10_instructions_caller]):
+        def launch_k(self:kernel_launcher[gfx10_instructions_caller], karg:conv_direct_navi.kernel_karg_t):
             class _sgpr(sgpr_file_t):
                 def __init__(self, sgpr_f):
                     super().__init__(sgpr_f.ic, sgpr_f._allocator)
@@ -69,12 +69,11 @@ class conv_direct_navi(kernel_constructor):
                     add = self.add 
                     self.tid = add('tid', 1)
                     self.in_off = add('in_off', 1)
-                    self.in_off = add('in_off', 1)
+                    
             
             s = _sgpr(self.sgpr_f)
             v = _vgpr(self.vgpr_f)
             
-            karg = k_args
             ic = self.ic
 
             input_buffer_size = filter_buffer_size = output_buffer_size = literal(101)
@@ -96,6 +95,8 @@ class conv_direct_navi(kernel_constructor):
             ic.s_load_dwordx2(s.in_buff_ptr[0:1], s.karg_ptr[0:1], karg.in_ptr+0)
             ic.s_load_dwordx2(s.out_buff_ptr[0:1], s.karg_ptr[0:1], karg.out_ptr+0)
             ic.s_load_dwordx2(s.wei_buff_ptr[0:1], s.karg_ptr[0:1], karg.wei_ptr+0)
+            ic.s_load_dwordx2(v.in_off[0:1], s.wei_buff_ptr[0:1], karg.wei_ptr+0)
+            ic.v_add3_u32(v.in_off[:],v.in_off[:],v.in_off[:],v.in_off[:])
 
             ic.s_load_dwordx4(s.wei_buff_ptr[0:3], s.karg_ptr[0:1], karg.H+0)
             ic.s_load_dwordx2(s.Y[0:1], s.karg_ptr[0:1], karg.Y+0)
@@ -130,12 +131,12 @@ class conv_direct_navi(kernel_constructor):
             func_x1(self)
             H33O = s.add('H33O', 4, 2)
 
-        launch_k(self.k_config)
+        launch_k(self.k_config, self.kargs)
 
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         super().__init__(mc_asm_printer, **kwargs)
-    class custom_caller(gpu_instructions_caller_base, gfx10_instructions_caller):
+    class custom_caller(gfx10_instructions_caller):
         def __init__(self, insturction_list) -> None:
             super().__init__(insturction_list)
 

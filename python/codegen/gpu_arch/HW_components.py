@@ -1,4 +1,5 @@
 from enum import Enum
+from python.codegen.generator_instructions import reg_allocator_caller
 from python.codegen.gpu_arch.allocator import base_allocator, stack_allocator
 from typing import Dict, List
 from python.codegen.amdgpu import amdgpu_sgpr_limit
@@ -19,7 +20,7 @@ class gpr_off_sequencer_t(object):
     def get_last_pos(self):
         return self._last_pos
 
-from python.codegen.gpu_instruct import gpu_instructions_caller_base
+from python.codegen.gpu_instruct import inst_caller_base
 from python.codegen.gpu_arch.allocator import stack_allocator
 
 from typing import Type
@@ -27,12 +28,12 @@ from python.codegen.gpu_arch.allocator import base_allocator
 
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks']
-    def __init__(self, ic:gpu_instructions_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None):
+    def __init__(self, ic:inst_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None):
         #mc_base_t.__init__(self, mc)
         self._allocator = gpr_allocator
         self.reg_t = reg_t
         self.define_on_creation = False
-        self.ic = ic
+        self.ic = reg_allocator_caller(ic.il)
         self.active_blocks:List[reg_block] = []
     
     @classmethod

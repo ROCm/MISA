@@ -334,12 +334,14 @@ class amdgpu_kernel_code_t(object):
         self.enable_sgpr_kernarg_segment_ptr        = kc('enable_sgpr_kernarg_segment_ptr', 1)
         self.enable_sgpr_dispatch_id                = kc('enable_sgpr_dispatch_id', 0)
         # other sgpr related to be implemented
-        self.user_sgpr_count                        = self.cal_user_sgpr_count()
+
 
         self.enable_sgpr_workgroup_id_x             = kc('enable_sgpr_workgroup_id_x', 1)
         self.enable_sgpr_workgroup_id_y             = kc('enable_sgpr_workgroup_id_y', 0)
         self.enable_sgpr_workgroup_id_z             = kc('enable_sgpr_workgroup_id_z', 0)
         self.enable_vgpr_workitem_id                = kc('enable_vgpr_workitem_id', 0)
+        
+        self.user_sgpr_count                        = self.cal_user_sgpr_count()
 
         self.float_mode                             = kc('float_mode', 192)
 
