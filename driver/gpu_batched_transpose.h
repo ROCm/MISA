@@ -50,18 +50,21 @@ static struct {
     hipFunction_t   kernel_batched_transpose_16x16_half;
     hipFunction_t   kernel_batched_transpose_16x16_byte;
 
-    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_smod_2x2_half;
-    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_smod_1x2_half;
-    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_smod_2x1_half;
-    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_smod_1x1_half;
+    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_ediv_2x2_half;
+    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_ediv_1x2_half;
+    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_ediv_2x1_half;
+    hipFunction_t   kernel_batched_transpose_32x32_pack_2x2_ediv_1x1_half;
 
-    hipFunction_t   kernel_batched_transpose_64x32_pack_4x2_smod_4x2_half;
-    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_smod_2x4_half;
-    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_smod_2x2_half;
-    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_smod_1x2_half;
+    hipFunction_t   kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half;
+    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_2x4_half;
+    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_2x2_half;
+    hipFunction_t   kernel_batched_transpose_32x64_pack_2x4_ediv_1x2_half;
 
-    hipFunction_t   kernel_batched_transpose_64x64_pack_4x4_smod_4x4_half;
-    hipFunction_t   kernel_batched_transpose_64x64_pack_4x4_smod_2x2_half;
+    hipFunction_t   kernel_batched_transpose_16x64_pack_1x4_ediv_1x2_half;
+    hipFunction_t   kernel_batched_transpose_64x16_pack_4x1_ediv_2x1_half;
+
+    hipFunction_t   kernel_batched_transpose_64x64_pack_4x4_ediv_4x4_half;
+    hipFunction_t   kernel_batched_transpose_64x64_pack_4x4_ediv_2x2_half;
 } the_transpose_gpu_handle;
 
 static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
@@ -72,18 +75,21 @@ static inline void gpu_nhwc_nchw_transpose_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_16x16_half,   the_transpose_gpu_handle.module, "batched_transpose_16x16_half"));
         HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_16x16_byte,   the_transpose_gpu_handle.module, "batched_transpose_16x16_byte"));
 
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_smod_2x2_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_smod_1x2_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_2x1_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_smod_2x1_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_1x1_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_smod_1x1_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_ediv_2x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_ediv_1x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_2x1_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_ediv_2x1_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_1x1_half,   the_transpose_gpu_handle.module, "batched_transpose_32x32_pack_2x2_ediv_1x1_half"));
 
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_smod_4x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x32_pack_4x2_smod_4x2_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_2x4_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_smod_2x4_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_smod_2x2_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_smod_1x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x32_pack_4x2_ediv_4x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x4_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_2x4_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_2x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_32x64_pack_2x4_ediv_1x2_half"));
 
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_smod_4x4_half,   the_transpose_gpu_handle.module, "batched_transpose_64x64_pack_4x4_smod_4x4_half"));
-        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_smod_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x64_pack_4x4_smod_2x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_16x64_pack_1x4_ediv_1x2_half,   the_transpose_gpu_handle.module, "batched_transpose_16x64_pack_1x4_ediv_1x2_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x16_pack_4x1_ediv_2x1_half,   the_transpose_gpu_handle.module, "batched_transpose_64x16_pack_4x1_ediv_2x1_half"));
+
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_ediv_4x4_half,   the_transpose_gpu_handle.module, "batched_transpose_64x64_pack_4x4_ediv_4x4_half"));
+        HIP_CALL(hipModuleGetFunction(&the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_ediv_2x2_half,   the_transpose_gpu_handle.module, "batched_transpose_64x64_pack_4x4_ediv_2x2_half"));
         inited = 1;
     }
 }
@@ -122,8 +128,8 @@ typedef struct{
     int tile_y;
     int pack_x;
     int pack_y;
-    int smod_x;
-    int smod_y;
+    int ediv_x;
+    int ediv_y;
 }transpose_kernel_param_t;
 
 template<size_t type_size>
@@ -153,6 +159,10 @@ struct transpose_kernel_get_all_param_t<2>{
             {32, 64, 2, 4, 2, 4},
             {32, 64, 2, 4, 2, 2},
             {32, 64, 2, 4, 1, 2},
+
+            {16, 64, 1, 4, 1, 2},
+            {64, 16, 4, 1, 2, 1},
+
             {64, 64, 4, 4, 4, 4},
             {64, 64, 4, 4, 2, 2},
         };
@@ -187,17 +197,17 @@ struct transpose_kernel_select_t<2>{
         }
         else if(kparam->tile_x == 32 && kparam->tile_y == 32){
             if(kparam->pack_x == 2 && kparam->pack_y == 2){
-                if(kparam->smod_x == 2 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_2x2_half;
+                if(kparam->ediv_x == 2 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_2x2_half;
                 }
-                else if(kparam->smod_x == 1 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_1x2_half;
+                else if(kparam->ediv_x == 1 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_1x2_half;
                 }
-                else if(kparam->smod_x == 2 && kparam->smod_y == 1){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_2x1_half;
+                else if(kparam->ediv_x == 2 && kparam->ediv_y == 1){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_2x1_half;
                 }
-                else if(kparam->smod_x == 1 && kparam->smod_y == 1){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_smod_1x1_half;
+                else if(kparam->ediv_x == 1 && kparam->ediv_y == 1){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x32_pack_2x2_ediv_1x1_half;
                 }
             }
         }
@@ -207,31 +217,45 @@ struct transpose_kernel_select_t<2>{
         // }
         else if(kparam->tile_x == 64 && kparam->tile_y == 32){
             if(kparam->pack_x == 4 && kparam->pack_y == 2){
-                if(kparam->smod_x == 4 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_smod_4x2_half;
+                if(kparam->ediv_x == 4 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x32_pack_4x2_ediv_4x2_half;
                 }
             }
         }
         else if(kparam->tile_x == 32 && kparam->tile_y == 64){
             if(kparam->pack_x == 2 && kparam->pack_y == 4){
-                if(kparam->smod_x == 2 && kparam->smod_y == 4){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_2x4_half;
+                if(kparam->ediv_x == 2 && kparam->ediv_y == 4){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x4_half;
                 }
-                else if(kparam->smod_x == 2 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_2x2_half;
+                else if(kparam->ediv_x == 2 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_2x2_half;
                 }
-                else if(kparam->smod_x == 1 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_smod_1x2_half;
+                else if(kparam->ediv_x == 1 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_32x64_pack_2x4_ediv_1x2_half;
+                }
+            }
+        }
+        else if(kparam->tile_x == 16 && kparam->tile_y == 64){
+            if(kparam->pack_x == 1 && kparam->pack_y == 4){
+                if(kparam->ediv_x == 1 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_16x64_pack_1x4_ediv_1x2_half;
+                }
+            }
+        }
+        else if(kparam->tile_x == 64 && kparam->tile_y == 16){
+            if(kparam->pack_x == 4 && kparam->pack_y == 1){
+                if(kparam->ediv_x == 2 && kparam->ediv_y == 1){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x16_pack_4x1_ediv_2x1_half;
                 }
             }
         }
         else if(kparam->tile_x == 64 && kparam->tile_y == 64){
             if(kparam->pack_x == 4 && kparam->pack_y == 4){
-                if(kparam->smod_x == 4 && kparam->smod_y == 4){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_smod_4x4_half;
+                if(kparam->ediv_x == 4 && kparam->ediv_y == 4){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_ediv_4x4_half;
                 }
-                else if(kparam->smod_x == 2 && kparam->smod_y == 2){
-                    return the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_smod_2x2_half;
+                else if(kparam->ediv_x == 2 && kparam->ediv_y == 2){
+                    return the_transpose_gpu_handle.kernel_batched_transpose_64x64_pack_4x4_ediv_2x2_half;
                 }
             }
         }
@@ -247,7 +271,7 @@ struct transpose_kernel_select_t<1>{
 bool transpose_kernel_is_valid(uint32_t batch, uint32_t height, uint32_t width, const transpose_kernel_param_t * kparam)
 {
     (void)batch;
-    return width % kparam->smod_x == 0 && height % kparam->smod_y == 0;
+    return width % kparam->ediv_x == 0 && height % kparam->ediv_y == 0;
 }
 
 template<typename T>
