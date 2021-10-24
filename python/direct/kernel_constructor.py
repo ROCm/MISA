@@ -28,6 +28,7 @@ class kernel_constructor(mc_base_t, ABC):
     def generate_kernel_body(self):
         self._emit_kernel_body()
         self.HW.ABI_HW_setregs()
+        self.instr_ctrl.plot_the_graph()
         self.instr_ctrl.execute_all()
         #some optimize
 
