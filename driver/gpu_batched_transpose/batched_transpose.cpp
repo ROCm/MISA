@@ -115,6 +115,54 @@ v_pack_b32_f16_2x2_half_x0_half_x1(float & y0, float & y1, const ushort & x0_lo,
     y1 = *reinterpret_cast<float*>(&b1);
 }
 
+template<typename T, int N>
+struct mapped_vector_type{};
+
+template<>
+struct mapped_vector_type<float, 4>{
+    using type = float4;
+};
+
+template<>
+struct mapped_vector_type<float, 2>{
+    using type = float2;
+};
+
+template<>
+struct mapped_vector_type<float, 1>{
+    using type = float;
+};
+
+template<>
+struct mapped_vector_type<ushort, 4>{
+    using type = ushort4;
+};
+
+template<>
+struct mapped_vector_type<ushort, 2>{
+    using type = ushort2;
+};
+
+template<>
+struct mapped_vector_type<ushort, 1>{
+    using type = ushort;
+};
+
+template<>
+struct mapped_vector_type<uchar, 4>{
+    using type = uchar4;
+};
+
+template<>
+struct mapped_vector_type<uchar, 2>{
+    using type = uchar2;
+};
+
+template<>
+struct mapped_vector_type<uchar, 1>{
+    using type = uchar;
+};
+
 template <typename T>
 inline __device__ void
 batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
@@ -157,6 +205,192 @@ batched_transpose_16x16(T * dst, T * src, uint32_t height, uint32_t width, uint3
         if(g_dst_h < height && g_dst_w < width){
             size_t dst_index = static_cast<size_t>(dim_in) * width * height + static_cast<size_t>(g_dst_w) * height + static_cast<size_t>(g_dst_h);
             dst[dst_index] = smem[i_dst_h * smem_stride + i_dst_w];
+        }
+    }
+}
+
+
+template <typename T>
+inline __device__ void
+batched_transpose_32x16(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    /*
+    * assume src is batch * height * width, dst is batch * width * height
+    */
+    constexpr auto element_byte = sizeof(T);
+    constexpr auto padding_element = 4 / element_byte;
+    constexpr auto smem_stride = 16 + padding_element;
+    __shared__ T smem[32 * smem_stride];
+
+    uint32_t h_dim = (height + 15) >> 4;
+    uint32_t w_dim = (width + 31) >> 5;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 5) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 4) + i_src_h;
+
+        __syncthreads();
+        size_t src_index = static_cast<size_t>(dim_in) * height * width + static_cast<size_t>(g_src_h) * width + static_cast<size_t>(g_src_w);
+        T v_src[2];
+        if(g_src_h < height && g_src_w < width){
+            v_src[0] =  src[src_index];
+        }
+        if(g_src_h < height && (g_src_w + 16) < width){
+            v_src[1] =  src[src_index + 16];
+        }
+        smem[i_src_h * smem_stride + i_src_w] = v_src[0];
+        smem[i_src_h * smem_stride + i_src_w + 16 * smem_stride] = v_src[1];
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 4) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 5) + i_dst_w;
+
+        size_t dst_index = static_cast<size_t>(dim_in) * width * height + static_cast<size_t>(g_dst_w) * height + static_cast<size_t>(g_dst_h);
+        T v_dst[2];
+        v_dst[0] = smem[i_dst_h * smem_stride + i_dst_w];
+        v_dst[1] = smem[i_dst_h * smem_stride + i_dst_w + 16 * smem_stride];
+
+        if(g_dst_h < height && g_dst_w < width){
+            dst[dst_index] = v_dst[0];
+        }
+        if(g_dst_h < height && (g_dst_w + 16) < width){
+            dst[dst_index + 16 * height] = v_dst[1];
+        }
+    }
+}
+
+template <typename T>
+inline __device__ void
+batched_transpose_16x32(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    /*
+    * assume src is batch * height * width, dst is batch * width * height
+    */
+    constexpr auto element_byte = sizeof(T);
+    constexpr auto padding_element = 4 / element_byte;
+    constexpr auto smem_stride = 16 + padding_element;
+    __shared__ T smem[32 * smem_stride];
+
+    uint32_t h_dim = (height + 31) >> 5;
+    uint32_t w_dim = (width + 15) >> 4;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 4) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 5) + i_src_h;
+
+        __syncthreads();
+        size_t src_index = static_cast<size_t>(dim_in) * height * width + static_cast<size_t>(g_src_h) * width + static_cast<size_t>(g_src_w);
+        T v_src[2];
+        if(g_src_h < height && g_src_w < width){
+            v_src[0] =  src[src_index];
+        }
+        if((g_src_h + 16) < height && g_src_w < width){
+            v_src[1] =  src[src_index + 16 * width];
+        }
+        smem[i_src_h * smem_stride + i_src_w] = v_src[0];
+        smem[i_src_h * smem_stride + i_src_w + 16 * smem_stride] = v_src[1];
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 5) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 4) + i_dst_w;
+
+        size_t dst_index = static_cast<size_t>(dim_in) * width * height + static_cast<size_t>(g_dst_w) * height + static_cast<size_t>(g_dst_h);
+        T v_dst[2];
+        v_dst[0] = smem[i_dst_h * smem_stride + i_dst_w];
+        v_dst[1] = smem[i_dst_h * smem_stride + i_dst_w + 16 * smem_stride];
+
+        if(g_dst_h < height && g_dst_w < width){
+            dst[dst_index] = v_dst[0];
+        }
+        if((g_dst_h + 16) < height && g_dst_w < width){
+            dst[dst_index + 16] = v_dst[1];
+        }
+    }
+}
+
+template <typename T>
+inline __device__ void
+batched_transpose_32x32(T * dst, T * src, uint32_t height, uint32_t width, uint32_t dim_stride, uint32_t dim_total,
+    uint32_t magic_h, uint32_t shift_h, uint32_t magic_w, uint32_t shift_w)
+{
+    /*
+    * assume src is batch * height * width, dst is batch * width * height
+    */
+    constexpr auto smem_stride = 17;
+    using vec_t = typename mapped_vector_type<T, 4>::type;
+    __shared__ vec_t smem[16 * smem_stride];
+
+    uint32_t h_dim = (height + 31) >> 5;
+    uint32_t w_dim = (width + 31) >> 5;
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride){
+        uint32_t dim_ih_tmp = magic_div_u32(dim_id, magic_w, shift_w);
+        uint32_t dim_iw = dim_id - dim_ih_tmp * w_dim;
+        uint32_t dim_in = magic_div_u32(dim_ih_tmp, magic_h, shift_h);
+        uint32_t dim_ih = dim_ih_tmp - dim_in * h_dim;
+
+        uint32_t i_src_w = threadIdx.x & 15;
+        uint32_t i_src_h = threadIdx.x >> 4;
+        uint32_t g_src_w = (dim_iw << 5) + i_src_w;
+        uint32_t g_src_h = (dim_ih << 5) + i_src_h;
+
+        __syncthreads();
+        size_t src_index = static_cast<size_t>(dim_in) * height * width + static_cast<size_t>(g_src_h) * width + static_cast<size_t>(g_src_w);
+        vec_t v_src;
+        if(g_src_h < height && g_src_w < width){
+            v_src.x =  src[src_index];
+        }
+        if(g_src_h < height && (g_src_w + 16) < width){
+            v_src.z =  src[src_index + 16];
+        }
+        if((g_src_h + 16) < height && g_src_w < width){
+            v_src.y =  src[src_index + 16 * width];
+        }
+        if((g_src_h + 16) < height && (g_src_w + 16) < width){
+            v_src.w =  src[src_index + 16 * width + 16];
+        }
+        smem[i_src_h * smem_stride + i_src_w] = v_src;
+        __syncthreads();
+
+        uint32_t i_dst_h = threadIdx.x & 15;
+        uint32_t i_dst_w = threadIdx.x >> 4;
+        uint32_t g_dst_h = (dim_ih << 5) + i_dst_h;
+        uint32_t g_dst_w = (dim_iw << 5) + i_dst_w;
+
+        size_t dst_index = static_cast<size_t>(dim_in) * width * height + static_cast<size_t>(g_dst_w) * height + static_cast<size_t>(g_dst_h);
+        vec_t v_dst = smem[i_dst_h * smem_stride + i_dst_w];
+
+        if(g_dst_h < height && g_dst_w < width){
+            dst[dst_index] = v_dst.x;
+        }
+        if((g_dst_h + 16) < height && g_dst_w < width){
+            dst[dst_index + 16] = v_dst.y;
+        }
+        if(g_dst_h < height && (g_dst_w + 16) < width){
+            dst[dst_index + 16 * height] = v_dst.z;
+        }
+        if((g_dst_h + 16) < height && (g_dst_w + 16) < width){
+            dst[dst_index + 16 * height + 16] = v_dst.w;
         }
     }
 }
@@ -1444,7 +1678,19 @@ batched_transpose_64x64_pack_4x4_ediv_2x2<ushort>(ushort * dst, ushort * src, ui
 
 DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,  dword,   float,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   half,  ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
-DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   byte, uint8_t,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x16,   byte,   uchar,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x16,  dword,   float,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x16,   half,  ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x16,   byte,   uchar,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x32,  dword,   float,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x32,   half,  ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(16x32,   byte,   uchar,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32,  dword,   float,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32,   half,  ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32,   byte,   uchar,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_ediv_2x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
 DEFINE_BATCHED_TRANSPOSE_KERNEL(32x32_pack_2x2_ediv_1x2,   half, ushort,  256,    BATCHED_TRANSPOSE_OCCUPANCY)
