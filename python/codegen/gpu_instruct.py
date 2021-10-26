@@ -49,7 +49,7 @@ class inst_caller_base(ABC):
         st = inspect.stack()
         return inst
 
-from python.codegen.generator_instructions import flow_control_caller, reg_allocator_caller
+from python.codegen.generator_instructions import flow_control_base, flow_control_caller, reg_allocator_base, reg_allocator_caller
 class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller):
     def __init__(self, insturction_list) -> None:
         super().__init__(insturction_list)
@@ -85,7 +85,10 @@ class instruction_graph():
         current_var_to_sub:List[instruction_graph.Node] = []
         dst_atr = ['DST', 'DST0','DST1', 'DST2']
         src_atr = ['SRC', 'SRC0', 'SRC1', 'SRC2', 'SRC3']
-        for i in i_list:            
+        for i in i_list:
+            if issubclass(type(i),(reg_allocator_base, flow_control_base)):
+                continue
+
             cur_vert = instruction_graph.Node(i.label, node_id, False)
             vert_list.append(cur_vert)
             node_id += 1

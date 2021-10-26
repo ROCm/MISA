@@ -161,15 +161,15 @@ class sgpr_hw_component(special_regs_base):
         self.create_special_reg('gid_z', 1, s_type)
 
     def get_gid_x(self):
-        self.get_special_reg('gid_x')
+        return self.get_special_reg('gid_x')
 
     def get_gid_y(self):
-        self.get_special_reg('gid_y')
+        return self.get_special_reg('gid_y')
     def get_gid_z(self):
-        self.get_special_reg('gid_z')
+        return self.get_special_reg('gid_z')
     
     def get_karg_segment_ptr(self):
-        self.get_special_reg('karg_segment_ptr')
+        return self.get_special_reg('karg_segment_ptr')
     
     def ABI_sgpr_setregs(self):
         off_seq = 0
@@ -196,12 +196,12 @@ class vgpr_hw_component(special_regs_base):
         self.create_special_reg('tid_z', 1, v_type)
 
     def get_tid_x(self):
-        self.get_special_reg('tid_x')
+        return self.get_special_reg('tid_x')
     def get_tid_y(self):
-        self.get_special_reg('tid_y')
+        return self.get_special_reg('tid_y')
     def get_tid_z(self):
         self._special_reg_used['tid_y'] = True
-        self.get_special_reg('tid_z')
+        return  self.get_special_reg('tid_z')
 
     def ABI_vgpr_setregs(self):
         off_seq = 0
