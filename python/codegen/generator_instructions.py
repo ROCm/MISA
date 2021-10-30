@@ -14,6 +14,7 @@ class reg_allocator_base(inst_base):
     def __str__(self) -> str:
         return self.allocator_f(self.reg, self.alignment)
 
+
 class reg_allocator_caller(inst_caller_base):
     def __init__(self, insturction_list: List[inst_base]) -> None:
         super().__init__(insturction_list)
@@ -48,3 +49,18 @@ class flow_control_caller(inst_caller_base):
     
     def kernel_func_end(self, func_ptr):
         return self.ic_pb(flow_control_base(f'{func_ptr.func_name}.end()', func_ptr))
+    
+class HW_Reg_Init(inst_base):
+    def __init__(self) -> None:
+        super().__init__(instruction_type.HW_REG_INIT, 'label')
+        self.label = 'HW_REG_INIT'
+        self.dst_regs = []
+
+    def __str__(self) -> str:
+        return f'//{self.label}'
+
+    def get_srs_regs(self):
+        return []
+
+    def get_dst_regs(self):
+        return self.dst_regs

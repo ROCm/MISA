@@ -1,5 +1,5 @@
 from enum import Enum
-from python.codegen.generator_instructions import reg_allocator_caller
+from python.codegen.generator_instructions import HW_Reg_Init, reg_allocator_caller
 from python.codegen.gpu_arch.allocator import base_allocator, stack_allocator
 from typing import Dict, List
 from python.codegen.amdgpu import amdgpu_sgpr_limit
@@ -171,7 +171,7 @@ class sgpr_hw_component(special_regs_base):
     def get_karg_segment_ptr(self):
         return self.get_special_reg('karg_segment_ptr')
     
-    def ABI_sgpr_setregs(self):
+    def ABI_sgpr_setregs(self, Reg_Init_instr:HW_Reg_Init):
         off_seq = 0
         alloc = self.sgpr_alloc
         ABI_reg_list = ['karg_segment_ptr',
@@ -182,6 +182,7 @@ class sgpr_hw_component(special_regs_base):
                 reg = self._special_regs_storage[i]
                 alloc.malloc_at_fixed_pos(reg.dwords, off_seq)
                 reg.set_position(off_seq)
+                Reg_Init_instr.dst_regs.append(reg[:])
                 off_seq += reg.dwords
         
 class vgpr_hw_component(special_regs_base):
@@ -203,7 +204,7 @@ class vgpr_hw_component(special_regs_base):
         self._special_reg_used['tid_y'] = True
         return  self.get_special_reg('tid_z')
 
-    def ABI_vgpr_setregs(self):
+    def ABI_vgpr_setregs(self, Reg_Init_instr:HW_Reg_Init):
         off_seq = 0
         alloc = self.vgpr_alloc
         ABI_reg_list = ['tid_x', 'tid_y', 'tid_z']
@@ -213,6 +214,7 @@ class vgpr_hw_component(special_regs_base):
                 reg = self._special_regs_storage[i]
                 alloc.malloc_at_fixed_pos(reg.dwords, off_seq)
                 reg.set_position(off_seq)
+                Reg_Init_instr.dst_regs.append(reg[:])
                 off_seq += reg.dwords
 
 class base_HW(sgpr_hw_component, vgpr_hw_component):
@@ -226,9 +228,9 @@ class base_HW(sgpr_hw_component, vgpr_hw_component):
         
         self.LDS_size = LDS_size
 
-    def ABI_HW_setregs(self):
-        self.ABI_sgpr_setregs()
-        self.ABI_vgpr_setregs()
+    def ABI_HW_setregs(self, Reg_Init_instr:HW_Reg_Init):
+        self.ABI_sgpr_setregs(Reg_Init_instr)
+        self.ABI_vgpr_setregs(Reg_Init_instr)
 
 class HW_gfx9(base_HW):
     def __init__(self, gpu_instructions_caller_base, sgpr_alloc: Type[base_allocator], vgpr_alloc: Type[base_allocator]) -> None:
