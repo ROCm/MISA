@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Union
 from python.codegen.gpu_data_types import *
-from python.codegen.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, vgpr_file_t
+from python.codegen.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
 from python.codegen.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
 from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.kernel_driver import base_config
@@ -45,11 +46,11 @@ class conv_direct_navi(kernel_constructor):
         @launcher_kernel
         def launch_k(self:kernel_launcher[gfx10_instructions_caller], karg:conv_direct_navi.kernel_karg_t):
             class _sgpr(sgpr_file_t):
-                def __init__(self, sgpr_f):
+                def __init__(self, sgpr_f, HW:sgpr_hw_component):
                     super().__init__(sgpr_f.ic, sgpr_f._allocator)
                     add = self.add 
-                    self.karg_ptr = add('karg_ptr', 2)
-                    self.group_id = add('group_id', 1)
+                    self.karg_ptr = HW.get_karg_segment_ptr()
+                    self.group_id = HW.get_gid_x()
                     self.gid_off = add('gid_off', 1)
                     self.in_buff_ptr = add('in_buff_ptr', 4)
                     self.out_buff_ptr = add('out_buff_ptr', 4)
@@ -64,72 +65,103 @@ class conv_direct_navi(kernel_constructor):
                     self.G = add('G', 1)
             
             class _vgpr(vgpr_file_t):
-                def __init__(self, vgpr_f):
+                def __init__(self, vgpr_f, HW:vgpr_hw_component):
                     super().__init__(vgpr_f.ic, vgpr_f._allocator)
                     add = self.add 
-                    self.tid = add('tid', 1)
+                    self.tid = HW.get_tid_x()
                     self.in_off = add('in_off', 1)
                     
             
-            s = _sgpr(self.sgpr_f)
-            v = _vgpr(self.vgpr_f)
+            s = _sgpr(self.sgpr_f, self.HW)
+            v = _vgpr(self.vgpr_f, self.HW)
             
             ic = self.ic
 
             input_buffer_size = filter_buffer_size = output_buffer_size = literal(101)
 
-            ic.s_mov_b32(s.in_buff_ptr[2], input_buffer_size)
-            ic.s_mov_b32(s.in_buff_ptr[3], 0x00027000)
-
-            ic.s_mov_b32(s.out_buff_ptr[2], output_buffer_size)
-            ic.s_mov_b32(s.out_buff_ptr[3], 0x00027000)
-
-            ic.s_mov_b32(s.wei_buff_ptr[2], filter_buffer_size)
-            ic.s_mov_b32(s.wei_buff_ptr[3], 0x00027000)
-            ic.s_mov_b32(s.wei_buff_ptr[3], s.wei_buff_ptr[2])
-            ic.v_add3_u32(v.in_off[:],v.in_off[:],v.in_off[:],v.in_off[:])
-
-
             #self.instr_ctrl._emmit_all(self._emit)
-
-            ic.s_load_dwordx2(s.in_buff_ptr[0:1], s.karg_ptr[0:1], karg.in_ptr+0)
-            ic.s_load_dwordx2(s.out_buff_ptr[0:1], s.karg_ptr[0:1], karg.out_ptr+0)
-            ic.s_load_dwordx2(s.wei_buff_ptr[0:1], s.karg_ptr[0:1], karg.wei_ptr+0)
-            ic.s_load_dwordx2(v.in_off[0:1], s.wei_buff_ptr[0:1], karg.wei_ptr+0)
-            ic.v_add3_u32(v.in_off[:],v.in_off[:],v.in_off[:],v.in_off[:])
-
-            ic.s_load_dwordx4(s.wei_buff_ptr[0:3], s.karg_ptr[0:1], karg.H+0)
-            ic.s_load_dwordx2(s.Y[0:1], s.karg_ptr[0:1], karg.Y+0)
 
             def fill_buff_desc(desc_reg:regVar, size:int):
                 ic.s_mov_b32(desc_reg[2], size)
                 ic.s_mov_b32(desc_reg[3], 0x00027000)
-
-            input_buffer_size = 25
-            filter_buffer_size = 50
-            output_buffer_size = 100
-
+            
+            input_buffer_size = filter_buffer_size = output_buffer_size = 256
             fill_buff_desc(s.in_buff_ptr[:], input_buffer_size)
             fill_buff_desc(s.out_buff_ptr[:], filter_buffer_size)
-            fill_buff_desc(s.wei_buff_ptr[:], output_buffer_size)
 
-            ic.v_dot2_i32_i16(s.wei_buff_ptr[0], s.karg_ptr[1],s.wei_buff_ptr[1], s.karg_ptr[0])
+            ic.s_load_dwordx2(s.in_buff_ptr[0:1], s.karg_ptr[0:1], karg.in_ptr+0)
+            ic.s_load_dwordx2(s.out_buff_ptr[0:1], s.karg_ptr[0:1], karg.out_ptr+0)
+            ic.s_load_dwordx2(s.wei_buff_ptr[0:1], s.karg_ptr[0:1], karg.wei_ptr+0)
+            ic.s_load_dwordx2(s.C[0], s.karg_ptr[0:1], karg.C+0)
+
+            
+            wGroup_stride = s.add('wGroup_stride', 1)
+            
+            N_per_thread = 4
+            threads_per_group = 64
+            N_per_group = N_per_thread * threads_per_group
+            item_size = 4
+            N_stride = s.add('N_stride', 1)
+            
+            ic.s_mul_i32(N_stride[0], 8, s.C[0])
+            ic.s_mul_i32(wGroup_stride[0], N_per_group * item_size, N_stride[0])
+            ic.s_mul_i32(s.gid_off[0], s.group_id[0], wGroup_stride[0])
+
+
+            #fill_buff_desc(s.wei_buff_ptr[:], output_buffer_size)
+
+            tid_offset = v.add('tid_offset', 1)
+            seq_items_per_thread = 4
+            ic.s_mul_i32(tid_offset[0], item_size * seq_items_per_thread, v.tid[0])
+            
+            @mfunc_func
+            def func_x1(self:kernel_func[gfx10_instructions_caller],
+                buff_ptr:regVar, t_offset:regVar, soffset:regVar, cnt:int, result_var:regVar):
+                ic = self.ic
+                s = self.sgpr_f
+                read_tmp = []
+                for i in range(cnt):
+                    read_tmp.append(s.add_no_pos(f'read_{i}', 1))
+
+                read_block = s.add_block('read_block', read_tmp)
+                
+                if(cnt == 1):
+                    load_ic = ic.buffer_load_dword
+                elif (cnt == 2):
+                    load_ic = ic.buffer_load_dwordx2
+                elif (cnt == 3):
+                    load_ic = ic.buffer_load_dwordx3
+                else:
+                    load_ic = ic.buffer_load_dwordx4
+                
+                load_ic(read_block[0:cnt-1], t_offset[0], buff_ptr[0:3], soffset[0])
+                
+                ic.v_mov_b32(result_var[0], 0)
+
+                for i in range(cnt):
+                    ic.v_add_f32(result_var[0], result_var[0], read_block[i])
+                
+            
+            results:List[reg_block] = []
+
+            for i in range(4):
+                results.append(v.add(f'out_res_{i}', 1))
+                func_x1(self, s.in_buff_ptr[0:3], tid_offset[0], s.gid_off[0], 4, results[i][0])
 
             @mfunc_func
-            def func_x1(self:kernel_func):
-                s = self.sgpr_f
-                H1O = s.add('H1O', 1, 4)
-                H2O = s.add('H2O', 4, 4)
+            def f_store(self:kernel_func[gfx10_instructions_caller],
+                buff_ptr:regVar, v_t_offset:regVar, s_offset:regVar, v_out_vars:List[regVar], strides:List[Union[regVar,int]]):
+                ic = self.ic
+                v = self.vgpr_f
+                tmp_v_offset = v.add('tmp_v_offset', 1)
 
-                H4O = s.add_no_pos('H30', 4)
-                H31O = s.add_no_pos('H310', 1)
+                for i in range(len(v_out_vars)):
+                    ic.v_add_f32(tmp_v_offset[0], strides[i], v_t_offset[0])
+                    ic.buffer_store_dword(v_out_vars[i][0], tmp_v_offset[0], buff_ptr[0:3], s_offset[0])
+            
+            f_store(self, s.out_buff_ptr[0:3], tid_offset[0], s.gid_off[0], list(map(lambda x:x[0], results)), [0, 4, 8, 12])
 
-                block = s.add_block('block', [H4O, H31O])
 
-                fill_buff_desc(H4O[:], 15)
-
-            func_x1(self)
-            H33O = s.add('H33O', 4, 2)
 
         launch_k(self.k_config, self.kargs)
 
