@@ -305,53 +305,23 @@ class igemm_dotx_mapping_t(mc_base_t):
             self._emit(f"; dotx mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.lanegroup_size_n() - 1}, v[{v_thread_id}]           ; lanegroup_n index ")
             self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
-            if k_pack != 1:
-                self._emit(f"v_lshlrev_b32 v[{v_gemm_in}], {utility_log2(k_pack)}, v[{v_gemm_in}]   ; shift left k_pack:{k_pack}")
-                self._emit(f"v_lshlrev_b32 v[{v_gemm_im}], {utility_log2(k_pack)}, v[{v_gemm_im}]   ; shift left k_pack:{k_pack}")
 
             self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_thread_id}]")
-            # if ctrl.block_k_per_wave() != 1:
-            #     self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.block_k_per_wave() - 1}, v[{v_thread_id}]          ; block_k_per_wave index")
-            #     if k_pack != 1:
-            #         if v_pack == 1:
-            #             if k_pack_per_thread >= ctrl.block_k_per_wave():
-            #                 #self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 0], v[{v_gemm_in}]  ; or k_pack_per_thread:{k_pack_per_thread}")
-            #                 #self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 0], v[{v_gemm_im}]  ; or k_pack_per_thread:{k_pack_per_thread}")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_in}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_im}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
-            #             else:
-            #                 self._emit(f"v_and_b32 v[{v_tmp4} + 1], {k_pack_per_thread - 1}, v[{v_tmp4} + 0]   ; and k_pack_per_thread:{k_pack_per_thread}")
-            #                 self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 0], {utility_log2(k_pack_per_thread)}, v[{v_tmp4} + 0] ; shift right k_pack_per_thread:{k_pack_per_thread}")
-            #                 #self._emit(f"v_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], v[{v_gemm_in}]  ; or k_pack_per_thread:{k_pack_per_thread}")
-            #                 #self._emit(f"v_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], v[{v_gemm_im}]  ; or k_pack_per_thread:{k_pack_per_thread}")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}],  v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_in}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}],  v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_k_per_thread())}, v[{v_gemm_im}]  ; or lanegroup_k_per_thread:{ctrl.lanegroup_k_per_thread()}")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
-            #                 self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
-            #         else:
-            #             self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n * k_pack)}, v[{v_gemm_in}]")
-            #             self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m * k_pack)}, v[{v_gemm_im}]")
-            #     else:
-            #         self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_n)}, v[{v_gemm_in}]")
-            #         self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 0], {utility_log2(ctrl.macro_tile_m)}, v[{v_gemm_im}]")
-            #     self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.block_k_per_wave())}, v[{v_thread_id}]")
-            #     pass
-
             if ctrl.lanegroup_n_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.lanegroup_n_per_wave() - 1}, v[{v_thread_id}]          ; lanegroup_n_per_wave index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_size_n() * k_pack)}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_gemm_in}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_n_per_wave())}, v[{v_thread_id}]")
             if ctrl.lanegroup_m_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 1], {ctrl.lanegroup_m_per_wave() - 1}, v[{v_thread_id}]          ; lanegroup_m_per_wave index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_size_m() * k_pack)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 1], {utility_log2(ctrl.lanegroup_size_m())}, v[{v_gemm_im}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_m_per_wave())}, v[{v_thread_id}]")
             if ctrl.waves_per_n() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 2], {ctrl.waves_per_n() - 1}, v[{v_thread_id}]  ; waves_per_n index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 2], {utility_log2(ctrl.lanegroup_size_n() * ctrl.lanegroup_n_per_wave() * k_pack)}, v[{v_gemm_in}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 2], {utility_log2(ctrl.lanegroup_size_n() * ctrl.lanegroup_n_per_wave())}, v[{v_gemm_in}]")
                 self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.waves_per_n())}, v[{v_thread_id}]")
             if ctrl.waves_per_m() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 3], {ctrl.waves_per_m() - 1}, v[{v_thread_id}]  ; waves_per_m index")
-                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 3], {utility_log2(ctrl.lanegroup_size_m() * ctrl.lanegroup_m_per_wave() * k_pack)}, v[{v_gemm_im}]")
+                self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4} + 3], {utility_log2(ctrl.lanegroup_size_m() * ctrl.lanegroup_m_per_wave())}, v[{v_gemm_im}]")
                 # self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.waves_per_n())}, v[{v_thread_id}]")
             self._emit_empty_line()
         return self._get_deferred()
@@ -411,8 +381,8 @@ class igemm_dotx_mapping_t(mc_base_t):
             p_ssh(f"{v_tmp4}+0",  v_thread_id, ctrl.waves_per_n())   
             p_ssh(f"{v_tmp4}+1",  v_thread_id, ctrl.waves_per_m(), True)
 
-            p_sac_n(v_gemm_in, f"{v_tmp4}+0",  ctrl.waves_per_n(),  ctrl.wave_tile_n * ctrl.wave_step_n)
-            p_sac_m(v_gemm_im, f"{v_tmp4}+1",  ctrl.waves_per_m(),  ctrl.wave_tile_m * ctrl.wave_step_m)
+            p_sac_n(v_gemm_in, f"{v_tmp4}+0",  ctrl.waves_per_n(),  ctrl.lanegroup_n_per_thread() * ctrl.lanegroup_n_per_cluster() * ctrl.lanegroup_n_per_wave())
+            p_sac_m(v_gemm_im, f"{v_tmp4}+1",  ctrl.waves_per_m(),  ctrl.lanegroup_m_per_thread() * ctrl.lanegroup_m_per_cluster() * ctrl.lanegroup_m_per_wave())
 
             if p_sac_n.first == 1:
                 self._emit(f"v_mov_b32 v[{v_gemm_in}], 0")

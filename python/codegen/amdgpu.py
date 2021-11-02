@@ -518,7 +518,7 @@ class amd_kernel_code_t(mc_base_t):
                     self._emit('.amdhsa_tg_split {}'.format(                        self.ki.kernel_code.tg_split))
                     self._emit('.amdhsa_accum_offset {}'.format(                    self.ki.kernel_code.accum_offset))
                 if self.mc.arch_config.arch >= 1000:
-                    self._emit('.amdhsa_wavefront_size32 {}'.format(                1 if self.ki.kernel_code.wavefront_size == 32 else 0))
+                    self._emit('.amdhsa_wavefront_size32 {}'.format(                1 if self.ki.kernel_code.wavefront_size == 32 else 1))
                     self._emit('.amdhsa_workgroup_processor_mode {}'.format(        1 if not self.ki.kernel_code.cumode else 1))
             self._emit('.end_amdhsa_kernel')
         else:

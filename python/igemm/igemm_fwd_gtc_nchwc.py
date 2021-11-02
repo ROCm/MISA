@@ -77,20 +77,16 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                                                                      self.tunable.precision)
             self.dotx_mapping = igemm_dotx_mapping_t(self.mc, ctrl_dotx_mapping)
 
-            ctrl_coalescing_store = ctrl_coalescing_store_t()
-            ctrl_coalescing_store.ctm = ctrl_dotx_mapping
+            ctrl_coalescing_store = ctrl_coalescing_store_dotx_t()
+            ctrl_coalescing_store.dotx_m = ctrl_dotx_mapping
             ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store.precision = self.tunable.precision
             ctrl_coalescing_store.arch_name = AMDGPU_ARCH_GFX1030
 
-            ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store.vector_write_out = self.tunable.vector_c                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store.block_size = self.tunable.block_size
 
-            na_k_vec_c, na_ce, nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
-            ctrl_coalescing_store.gemm_m_m0_m1 = [1, na_k_vec_c]
-
-            ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
-            #self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
+            self.coalescing_store = igemm_coalescing_store_dotx_t(mc, ctrl_coalescing_store)
 
         else:
             assert False, "xdlops is not needed for now"
@@ -1767,7 +1763,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.dotx_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp(),
                                     k_pack=k_pack_src_mat, v_pack=v_pack))
-            self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+            #self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             #self._emit(self.dotx_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
         else:
             v_pack = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else 1
@@ -1814,6 +1810,18 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte * self.tunable.vector_c)}, v[{v.v_gemm_in()}] ; LDS load wei")
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
+
+        self._emit(f"; init_co_lds_offset")
+        self._emit(f"v_and_b32 v[{v.v_tmp()}], v[{v.v_gemm_im()}], {hex(0xffffffff - (self.tunable.vector_c - 1))}")
+        self._emit(f"v_lshlrev_b32 v[{v.v_tmp(1)}], {igemm_log2(self.tunable.vector_c)}, v[{v.v_gemm_in()}]")
+        self._emit(f"v_lshl_or_b32 v[{v.v_co_sst()}], v[{v.v_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}, v[{v.v_tmp(1)}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_co_sst()}], {igemm_log2(data_byte)}, v[{v.v_co_sst()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_co_sld()}], {igemm_log2(data_byte * self.tunable.vector_c)}, v[0]")
+
+        self._emit(f"; init_co_sub_m_index")
+        self._emit(f"v_lshrrev_b32 v[{v.v_co_sub_m_index()}], {igemm_log2(self.tunable.gemm_n_per_block)}, v[0]")
+        self._emit(f"; init_co_sub_n_index")
+        self._emit(f"v_and_b32 v[{v.v_co_sub_n_index()}], {self.tunable.gemm_n_per_block - 1}, v[0]")
 
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
@@ -2183,8 +2191,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.tunable.nxe != 0:
-                #self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
-                #    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag()))
+                self._emit(self.coalescing_store(v.v_tmp(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
+                    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag()))
                 pass
             else:
                 self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
