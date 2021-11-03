@@ -32,6 +32,10 @@
 #include <assert.h>
 #include "magic_div.h"
 
+#ifndef BATCHED_TRANSPOSE_PERSISTENT
+#define BATCHED_TRANSPOSE_PERSISTENT 0
+#endif
+
 #ifndef HIP_CALL
 #define HIP_CALL(call)                                                         \
     do {                                                                       \
@@ -412,17 +416,20 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
     hipDevice_t dev;
     HIP_CALL(hipGetDevice(&dev));
     HIP_CALL(hipGetDeviceProperties(&dev_prop, dev));
-    int num_cu = dev_prop.multiProcessorCount;
 
     // TODO: need find better way to decide transpose tile size
-
-    const int occupancy = 4;
-    size_t block_size = 256;
-    size_t grid_size = num_cu * occupancy;
-
     uint32_t dim_h = (height + kparam->tile_y - 1) / kparam->tile_y;
     uint32_t dim_w = (width + kparam->tile_x - 1) / kparam->tile_x;
     uint32_t dim_total = batch * dim_h * dim_w;
+
+    size_t block_size = 256;
+#if BATCHED_TRANSPOSE_PERSISTENT
+    int num_cu = dev_prop.multiProcessorCount;
+    const int occupancy = 4;
+    size_t grid_size = num_cu * occupancy;
+#else
+    size_t grid_size = batch * dim_h * dim_w;
+#endif
 
     magic_div_u32_t magic_h = magic_div_u32_gen(dim_h);
     magic_div_u32_t magic_w = magic_div_u32_gen(dim_w);
