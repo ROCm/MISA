@@ -753,7 +753,7 @@ public:
             int group = arg->get_int("group_count");
 
             int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
+                0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, this->max_gks < 0 ? MAX_GEMM_K_SPLITS : this->max_gks);
             int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
 
             std::vector<int> gks_list;

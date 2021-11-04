@@ -500,6 +500,10 @@ public:
         this->gcn_arch = dev_prop.gcnArch;
         if(this->gcn_arch >= 1000)
             this->num_cu *= 2;
+        max_mpb = -1;
+        max_npb = -1;
+        max_kpb = -1;
+        max_gks = -1;
     }
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
         return igemm_gtc_encode_kernel_name(tunable);
@@ -560,6 +564,14 @@ public:
         return workspace_size * sizeof(float);
     }
 
+    void set_block_tile_boundary(int max_mpb_, int max_npb_, int max_kpb_, int max_gks_){
+        // CAUSTION! when setting this value to none -1, you need to understand what will happen
+        this->max_mpb = max_mpb_;
+        this->max_npb = max_npb_;
+        this->max_kpb = max_kpb_;
+        this->max_gks = max_gks_;
+    }
+
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
@@ -579,6 +591,11 @@ public:
 
     int                 num_cu;
     int                 gcn_arch;
+
+    int                 max_mpb;
+    int                 max_npb;
+    int                 max_kpb;
+    int                 max_gks;
 };
 
 #endif

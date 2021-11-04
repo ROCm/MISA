@@ -775,7 +775,7 @@ public:
 
         result_t result;
 
-        int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
+        int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : (this->max_gks == -1 ? WRW_MAX_GEMM_K_SPLITS : this->max_gks);
         float min_duration = FLT_MAX;
         int selected_gkgs = 0;
         int selected_grid_size = 0;
@@ -909,7 +909,7 @@ public:
         if(tunable->gemm_k_global_split == 0)
             return std::vector<int>{0};
         else{
-            int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : WRW_MAX_GEMM_K_SPLITS;
+            int max_split_num = tunable->gemm_k_global_split == 0 ? 1 : (this->max_gks == -1 ? WRW_MAX_GEMM_K_SPLITS : this->max_gks);
 
             std::vector<int> gks_list;
             std::vector<int> real_gks_list;

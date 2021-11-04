@@ -979,12 +979,12 @@ public:
             int group = arg->get_int("group_count");
 
             int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS_BWD);
+                0 : igemm_get_max_gks(k / group, tunable->gemm_k_per_block, this->max_gks == -1? MAX_GEMM_K_SPLITS_BWD : this->max_gks);
             if(tunable->gemm_k_global_split == 1 && tunable->merge_e == 1){
                 // this is merge_e, which indicate support padding k
                 int padded_k_num = ((k / group) + tunable->gemm_k_per_block - 1) / tunable->gemm_k_per_block;
                 int k_pow2 = (int)log2(utility_prev_pow2(padded_k_num));
-                max_split_num = k_pow2 <= MAX_GEMM_K_SPLITS_BWD ? k_pow2 : MAX_GEMM_K_SPLITS_BWD;
+                max_split_num = k_pow2 <= (this->max_gks == -1? MAX_GEMM_K_SPLITS_BWD : this->max_gks) ? k_pow2 : (this->max_gks == -1? MAX_GEMM_K_SPLITS_BWD : this->max_gks);
             }
             int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
 
