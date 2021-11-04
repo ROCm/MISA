@@ -564,6 +564,11 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int sleep_ms = env_get_int("IGEMM_SLEEP_MS", 0);
     int dump_gmap = env_get_int("IGEMM_DUMP_GMAP", 0);
     int gks_iterative = env_get_int("IGEMM_GKS_ITERATIVE", 0);
+    int max_mpb = env_get_int("IGEMM_MAX_MPB", -1);
+    int max_npb = env_get_int("IGEMM_MAX_NPB", -1);
+    int max_kpb = env_get_int("IGEMM_MAX_KPB", -1);
+    int max_gks = env_get_int("IGEMM_MAX_GKS", -1);
+
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -608,6 +613,17 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         return result;
     };
 
+    auto need_skip_due_to_macro_tile_boundary = [&](const igemm_gtc_tunable_t * tunable){
+        if(max_mpb != -1 && tunable->gemm_m_per_block > max_mpb)
+            return true;
+        if(max_npb != -1 && tunable->gemm_n_per_block > max_npb)
+            return true;
+        if(max_kpb != -1 && tunable->gemm_k_per_block > max_kpb)
+            return true;
+        return false;
+    };
+
+    driver->set_block_tile_boundary(max_mpb, max_npb, max_kpb, max_gks);
     result_t fastest_result;
     fastest_result.duration_ms = FLT_MAX;
     int fastest_id = -1;
@@ -615,6 +631,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         int unique_index = 0;
         std::vector<igemm_gtc_tunable_t> unique_tunables;   // don't use this when gks_iterative is zero, since it will be just the same as the original tunables
         for(int i=0; i<tunables.size(); i++){
+            if(need_skip_due_to_macro_tile_boundary(&tunables[i]))
+                continue;
             if(gks_iterative){
                 if(tunables[i].gemm_k_global_split != 0){
                     std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
@@ -640,11 +658,12 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                 }
             }
             else{
-                result_t result = launch(&tunables[i], i, -1);
+                result_t result = launch(&tunables[i], unique_index, -1);
                 if(result.duration_ms < fastest_result.duration_ms){
                     fastest_result = result;
-                    fastest_id = i;
+                    fastest_id = unique_index;
                 }
+                unique_index++;
             }
         }
 
