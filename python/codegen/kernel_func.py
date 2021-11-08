@@ -29,6 +29,8 @@ class kernel_func(Generic[T]):
             self.func_name = func_name
         
         self.ic_begin_pos = -1
+
+        self.reg_ignore_list = []
     
     @classmethod
     def create_from_other_inst(cls, other, func_name: str = None):
@@ -52,6 +54,7 @@ class kernel_func(Generic[T]):
         ic_end_pos = len(self.PIc.il)
         il = self.PIc.il
         not_dealocated_list = []
+        ignore_list = self.reg_ignore_list
 
         for i in range(self.ic_begin_pos, ic_end_pos, 1):
             cur_instruction = il[i]
@@ -69,17 +72,23 @@ class kernel_func(Generic[T]):
                         not_dealocated_list.insert(split_pos, reg)
                         split_pos += 1
                 elif(cur_instruction.inst_type is instruction_type.REGDEALLOC):
-                    not_dealocated_list.remove(cur_instruction.reg)
+                    try:
+                        not_dealocated_list.remove(cur_instruction.reg)
+                    except ValueError :
+                        try:
+                            ignore_list.index(cur_instruction.reg)
+                        except IndexError:
+                            assert(False)
         
-        sgpr_dealloc = self.sgpr_f._dealloc
-        vgpr_dealloc = self.vgpr_f._dealloc
+        sgpr_dealloc = self.sgpr_f.free
+        vgpr_dealloc = self.vgpr_f.free
         
         for i in reversed(not_dealocated_list):
             assert(type(i) is reg_block or block_of_reg_blocks)
             if(i.reg_t is reg_type.sgpr):
-                self.PIc.reg_dealloc(i,sgpr_dealloc)
+                sgpr_dealloc(i)
             else:
-                self.PIc.reg_dealloc(i,vgpr_dealloc)
+                vgpr_dealloc(i)
 
         self.PIc.kernel_func_end(self)
 
@@ -103,6 +112,14 @@ class kernel_launcher(kernel_func[T]):
         super().__init__(instructions_caller_base, func_name=func_name, sgpr_a=sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
         self.HW = gpu_HW
     
+    def _func_begin(self):
+        self.PIc.kernel_func_begin(self)
+        self.ic_begin_pos = 0
+
+    def _func_end(self):
+        self.reg_ignore_list = self.HW.get_ABI_active_reg_list()
+        super()._func_end()
+
     @classmethod
     def create_from_other_inst(cls, other, func_name: str = None):
         return cls(other.ic, other.HW, func_name)

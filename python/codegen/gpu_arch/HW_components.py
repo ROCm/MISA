@@ -63,7 +63,7 @@ class gpr_file_t():#mc_base_t):
 
         return '\n'.join(s)
 
-    def _dealloc(self, reg:reg_block, alignment):
+    def _dealloc(self, reg:reg_block, alignment=0):
         #self.active_blocks.remove(reg)
         self._allocator.mfree(reg.position)
         return f'//dealock .unset {reg.label}, {reg.position}'
@@ -78,6 +78,9 @@ class gpr_file_t():#mc_base_t):
         self.active_blocks.append(ret)
         self.ic.reg_alloc(ret, alignment, self._alloc)
         return ret
+
+    def free(self, reg_block):
+        self.ic.reg_dealloc(reg_block, self._dealloc)
 
     def add_no_pos(self, label:str, dwords:int = 1):
         return reg_block.declare(label, self.reg_t, dwords=dwords)
@@ -184,6 +187,17 @@ class sgpr_hw_component(special_regs_base):
                 reg.set_position(off_seq)
                 Reg_Init_instr.dst_regs.append(reg[:])
                 off_seq += reg.dwords
+    
+    def get_ABI_sgpr_active_reg_list(self):
+        ret = []
+        ABI_reg_list = ['karg_segment_ptr',
+            'gid_x', 'gid_y', 'gid_z'
+        ]
+        for i in ABI_reg_list:
+            if(self._special_reg_used[i]):
+                reg = self._special_regs_storage[i]
+                ret.append(reg)
+        return ret
         
 class vgpr_hw_component(special_regs_base):
     def __init__(self, gpu_instructions_caller_base, vgpr_size, vgpr_alloc:Type[base_allocator], *args, **kwargs) -> None:
@@ -217,6 +231,14 @@ class vgpr_hw_component(special_regs_base):
                 Reg_Init_instr.dst_regs.append(reg[:])
                 off_seq += reg.dwords
 
+    def get_ABI_vgpr_active_reg_list(self):
+        ret = []
+        ABI_reg_list = ['tid_x', 'tid_y', 'tid_z']
+        for i in ABI_reg_list:
+            if(self._special_reg_used[i]):
+                reg = self._special_regs_storage[i]
+                ret.append(reg)
+        return ret
 class base_HW(sgpr_hw_component, vgpr_hw_component):
     def __init__(self, gpu_instructions_caller_base,sgpr_alloc:Type[base_allocator], vgpr_alloc:Type[base_allocator], sgpr_size, vgpr_size, LDS_size) -> None:
         super().__init__(
@@ -231,6 +253,12 @@ class base_HW(sgpr_hw_component, vgpr_hw_component):
     def ABI_HW_setregs(self, Reg_Init_instr:HW_Reg_Init):
         self.ABI_sgpr_setregs(Reg_Init_instr)
         self.ABI_vgpr_setregs(Reg_Init_instr)
+    
+    def get_ABI_active_reg_list(self):
+        return [
+            *self.get_ABI_sgpr_active_reg_list(),
+            *self.get_ABI_vgpr_active_reg_list()
+        ]
 
 class HW_gfx9(base_HW):
     def __init__(self, gpu_instructions_caller_base, sgpr_alloc: Type[base_allocator], vgpr_alloc: Type[base_allocator]) -> None:
