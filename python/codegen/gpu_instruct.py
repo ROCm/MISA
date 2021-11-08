@@ -271,19 +271,90 @@ class instruction_graph():
 
         graph_renderer.selection_policy = NodesAndLinkedEdges()
         graph_renderer.inspection_policy = NodesOnly()
-
         from holoviews.element.graphs import layout_nodes
         import holoviews as hv
 
-        cities_graph_fruchterman = layout_nodes(graph_renderer, layout=nx.layout.fruchterman_reingold_layout)
+        #cities_graph_fruchterman = layout_nodes(graph_renderer, layout=nx.layout.fruchterman_reingold_layout)
 
-        labels = hv.Labels(cities_graph_fruchterman.nodes, ['x', 'y'], ["index"])
+        #labels = hv.Labels(cities_graph_fruchterman.nodes, ['x', 'y'], ["index"])
+        
+        #graph.node_renderer.data_source.add(node_indices, 'index')
+        #graph.node_renderer.data_source.add(Spectral8, 'color')
+        #graph.node_renderer.data_source.add(["circle", "square"] * 4, 'marker')
+        #graph.node_renderer.glyph = Scatter(size=20, fill_color='color', marker="marker")
+        
+        def plan_A():
+            from holoviews.element.graphs import layout_nodes
+            import holoviews as hv
+            import hvplot.networkx as hvnx
+            import hvplot as hvplot
+            #cities_graph_fruchterman = layout_nodes(graph_renderer, layout=nx.layout.fruchterman_reingold_layout)
+            #
+            #labels = hv.Labels(cities_graph_fruchterman.nodes, ['x', 'y'], ["index"])
+            #
+            #labels.opts(xoffset=-0.05, yoffset=0.04, text_font_size='8pt',)
+            #
+            #cities_graph_fruchterman * labels
 
-        labels.opts(xoffset=-0.05, yoffset=0.04, text_font_size='8pt',)
+            
+            ##pos = nx.layout.spring_layout(G)
+        
+            node_sizes = [30 for i in range(len(G))]
+            M = G.number_of_edges()
+            edge_colors = range(2, M + 2)
 
-        cities_graph_fruchterman * labels
+            G2 = G.to_directed()
+            nodes = hvnx.draw_networkx_nodes(G2, pos, node_size=node_sizes, arrowstyle='->',
+                                        arrows=True, edge_color=edge_colors, aspect='equal', arrowhead_length=0.005, 
+                                        edge_cmap='Blues', edge_width=1, colorbar=True, directed=True)
 
-        #plot.renderers.append(graph_renderer)
+            edges = hvnx.draw(G2, pos, node_size=node_sizes, arrowstyle='->',
+                                        arrows=True, edge_color=edge_colors, aspect='equal', arrowhead_length=0.005, 
+                                        edge_cmap='Blues', edge_width=1, colorbar=True, directed=True)
+            
+
+            #r = nodes * edges
+            #graph = hv.Graph((edges, nodes, ), )
+            #graph.opts(directed=True)
+
+            hv.render(edges)
+            
+            hvplot.save(edges, 'test.html')
+
+        #plan_A()
+
+        def plan_B():
+            import numpy as np
+            import holoviews as hv
+            from holoviews import opts
+            import panel as pn
+            from bokeh.resources import INLINE
+            hv.extension('bokeh')
+            opts.defaults(opts.Graph(width=400, height=400))
+            #N = 8
+            #node_indices = np.arange(N)
+            #source = np.zeros(N)
+            #target = node_indices
+
+            #= hv.Graph(((source, target),))
+            #position = nx.spring_layout(G, scale=2)
+            #nx.draw(G,position)
+            #padding = dict(x=(-1.1, 1.1), y=(-1.1, 1.1))
+            #hv.Graph.from_networkx
+            edges = G.edges
+            edges = [1, 2, 3]
+            nodes = G.nodes
+            nodes = [0,0,0]
+            simple_graph = hv.Graph(((edges, nodes),))
+            #simple_graph = graph_renderer
+            
+            panel_object = pn.pane.HoloViews(simple_graph)
+            pn.pane.HoloViews(simple_graph).save('test2', embed=True, resources=INLINE)
+        
+        #plan_B()
+
+
+        plot.renderers.append(graph_renderer)
 
         output_file("interactive_graphs.html")
         show(plot)
