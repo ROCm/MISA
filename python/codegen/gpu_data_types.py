@@ -148,18 +148,35 @@ class reg_block(object):
 
         if(type(key) is tuple):
             assert len(key) == 2
-            slice_size = key[1] - key[0]
+            slice_size = key[1] - key[0] + 1
             new_offset = key[0]
         elif (type(key) is slice):
-            indices = key.indices(self.dwords)
+            indices = key.indices(self.dwords-1)
             assert(indices[2] <= 1)
-            slice_size = indices[1] - indices[0]
+            slice_size = indices[1] - indices[0] + 1
             new_offset = indices[0]
         else:
             new_offset = key
         #send label without reg_type prefix
         view_slice = regVar('', self, new_offset, slice_size)
         return view_slice
+
+class reg_block_custom_reg(reg_block):
+    def __init__(self, label:str, reg_t:reg_type, dwords:int = 1):
+        
+        assert type(label) is str
+        assert type(dwords) is int
+        super().__init__(label=label, reg_t=reg_t, position=-1, dwords=dwords)
+        self.position = label
+
+    def define(self):
+        raise AttributeError( "'custom_reg' object has no attribute 'define'" )
+
+    def set_position(self, position:int):
+        raise AttributeError( "'custom_reg' object has no attribute 'set_position'" )
+    
+    def expr(self, index = 0):
+        raise AttributeError( "'custom_reg' object has no attribute 'expr'" )
 
 class block_of_reg_blocks(reg_block):
     def __init__(self, label: str, reg_t: reg_type, reg_blocks:List[reg_block], position: int = 0, dwords: int = 1):
@@ -172,12 +189,13 @@ class block_of_reg_blocks(reg_block):
         return block_of_reg_blocks(label, reg_t, reg_blocks, position=-1, dwords=dwords)
 
 class regVar(object):
-    __slots__ = ['label', 'base_reg', 'reg_offset', 'right_index']
-    def __init__(self, label:str, base_reg:reg_block, reg_offset:int = 0, right_index:int = 0):
+    __slots__ = ['label', 'base_reg', 'reg_offset', 'regVar_size']
+    def __init__(self, label:str, base_reg:reg_block, reg_offset:int = 0, regVar_size:int = 1):
         self.label = label
         self.base_reg = base_reg
         self.reg_offset = reg_offset
-        self.right_index = right_index
+        self.regVar_size = regVar_size
+        assert(regVar_size >= 0)
     
     #@classmethod
     #def init_working_label(cls, label:str, reg:reg_block, reg_offset:int = 0, dwords:int = 0):
@@ -191,14 +209,16 @@ class regVar(object):
     def __getitem__(self, key):
         slice_size = 1
         new_offset = self.reg_offset
-
+        assert(self.regVar_size > 0)
         if(type(key) is tuple):
             assert len(key) == 2
-            slice_size = key[1] - key[0]
+            slice_size = key[1] - key[0] + 1
             new_offset = new_offset + key[0]
         elif (type(key) is slice):
-            slice_size = key.stop - key.start
-            new_offset = new_offset + key.start
+            indices = key.indices(self.regVar_size - 1)
+            assert(indices[2] <= 1)
+            slice_size = indices[1] - indices[0] + 1
+            new_offset = indices[0]
         else:
             new_offset = new_offset + key
         #send label without reg_type prefix
@@ -225,13 +245,19 @@ class regVar(object):
         return f'.set {label}, {self.base_reg.position + self.reg_offset}'
 
     def __str__(self) -> str:
-        right_index = self.right_index
+        assert(self.regVar_size > 0)
+        right_index = self.regVar_size - 1
         if(right_index == 0):
             #if (self.label is present) #TODO
             #return f'{self.base_reg.reg_t.value}[{self.label}]'
             return f'{self.base_reg.reg_t.value}[{self.base_reg.label}+{self.reg_offset}]'
         else:
-            return f'{self.base_reg.reg_t.value}[{self.base_reg.label}+{self.reg_offset}:{self.base_reg.label}+{self.reg_offset}+{self.right_index}]'
+            return f'{self.base_reg.reg_t.value}[{self.base_reg.label}+{self.reg_offset}:{self.base_reg.label}+{self.reg_offset}+{right_index}]'
+    
+    def __add__(self, offset):
+        assert(type(offset) is int)
+        return regVar(self.label, self.base_reg, self.reg_offset + offset, self.regVar_size - offset)
+
 
 class regAbs(regVar):
     def __init__(self, reg_src:regVar):
@@ -298,8 +324,10 @@ class  VCC_reg(regVar):
 
 class  _VCC_LO(VCC_reg):
     def __init__(self):
+
+        super().__init__(baseVCC=False)
         self.label = 'vcc_lo'
-        self.dwords = 1
+        self.regVar_size = 1
     
     def __getitem__(self, key):
         l = 0
@@ -321,8 +349,10 @@ class  _VCC_LO(VCC_reg):
         
 class  _VCC_HI(VCC_reg):
     def __init__(self):
+        super().__init__(baseVCC=False)
+        self.reg_offset = 1
+        self.regVar_size = 1
         self.label = 'vcc_hi'
-        self.dwords = 1
     
     def __getitem__(self, key):
         l = 0
@@ -342,11 +372,12 @@ class  _VCC_HI(VCC_reg):
         
         return self
 
-class  EXEC_reg(regVar):
-    def __init__(self):
-        self.label = 'exec'
-        self.dwords = 2
+EXEC_reg_block = reg_block('exec', reg_type.sgpr, -1, 2) 
 
+class  EXEC_reg(regVar):
+    def __init__(self, baseEXEC=True):
+        super().__init__(EXEC_reg_block.label, EXEC_reg_block, 0, 2)
+        if(baseEXEC):
         self.lo = _EXEC_LO()
         self.hi = _EXEC_HI()
     
@@ -389,8 +420,9 @@ class  EXEC_reg(regVar):
 
 class  _EXEC_LO(EXEC_reg):
     def __init__(self):
+        super().__init__(baseEXEC=False)
         self.label = 'exec_lo'
-        self.dwords = 1
+        self.regVar_size = 1
     
     def __getitem__(self, key):
         l = 0
@@ -412,8 +444,12 @@ class  _EXEC_LO(EXEC_reg):
         
 class  _EXEC_HI(EXEC_reg):
     def __init__(self):
+
+        super().__init__(baseEXEC=False)
+        self.regVar_size = 1
+        self.reg_offset = 1
         self.label = 'exec_hi'
-        self.dwords = 1
+
     
     def __getitem__(self, key):
         l = 0
