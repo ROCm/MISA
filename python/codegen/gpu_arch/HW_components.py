@@ -128,6 +128,8 @@ class sgpr_file_t(gpr_file_t):
         self.exec = exec
         self.vcc_lo = exec.lo
         self.vcc_hi = exec.hi
+
+        self.m0 = M0_reg()
     
 class vgpr_file_t(gpr_file_t):
     def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):

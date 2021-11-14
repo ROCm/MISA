@@ -81,6 +81,7 @@ class uimm20_t():
     def __str__(self) -> str:
         return f' {self.val}' 
 
+
 class label_t():
     def __init__(self, val:str) -> None:
         self.label = val
@@ -277,13 +278,51 @@ def abs(reg:regVar):
 def neg(reg:regVar):
     return regAbs
 
-class  VCC_reg(regVar):
+class  M0_reg(regVar):
     def __init__(self):
-        self.label = 'vcc'
+        self.label = 'm0'
         self.dwords = 2
 
-        self.lo = _VCC_LO()
-        self.hi = _VCC_HI()
+    
+    def set_lable(self, label:str):
+        raise AttributeError( "'m0' object has no attribute 'set_lable'" )
+
+    def define(self):
+        raise AttributeError( "'m0' object has no attribute 'define'" )
+
+    def define_as(self, label:str):
+        raise AttributeError( "'m0' object has no attribute 'define_as'" )
+
+    def __getitem__(self, key):
+        slice_size = 1
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        slice_size = r - l
+        assert(slice_size <= 1 and slice_size >= 0)
+        return self
+
+    def __str__(self) -> str:
+        return f'{self.label}'
+
+vcc_reg_block = reg_block('vcc', reg_type.sgpr, -1, 2) 
+
+class  VCC_reg(regVar):
+    def __init__(self, baseVCC=True):
+        super().__init__(vcc_reg_block.label, vcc_reg_block, 0, 2)
+        if(baseVCC):
+            self.lo = _VCC_LO()
+            self.hi = _VCC_HI()
     
     def set_lable(self, label:str):
         raise AttributeError( "'VCC' object has no attribute 'set_lable'" )
@@ -328,7 +367,7 @@ class  _VCC_LO(VCC_reg):
         super().__init__(baseVCC=False)
         self.label = 'vcc_lo'
         self.regVar_size = 1
-    
+
     def __getitem__(self, key):
         l = 0
         r = 0
@@ -378,8 +417,8 @@ class  EXEC_reg(regVar):
     def __init__(self, baseEXEC=True):
         super().__init__(EXEC_reg_block.label, EXEC_reg_block, 0, 2)
         if(baseEXEC):
-        self.lo = _EXEC_LO()
-        self.hi = _EXEC_HI()
+            self.lo = _EXEC_LO()
+            self.hi = _EXEC_HI()
     
     def set_lable(self, label:str):
         raise AttributeError( "'EXEC' object has no attribute 'set_lable'" )
