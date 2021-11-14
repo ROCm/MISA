@@ -31,7 +31,6 @@ from .amdgpu import *
 from .mc import *
 from .mbb import *
 from .scheduler import *
-from .instruction import *
 from .kernel_driver import *
 from .gpu_instruct import *
 from .kernel_arg import *

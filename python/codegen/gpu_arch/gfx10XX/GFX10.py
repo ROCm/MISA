@@ -3392,27 +3392,27 @@ class sopk_instr_caller(inst_caller_base):
 		return self.ic_pb(sopk_base('s_cmovk_i32', sdst, imm16, None))
 	def s_cmpk_eq_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_eq_i32', None, ssrc, imm16))
-	def s_cmpk_eq_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_eq_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_eq_u32', None, ssrc, imm16))
 	def s_cmpk_ge_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_ge_i32', None, ssrc, imm16))
-	def s_cmpk_ge_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_ge_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_ge_u32', None, ssrc, imm16))
 	def s_cmpk_gt_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_gt_i32', None, ssrc, imm16))
-	def s_cmpk_gt_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_gt_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_gt_u32', None, ssrc, imm16))
 	def s_cmpk_le_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_le_i32', None, ssrc, imm16))
-	def s_cmpk_le_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_le_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_le_u32', None, ssrc, imm16))
 	def s_cmpk_lg_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lg_i32', None, ssrc, imm16))
-	def s_cmpk_lg_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_lg_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lg_u32', None, ssrc, imm16))
 	def s_cmpk_lt_i32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lt_i32', None, ssrc, imm16))
-	def s_cmpk_lt_u32(self, ssrc:regVar, imm16:regVar):
+	def s_cmpk_lt_u32(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lt_u32', None, ssrc, imm16))
 	def s_getreg_b32(self, sdst:regVar, hwreg:regVar):
 		return self.ic_pb(sopk_base('s_getreg_b32', sdst, hwreg, None))
@@ -3430,14 +3430,17 @@ class sopk_instr_caller(inst_caller_base):
 		return self.ic_pb(sopk_base('s_subvector_loop_end', sdst, label, None))
 	def s_version(self):
 		return self.ic_pb(sopk_base('s_version', None, None, None))
-	def s_waitcnt_expcnt(self, ssrc:regVar, imm16:regVar):
+	def s_waitcnt_expcnt(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_expcnt', None, ssrc, imm16))
-	def s_waitcnt_lgkmcnt(self, ssrc:regVar, imm16:regVar):
+	def s_waitcnt_lgkmcnt(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_lgkmcnt', None, ssrc, imm16))
-	def s_waitcnt_vmcnt(self, ssrc:regVar, imm16:regVar):
+	def s_waitcnt_vmcnt(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_vmcnt', None, ssrc, imm16))
-	def s_waitcnt_vscnt(self, ssrc:regVar, imm16:regVar):
+	def s_waitcnt_vscnt(self, ssrc:regVar, imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, ssrc, imm16))
+	def s_wait(self, vmcnt, expcnt=0, lgkmcnt=0):
+		cnt = vmcnt | (expcnt << 4) | (lgkmcnt << 8)
+		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, None, cnt))
 class sopp_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, SRC:Union[regVar,None,Any]): 
 		super().__init__(instruction_type.SMEM, INSTRUCTION)
@@ -3466,8 +3469,8 @@ class sopp_instr_caller(inst_caller_base):
 		return self.ic_pb(sopp_base('s_cbranch_execz', None))
 	def s_cbranch_scc0(self):
 		return self.ic_pb(sopp_base('s_cbranch_scc0', None))
-	def s_cbranch_scc1(self):
-		return self.ic_pb(sopp_base('s_cbranch_scc1', None))
+	def s_cbranch_scc1(self, label):
+		return self.ic_pb(sopp_base('s_cbranch_scc1', label))
 	def s_cbranch_vccnz(self):
 		return self.ic_pb(sopp_base('s_cbranch_vccnz', None))
 	def s_cbranch_vccz(self):
@@ -3514,8 +3517,8 @@ class sopp_instr_caller(inst_caller_base):
 		return self.ic_pb(sopp_base('s_ttracedata', None))
 	def s_ttracedata_imm(self):
 		return self.ic_pb(sopp_base('s_ttracedata_imm', None))
-	def s_waitcnt(self):
-		return self.ic_pb(sopp_base('s_waitcnt', None))
+	def s_waitcnt(self, SRC:int):
+		return self.ic_pb(sopp_base('s_waitcnt', SRC))
 	def s_wakeup(self):
 		return self.ic_pb(sopp_base('s_wakeup', None))
 class vintrp_base(inst_base): 
@@ -3753,9 +3756,9 @@ class vop2_instr_caller(inst_caller_base):
 		return self.ic_pb(vop2_base('v_fmamk_f32', vdst, None, src0, simm32, vsrc2))
 	def v_ldexp_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_ldexp_f16', vdst, None, src0, vsrc1, None))
-	def v_lshlrev_b32(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_lshlrev_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_lshlrev_b32', vdst, None, src0, vsrc1, None))
-	def v_lshrrev_b32(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_lshrrev_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_lshrrev_b32', vdst, None, src0, vsrc1, None))
 	def v_mac_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mac_f32', vdst, None, src0, vsrc1, None))
