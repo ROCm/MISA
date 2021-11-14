@@ -161,19 +161,18 @@ class onDemand_allocator(base_allocator):
             assert(False)
 
         s_pos = selected_block.pos
-        if alignment:
+        self.unallocated_units.pop(s_pos)
+        position = s_pos
+        if alignment > 1:
             position = ((s_pos + alignment - 1) // alignment) * alignment
             if(position > s_pos):
                 self.unallocated_units[s_pos] = onDemand_allocator.alloc_unit(s_pos, position-s_pos)
-        else:
-            self.unallocated_units.pop(s_pos)
-            position = s_pos
         
         r_unallocated_space = (selected_block.size + selected_block.pos) - (position + size)
         if(r_unallocated_space > 0):
             self.unallocated_units[position + size] = onDemand_allocator.alloc_unit(position + size, r_unallocated_space)
         
-        new_allocated_unit = onDemand_allocator.alloc_unit(position, position+size)
+        new_allocated_unit = onDemand_allocator.alloc_unit(position, size)
         
         self.allocated_units[position] = new_allocated_unit
 
@@ -207,7 +206,7 @@ class onDemand_allocator(base_allocator):
         if(r_unallocated_space > 0):
             self.unallocated_units[position + size] = onDemand_allocator.alloc_unit(position + size, r_unallocated_space)
         
-        new_allocated_unit = onDemand_allocator.alloc_unit(position, position+size)
+        new_allocated_unit = onDemand_allocator.alloc_unit(position, size)
         self.allocated_units[position] = new_allocated_unit
         
         self._update_alloc_size()
