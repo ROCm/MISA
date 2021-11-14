@@ -1,6 +1,6 @@
 
 
-from python.codegen.gpu_data_types import block_of_reg_blocks, reg_block
+from python.codegen.gpu_data_types import block_of_reg_blocks, label_t, reg_block
 from python.codegen.gpu_instruct import inst_base, inst_caller_base, instruction_type
 from typing import List, Optional, Union
 
@@ -33,8 +33,7 @@ class reg_allocator_caller(inst_caller_base):
 
 class flow_control_base(inst_base):
     def __init__(self, label, func_ptr) -> None:
-        super().__init__(instruction_type.FLOW_CONTROL, 'label')
-        self.label = label
+        super().__init__(instruction_type.FLOW_CONTROL, label)
         self.func_ptr = func_ptr
 
     def __str__(self) -> str:
@@ -49,11 +48,11 @@ class flow_control_caller(inst_caller_base):
     
     def kernel_func_end(self, func_ptr):
         return self.ic_pb(flow_control_base(f'{func_ptr.func_name}.end()', func_ptr))
+
     
 class HW_Reg_Init(inst_base):
     def __init__(self) -> None:
-        super().__init__(instruction_type.HW_REG_INIT, 'label')
-        self.label = 'HW_REG_INIT'
+        super().__init__(instruction_type.HW_REG_INIT, 'HW_REG_INIT')
         self.dst_regs = []
 
     def __str__(self) -> str:
@@ -64,3 +63,21 @@ class HW_Reg_Init(inst_base):
 
     def get_dst_regs(self):
         return self.dst_regs
+
+
+class instr_label_base(inst_base):
+    def __init__(self, instr_label:label_t) -> None:
+        super().__init__(instruction_type.FLOW_CONTROL, 'label')
+        self.instr_label = instr_label
+
+    def __str__(self) -> str:
+        return f'{self.instr_label.define()}'
+
+class instr_label_caller(inst_caller_base):
+    def __init__(self, insturction_list: List[inst_base]) -> None:
+        super().__init__(insturction_list)
+    
+    def set_label(self, label:label_t):
+        return self.ic_pb(instr_label_base(label))
+
+    

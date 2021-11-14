@@ -4,7 +4,7 @@ from python.codegen.gpu_arch.HW_components import base_HW, sgpr_file_t, vgpr_fil
 from python.codegen.gpu_arch.allocator import base_allocator
 from typing import Generic, List, Type, TypeVar
 from python.codegen.gpu_data_types import block_of_reg_blocks, reg_block, reg_type
-from python.codegen.generator_instructions import reg_allocator_base
+from python.codegen.generator_instructions import instr_label_caller, reg_allocator_base
 from python.codegen.gpu_instruct import gpu_instructions_caller_base, inst_caller_base, instruction_type
 
 import inspect
@@ -20,6 +20,9 @@ class kernel_func(Generic[T]):
             self.vgpr_f = vgpr_file_t(instructions_caller_base, vgpr_a)
 
         self.agpr_f = None
+
+        self.set_label = instr_label_caller(instructions_caller_base.il).set_label
+        
 
         self.ic = instructions_caller_base
         self.PIc = gpu_instructions_caller_base(instructions_caller_base.il)

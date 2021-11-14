@@ -74,8 +74,8 @@ class inst_caller_base(ABC):
         st = inspect.stack()
         return inst
 
-from python.codegen.generator_instructions import HW_Reg_Init, flow_control_base, flow_control_caller, reg_allocator_base, reg_allocator_caller
-class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller):
+from python.codegen.generator_instructions import HW_Reg_Init, flow_control_base, flow_control_caller, instr_label_caller, reg_allocator_base, reg_allocator_caller
+class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller, instr_label_caller):
     def __init__(self, insturction_list) -> None:
         super().__init__(insturction_list)
 
