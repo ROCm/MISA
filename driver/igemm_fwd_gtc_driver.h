@@ -498,7 +498,9 @@ public:
 
         int use_workspace = 0;
 
-        if(tunable->gemm_k_global_split == 1 && data_byte == 2 && tunable->vector_store == 1)
+        if(tunable->gemm_k_global_split == 1 && tunable->precision == "fp16" && tunable->vector_store == 1)
+            use_workspace = 1;
+        else if(tunable->gemm_k_global_split == 1 && tunable->precision == "bf16")
             use_workspace = 1;
         else
             use_workspace = 0;
@@ -648,7 +650,10 @@ public:
         size_t karg_tensor_cast_size = sizeof(karg_tensor_cast);
 
         hipFunction_t tensor_cast_func;
-        HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, "tensor_cast_fp16_fp32_1d"));
+        if(use_workspace == 1){
+            std::string tensor_cast_kernel_name = tunable->precision == "fp16" ? "tensor_cast_fp16_fp32_1d" : "tensor_cast_bf16_fp32_1d";
+            HIP_CALL(hipModuleGetFunction(&tensor_cast_func, module_tensor_cast, tensor_cast_kernel_name.c_str()));
+        }
 
         // TODO: use kernel to pre-clear when atomic
         auto fwd_prolog = tunable->gemm_k_global_split ? 
@@ -659,6 +664,16 @@ public:
                     hipMemset(p_out, 0, static_cast<size_t>(n) * splits * k * ho * wo * utility_string_to_data_byte(tunable->precision));
                 return .0;
             }} : 
+            std::function<float()>{[&]() -> float{
+                return .0;
+            }};
+
+        auto fwd_postlog = use_workspace == 1 ?
+            std::function<float()>{[&]() -> float{
+                size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                igemm_launch_kernel_single(tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1});
+                return .0;
+            }} :
             std::function<float()>{[&]() -> float{
                 return .0;
             }};
@@ -680,11 +695,11 @@ public:
                 }
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
-                if(use_workspace == 1){
-                    size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
-                    kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
-                }
-                float duration = igemm_launch_kernels_with_prolog(kernel_launchers, fwd_prolog, this->warmup, this->repeat);
+                // if(use_workspace == 1){
+                //     size_t thread_length_cast = (static_cast<size_t>(n) * k * ho * wo + 8 * 256) / (8 * 256) * (8 * 256) / 8;
+                //     kernel_launchers.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
+                // }
+                float duration = igemm_launch_kernels(kernel_launchers, fwd_prolog, fwd_postlog, this->warmup, this->repeat);
 
                 if(min_duration > duration){
                     min_duration = duration;
@@ -707,9 +722,9 @@ public:
             int gks   = heuristic_select_gks(arg, tunable);
             size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
 
-            float duration = igemm_launch_kernels_with_prolog({
+            float duration = igemm_launch_kernels({
                     {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
-                }, fwd_prolog, this->warmup, this->repeat);
+                }, fwd_prolog, fwd_postlog, this->warmup, this->repeat);
 
             result.return_code = 0;
             result.duration_ms = duration;
@@ -738,7 +753,7 @@ public:
             int group = arg->get_int("group_count");
 
             int max_split_num = tunable->gemm_k_global_split == 0 ?
-                0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, MAX_GEMM_K_SPLITS);
+                0 : igemm_get_max_gks(c / group, tunable->gemm_k_per_block, this->max_gks < 0 ? MAX_GEMM_K_SPLITS : this->max_gks);
             int start_gks = (tunable->gemm_k_global_split == 0 || max_split_num == 0)? 0 : 1;
 
             std::vector<int> gks_list;

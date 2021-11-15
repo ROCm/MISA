@@ -33,6 +33,7 @@ IGEMM_BWD_GTC_NHWC_PACK_OUT_FLAG = 0
 
 IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 IGEMM_BWD_GTC_PACK_DUE_ITER_B16_LO_HI = True
+IGEMM_BWD_GTC_NHWC_USE_BF16_1K_IN_FP16 = True    # used in gfx90a
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -129,7 +130,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 from functools import reduce
                 return reduce(lambda a, b: a*b, x, 1)
             ctrl_xdlops_mapping = get_ctrl_xdlops_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block, self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
-                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision)
+                    self.tunable.wave_repeat_m, self.tunable.wave_repeat_n, self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE, self.tunable.precision, bf16_1k_in_fp16 = self.use_bf16_1k_in_fp16())
             self.xdlops_mapping = igemm_xdlops_mapping_t(self.mc, ctrl_xdlops_mapping)
             assert flatten(ctrl_xdlops_mapping.acc_c_per_thread_m()) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by agpr per thread in m direction {ctrl_xdlops_mapping.acc_c_per_thread_m()}"
@@ -163,6 +164,14 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                         else:
                             vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                             #return 2
+                elif self.tunable.precision == 'bf16':
+                    if self.tunable.gemm_k_global_split:
+                        vector_write = 1
+                    else:
+                        if self.is_pad_k():
+                            vector_write = 1
+                        else:
+                            vector_write = utility_gcd(self.tunable.gemm_n_per_block, config_vs if config_vs != 0 else 8)
                 elif self.tunable.precision == 'int8':
                     assert False, "currently bwd not need int8"
                     if self.is_pad_k():
@@ -185,6 +194,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             if ctrl_coalescing_store_xdlops.vector_write_out == 1 and self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'fp16':
                 ctrl_coalescing_store_xdlops.precision = 'fp32'
+            elif self.tunable.gemm_k_global_split == 1 and self.tunable.precision == 'bf16':
+                ctrl_coalescing_store_xdlops.precision = 'fp32'
 
             #if gemm_m_order == IGEMM_BWD_GTC_NHWC_LDS_STORE_ORDER_GEMM_M_N1B_N0:
             #    # we may consider not suppor this mode
@@ -200,7 +211,19 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         self.vgpr = self.kernel_vgpr_t(mc, self)
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.agpr = self.kernel_agpr_t(mc, self)
-    
+
+    def use_bf16_1k_in_fp16(self):
+        if self.tunable.precision == 'fp16' and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and IGEMM_BWD_GTC_NHWC_USE_BF16_1K_IN_FP16:
+            return True
+        else:
+            return False
+
+    def get_predefine_for_bf16_1k_in_fp16(self):
+        return 'igemm_bwd_fp16_alt_impl'
+
+    def get_predefine_for_bf16_1k_in_fp16_default_value(self):
+        return 1
+
     def name(self):
         return igemm_gtc_encode_kernel_name(self.tunable, self.mc.arch_config.arch)
     
@@ -725,6 +748,12 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             v = self.outer.vgpr
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
+                if self.outer.use_bf16_1k_in_fp16():
+                    m_packed_fp16_to_bf16 = macro_packed_fp16_to_bf16_t(self.mc, num_vgpr = self.outer.get_num_vgpr_global_load_a())
+                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                    self._emit(m_packed_fp16_to_bf16(v.v_gld_a(), v.v_tmp(5)))
+                    self._emit(f'.endif')
                 self._emit(m_in_2d_shared_store(v.v_gld_a(), v.v_sst_a_os()))
             return self._get_deferred()
 
@@ -742,7 +771,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.outer.get_thread_lengths()
             m_in_2d_shared_store, m_wei_2d_shared_store = self.outer.get_macro_shared_store()
             with self._deferred_context():
-                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(),) if self.outer.tunable.precision == 'fp16' and tb_k % 2 == 0 else ()))
+                self._emit(m_wei_2d_shared_store(v.v_gld_b(), v.v_sst_b_os(), *(v.v_pack_k_tmp(), v.v_tmp(4)) if self.outer.tunable.precision in ('fp16', 'bf16') and tb_k % 2 == 0 else ()))
             return self._get_deferred()
 
     class kernel_karg_t(mc_base_t):
@@ -1190,7 +1219,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = self.get_thread_lengths()
         if self.tunable.precision == 'fp32':
             pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_k != 1 else 1
-        elif self.tunable.precision == 'fp16':
+        elif self.tunable.precision in ('fp16', 'bf16'):
             pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_c1 != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
@@ -1433,13 +1462,15 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             out_sst_ctrl.stride_d1 = k_pack_src_mat * data_byte
 
         class macro_wei_sst_t(macro_base_t):
-            def __init__(self, mc):
+            def __init__(self, mc, outer):
                 macro_base_t.__init__(self, mc, True)
+                self.outer = outer
                 self.issue_cnt = 0
                 self.declare_arg("v_src")
                 self.declare_arg("v_sst_os")
                 if data_byte == 2 and tb_k % 2 == 0:
                     self.declare_arg("v_pack_k_tmp")    # need tb_k // 2
+                    self.declare_arg("v_tmp2")
 
             def name(self):
                 return ''
@@ -1462,7 +1493,16 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                                 idx = i_k * num_tb_c + i_c
                                 k_r, k_p = i_k // k_pack_src_mat, i_k % k_pack_src_mat
                                 offset = k_r * stride_dk + i_c * stride_dc + k_p * data_byte
-                                self._emit(ds_write(self.v_sst_os(), self.v_src(idx), offset))
+                                if self.outer.use_bf16_1k_in_fp16():
+                                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                                    self._emit(f"v_cvt_f32_f16 v[{self.v_src(idx)}], v[{self.v_src(idx)}]")
+                                    self._emit(ds_write(self.v_sst_os(), self.v_src(idx), offset, 1))
+                                    self._emit(f'.else')
+                                    self._emit(ds_write(self.v_sst_os(), self.v_src(idx), offset))
+                                    self._emit(f'.endif')
+                                else:
+                                    self._emit(ds_write(self.v_sst_os(), self.v_src(idx), offset))
                                 self.issue_cnt = self.issue_cnt + ds_write.get_issues(offset)
                     else:
                         packed_k_dword = tb_k // 2
@@ -1472,9 +1512,21 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                             for i_pk in range(packed_k_dword):
                                 idx_0 = 2 * i_pk * dwords_per_c + i_c // 2
                                 idx_1 = 2 * i_pk * dwords_per_c + i_c // 2 + dwords_per_c
-                                op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
-                                # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
-                                self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                                if self.outer.use_bf16_1k_in_fp16():
+                                    src0_sel = '' if i_c % 2 == 0 else ' src0_sel:WORD_1'
+                                    fp16_alt_impl_pds = self.outer.get_predefine_for_bf16_1k_in_fp16()
+                                    self._emit(f'.if {fp16_alt_impl_pds} == 1')
+                                    self._emit(f"v_cvt_f32_f16 v[{self.v_tmp2(0)}], v[{self.v_src(idx_0)}]{src0_sel}")
+                                    self._emit(f"v_cvt_f32_f16 v[{self.v_tmp2(1)}], v[{self.v_src(idx_1)}]{src0_sel}")
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_tmp2(0)}], v[{self.v_tmp2(1)}]  op_sel:[1, 1]")
+                                    self._emit(f'.else')
+                                    op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
+                                    self._emit(f'.endif')
+                                else:
+                                    op_sel = '' if i_c % 2 == 0 else ' op_sel:[1, 1]'
+                                    # print(f"i_pk:{i_pk}, i_c:{i_c}, idx_0:{idx_0}, idx_1:{idx_1}")
+                                    self._emit(f"v_pack_b32_f16 v[{self.v_pack_k_tmp(i_pk)}], v[{self.v_src(idx_0)}], v[{self.v_src(idx_1)}]{op_sel}")
                             self._emit(ds_write(self.v_sst_os(), self.v_pack_k_tmp(), i_c * stride_dc))
                             self.issue_cnt = self.issue_cnt + ds_write.get_issues(i_c * stride_dc)
 
@@ -1515,7 +1567,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_3d_shared_store_t(self.mc, out_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
-                        macro_wei_sst_t(self.mc) if not self.tunable.tensor_b_pass_through else None
+                        macro_wei_sst_t(self.mc, self) if not self.tunable.tensor_b_pass_through else None
 
     def get_macro_move_slice_window(self):
         inline = True if self.tunable.fma_interleave else False
@@ -2754,7 +2806,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                                                                         self.tunable.wave_tile_m, self.tunable.wave_tile_n, self.tunable.wave_tile_k,
                                                                         self.tunable.wave_repeat_m, self.tunable.wave_repeat_n,
                                                                         self.tunable.wave_step_m, self.tunable.wave_step_n, self.tunable.block_size // AMDGPU_WAVE_SIZE,
-                                                                        self.tunable.precision)
+                                                                        self.tunable.precision, bf16_1k_in_fp16 = self.use_bf16_1k_in_fp16())
             fctrl.cxm                         = ctrl_xdlops_mapping
             fctrl.unroll_k                    = self.tunable.gemm_k_per_block
             fctrl.label_prefix                = self.name()

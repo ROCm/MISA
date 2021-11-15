@@ -1277,6 +1277,26 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             if ctrl.vector_write_out == 1:
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}]")
                                 self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}]")
+                        if ctrl.precision == 'bf16':
+                            if ctrl.vector_write_out == 1:
+                                if not ctrl.accvgpr_unified:
+                                    self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}] op_sel:[1,1]")
+                                    self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}], v[{v_c(vgpr_index + 3)}] op_sel:[1,1]")
+                                else:
+                                    self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 0)}], v[{a_c(agpr_index + 0)}], v[{a_c(agpr_index + 1)}] op_sel:[1,1]") ; agpr_consume_list.append(agpr_index + 0) ; agpr_consume_list.append(agpr_index + 1)
+                                    self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + 1)}], v[{a_c(agpr_index + 2)}], v[{a_c(agpr_index + 3)}] op_sel:[1,1]") ; agpr_consume_list.append(agpr_index + 2) ; agpr_consume_list.append(agpr_index + 3)
+                            else:
+                                if not ctrl.accvgpr_unified:
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 0)}], 16, v[{v_c(vgpr_index + 0)}]")
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 1)}], 16, v[{v_c(vgpr_index + 1)}]")
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 2)}], 16, v[{v_c(vgpr_index + 2)}]")
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 3)}], 16, v[{v_c(vgpr_index + 3)}]")
+                                else:
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 0)}], 16, v[{a_c(agpr_index + 0)}]") ; agpr_consume_list.append(agpr_index + 0)
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 1)}], 16, v[{a_c(agpr_index + 1)}]") ; agpr_consume_list.append(agpr_index + 1)
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 2)}], 16, v[{a_c(agpr_index + 2)}]") ; agpr_consume_list.append(agpr_index + 2)
+                                    self._emit(f"v_lshrrev_b32 v[{v_c(vgpr_index + 3)}], 16, v[{a_c(agpr_index + 3)}]") ; agpr_consume_list.append(agpr_index + 3)
+
                         elif ctrl.precision == 'int8':
                             # CAUSION: must have a symbol s_0xff and pre inited with 0xff
                             if ctrl.vector_write_out == 1:
@@ -1429,7 +1449,7 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
                         cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
-                        lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and ctrl.vector_write_out == 1 else 0
+                        lo_hi = i_gst_flat % 2 if ctrl.precision in ('fp16', 'bf16') and ctrl.vector_write_out == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
                             self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")

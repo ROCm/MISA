@@ -327,15 +327,23 @@ class simple_interleave_scheduler_t(mc_base_t):
             return self._get_deferred()
 
         if interleave_pattern == INTERLEAVE_PTN_1:
+            def check_share_mem_block(current_mbb):
+                if current_mbb.mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
+                    return True
+                if current_mbb.length() >=2:
+                    if current_mbb.mc_inst(-2).type() == MC_INST_TYPE_SHARE_MEM and \
+                        current_mbb.mc_inst(-1).type() == MC_INST_TYPE_PREDEFINE_ENDIF:
+                        return True
+                return False
             mbb_0_mfma_cnt = 0
             for m in mbb_0:
                 if mbb_have_mfma(m):
                     mbb_0_mfma_cnt += 1
 
-            assert mbb_1[0].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM
+            assert check_share_mem_block(mbb_1[0])
             num_smem = 0
             for i in range(len(mbb_1)):
-                if mbb_1[i].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
+                if check_share_mem_block(mbb_1[i]):
                     num_smem = num_smem + 1
                 else:
                     pass
@@ -353,7 +361,7 @@ class simple_interleave_scheduler_t(mc_base_t):
                             break
                         # print(f' --- inst:{mbb_1[m1_idx]()} === {m1_idx}/{len(mbb_1)}, {smem_per_interleave_cnt}/smem_per_interleave:{smem_per_interleave}')
                         self._emit(self.call_mbb(mbb_1[m1_idx]))
-                        if mbb_1[m1_idx].mc_inst(-1).type() == MC_INST_TYPE_SHARE_MEM:
+                        if check_share_mem_block(mbb_1[m1_idx]):
                             smem_per_interleave_cnt = smem_per_interleave_cnt + 1
                         m1_idx += 1
                         if smem_per_interleave_cnt >= smem_per_interleave:

@@ -46,6 +46,7 @@ using float16 = int16_t;
 #include <functional>
 #include <stdint.h>
 #include <numeric>
+#include "magic_div.h"
 
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_MAC              "mac"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
@@ -85,62 +86,6 @@ typedef enum {
     driver_mode_normal      = 0,    // bench all solutions
     driver_mode_heuristic   = 1,    // find suitable heuristic
 } driver_mode_t;
-
-#if USE_MAGIC_DIV
-typedef struct {
-    uint32_t magic;
-    uint8_t shift;
-} magic_div_u32_t;
-
-/*
-*
-* numer / denom = quotient, reminder
-*
-* use magic number to do integer division of uint32 (acctually INT32_MAX, the 31 bit divisoin)
-* most algorithm to compute uint32 need branching if cover all 32 bit of uint32.
-* since we compute the magic number on host side, implement the division in gpu side, it is better not use branching
-* hence add more restriction to numer and denom, to be 1 bit less. hence need less-or-equal than INT32_MAX 
-*
-* magic_div_u32_gen() compute from input arg d, to get a magic and a shift.
-* to use the value, below is a example host-side code to do this
-*
-* // host side version
-* static inline uint32_t magic_div_mulhi_u32(uint32_t x, uint32_t y) {
-*     uint64_t xl = x, yl = y;
-*     uint64_t rl = xl * yl;
-*     return (uint32_t)(rl >> 32);
-* }
-* uint32_t magic_div_u32_do(uint32_t numer, const struct magic_div_u32_t *denom) {
-*     uint32_t tmp = magic_div_mulhi_u32(denom->magic, numer);
-*     return (tmp + numer) >> denom->shift;
-* }
-*
-*/
-static inline magic_div_u32_t magic_div_u32_gen(uint32_t d) {
-    assert(d >= 1 && d <= INT32_MAX);
-    uint8_t shift;
-    for (shift = 0; shift < 32; shift++)
-        if ((1U << shift) >= d)
-            break;
-
-    uint64_t one = 1;
-    uint64_t magic = ((one << 32) * ((one << shift) - d)) / d + 1;
-    assert(magic <= 0xffffffffUL);
-
-    magic_div_u32_t result;
-    result.magic = magic;
-    result.shift = shift;
-    return result;
-}
-static inline uint32_t magic_div_u32_pack_shift(uint8_t s0, uint8_t s1, uint8_t s2, uint8_t s3)
-{
-    uint32_t shift_0 = static_cast<uint32_t>(s0);
-    uint32_t shift_1 = static_cast<uint32_t>(s1);
-    uint32_t shift_2 = static_cast<uint32_t>(s2);
-    uint32_t shift_3 = static_cast<uint32_t>(s3);
-    return (shift_3 << 24) | (shift_2 << 16) | (shift_1 << 8) | shift_0;
-}
-#endif
 
 typedef struct {
     std::string tensor_layout;
@@ -456,37 +401,9 @@ typedef struct{
     std::vector<size_t>     grid_size;
     std::vector<size_t>     block_size;
 }igemm_launch_kernel_t;
-static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t> & kernels, int warmup, int repeat)
-{
-    auto launch_kernels = [&]() -> float{
-        float ms = .0;
-        for(const auto ker :  kernels)
-            ms += igemm_launch_kernel_single(ker.kernel_func, ker.args, ker.arg_size, ker.grid_size, ker.block_size);
-        return ms;
-    };
 
-    assert(repeat > 2);
-    std::vector<float> duration_list;
-    for (int i = 0; i < warmup; i++) {
-        launch_kernels();
-    }
-
-    for (int i = 0; i < repeat; i++) {
-        float d = launch_kernels();
-        duration_list.push_back(d);
-    }
-    // remove min and max from list, then do average
-    auto imin = std::min_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imin);
-    auto imax = std::max_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imax);
-
-    assert(duration_list.size() == (repeat - 2));
-    float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
-    return avg_duration;
-}
-template<typename prolog_kernel_t>
-static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, int warmup, int repeat)
+template<typename prolog_kernel_t, typename postlog_kernel_t>
+static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t> & kernels, prolog_kernel_t prolog_kernel, postlog_kernel_t postlog_kernel, int warmup, int repeat)
 {
     auto launch_kernels = [&]() -> float{
         float ms = .0;
@@ -496,6 +413,7 @@ static inline float igemm_launch_kernels_with_prolog(const std::vector<igemm_lau
             //std::cout << ker.kernel_func << ": " << t << std::endl;
             ms += t;
         }
+        ms += postlog_kernel();
         return ms;
     };
 
@@ -594,6 +512,10 @@ public:
         this->gcn_arch = dev_prop.gcnArch;
         if(this->gcn_arch >= 1000)
             this->num_cu *= 2;
+        max_mpb = -1;
+        max_npb = -1;
+        max_kpb = -1;
+        max_gks = -1;
     }
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
         return igemm_gtc_encode_kernel_name(tunable);
@@ -624,15 +546,21 @@ public:
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * k * ho * wo;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * k * ho * wo;
         }
         else if(forw & 2) // backward data ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && tunable->vector_store == 1)
                 workspace_size = static_cast<size_t>(n) * c * hi * wi;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
+                workspace_size = static_cast<size_t>(n) * c * hi * wi;
         }
         else if(forw & 4) // backward weights ws size
         {
             if(tunable->precision == "fp16" && tunable->gemm_k_global_split == 1 && (tunable->tensor_b_thread_lengths[3] == 1 || tunable->vector_store == 1))
+                workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
+            else if(tunable->precision == "bf16" && tunable->gemm_k_global_split == 1)
                 workspace_size = static_cast<size_t>(group) * (k / group) * (c / group) * y * x;
         }
         else if(forw == 0) // all dirs
@@ -646,6 +574,14 @@ public:
             assert(false);
         }
         return workspace_size * sizeof(float);
+    }
+
+    void set_block_tile_boundary(int max_mpb_, int max_npb_, int max_kpb_, int max_gks_){
+        // CAUSTION! when setting this value to none -1, you need to understand what will happen
+        this->max_mpb = max_mpb_;
+        this->max_npb = max_npb_;
+        this->max_kpb = max_kpb_;
+        this->max_gks = max_gks_;
     }
 
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
@@ -667,6 +603,11 @@ public:
 
     int                 num_cu;
     int                 gcn_arch;
+
+    int                 max_mpb;
+    int                 max_npb;
+    int                 max_kpb;
+    int                 max_gks;
 };
 
 #endif
