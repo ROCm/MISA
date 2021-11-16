@@ -808,8 +808,8 @@ public:
                     }, wrw_prolog, wrw_postlog, this->warmup, this->repeat);
                 if(min_duration > duration){
                     min_duration = duration;
-                    selected_gkgs = gemm_k_global_splits;
-                    selected_grid_size = grid_size * selected_gkgs;
+                    selected_gkgs = _gks;
+                    selected_grid_size = grid_size * gemm_k_global_splits;
                 }
                 // printf("block:%d, grid:%d, split:%d, duration:%f\n", block_size, grid_size, gemm_k_global_splits, duration);
                 // fflush(stdout);
