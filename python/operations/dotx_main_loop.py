@@ -340,6 +340,8 @@ class dotx_main_loop_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"s_branch {label_fma_body}")
 
+        assert dotx_m.lanegroup_repeat_m <= local_prefetch_num, f"do not support the cases whose repeat m num is greater than local prefetch num"
+
         # Label: finishing of fma body
         self._emit_front(f"{label_fma_finishing}:")
         self._emit(f"s_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_a.get_issues()})")
