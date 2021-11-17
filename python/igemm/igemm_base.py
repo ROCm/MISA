@@ -324,7 +324,7 @@ class igemm_gtc_tunable_parameter_t(object):
                             ((self.tensor_a_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
                     self.num_vgpr_accumulate_b  = self.local_prefetch_num * self.lanegroup_repeat_n * dotx_mapping.thread_n() * \
                             ((self.tensor_b_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
-                    self.num_vgpr_accumulate_c  = dotx_mapping.lanegroup_tile_n * dotx_mapping.lanegroup_tile_m
+                    self.num_vgpr_accumulate_c  = dotx_mapping.total_acc_c()
                     
                     # TODO: try use prefetch
                     self.num_vgpr_accumulate_a  = self.local_prefetch_num * dotx_mapping.thread_m() 
