@@ -233,7 +233,10 @@ class ctrl_xdlops_mapping_t(object):
         if self.inst_mfma.data_type == AMDGPU_PRECISION_FP16:
             return 4
         if self.inst_mfma.data_type == AMDGPU_PRECISION_BF16:
-            return 2
+            if 'bf16_1k' in self.inst_mfma.options and self.inst_mfma.options['bf16_1k']:
+                return 4
+            else:
+                return 2
         if self.inst_mfma.data_type == AMDGPU_PRECISION_INT8:
             return 4
         assert False
@@ -448,6 +451,44 @@ ctrl_xdlops_mapping_fp16 = [
         ctrl_xdlops_mapping_t( 4  , 64,  4 ,  64,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16),
         ctrl_xdlops_mapping_t( 16 , 16,  16,  16,   4, 1,  1,  1,  1,  1,  v_mfma_f32_4x4x4f16)]
 
+def fp16_mfma_to_bf16_1k(fp16_mfma):
+    if fp16_mfma.name() == 'v_mfma_f32_4x4x4f16':
+        return v_mfma_f32_4x4x4bf16_1k
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x4f16':
+        return v_mfma_f32_16x16x4bf16_1k
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x16f16':
+        return v_mfma_f32_16x16x16bf16_1k
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x4f16':
+        return v_mfma_f32_32x32x4bf16_1k
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x8f16':
+        return v_mfma_f32_32x32x8bf16_1k
+    assert False, 'no such fp16 inst ' + fp16_mfma.name()
+    return None
+
+ctrl_xdlops_mapping_bf16_1k = [ctrl_xdlops_mapping_t(item.macro_tile_m, item.macro_tile_n,
+                                    item.wave_tile_m, item.wave_tile_n, item.wave_tile_k, item.waves,
+                                    item.wave_repeat_m, item.wave_repeat_n, item.wave_step_m, item.wave_step_n,
+                                    fp16_mfma_to_bf16_1k(item.inst_mfma))  for item in ctrl_xdlops_mapping_fp16 ]
+
+def fp16_mfma_to_16f(fp16_mfma):
+    if fp16_mfma.name() == 'v_mfma_f32_4x4x4f16':
+        return v_mfma_f32_4x4x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x4f16':
+        return v_mfma_f32_16x16x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_16x16x16f16':
+        return v_mfma_f32_16x16x16_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x4f16':
+        return v_mfma_f32_32x32x4_16f_m
+    if fp16_mfma.name() == 'v_mfma_f32_32x32x8f16':
+        return v_mfma_f32_32x32x8_16f_m
+    assert False, 'no such fp16 inst ' + fp16_mfma.name()
+    return None
+
+ctrl_xdlops_mapping_16f = [ctrl_xdlops_mapping_t(item.macro_tile_m, item.macro_tile_n,
+                                    item.wave_tile_m, item.wave_tile_n, item.wave_tile_k, item.waves,
+                                    item.wave_repeat_m, item.wave_repeat_n, item.wave_step_m, item.wave_step_n,
+                                    fp16_mfma_to_16f(item.inst_mfma))  for item in ctrl_xdlops_mapping_fp16 ]
+
 ctrl_xdlops_mapping_int8 = [
         ctrl_xdlops_mapping_t( 256, 256,  64,  32,  4, 4,  2,  2,  1,  2,  v_mfma_i32_32x32x4i8),
         ctrl_xdlops_mapping_t( 256, 256,  32,  32,  8, 4,  2,  2,  2,  2,  v_mfma_i32_32x32x8i8),
@@ -515,18 +556,21 @@ ctrl_xdlops_mapping_int8 = [
 
 
 
-def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves, precision):
+def get_ctrl_xdlops_mapping_from_wave_tile(macro_tile_m, macro_tile_n, wave_tile_m, wave_tile_n, wave_tile_k,  wave_repeat_m, wave_repeat_n, wave_step_m, wave_step_n, waves, precision, **options):
     if type(precision) is str:
         precision = amdgpu_string_to_precision(precision)
     ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
     if precision == AMDGPU_PRECISION_FP32:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp32
     elif precision == AMDGPU_PRECISION_FP16:
-        ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
+        if 'bf16_1k_in_fp16' in options and options['bf16_1k_in_fp16']:
+            ctrl_xdlops_mapping = ctrl_xdlops_mapping_16f
+        else:
+            ctrl_xdlops_mapping = ctrl_xdlops_mapping_fp16
     elif precision == AMDGPU_PRECISION_INT8:
         ctrl_xdlops_mapping = ctrl_xdlops_mapping_int8
     elif precision == AMDGPU_PRECISION_BF16:
-        assert False, f"not support bf16 now"
+        ctrl_xdlops_mapping = ctrl_xdlops_mapping_bf16_1k   # TODO: this is limited to gpu arch
     else:
         assert False, f"wrong data type"
     target_mfma_tiling = list()
@@ -551,7 +595,7 @@ def set_ctrl_xdlops_mapping_accvgpr_unified(accvgpr_unified):
     if set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified == accvgpr_unified:
         return
     set_ctrl_xdlops_mapping_accvgpr_unified.cached_accvgpr_unified = accvgpr_unified
-    for ctrl in (ctrl_xdlops_mapping_fp32, ctrl_xdlops_mapping_fp16, ctrl_xdlops_mapping_int8):
+    for ctrl in (ctrl_xdlops_mapping_fp32, ctrl_xdlops_mapping_fp16, ctrl_xdlops_mapping_int8, ctrl_xdlops_mapping_bf16_1k, ctrl_xdlops_mapping_16f):
         for x in ctrl:
             x.inst_mfma.accvgpr_unified = accvgpr_unified
 

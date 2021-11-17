@@ -87,6 +87,8 @@ class ctrl_mfma_main_loop_t(object):
         self.pass_through_b_v_pack       = 1
         self.pass_through_a_interleave_gld         = 1
         self.pass_through_b_interleave_gld         = 1
+        self.pass_through_bf16_1k_in_fp16          = False   # the pass through side is indeed bf16 1k
+        self.pass_through_bf16_1k_in_fp16_predefine = None   # predefine symbol for .if....else
         self.opt_1st_sld                 = True    # optimize 1st ds_read
 
 class mfma_main_loop_t(mc_base_t):
@@ -469,7 +471,16 @@ class mfma_main_loop_t(mc_base_t):
                             if not p_interleave_gld and v_gld_p_gpf:
                                 # move buffer
                                 for i_pnum in range(v_gld_p_num):
-                                    self._emit(f"v_mov_b32 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
+                                    if ctrl.pass_through_bf16_1k_in_fp16:
+                                        self._emit(f".if {ctrl.pass_through_bf16_1k_in_fp16_predefine} == 1")
+                                        self._emit(f"v_cvt_f32_f16 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
+                                        self._emit(f"v_cvt_f32_f16 v[{v_gld_p_gpf(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}] src0_sel:WORD_1")
+                                        self._emit(f"v_pack_b32_f16 v[{v_gld_p(i_pnum)}], v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}] op_sel:[1,1]")
+                                        self._emit(f".else")
+                                        self._emit(f"v_mov_b32 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
+                                        self._emit(f".endif")
+                                    else:
+                                        self._emit(f"v_mov_b32 v[{v_gld_p(i_pnum)}], v[{v_gld_p_gpf(i_pnum)}]")
 
                         for i_v in range(v_pack_p_per_kpt):
                             self._emit(mfma_step_pxq_vk(i_k, i_rp, i_rq, i_v, i_local_buffer_q))
