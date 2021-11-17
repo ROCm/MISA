@@ -62,3 +62,58 @@ v_dot4_i32_i8   = inst_dotx_vop3p_t('v_dot4_i32_i8' ,  4, AMDGPU_PRECISION_INT8)
 v_dot4_u32_u8   = inst_dotx_vop3p_t('v_dot4_u32_u8' ,  4, AMDGPU_PRECISION_UINT8)
 v_dot8_i32_i4   = inst_dotx_vop3p_t('v_dot8_i32_i4' ,  8, AMDGPU_PRECISION_INT4)
 v_dot8_u32_u4   = inst_dotx_vop3p_t('v_dot8_u32_u4' ,  8, AMDGPU_PRECISION_UINT4)
+
+class macro_dotx_mxn_t(macro_base_t):
+    '''
+    '''
+    def name(self):
+        return f".v_dotx_{self.precision}_{self.m}x{self.n}" + \
+                ("" if self.stride == 1 else f"_s{self.stride}")
+
+    def __init__(self, mc, m, n, stride, precision):
+        macro_base_t.__init__(self, mc)
+        self.m = m
+        self.n = n
+        self.stride = stride
+        self.precision = precision
+        assert stride >= n and stride % n == 0
+    def __call__(self, c, a, b):
+        return '{} {},{},{}'.format(self.name(), c, a, b)
+    def emit(self):
+        reg_a = msym_t(sym_t('a'))
+        reg_b = msym_t(sym_t('b'))
+        reg_c = msym_t(sym_t('c'))
+        with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
+            for idx_m in range(self.m):
+                for idx_n in range(self.n):
+                    for idx_dpp in range(8):
+                        self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+
+class macro_dotx_mxnxk_t(macro_base_t):
+    '''
+    continuous fma, or strided fma
+    TODO: implement any index-ed fma (for rdna)
+    '''
+    def name(self):
+        return f".v_dotx_{self.precision}_{self.m}x{self.n}x{self.k}" + \
+                ("" if self.stride == 1 else f"_s{self.stride}")
+
+    def __init__(self, mc, m, n, k, stride, precision):
+        macro_base_t.__init__(self, mc)
+        self.m = m
+        self.n = n
+        self.k = k
+        self.stride = stride
+        self.precision = precision
+        assert stride >= n and stride % n == 0
+    def __call__(self, c, a, b):
+        return '{} {},{},{}'.format(self.name(), c, a, b)
+    def emit(self):
+        reg_a = msym_t(sym_t('a'))
+        reg_b = msym_t(sym_t('b'))
+        reg_c = msym_t(sym_t('c'))
+        v_dotx_mxn = macro_dotx_mxn_t(self.mc, self.m, self.n, self.stride, self.precision)
+        with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
+            for idx_k in range(self.k // v_dot2c_f32_f16.k):
+                self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k), reg_b(idx_k)))
+                

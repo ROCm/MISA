@@ -143,10 +143,10 @@ typedef struct {
 } igemm_gtc_tunable_t;
 
 static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const config_section_t &sec){
-    if(sec.count("gemm_m_per_thread") > 0 && sec.count("gemm_n_per_thread") > 0){
+    if(sec.count("lanegroup_tile_m") > 0 && sec.count("lanegroup_tile_n") > 0){
         if(arch_string == "gfx900")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC;
-        if(arch_string == "gfx906")
+        if(arch_string == "gfx906" || arch_string == "gfx1030")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
         if(arch_string == "gfx908" || arch_string == "gfx90a")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
@@ -174,14 +174,22 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.gemm_k_per_block         = sec.at("gemm_k_per_block").get_int();
             tunable.fma_type                 = get_igemm_gtc_fma_type(codegen_sec.at("arch").get_string(), sec);
             assert(tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_NA);
-            if(tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            if(tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC){
                 tunable.gemm_m_per_thread        = sec.at("gemm_m_per_thread").get_int();
                 tunable.gemm_m_level0_cluster    = sec.at("gemm_m_level0_cluster").get_int();
                 tunable.gemm_m_level1_cluster    = sec.at("gemm_m_level1_cluster").get_int();
                 tunable.gemm_n_per_thread        = sec.at("gemm_n_per_thread").get_int();
                 tunable.gemm_n_level0_cluster    = sec.at("gemm_n_level0_cluster").get_int();
                 tunable.gemm_n_level1_cluster    = sec.at("gemm_n_level1_cluster").get_int();
-            }else{
+            }else if(tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+                tunable.lanegroup_tile_m        = sec.at("lanegroup_tile_m").get_int();
+                tunable.lanegroup_wave_m    = sec.at("lanegroup_wave_m").get_int();
+                tunable.lanegroup_repeat_m    = sec.at("lanegroup_repeat_m").get_int();
+                tunable.lanegroup_tile_n        = sec.at("lanegroup_tile_n").get_int();
+                tunable.lanegroup_wave_n    = sec.at("lanegroup_wave_n").get_int();
+                tunable.lanegroup_repeat_n    = sec.at("lanegroup_repeat_n").get_int();
+            }
+            else{
                 tunable.wave_tile_m              = sec.at("wave_tile_m").get_int();
                 tunable.wave_step_m              = sec.at("wave_step_m").get_int();
                 tunable.wave_repeat_m            = sec.at("wave_repeat_m").get_int();
@@ -286,7 +294,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             std::to_string(gemm_n_per_block) + "x" +
             std::to_string(gemm_k_per_block) + "_";
 
-    if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+    if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC){
         auto gemm_m_per_thread        = tunable->gemm_m_per_thread;
         auto gemm_m_level0_cluster    = tunable->gemm_m_level0_cluster;
         auto gemm_m_level1_cluster    = tunable->gemm_m_level1_cluster;
@@ -311,6 +319,10 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             std::to_string(gemm_n_repeat) + "x" +
             std::to_string(gemm_n_level0_cluster) + "x" +
             std::to_string(gemm_n_level1_cluster) + "_";
+    }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+        kernel_name +=   std::string("lt") + std::to_string(tunable->lanegroup_tile_m) + "x" + std::to_string(tunable->lanegroup_tile_n) + "_" + 
+                         "lw" + std::to_string(tunable->lanegroup_wave_m) + "x" + std::to_string(tunable->lanegroup_wave_n) + "_" +
+                         "ws" + std::to_string(tunable->lanegroup_repeat_m) + "x" + std::to_string(tunable->lanegroup_repeat_n) + "_";
     }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
         kernel_name +=   std::string("wt") + std::to_string(tunable->wave_tile_m) + "x" + std::to_string(tunable->wave_tile_n) + "x" + std::to_string(tunable->wave_tile_k) + "_" + 
                          "ws" + std::to_string(tunable->wave_step_m) + "x" + std::to_string(tunable->wave_step_n) + "_" +

@@ -38,8 +38,20 @@
 #include <numeric>
 #include <math.h>
 
+static inline int env_get_int_fwd(const char *var_name, int default_int) {
+    char *v = getenv(var_name);
+    int r = default_int;
+    if (v)
+        r = atoi(v);
+    return r;
+}
+
 //#define GEMM_K_GLOBAL_SPLIT 3
 #define MAX_GEMM_K_SPLITS 8
+
+#ifndef VECTOR_C_FP16
+#define VECTOR_C_FP16 8
+#endif
 
 typedef struct {
     void *p_in;
@@ -108,6 +120,40 @@ typedef struct {
     uint32_t __pack_0;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_nhwc_karg_t;
+
+typedef struct {
+    void *p_in;
+    void *p_wei;
+    void *p_out;
+    int hi;
+    int wi;
+    int n;
+    int k;                      // this is indeed k_per_group
+    int c;                      // this is indeed c_per_group
+    int ho;
+    int wo;
+    int stride_h;
+    int stride_w;
+    int dilation_h;
+    int dilation_w;
+    int pad_h;
+    int pad_w;
+    int y;
+    int x;
+    int group;
+#if USE_MAGIC_DIV
+    uint32_t magic_0;                       // denom: (gemm_n + n_per_block - 1) / n_per_block
+    uint32_t magic_1;                       // denom: ho*wo
+    uint32_t magic_2;                       // denom: wo
+    uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
+    uint32_t magic_4;                       // denom: x*c
+    uint32_t magic_5;                       // denom: c
+    uint32_t shift_pack_0;
+    uint32_t shift_pack_1;
+    uint32_t ks;
+    uint32_t __pack_0;
+#endif
+} __attribute__((packed)) igemm_fwd_gtc_nchwc_karg_t;
 
 #define IGEMM_FWD_GTC_MAX_KARG_SIZE     160
 
@@ -186,9 +232,11 @@ public:
     ~igemm_fwd_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
-        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
+        }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            return 256;
         }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
             int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
@@ -238,6 +286,9 @@ public:
             gemm_m = n * b;
             // gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
             gemm_n = k / group;
+        }else if (tunable->tensor_layout == "nchwc"){
+            gemm_m = k / group;
+            gemm_n = n * b;
         }else{
             assert(false);
         }
@@ -346,16 +397,6 @@ public:
                 return false;
             }
         }else if(tunable->tensor_layout == "nhwc"){
-            //int gemm_m = n * b;
-            // int gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
-            //int gemm_n = k / group;
-            //int gemm_k = (c / group) * y * x;
-
-            // support pad to modulo, hence only check when nxe is 0
-            //if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
-            //{
-            //    return false;
-            //}
             if(tunable->merge_e){
                 uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / ( x * (c / group))) % y;
                 uint32_t s_move_slice_k_x = (tunable->gemm_k_per_block /  (c / group)) % x;
@@ -373,20 +414,6 @@ public:
                 if(c >> tunable->gemm_k_global_split == 0  || ((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
                     return false;
             }
-
-            // if(gemm_m_per_block % tunable->nxb != 0){
-            //     //printf("tunable_is_valid false: gemm_n_per_block%tunable->nxb!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
-            //     return false;
-            // }
-
-            // if(n % (gemm_m_per_block / tunable->nxb) != 0){
-            //     //printf("tunable_is_valid false: n%(gemm_n_per_block/tunable->nxb)!=0, gemm_n_per_block is %d, tunable->nxb is %d\n", gemm_n_per_block, tunable->nxb);
-            //     return false;
-            // }
-
-            // if((nxe == 0) && ((b % tunable->nxb != 0) || (gemm_k % gemm_k_per_block != 0))){
-            //     return false;
-            // }
 
             if((nxe == 0) && !unit_conv){
                 return false;
@@ -423,29 +450,22 @@ public:
                     }
                 }
             }
+        }else if(tunable->tensor_layout == "nchwc"){
+            int vector_c = VECTOR_C_FP16;
+            if((c / group) % vector_c != 0 || (k / group) % vector_c != 0){
+                return false;
+            }
 
-            // input vector load limitation, n1b
-            //if(tunable->tensor_a_thread_lengths[3] > 1 && (
-            //    !unit_conv ||
-            //    unit_conv && (hi * wi) % tunable->tensor_a_thread_lengths[3] != 0)) {
-            //    return false;
-            //}
+            int gemm_m = k / group;
+            int gemm_n = n * b;
+            int gemm_k = (c / group) * y * x;
 
-            // // weight vector load limitation, c1e
-            // if(tunable->tensor_a_thread_lengths[1] > 1 &&
-            //         gemm_k % tunable->tensor_a_thread_lengths[1] != 0){
-            //     return false;
-            // }
+            // support pad to modulo, hence only check when nxe is 0
+            if((gemm_n % gemm_n_per_block != 0) || (gemm_m % gemm_m_per_block != 0))
+            {
+                return false;
+            }
 
-            // // if tb_c1e > 1, only 1x1 case is runable, it can not check gemm_k_padding either.
-            // if(tunable->tensor_b_thread_lengths[1] > 1 && (( x !=1 || y != 1)||(gemm_k % gemm_k_per_block != 0))){
-            //     return false;
-            // }
-
-            // // if t_c0 > 1, need to check gemmk per block
-            // if(tunable->tensor_b_thread_lengths[0] > 1 && (gemm_k % gemm_k_per_block != 0)){
-            //     return false;
-            // }
         }else{
             assert(0);
         }
@@ -623,6 +643,59 @@ public:
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
+        } else if(tunable->tensor_layout == "nchwc") {
+            igemm_fwd_gtc_nchwc_karg_t karg;
+            int vector_c       = VECTOR_C_FP16;
+            karg.p_in          = p_in;
+            karg.p_wei         = p_wei;
+            karg.p_out         = p_out;
+            karg.hi            = hi;
+            karg.wi            = wi;
+            karg.n             = n;
+            karg.k             = k / group;
+            karg.c             = c / group / vector_c;
+            karg.ho            = ho;
+            karg.wo            = wo;
+            karg.stride_h      = stride_h;
+            karg.stride_w      = stride_w;
+            karg.dilation_h    = dilation_h;
+            karg.dilation_w    = dilation_w;
+            karg.pad_h         = pad_h;
+            karg.pad_w         = pad_w;
+            karg.y             = y;
+            karg.x             = x;
+            karg.group         = group;
+            if(tunable->merge_e){
+                uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
+                uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
+                uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
+                karg.y = (s_move_slice_k_y << 24) | karg.y;
+                karg.x = (s_move_slice_k_x << 24) | karg.x;
+                karg.c = (s_move_slice_k_c << 24) | karg.c;
+            }
+#if USE_MAGIC_DIV
+            int gemm_n = n * ho * wo;
+            int gemm_m = k / group;
+
+            magic_div_u32_t mdiv_0 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
+            magic_div_u32_t mdiv_1 = magic_div_u32_gen(ho*wo);
+            magic_div_u32_t mdiv_2 = magic_div_u32_gen(wo);
+            magic_div_u32_t mdiv_3 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) * utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
+            karg.magic_0        = mdiv_0.magic;
+            karg.magic_1        = mdiv_1.magic;
+            karg.magic_2        = mdiv_2.magic;
+            karg.magic_3        = mdiv_3.magic;
+            karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
+            if(tunable->merge_e){
+                magic_div_u32_t mdiv_4 = magic_div_u32_gen(y*x);
+                magic_div_u32_t mdiv_5 = magic_div_u32_gen(x);
+                karg.magic_4           = mdiv_4.magic;
+                karg.magic_5           = mdiv_5.magic;
+                karg.shift_pack_1      = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
+            }
+#endif
+            karg_size = sizeof(karg);
+            memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
         } else {
             assert(0);
         }
@@ -631,6 +704,9 @@ public:
 
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
+
+        std::cout << std::endl;
+        std::cout << kernel_name << std::endl;
 
 #ifdef IGEMM_SPLIT_KERNEL
         hipModule_t cur_kernel_module;
@@ -693,6 +769,10 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
+                if(tunable->tensor_layout == "nchwc"){
+                    splits = 1;
+                }
+                printf("block:%d, grid:%d\n", block_size, grid_size);
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
                 // if(use_workspace == 1){
@@ -731,6 +811,27 @@ public:
             result.gks         = gks;
         }else{
             assert(0);
+        }
+
+        if(env_get_int_fwd("DBG_MODE", 0) != 0){
+            printf("workspace debug \r\n");
+            float* gemmc_host_check = (float* )malloc(k * n * ho * wo * sizeof(float));
+            printf("gemmc_host_check size=%d\n",  k * n * ho * wo * sizeof(float));
+            printf("copy output\n");
+            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo * sizeof(float16), hipMemcpyDeviceToHost);
+
+            for (int i_check = 0; i_check < (0+block_size); i_check++)
+            {
+                float16 *gemmc_host_check_fp16 = (float16 *)gemmc_host_check;
+                float16 check_num0 = gemmc_host_check_fp16[i_check*2];
+                float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
+                float check_num0_fp32 = (float)check_num0;
+                float check_num1_fp32 = (float)check_num1;
+                printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+            }
+            printf("s_p_out=%x\n", p_out);
+            printf("workspace debug end \r\n");
+            free(gemmc_host_check);
         }
 
 #ifdef IGEMM_SPLIT_KERNEL

@@ -27,6 +27,7 @@
 
 from ..codegen import *
 from .utility import *
+from .dlops_inst import *
 
 class inst_fma_t(object):
     def __init__(self, arch_config):
@@ -106,6 +107,10 @@ class ctrl_fma_main_loop_t(object):
         self.s_kitr                      = None
         self.s_knum                      = None
 
+        # arch and fma type
+        self.arch_name                   = AMDGPU_ARCH_GFX1030
+        self.precision                   = 'fp16'
+
 
 class fma_main_loop_t(mc_base_t):
     '''
@@ -152,7 +157,7 @@ class fma_main_loop_t(mc_base_t):
 
         # assert type(v_a) is sym_t and type(s_kitr) is sym_t  # other gpr type check ignore
 
-        data_byte = amdgpu_precision_data_byte(self.ctrl.data_type)
+        data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(self.ctrl.precision))
 
         lds_width_m = data_byte * self.ctrl.thread_m * self.ctrl.gemm_m_level0_cluster * self.ctrl.gemm_m_level1_cluster
         lds_width_n = data_byte * self.ctrl.thread_n * self.ctrl.gemm_n_level0_cluster * self.ctrl.gemm_n_level1_cluster
@@ -171,7 +176,10 @@ class fma_main_loop_t(mc_base_t):
         thread_sub_m = self.ctrl.thread_m // self.ctrl.gemm_m_repeat
         thread_sub_n = self.ctrl.thread_n // self.ctrl.gemm_n_repeat
 
-        v_fma = macro_v_fma_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n)
+        if self.ctrl.arch_name == AMDGPU_ARCH_GFX1030:
+            v_fma = macro_dlops_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n, self.ctrl.precision)
+        else:
+            v_fma = macro_v_fma_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n)
 
         # start emit
         self._emit(f"; start FMA loop, {thread_m}x{thread_n} thread tile with {thread_sub_m}x{thread_sub_n} sub-tile")

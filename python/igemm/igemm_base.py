@@ -217,6 +217,8 @@ class igemm_gtc_tunable_parameter_t(object):
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
+        self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
@@ -226,6 +228,8 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
             assert self.nxb == 0, 'nhwc now no need have different nxb value'
+        elif self.tensor_layout == "nchwc":
+            assert self.vector_c in (4, 8), 'do not support arbitary vector_c'
         else:
             assert False
         assert self.nxe in (0,1)
@@ -271,6 +275,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
+            elif self.tensor_layout == "nchwc":
+                pass
             else:
                 assert False
         elif self.direction == 'bwd':
@@ -318,7 +324,11 @@ class igemm_gtc_tunable_parameter_t(object):
                             ((self.tensor_a_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
                     self.num_vgpr_accumulate_b  = self.local_prefetch_num * self.lanegroup_repeat_n * dotx_mapping.thread_n() * \
                             ((self.tensor_b_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
-                    self.num_vgpr_accumulate_c  = dotx_mapping.lanegroup_m_per_thread() * dotx_mapping.lanegroup_n_per_thread()
+                    self.num_vgpr_accumulate_c  = dotx_mapping.lanegroup_tile_n * dotx_mapping.lanegroup_tile_m
+                    
+                    # TODO: try use prefetch
+                    self.num_vgpr_accumulate_a  = self.local_prefetch_num * dotx_mapping.thread_m() 
+                    self.num_vgpr_accumulate_b  = self.local_prefetch_num * dotx_mapping.thread_n()
             else:
                 self.gemm_m_repeat              = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
                 self.gemm_n_repeat              = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
@@ -662,8 +672,11 @@ class igemm_gtc_tunable_parameter_t(object):
                 line_start + new_line + \
                 line_start + 'block_size                 {} {}'.format(equal, self.block_size) + new_line
             if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
-                sstr += \
-                line_start + 'thread_tile                {} {}x{}'.format(equal, self.thread_tile_m, self.thread_tile_n) + new_line
+                if igemm_use_lanegroup_thread_mapping(self):
+                    pass
+                else:
+                    sstr += \
+                    line_start + 'thread_tile                {} {}x{}'.format(equal, self.thread_tile_m, self.thread_tile_n) + new_line
             sstr += \
                 line_start + 'lds_total                  {} {}'.format(equal, self.lds_total) + new_line + \
                 line_start + 'lds_buffer_num             {} {}'.format(equal, self.lds_buffer_num) + new_line + \

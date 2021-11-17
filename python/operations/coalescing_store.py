@@ -222,7 +222,7 @@ class igemm_coalescing_store_t(mc_base_t):
     def __init__(self, mc, ctrl):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_coalescing_store_t
-        assert ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 2
+        assert (ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 2) or (ctrl.ctm.t_mr() == 2 and ctrl.ctm.t_nr() == 4)
         assert ctrl.block_size % ctrl.ctm.n_n_total() == 0, f"block_size:{ctrl.block_size}, gemm_n:{ctrl.ctm.n_n_total()}"
         self.ctrl = ctrl
 
@@ -357,7 +357,10 @@ class igemm_coalescing_store_t(mc_base_t):
                     issue_list.append(inst_sld.get_issues(sld_offset))
 
                 if v_store_flag is not None and type(v_store_flag) is str:
-                    self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
+                    if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
+                        self._emit(f"v_cmpx_eq_u32 1, v[{v_store_flag}]")
+                    else:
+                        self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
                     #self._emit(f"s_cbranch_execz {label_prefix}_co_{i_group}")
 
                 self._emit(f";   store to global, m index start from {m_index_start_per_group}, m0:{m0_index_start_per_group}, m1:{m1_index_start_per_group}")
@@ -425,6 +428,7 @@ class ctrl_coalescing_store_xdlops_t(object):
         self.block_size = 256
         self.vector_write_out = 1
         self.precision = 'fp32'
+        self.arch_name = AMDGPU_ARCH_GFX908
         self.accvgpr_unified = False        # agpr unified in gfx90a
         self.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M0_M1
         self.gemm_m_m0_m1 = []
@@ -1429,7 +1433,10 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                             self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
+                        if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
+                            self._emit(f"v_cmpx_eq_u32 1, v[{v_store_flag}]")
+                        else:
+                            self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
 
                     self._emit(f";   store to global, m index start from {m_index_start_per_group}, m0:{m0_index_start_per_group}, m1:{m1_index_start_per_group}")
 

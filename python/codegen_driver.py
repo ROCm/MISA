@@ -51,6 +51,8 @@ class codegen_driver_t(mc_base_t):
             # gtc fwd
             if 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'] == 'nhwc':
                 kernel_list.extend([igemm_fwd_gtc_nhwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+            elif 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'] == 'nchwc':
+                kernel_list.extend([igemm_fwd_gtc_nchwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
             else:
                 kernel_list.extend([igemm_fwd_gtc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
 
@@ -88,6 +90,16 @@ class codegen_driver_t(mc_base_t):
         macro_v_fma_mxn_t(self.mc, 4, 2, 4).emit()
         macro_v_fma_mxn_t(self.mc, 2, 2, 4).emit()
 
+    def _emit_dlops_macro(self):
+        macro_dlops_mxn_t(self.mc, 4, 4, 8, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 2, 4, 8, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 4, 2, 4, 'fp16').emit()
+        macro_dlops_mxn_t(self.mc, 2, 2, 4, 'fp16').emit()
+
+    def _emit_dotx_macro(self):
+        macro_dotx_mxn_t(self.mc, 1, 1, 1, 'fp16').emit()
+        macro_dotx_mxnxk_t(self.mc, 1, 1, 8, 1, 'fp16').emit()
+
     def emit_global_macro(self):
         # emit global macro, independent of tunable
         macro_int_div_vv_t(self.mc).emit()
@@ -107,7 +119,9 @@ class codegen_driver_t(mc_base_t):
         if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
-        if self.mc.arch_config.use_dlops:
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit_dotx_macro()
+        else:
             self._emit_fma_macro()
         if hasattr(self.kernel_list[0], 'use_bf16_1k_in_fp16'):
             if self.kernel_list[0].use_bf16_1k_in_fp16():
@@ -135,7 +149,9 @@ class codegen_driver_t(mc_base_t):
         if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
-        if self.mc.arch_config.use_dlops:
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            self._emit_dlops_macro()
+        else:
             self._emit_fma_macro()
 
     def emit_igemm_macro(self):

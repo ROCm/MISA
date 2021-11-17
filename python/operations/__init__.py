@@ -31,9 +31,11 @@ from .shared_memory import *
 from .utility import *
 from .thread_mapping import *
 from .coalescing_store import *
+from .coalescing_store_dotx import *
 from .mfma import *
 from .xdlops_mapping import *
 from .mfma_main_loop import *
 from .nop import *
 from .dotx import *
 from .dotx_mapping import *
+from .dotx_main_loop import *

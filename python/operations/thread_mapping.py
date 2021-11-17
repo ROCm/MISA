@@ -25,6 +25,7 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 from ..codegen import *
+from ..igemm import igemm_base
 from .utility import *
 
 class ctrl_thread_mapping_t(object):
@@ -116,19 +117,19 @@ class igemm_thread_mapping_t(mc_base_t):
             self._emit(f";  perthrd       {t_mr} x   {t_nr} x  1  x  1  x  {t_m0}  x  {t_n0}")
 
             self._emit(f"v_and_b32 v[{v_tmp4}], {c_n0 - 1}, v[{v_tid_shifter}]")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp4}], {utility_log2(t_n0)}, v[{v_tmp4}]         ; => iNL0")
-            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {utility_log2(c_n0)}, v[{v_tid_shifter}]")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp4}], {igemm_base.igemm_log2(t_n0)}, v[{v_tmp4}]         ; => iNL0")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_base.igemm_log2(c_n0)}, v[{v_tid_shifter}]")
 
             self._emit(f"v_and_b32 v[{v_tmp4}+1], {c_m0 - 1}, v[{v_tid_shifter}]")
-            self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {utility_log2(t_m0)}, v[{v_tmp4}+1]     ; => iML0")
-            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {utility_log2(c_m0)}, v[{v_tid_shifter}]")
+            self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {igemm_base.igemm_log2(t_m0)}, v[{v_tmp4}+1]     ; => iML0")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_base.igemm_log2(c_m0)}, v[{v_tid_shifter}]")
 
             self._emit(f"v_and_b32 v[{v_tmp4}+2],   {c_n1 - 1}, v[{v_tid_shifter}]       ; => iNL1")
-            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {utility_log2(c_n1)}, v[{v_tid_shifter}]")
+            self._emit(f"v_lshrrev_b32 v[{v_tid_shifter}], {igemm_base.igemm_log2(c_n1)}, v[{v_tid_shifter}]")
             self._emit(f"v_and_b32 v[{v_tmp4}+3],   {c_m1 - 1}, v[{v_tid_shifter}]       ; => iML1")
 
-            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {utility_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
-            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {utility_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]              ; im  (without repeat)")
+            self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4}+2], {igemm_base.igemm_log2(t_n0 * c_n0)}, v[{v_tmp4}]               ; in  (without repeat)")
+            self._emit(f"v_lshl_or_b32 v[{v_gemm_im}], v[{v_tmp4}+3], {igemm_base.igemm_log2(t_m0 * c_m0)}, v[{v_tmp4}+1]              ; im  (without repeat)")
         return self._get_deferred()
 
     def emit(self):
