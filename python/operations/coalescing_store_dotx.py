@@ -511,7 +511,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 vgpr_index_acc = 0
                 for i_mr in range(l_mr):
                     gpr_m_offset = i_mr * s_mr
-                    sst_m_offset = i_mr * ctrl.vector_write_out   
+                    sst_m_offset = i_mr * (ctrl.dotx_m.macro_tile_m // ctrl.dotx_m.lanegroup_repeat_m // ctrl.vector_write_out)
+                    #print(f"sst_m_offset={sst_m_offset}")
                     
                     #if ctrl.vector_write_out != 1:
                     #    sst_m_offset = sst_m_offset * l_mt          # ATTENTION! if vector write out, we no longer have shrink granularity, hence need multiply back

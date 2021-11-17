@@ -24,7 +24,7 @@ else
 fi
 
 # host compilation
-export TEST_KERNEL=igemm_${DIR}_gtc_gfx1030_nchwc_fp16
+export TEST_KERNEL=igemm_${DIR}_gtc_gfx1030_nchwc_fp16_test
 rm out/conv_driver.exe
 rm out/${TEST_KERNEL}.hsaco
 
