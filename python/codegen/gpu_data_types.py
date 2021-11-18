@@ -97,8 +97,8 @@ class label_t():
         return f' {self.val}:'
 
 class reg_block(object):
-    __slots__ = ['label', 'dwords', 'reg_t', 'position']
-    def __init__(self, label:str, reg_t:reg_type, position:int = 0, dwords:int = 1):
+    __slots__ = ['label', 'dwords', 'reg_t', 'position', 'label_as_pos', 'reg_align']
+    def __init__(self, label:str, reg_t:reg_type, position:int = 0, dwords:int = 1, label_as_pos=False, reg_align=1):
         
         assert type(label) is str
         assert type(position) is int
@@ -108,11 +108,13 @@ class reg_block(object):
         self.position = position
         self.dwords = dwords
         self.reg_t = reg_t
+        self.reg_align = reg_align
+        self.label_as_pos = label_as_pos
 
     @classmethod
-    def declare(cls, label:str, reg_t:reg_type, dwords:int = 1):
+    def declare(cls, label:str, reg_t:reg_type, dwords:int = 1, label_as_pos=False, reg_align=1):
         '''Declaration without definition, only block type, label and size will be defined'''
-        return reg_block(label, reg_t, position=-1, dwords=dwords)
+        return reg_block(label, reg_t, position=-1, dwords=dwords, label_as_pos=label_as_pos, reg_align=reg_align)
 
     #def define(self):
     #    if(self.position < 0):
@@ -143,6 +145,24 @@ class reg_block(object):
             return self.expr(index1)
         else:
             return self.expr((index1,index2))
+    
+    def get_str(self, index=None) -> str:
+        if self.label_as_pos:
+            self_pos = self.label
+        else:
+            self_pos = self.position
+
+        if index is None:
+            return f'{self.reg_t.value}[{self_pos}]'
+        elif type(index) is int:
+            if index == 0:
+                return f'{self.reg_t.value}[{self_pos}]'
+            return f'{self.reg_t.value}[{self_pos}+{index}]'
+        elif type(index) is tuple:
+            assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
+            return f'{self.reg_t.value}[{self_pos}+{index[0]}:{self_pos}+{index[1]}]'
+        else:
+            assert False
     
     def __getitem__(self, key):
         slice_size = 1
@@ -179,15 +199,16 @@ class reg_block_custom_reg(reg_block):
     def expr(self, index = 0):
         raise AttributeError( "'custom_reg' object has no attribute 'expr'" )
 
+
 class block_of_reg_blocks(reg_block):
-    def __init__(self, label: str, reg_t: reg_type, reg_blocks:List[reg_block], position: int = 0, dwords: int = 1):
-        super().__init__(label, reg_t, position=position, dwords=dwords)
+    def __init__(self, label: str, reg_t: reg_type, reg_blocks:List[reg_block], position: int = 0, dwords: int = 1, reg_align=1):
+        super().__init__(label, reg_t, position=position, dwords=dwords, reg_align=reg_align)
         self._reg_blocks = reg_blocks
     
     @classmethod
-    def declare(cls, label:str, reg_t:reg_type, reg_blocks:List[reg_block], dwords:int = 1):
+    def declare(cls, label:str, reg_t:reg_type, reg_blocks:List[reg_block], dwords:int = 1, reg_align=1):
         '''Declaration without definition, only block type, label and size will be defined'''
-        return block_of_reg_blocks(label, reg_t, reg_blocks, position=-1, dwords=dwords)
+        return block_of_reg_blocks(label, reg_t, reg_blocks, position=-1, dwords=dwords, reg_align=reg_align)
 
 class regVar(object):
     __slots__ = ['label', 'base_reg', 'reg_offset', 'regVar_size']

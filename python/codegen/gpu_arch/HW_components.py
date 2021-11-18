@@ -27,14 +27,15 @@ from typing import Type
 from python.codegen.gpu_arch.allocator import base_allocator
 
 class gpr_file_t():#mc_base_t):
-    __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks']
-    def __init__(self, ic:inst_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None):
+    __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks', 'label_as_pos']
+    def __init__(self, ic:inst_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None, label_as_pos=False):
         #mc_base_t.__init__(self, mc)
         self._allocator = gpr_allocator
         self.reg_t = reg_t
         self.define_on_creation = False
         self.ic = reg_allocator_caller(ic.il)
         self.active_blocks:List[reg_block] = []
+        self.label_as_pos = label_as_pos
     
     @classmethod
     def create_from_other_inst(cls, other):
@@ -74,7 +75,7 @@ class gpr_file_t():#mc_base_t):
         return [dealoc(i,0) for i in blocks]
 
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
-        ret = reg_block.declare(label, self.reg_t, dwords=dwords)
+        ret = reg_block.declare(label, self.reg_t, dwords=dwords, label_as_pos=self.label_as_pos, reg_align=alignment)
         self.active_blocks.append(ret)
         self.ic.reg_alloc(ret, alignment, self._alloc)
         return ret
@@ -82,8 +83,8 @@ class gpr_file_t():#mc_base_t):
     def free(self, reg_block):
         self.ic.reg_dealloc(reg_block, self._dealloc)
 
-    def add_no_pos(self, label:str, dwords:int = 1):
-        return reg_block.declare(label, self.reg_t, dwords=dwords)
+    def add_no_pos(self, label:str, dwords:int = 1, reg_align=1):
+        return reg_block.declare(label, self.reg_t, dwords=dwords, reg_align=reg_align)
 
     def add_block(self, label:str, reg_list:List[reg_block], alignment:int = 0) ->block_of_reg_blocks:
         in_block_define = gpr_off_sequencer_t()
@@ -93,7 +94,7 @@ class gpr_file_t():#mc_base_t):
             assert i.reg_t == self.reg_t, f" reg_t of element {i} doesn't match the block reg_t"
             block_pos.append(in_block_define(i.dwords))
 
-        block = block_of_reg_blocks.declare(label, self.reg_t, reg_list, dwords=in_block_define.get_last_pos())
+        block = block_of_reg_blocks.declare(label, self.reg_t, reg_list, dwords=in_block_define.get_last_pos(), reg_align=alignment)
 
         self.ic.Block_alloc([block,*reg_list], block_pos, alignment, self._alloc_block)
         
