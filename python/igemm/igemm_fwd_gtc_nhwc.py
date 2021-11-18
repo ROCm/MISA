@@ -89,11 +89,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             ctrl_coalescing_store.vector_write_out = 1                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store.block_size = self.tunable.block_size
 
-            #gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
-            na_nb0, na_nb1, na_e, na_c, nb_e, nb_c, nb_k0, nb_k1 = self.get_dims_lengths()
-            ctrl_coalescing_store.gemm_m_m0_m1 = [na_nb0, na_nb1]
-            #if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0:
-            #    ctrl_coalescing_store.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
+            gemm_m_order, gemm_n_order = self.get_lds_gemm_m_gemm_n_order()
+            na_c0, na_c1e, na_k0, na_k1, nb_c0, nb_c1e, nb_n0, nb_n1b = self.get_dims_lengths()
+            ctrl_coalescing_store.gemm_m_m0_m1 = [na_k0, na_k1]
+            if gemm_m_order == IGEMM_FWD_GTC_LDS_STORE_ORDER_GEMM_M_K1_K0:
+                ctrl_coalescing_store.gemm_m_order = IGEMM_COALESCING_GEMM_M_ORDER_M1_M0
 
             ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
