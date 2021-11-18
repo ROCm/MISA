@@ -53,6 +53,8 @@ static inline int env_get_int_fwd(const char *var_name, int default_int) {
 #define VECTOR_C_FP16 8
 #endif
 
+#define LANEGROUP_SIZE 8
+
 typedef struct {
     void *p_in;
     void *p_wei;
@@ -236,7 +238,10 @@ public:
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
         }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
-            return 256;
+            int waves_per_m = tunable->gemm_m_per_block / (tunable->lanegroup_tile_m * tunable->lanegroup_wave_m * tunable->lanegroup_repeat_m);
+            int waves_per_n = tunable->gemm_n_per_block / (tunable->lanegroup_tile_n * tunable->lanegroup_wave_n * tunable->lanegroup_repeat_n);
+            int wavefront_size = tunable->lanegroup_wave_m * tunable->lanegroup_wave_n * LANEGROUP_SIZE;
+            return waves_per_m * waves_per_n * wavefront_size;
         }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
             int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
