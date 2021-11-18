@@ -145,7 +145,7 @@ class reg_block(object):
             return self.expr(index1)
         else:
             return self.expr((index1,index2))
-    
+
     def get_str(self, index=None) -> str:
         if self.label_as_pos:
             self_pos = self.label
@@ -230,20 +230,23 @@ class regVar(object):
 
     def __getitem__(self, key):
         slice_size = 1
-        new_offset = self.reg_offset
+
         assert(self.regVar_size > 0)
         if(type(key) is tuple):
             assert len(key) == 2
             slice_size = key[1] - key[0] + 1
-            new_offset = new_offset + key[0]
+            new_offset = key[0]
         elif (type(key) is slice):
             indices = key.indices(self.regVar_size - 1)
             assert(indices[2] <= 1)
             slice_size = indices[1] - indices[0] + 1
             new_offset = indices[0]
         else:
-            new_offset = new_offset + key
+            new_offset = key
         #send label without reg_type prefix
+        assert(new_offset < self.regVar_size and slice_size <= self.regVar_size - new_offset)
+        new_offset = self.reg_offset + new_offset
+        
         block_slice = regVar('', self.base_reg, new_offset, slice_size)
         return block_slice
 
@@ -269,12 +272,11 @@ class regVar(object):
     def __str__(self) -> str:
         assert(self.regVar_size > 0)
         right_index = self.regVar_size - 1
+        
         if(right_index == 0):
-            #if (self.label is present) #TODO
-            #return f'{self.base_reg.reg_t.value}[{self.label}]'
-            return f'{self.base_reg.reg_t.value}[{self.base_reg.label}+{self.reg_offset}]'
+            return self.base_reg.get_str(index=self.reg_offset)
         else:
-            return f'{self.base_reg.reg_t.value}[{self.base_reg.label}+{self.reg_offset}:{self.base_reg.label}+{self.reg_offset}+{right_index}]'
+            return self.base_reg.get_str(index=(self.reg_offset, self.reg_offset+right_index))
     
     def __add__(self, offset):
         assert(type(offset) is int)
@@ -528,4 +530,3 @@ class  _EXEC_HI(EXEC_reg):
         assert(l == r)
         
         return self
-

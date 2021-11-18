@@ -25,14 +25,14 @@ class _singl_arg():
         self.name = name
         self.size = size
         self.offset = offset
-        self.value_kind = value_kind
-        self.value_type = value_type
-        self.address_space = getattr(misc, 'address_space', None)
-        self.is_const = getattr(misc, 'is_const', None)
+        self.value_kind:arg_kind = value_kind
+        self.value_type:arg_type = value_type
+        self.address_space = getattr(misc, 'address_space', 'global')
+        self.is_const = getattr(misc, 'is_const', 'false')
     
     def get_amdgpu_arg(self) -> amdgpu_kernel_arg_t:
         misc = {'address_space':self.address_space, 'is_const':self.is_const}
-        return amdgpu_kernel_arg_t(self.name, self.size, self.offset, self.value_kind, self.value_type, **misc)
+        return amdgpu_kernel_arg_t(self.name, self.size, self.offset, self.value_kind.value, self.value_type.value, **misc)
 
     def declare_symb(self):
         return f'.set {self.name}, {self.offset}'

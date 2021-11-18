@@ -3440,7 +3440,7 @@ class sopk_instr_caller(inst_caller_base):
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, ssrc, imm16))
 	def s_wait(self, vmcnt, expcnt=0, lgkmcnt=0):
 		cnt = vmcnt | (expcnt << 4) | (lgkmcnt << 8)
-		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, None, cnt))
+		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, 'null', cnt))
 class sopp_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, SRC:Union[regVar,None,Any]): 
 		super().__init__(instruction_type.SMEM, INSTRUCTION)
