@@ -47,11 +47,15 @@ class kernel_constructor(mc_base_t, ABC):
     def set_GPU_HW(self):
         self.HW = base_HW(self.instructions_caller, stack_allocator, stack_allocator, 104, 256, 65000)
         
+    
+    def get_kernel_block_size(self):
+        return (64, 1, 1)
+
     def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
         return amdgpu_kernel_info_t(
             kernel_code=self._get_kernel_code_obj_t(),
             kernel_args=self.kargs.get_amdgpu_metadata_list(),
-            kernel_block_size=0, kernel_name=self.get_kernel_name())
+            kernel_block_size=self.get_kernel_block_size(), kernel_name=self.get_kernel_name())
     
     @abstractmethod
     def _instructions_init(self):
