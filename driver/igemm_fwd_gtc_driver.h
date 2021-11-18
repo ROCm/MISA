@@ -710,9 +710,6 @@ public:
         hipFunction_t kernel_func;
         std::string kernel_name = get_kernel_name(tunable);
 
-        std::cout << std::endl;
-        std::cout << kernel_name << std::endl;
-
 #ifdef IGEMM_SPLIT_KERNEL
         hipModule_t cur_kernel_module;
         std::string cur_kernel_hsaco = kernel_name + ".hsaco";
@@ -777,7 +774,7 @@ public:
                 if(tunable->tensor_layout == "nchwc"){
                     splits = 1;
                 }
-                printf("block:%d, grid:%d\n", block_size, grid_size);
+                //printf("block:%d, grid:%d\n", block_size, grid_size);
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
                 // if(use_workspace == 1){
