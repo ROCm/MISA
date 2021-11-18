@@ -33,8 +33,16 @@ class conv_direct_1x1u(kernel_constructor):
         def __init__(self, mc) -> None:
             super().__init__(mc)
             pb_arg = self._pb_kernel_arg
-            self.in_ptr_off  = pb_arg('in_ptr',  arg_kind.GlobBuffer, arg_type.F32)
-            self.wei_ptr_off = pb_arg('wei_ptr', arg_kind.GlobBuffer, arg_type.F32)
+            self.N = pb_arg('N', arg_kind.value, arg_type.I32, is_const='True')
+            self.C = pb_arg('C', arg_kind.value, arg_type.I32, is_const='True')
+            self.H = pb_arg('H', arg_kind.value, arg_type.I32, is_const='True')
+            self.W = pb_arg('W', arg_kind.value, arg_type.I32, is_const='True')
+            self.K = pb_arg('K', arg_kind.value, arg_type.I32, is_const='True')
+            self.n_groups = pb_arg('n_groups', arg_kind.value, arg_type.I32, is_const='True')
+            self.unused_0 = pb_arg('unused_0', arg_kind.value, arg_type.I32, is_const='True')
+            self.unused_1 = pb_arg('unused_1', arg_kind.value, arg_type.I32, is_const='True')
+            self.in_ptr_off  = pb_arg('in_ptr',  arg_kind.GlobBuffer, arg_type.F32, address_space='global', is_const='True')
+            self.wei_ptr_off = pb_arg('wei_ptr', arg_kind.GlobBuffer, arg_type.F32, is_const='True')
             self.out_ptr_off = pb_arg('out_ptr', arg_kind.GlobBuffer, arg_type.F32)
             self.dbg_ptr_off = pb_arg('dbg_ptr_off', arg_kind.GlobBuffer, arg_type.F32)
             
@@ -253,8 +261,8 @@ class conv_direct_1x1u(kernel_constructor):
                     self.soffset_out = add('soffset_out', 1)
                     self.soffset_wei = add('soffset_wei', 1)
                     self.desc_in = add('desc_in', 4)
-                    self.desc_wei = add('desc_wei', 4)
                     self.desc_out = add('desc_out', 4)
+                    self.desc_wei = add('desc_wei', 4)
                     self.filtersA = add('filtersA', perf_p.k_mult * perf_p.c_mult, 1)
                     
                     self.filtersB = add('filtersB', perf_p.k_mult * perf_p.c_mult, 4)
@@ -314,8 +322,8 @@ class conv_direct_1x1u(kernel_constructor):
             fill_buff_desc(s.desc_out[:], conv_p.output_buffer_size)
 
             ic.s_load_dwordx2(s.desc_in[0:1], s.karg_ptr[0:1], karg.in_ptr_off+0)
-            ic.s_load_dwordx2(s.desc_wei[0:1], s.karg_ptr[0:1], karg.out_ptr_off+0)
-            ic.s_load_dwordx2(s.desc_out[0:1], s.karg_ptr[0:1], karg.wei_ptr_off+0)
+            ic.s_load_dwordx2(s.desc_wei[0:1], s.karg_ptr[0:1], karg.wei_ptr_off+0)
+            ic.s_load_dwordx2(s.desc_out[0:1], s.karg_ptr[0:1], karg.out_ptr_off+0)
             
             #ic.s_load_dwordx2(s.C[0], s.karg_ptr[0:1], karg.C+0)
 
@@ -420,19 +428,22 @@ class conv_direct_1x1u(kernel_constructor):
                 elif cnt == 4:
                     ic.s_buffer_load_dwordx4(base[0:3], desc[0:3], off[0])
                 elif cnt == 8:
-                    ic.s_buffer_load_dwordx4(base[0:7], desc[0:3], off[0])
+                    ic.s_buffer_load_dwordx8(base[0:7], desc[0:3], off[0])
                 elif cnt == 16:
-                    ic.s_buffer_load_dwordx4(base[0:15], desc[0:3], off[0])
+                    ic.s_buffer_load_dwordx16(base[0:15], desc[0:3], off[0])
 
             def xsload(base, xx, cnt):
+                ret = 0
                 for _i_1 in range(xx):
                     if cnt == 1:
-                        ic.s_buffer_load_dword(base[0], s.desc_wei[0:3], s.soffset_wei[0])
+                        ic.s_buffer_load_dword(base[_i_1], s.desc_wei[0:3], s.soffset_wei[0])
                     else:
-                        _s_buffer_load_dwordxcnt(cnt, base[0:cnt-1], s.desc_wei[0:3], s.soffset_wei[0])
+                        _s_buffer_load_dwordxcnt(cnt, base[_i_1:_i_1+cnt-1], s.desc_wei[0:3], s.soffset_wei[0])
                     
                     base = base + cnt
+                    ret += cnt
                     ic.s_add_u32(s.soffset_wei[0], s.soffset_wei[0], 0 + 4 * cnt)
+                return ret
                 
             def load_filters(base, seq_size, seq_cnt, seq_stride):
                 seq_it = 0
@@ -449,11 +460,16 @@ class conv_direct_1x1u(kernel_constructor):
                     x1_chunks = rest
                     imm_off = 0
 
-                    xsload (fbase, x16_chunks, 16)
-                    xsload (fbase, x8_chunks, 8)
-                    xsload (fbase, x4_chunks, 4)
-                    xsload (fbase, x2_chunks, 2)
-                    xsload (fbase, x1_chunks, 1)
+                    inc = xsload (fbase, x16_chunks, 16)
+                    fbase += inc
+                    inc = xsload (fbase, x8_chunks, 8)
+                    fbase += inc
+                    inc = xsload (fbase, x4_chunks, 4)
+                    fbase += inc
+                    inc = xsload (fbase, x2_chunks, 2)
+                    fbase += inc
+                    inc = xsload (fbase, x1_chunks, 1)
+                    fbase += inc
 
                     seq_it = seq_it + 1
                     if(conv_p.weights_layout == 0 and seq_it == seq_cnt):
@@ -472,11 +488,11 @@ class conv_direct_1x1u(kernel_constructor):
                     if size == 1:
                         ic.buffer_load_dword(dst[0], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
                     elif size == 2:
-                        ic.buffer_load_dwordx2(dst[size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
+                        ic.buffer_load_dwordx2(dst[0:size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
                     elif size == 3:
-                        ic.buffer_load_dwordx3(dst[size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
+                        ic.buffer_load_dwordx3(dst[0:size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
                     elif size == 4:
-                        ic.buffer_load_dwordx4(dst[size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
+                        ic.buffer_load_dwordx4(dst[0:size-1], off[0], desc[0:3], soff[0], f'offen offset:0+{ioff}')
 
                 def m_buffer_load_ushort(size, dst, off, desc, soff, ioff:int=0):
                     if size == 1:
@@ -527,7 +543,7 @@ class conv_direct_1x1u(kernel_constructor):
                         c_it = c_it + 1
                         ic.s_add_u32(s.stmp_offset[0], s.stmp_offset[0], conv_p.input_c_stride)
 
-                    nb = nb + 1
+                    nb = nb + 1 
 
                     if nb == perf_p.n_mult:
                         ic.s_add_u32(s.soffset_in[0], s.soffset_in[0], 0 + (conv_p.input_c_stride * hi_c_mult) - conv_p.input_n_stride * const_params.active_n_per_gpr * (perf_p.n_mult - 1) )
@@ -631,7 +647,8 @@ class conv_direct_1x1u(kernel_constructor):
                                 inp_gpr = ibase + c_gpr_inp + n_gpr_inp + chunk_lo + chunk_hi
 
                                 if conv_p.buf_type == DATA_TYPE.TYPE_FP32 and conv_p.vec_c_in == 1 :
-                                    ic.v_mac_f32( acc[0], f_gpr[0], inp_gpr[0])
+                                    #ic.v_mac_f32( acc[0], f_gpr[0], inp_gpr[0])
+                                    ic.v_fma_f32( acc[0], f_gpr[0], inp_gpr[0], acc[0])
                                 elif conv_p.buf_type == DATA_TYPE.TYPE_FP16:
                                     if const_params.dot_instructions_available:
                                         ic.v_dot2_f32_f16( acc[0], f_gpr[0], inp_gpr[0], acc[0])
@@ -716,22 +733,12 @@ class conv_direct_1x1u(kernel_constructor):
             # reduction across waves in group
             # all waves but last store accums to LDS and dies
             # last wave survives and read LDS
-            
-            def GPR_REUSE(src, dst):
-                dst.set_position(src.position)
-                del src
-            #v.free(v.voffset_in)
-            #.GPR_REUSE voffset_in, lds_off
+
             lds_off = v.add_no_pos('lds_off')
-            #lds_off.set_position(v.voffset_in.position)
-            #del v.voffset_in
-            GPR_REUSE(v.voffset_in, lds_off)
+            v.reuse(v.voffset_in, lds_off)
 
             lds_off_k = s.add_no_pos('lds_off_k')
-            #lds_off_k.set_position(s.soffset_in.position)
-            #del s.soffset_in
-            GPR_REUSE(s.soffset_in, lds_off_k)
-            #.GPR_REUSE soffset_in, lds_off_k
+            s.reuse(s.soffset_in, lds_off_k)
             
             last_wave = label_t('last_wave')
 
@@ -813,7 +820,7 @@ class conv_direct_1x1u(kernel_constructor):
 
             # store output
             current_k = s.add_no_pos('current_k')
-            GPR_REUSE(s.stmp_offset, current_k)
+            s.reuse(s.stmp_offset, current_k)
 
             ic.s_mul_i32(current_k[0], s.gid_k[0], 0 + perf_p.k_mult * perf_p.waves_k_in_group // conv_p.vec_k_out)
             ic.s_mul_i32(s.stmp[0], s.wave_k_id[0], 0 + perf_p.k_mult // conv_p.vec_k_out)
@@ -822,7 +829,7 @@ class conv_direct_1x1u(kernel_constructor):
             current_hw = v.add_no_pos('current_hw')
 
             if(not const_params.rem_hw_in):
-                GPR_REUSE(v.inputA, current_hw)
+                v.reuse(v.inputA, current_hw)
                 ic.v_and_b32(current_hw[0], 0 + perf_p.chunk_size - 1, v.tid[0])
                 ic.v_mul_u32_u24(current_hw[0], 0 + perf_p.chunks_per_wave, current_hw[0])
                 ic.s_mul_i32(s.stmp[0], s.gid_hw[0], 0 + const_params.active_hw_per_wave)
@@ -872,6 +879,8 @@ class conv_direct_1x1u(kernel_constructor):
 
         launch_k(self.k_config, self.kargs)
 
+    def get_kernel_block_size(self):
+        return (256, 1, 1)
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         super().__init__(mc_asm_printer, **kwargs)
@@ -885,7 +894,7 @@ class conv_direct_1x1u(kernel_constructor):
         self.kargs=self.kernel_karg_t(self.mc)
     
     def set_GPU_HW(self):
-        self.HW = HW_gfx9(self.instructions_caller, onDemand_allocator, onDemand_allocator)
+        self.HW = HW_gfx9(self.instructions_caller, stack_allocator, stack_allocator)
 
     def _instructions_init(self):
         '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''
