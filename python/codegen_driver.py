@@ -90,12 +90,6 @@ class codegen_driver_t(mc_base_t):
         macro_v_fma_mxn_t(self.mc, 4, 2, 4).emit()
         macro_v_fma_mxn_t(self.mc, 2, 2, 4).emit()
 
-    def _emit_dlops_macro(self):
-        macro_dlops_mxn_t(self.mc, 4, 4, 8, 'fp16').emit()
-        macro_dlops_mxn_t(self.mc, 2, 4, 8, 'fp16').emit()
-        macro_dlops_mxn_t(self.mc, 4, 2, 4, 'fp16').emit()
-        macro_dlops_mxn_t(self.mc, 2, 2, 4, 'fp16').emit()
-
     def _emit_dotx_macro(self):
         macro_dotx_mxn_t(self.mc, 1, 1, 1, 'fp16').emit()
         macro_dotx_mxnxk_t(self.mc, 1, 1, 8, 1, 'fp16').emit()
@@ -150,7 +144,7 @@ class codegen_driver_t(mc_base_t):
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
-            self._emit_dlops_macro()
+            self._emit_dotx_macro()
         else:
             self._emit_fma_macro()
 

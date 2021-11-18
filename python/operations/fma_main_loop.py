@@ -27,7 +27,6 @@
 
 from ..codegen import *
 from .utility import *
-from .dlops_inst import *
 
 class inst_fma_t(object):
     def __init__(self, arch_config):
@@ -177,7 +176,7 @@ class fma_main_loop_t(mc_base_t):
         thread_sub_n = self.ctrl.thread_n // self.ctrl.gemm_n_repeat
 
         if self.ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-            v_fma = macro_dlops_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n, self.ctrl.precision)
+            pass
         else:
             v_fma = macro_v_fma_mxn_t(self.mc, thread_sub_m, thread_sub_n, thread_n)
 

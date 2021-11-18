@@ -28,7 +28,6 @@
 from re import S
 from ..codegen import *
 from .utility import *
-from .dlops_inst import *
 from .dotx_mapping import *
 from .dotx import *
 
