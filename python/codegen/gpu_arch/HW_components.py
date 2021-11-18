@@ -1,7 +1,7 @@
 from enum import Enum
 from python.codegen.generator_instructions import HW_Reg_Init, reg_allocator_caller
-from python.codegen.gpu_arch.allocator import base_allocator, stack_allocator
-from typing import Dict, List
+from python.codegen.gpu_arch.allocator import base_allocator, onDemand_allocator, stack_allocator
+from typing import Dict, List, Tuple, Union
 from python.codegen.amdgpu import amdgpu_sgpr_limit
 from python.codegen.gpu_data_types import *
 import copy
@@ -74,6 +74,11 @@ class gpr_file_t():#mc_base_t):
         dealoc = self._dealloc
         return [dealoc(i,0) for i in blocks]
 
+    def _reuse(self, reg_tuple_src_dst:Tuple, alignment):
+        src, dst = reg_tuple_src_dst
+        dst.set_position(src.position)
+        return f'.set {dst.label}, {dst.position} \n .set {src.label}, -1'
+
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
         ret = reg_block.declare(label, self.reg_t, dwords=dwords, label_as_pos=self.label_as_pos, reg_align=alignment)
         self.active_blocks.append(ret)
@@ -82,6 +87,31 @@ class gpr_file_t():#mc_base_t):
 
     def free(self, reg_block):
         self.ic.reg_dealloc(reg_block, self._dealloc)
+
+    def reuse(self, reg_block_src:Union[reg_block, regVar], reg_block_dst:Union[reg_block, regVar, str]):
+        
+        src = reg_block_src
+        dst = reg_block_dst
+
+        if(type(src) is regVar):
+            src = src.base_reg
+        
+        assert(type(src) is reg_block)
+
+        if(type(dst) is regVar):
+            dst = dst.base_reg
+        elif(type(dst) is str):
+            dst = reg_block.declare(dst, self.reg_t, dwords=src.dwords, label_as_pos=self.label_as_pos, reg_align=src.reg_align)
+        
+        assert(type(dst) is reg_block)
+
+        if( type(self._allocator) is stack_allocator):
+            self.ic.reg_pos_reuse(src, dst, self._reuse)
+        elif( type(self._allocator) is onDemand_allocator):
+            self.free(src)
+            self.active_blocks.append(dst)
+            self.ic.reg_alloc(dst, dst.reg_align, self._alloc)
+
 
     def add_no_pos(self, label:str, dwords:int = 1, reg_align=1):
         return reg_block.declare(label, self.reg_t, dwords=dwords, reg_align=reg_align)

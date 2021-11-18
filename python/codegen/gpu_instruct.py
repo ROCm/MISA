@@ -21,6 +21,7 @@ class instruction_type(Enum):
     VOP1 = 'VOP1'
     REGALLOC = 'REGA'
     REGDEALLOC = 'REGD'
+    REGREUSE = 'REGREUSE'
     BLOCKALLOC = 'BLCKA'
     BLOCKSPLIT = 'BLCKS'
     #BLOCKDEALLOC = 'BLCKD'

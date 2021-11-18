@@ -82,6 +82,9 @@ class kernel_func(Generic[T]):
                             ignore_list.index(cur_instruction.reg)
                         except IndexError:
                             assert(False)
+                elif(cur_instruction.inst_type is instruction_type.REGREUSE):
+                        not_dealocated_list.remove(cur_instruction.reg[0])
+                        not_dealocated_list.append(cur_instruction.reg[1])
         
         sgpr_dealloc = self.sgpr_f.free
         vgpr_dealloc = self.vgpr_f.free

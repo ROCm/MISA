@@ -30,6 +30,9 @@ class reg_allocator_caller(inst_caller_base):
 
     def reg_dealloc(self, dst:reg_block, dealloc_f):
         return self.ic_pb(reg_allocator_base(instruction_type.REGDEALLOC, dst, 0, dealloc_f))
+    
+    def reg_pos_reuse(self, src:reg_block, dst:reg_block, reuse_f):
+        return self.ic_pb(reg_allocator_base(instruction_type.REGREUSE, (src, dst), 0, reuse_f))
 
 class flow_control_base(inst_base):
     def __init__(self, label, func_ptr) -> None:
