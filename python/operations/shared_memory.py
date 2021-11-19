@@ -1028,5 +1028,5 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         #assert False, "tobe implemented"
         #return self.ctrl.length_d0
         with self._deferred_context():
-            self.emit()
+            self.expr()
         return self.issue_cnt

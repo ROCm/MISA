@@ -30,5 +30,6 @@ from .igemm_bwd_gtc_nhwc import *
 from .igemm_wrw_gtc import *
 from .igemm_fwd_gtc import *
 from .igemm_fwd_gtc_nhwc import *
+from .igemm_fwd_gtc_nchwc import *
 from .igemm_wrw_gtc_nhwc import *
 from .igemm_upsampling_clear import *

@@ -30,6 +30,9 @@ if [ "${LAYOUT}" = "nchw" ] ; then
 elif [ "${LAYOUT}" = "nhwc" ] ; then
     LAYOUT_HSACO="_nhwc"
     LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
+elif [ "${LAYOUT}" = "nchwc" ] ; then
+    LAYOUT_HSACO="_nchwc"
+    LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
     echo "wrong layout: ${LAYOUT}"
     exit 1
@@ -52,7 +55,7 @@ else
     exit 1
 fi
 
-if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] ; then
+if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] ; then
     echo "wrong arch: ${ARCH}"
     exit 1
 fi
@@ -64,10 +67,14 @@ export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
+export PER_PIXEL_CHECK=0
+
+export DBG_MODE=0
 export IGEMM_ASSERT_WHEN_INVALID=1
 export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
 export IGEMM_GKS_ITERATIVE=1
+export IGEMM_BENCH_CSV=1
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
