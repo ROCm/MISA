@@ -35,19 +35,24 @@ class instruction_graph():
         reg_to_edge_translation = Dict
         self.reg_translation = reg_to_edge_translation
         self.vert_list:List[instruction_graph.Node] = []
-        self.sub_var_list = []
         self._build_graph()
+
+
+    def add_new_var_node(self, name) -> Node:
+        new_var = instruction_graph.Node(name, self.max_sub_var_id, True)
+        self.max_sub_var_id += 1
+        return new_var
 
     def _build_graph(self):
         i_list = self.instructions_list
         node_id = 0
-        sub_var_id = 0
+        self.max_sub_var_id = 0
         var_list = []
-        sub_var_list = []
+
         vert_list = []
         current_var_to_sub:List[instruction_graph.Node] = []
         
-        
+
         
         for i in i_list:
             if issubclass(type(i),(reg_allocator_base, flow_control_base)):
@@ -57,49 +62,49 @@ class instruction_graph():
             vert_list.append(cur_vert)
             node_id += 1
             src_regs = i.get_srs_regs()
+
             for src in src_regs:
                 if(src):
-                    if(type(src) in [reg_block, regAbs, regNeg, regVar, VCC_reg, EXEC_reg]):
+                    if(type(src) in [regAbs, regNeg, regVar, VCC_reg, EXEC_reg]):
                         #pre defined HW values
                         src = src.base_reg
                         try:
                             index = var_list.index(src)
                         except ValueError:
+                            assert(False)
                             index = len(var_list)
                             var_list.append(src)
-                            cur_sub_var = instruction_graph.Node(src.label, sub_var_id, True)
-                            sub_var_list.append(cur_sub_var)
-                            sub_var_id += 1
-                            current_var_to_sub.append(cur_sub_var)
+                            cur_sub_var = self.add_new_var_node(src.label)
+                            current_var_to_sub[index] = cur_sub_var
 
                         cur_sub_var = current_var_to_sub[index]
-                        cur_vert.connections_in.append(cur_sub_var)
-                        cur_sub_var.connections_out.append(cur_vert)
+                        
+                    elif(type(src) in [reg_block]):
+                        assert(False)
+                        continue
                     else:
-                        cur_sub_var = instruction_graph.Node(src, sub_var_id, True)
-                        sub_var_list.append(cur_sub_var)
-                        sub_var_id += 1
-                        cur_vert.connections_in.append(cur_sub_var)
-                        cur_sub_var.connections_out.append(cur_vert)
+                        cur_sub_var = self.add_new_var_node(src)
+
+                    cur_vert.connections_in.append(cur_sub_var)
+                    cur_sub_var.connections_out.append(cur_vert)
 
             dst_regs = i.get_dst_regs()
             for dst in dst_regs:
                 if(dst):
                     dst = dst.base_reg
-                    cur_sub_var = instruction_graph.Node(dst.label, sub_var_id, True)
-                    sub_var_list.append(cur_sub_var)
-                    sub_var_id += 1
+                    cur_sub_var = self.add_new_var_node(dst.label)
+
                     cur_vert.connections_out.append(cur_sub_var)
                     try:
                         index = var_list.index(dst)
-                        current_var_to_sub[index] = cur_sub_var
                     except ValueError:
                         index = len(var_list)
                         var_list.append(dst)
                         current_var_to_sub.append(cur_sub_var)
+
+                    current_var_to_sub[index] = cur_sub_var
                     
         self.vert_list = vert_list
-        self.sub_var_list = sub_var_list
 
 
     #def build_plot(self):

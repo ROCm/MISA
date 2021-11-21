@@ -10,7 +10,7 @@ from ..codegen.mc import mc_base_t, mc_asm_printer_t
 
 #public dep
 from python.codegen.kernel_arg import arg_kind, arg_type
-
+from python.codegen.generator.instructions_graph import instruction_graph
 
 class kernel_constructor(mc_base_t, ABC):
 
@@ -28,7 +28,11 @@ class kernel_constructor(mc_base_t, ABC):
     def generate_kernel_body(self):
         self._emit_kernel_body()
         self.HW.ABI_HW_setregs(self.instr_ctrl.get_HW_Reg_Init())
-        self.instr_ctrl.plot_the_graph()
+
+        ig_class = instruction_graph(self.instr_ctrl.instructions_list)
+        G = ig_class.get_graph()
+        ig_class.bokeh_show(G)
+
         self.instr_ctrl.execute_all()
         #some optimize
 
