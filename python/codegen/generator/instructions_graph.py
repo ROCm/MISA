@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Type
 import networkx as nx
 
 from bokeh.io import output_file, show
@@ -38,33 +38,39 @@ class instruction_graph():
         self._build_graph()
 
 
-    def add_new_var_node(self, name) -> Node:
-        new_var = instruction_graph.Node(name, self.max_sub_var_id, True)
-        self.max_sub_var_id += 1
+    def _add_new_var_node(self, name) -> Node:
+        new_var = instruction_graph.Node(name, self._max_sub_var_id, True)
+        self._max_sub_var_id += 1
         return new_var
     
-    def add_new_vert_node(self, name):
-        cur_vert = instruction_graph.Node(name, self.max_node_id, False)
+    def _add_new_vert_node(self, name):
+        cur_vert = instruction_graph.Node(name, self._max_node_id, False)
         self.vert_list.append(cur_vert)
-        self.max_node_id += 1
+        self._max_node_id += 1
         return cur_vert
 
     def _build_graph(self):
         i_list = self.instructions_list
-        self.max_node_id = 0
-        self.max_sub_var_id = 0
+        # node -> vertex -> instruction
+        self._max_node_id = 0
+        # sub variable -> edge -> register
+        self._max_sub_var_id = 0
         
-        var_list = []
+        empty_Node = instruction_graph.Node('None', -1, True)
+        #
+        baseReg_list = []
+        baseView_list = []
+
         self.vert_list = []
-        
-        current_var_to_sub:List[instruction_graph.Node] = []
+        base_subNodes = List[instruction_graph.Node]
+        baseSubNodes_list:List[base_subNodes] = []
         
         for i in i_list:
             #pseudo instractions ignored
             if issubclass(type(i),(reg_allocator_base, flow_control_base, instr_label_base)):
                 continue
 
-            cur_vert = self.add_new_vert_node(i.label)
+            cur_vert = self._add_new_vert_node(i.label)
 
             src_regs = i.get_srs_regs()
 
@@ -72,38 +78,50 @@ class instruction_graph():
                 if(src):
                     if(type(src) in [regAbs, regNeg, regVar, VCC_reg, EXEC_reg]):
                         #pre defined HW values
-                        src = src.base_reg
+                        src_view:tuple = src.get_view_range()
+                        src_base = src.base_reg
+                        
                         try:
-                            index = var_list.index(src)
+                            index = baseReg_list.index(src_base)
                         except ValueError:
                             assert(False)
 
-                        cur_sub_var = current_var_to_sub[index]
+                        cur_sub_var = baseSubNodes_list[index][src_view[0]:src_view[1]]
                         
                     elif(type(src) in [reg_block]):
                         assert(False)
                         continue
                     else:
-                        cur_sub_var = self.add_new_var_node(src)
+                        cur_sub_var = [self._add_new_var_node(src)]
 
-                    cur_vert.connections_in.append(cur_sub_var)
-                    cur_sub_var.connections_out.append(cur_vert)
+                    cur_vert.connections_in.extend(cur_sub_var)
+                    #map(lambda x:x.connections_out.append(cur_vert), cur_sub_var)
+                    [x.connections_out.append(cur_vert) for x in cur_sub_var]
 
             dst_regs = i.get_dst_regs()
             for dst in dst_regs:
                 if(dst):
-                    dst = dst.base_reg
-                    cur_sub_var = self.add_new_var_node(dst.label)
+                    dst_view:tuple = dst.get_view_range()
+                    dst_base:reg_block = dst.base_reg
+                    
+                    cur_sub_var = list(
+                        map(lambda x:self._add_new_var_node(dst_base.label), 
+                            range(dst_view[0], dst_view[1]))
+                    )
 
-                    cur_vert.connections_out.append(cur_sub_var)
+                    cur_vert.connections_out.extend(cur_sub_var)
                     try:
-                        index = var_list.index(dst)
+                        index = baseReg_list.index(dst_base)
                     except ValueError:
-                        index = len(var_list)
-                        var_list.append(dst)
-                        current_var_to_sub.append(cur_sub_var)
+                        index = len(baseReg_list)
+                        baseReg_list.append(dst_base)
+                        empty_base_subNodes = [empty_Node] * dst_base.dwords
+                        baseSubNodes_list.append(empty_base_subNodes)
+                    
+                    cur_baseSubNodes = baseSubNodes_list[index]
+                    for i, j in zip(range(dst_view[0],dst_view[1]), range(dst_view[1]-dst_view[0])):
+                        cur_baseSubNodes[i] = cur_sub_var[j]
 
-                    current_var_to_sub[index] = cur_sub_var
 
 
     #def build_plot(self):

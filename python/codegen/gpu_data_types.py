@@ -281,6 +281,11 @@ class regVar(object):
     def __add__(self, offset):
         assert(type(offset) is int)
         return regVar(self.label, self.base_reg, self.reg_offset + offset, self.regVar_size - offset)
+    
+    def get_view_range(self):
+        l = self.reg_offset
+        r = self.regVar_size + l
+        return (l, r)
 
 
 class regAbs(regVar):
