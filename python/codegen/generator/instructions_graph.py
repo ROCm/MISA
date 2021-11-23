@@ -196,13 +196,15 @@ class instruction_graph():
         return G
 
     def bokeh_show(self, G:nx.DiGraph):
-        plot = Plot(width=2000, height=1000,
-            x_range=Range1d(-50.0,110), y_range=Range1d(0,1000))
-        plot.title.text = "Graph Interaction Demonstration"
+        #plot = Plot(width=2000, height=1000,
+        #    x_range=Range1d(-50.0,110), y_range=Range1d(0,1000))
+        
+        from bokeh.plotting import figure
+        plot = figure(title="Instructions graph", x_axis_label="x", y_axis_label="iRank", width=2000, height=1000)
 
         
         node_hover_tool = HoverTool(tooltips=[("index", "@index"), ("name", "@name")])
-        plot.add_tools(node_hover_tool, TapTool(), BoxSelectTool(), BoxZoomTool(), WheelZoomTool())
+        plot.add_tools(node_hover_tool, TapTool(), BoxSelectTool())
         pos=nx.get_node_attributes(G,'pos')
         graph_renderer = from_networkx(G, nx.fruchterman_reingold_layout)
         
@@ -215,16 +217,18 @@ class instruction_graph():
         graph_renderer.node_renderer.selection_glyph = Circle(size=15, fill_color=Spectral4[2])
         graph_renderer.node_renderer.hover_glyph = Circle(size=15, fill_color=Spectral4[1])
 
+        graph_renderer.node_renderer.glyph.properties_with_values()
 
         graph_renderer.edge_renderer.glyph = MultiLine(line_color="#CCCCCC", line_alpha=0.8, line_width=5)
         graph_renderer.edge_renderer.selection_glyph = MultiLine(line_color=Spectral4[2], line_width=5)
         graph_renderer.edge_renderer.hover_glyph = MultiLine(line_color=Spectral4[1], line_width=5)
 
         graph_renderer.selection_policy = NodesAndLinkedEdges()
-        graph_renderer.inspection_policy = NodesOnly()
-        from holoviews.element.graphs import layout_nodes
-        import holoviews as hv
 
+        graph_renderer.inspection_policy = NodesOnly()
+        
+        #from holoviews.element.graphs import layout_nodes
+        #import holoviews as hv
         #cities_graph_fruchterman = layout_nodes(graph_renderer, layout=nx.layout.fruchterman_reingold_layout)
 
         #labels = hv.Labels(cities_graph_fruchterman.nodes, ['x', 'y'], ["index"])
@@ -303,6 +307,33 @@ class instruction_graph():
             pn.pane.HoloViews(simple_graph).save('test2', embed=True, resources=INLINE)
         
         #plan_B()
+
+        def paln_c():
+            def choose_node_outline_colors(nodes_clicked):
+                outline_colors = []
+                for node in G.nodes():
+                    if str(node) in nodes_clicked:
+                        outline_colors.append('pink')
+                    else:
+                        outline_colors.append('black')
+                return outline_colors
+
+
+            def update_node_highlight(event):
+                nodes_clicked_ints = source.selected.indices
+                nodes_clicked = list(map(str, nodes_clicked_ints))
+                source.data['line_color'] = choose_node_outline_colors(nodes_clicked)
+
+            source = graph.node_renderer.data_source
+            source.data['line_color'] = choose_node_outline_colors('1')
+            TOOLTIPS = [
+                ("Index", "@index"),
+            ]
+            plot.add_tools(HoverTool(tooltips=TOOLTIPS), TapTool(), BoxSelectTool())
+            taptool = plot.select(type=TapTool)
+
+            plot.on_event(Tap, update_node_highlight)
+            curdoc().add_root(plot)
 
 
         plot.renderers.append(graph_renderer)
