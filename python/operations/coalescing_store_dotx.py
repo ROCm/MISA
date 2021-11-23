@@ -511,7 +511,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 vgpr_index_acc = 0
                 for i_mr in range(l_mr):
                     gpr_m_offset = i_mr * s_mr
-                    sst_m_offset = i_mr * ctrl.vector_write_out   
+                    sst_m_offset = i_mr * (ctrl.dotx_m.macro_tile_m // ctrl.dotx_m.lanegroup_repeat_m // ctrl.vector_write_out)
+                    #print(f"sst_m_offset={sst_m_offset}")
                     
                     #if ctrl.vector_write_out != 1:
                     #    sst_m_offset = sst_m_offset * l_mt          # ATTENTION! if vector write out, we no longer have shrink granularity, hence need multiply back
@@ -635,11 +636,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                            self._emit(f"v_cmpx_eq_u32 1, v[{v_store_flag}]")
-                        else:
-                            self._emit(f"v_cmpx_eq_u32 vcc, 1, v[{v_store_flag}]")
-
+                        self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
                     self._emit(f";   store to global, m index start")
 
                     for i_gst in range(num_gst_per_ssgroup):

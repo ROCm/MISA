@@ -27,16 +27,6 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-class inst_v_cmpx_t(object):
-    ''' TODO: this implementation always offen '''
-    def __init__(self, arch_name, cmp_type):
-        self.arch_name = arch_name
-        self.cmp_type = cmp_type
-
-    def __call__(self, vdst, vaddr, srsrc, soffset, offset):
-        
-        assert False
-
 class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, data_byte):
@@ -377,10 +367,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
                 for i_d1 in range(n_d1):
                     if ctrl.dim_conti_flag == 0:
                         if ctrl.use_flag and self.v_flag != None:
-                            if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                                self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag(i_dst)}]")
-                            else:
-                                self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_dst)}]")
+                            self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag(i_dst)))
                         if i_d0 == 0 and i_d1 == 0:
                             self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os()}", f"{self.s_ptr()}", 0, 0))
                         elif i_d0 == 0 and i_d1 == 1:
@@ -474,15 +461,9 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
                 if ctrl.use_flag and self.v_flag != None:
                     if ctrl.bfe_flag:
                         self._emit(f"v_bfe_u32 v[{self.v_tmp()}], v[{self.v_flag()}], {i_cnt}, 1")
-                        if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                            self._emit(f"v_cmpx_le_u32 1, v[{self.v_tmp()}]")
-                        else:
-                            self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_tmp()}]")
+                        self._emit(v_cmpx_le_u32("vcc", 1, self.v_tmp()))
                     else:
-                        if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                            self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag(i_cnt)}]")
-                        else:
-                            self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_cnt)}]")
+                        self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag(i_cnt)))
                 self._emit(buffer_load_dword(f"{self.v_dst()}+{i_cnt*vgpr_per_vector}", f"{self.v_os(i_cnt)}", f"{self.s_ptr()}", f"{self.s_os()}", 0))
                 if ctrl.use_flag and self.v_flag != None:
                     self._emit(f"s_mov_b64 exec, -1")
@@ -546,10 +527,7 @@ class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
             for i_d0 in range(ctrl.length_d0):
                 for i_d1 in range(n_d1):
                     if ctrl.use_flag and self.v_flag != None:
-                        if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                            self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag(i_d0)}]")
-                        else:
-                            self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d0)}]")
+                        self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag(i_d0)))
                     current_s_offset = 0 if i_d1 == 0 else (self.s_stride_d1() if i_d1 == 1 else self.s_offset(i_d1 - 2))
                     self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os(i_d0)}", f"{self.s_ptr()}", current_s_offset, 0))
                     if ctrl.use_flag and self.v_flag != None:
@@ -617,10 +595,7 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
             if ctrl.flag_merge_v and n_d1 == 1:
                 # v is along d1 dimension, hence only possible when n_d1 is 1
                 if ctrl.use_flag and self.v_flag != None:
-                    if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                        self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag()}]")
-                    else:
-                        self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag()}]")
+                    self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag()))
                 for i_d0 in range(ctrl.length_d0):
                     for i_d1 in range(1):
                         current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
@@ -632,10 +607,7 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
                 for i_d0 in range(ctrl.length_d0):
                     for i_d1 in range(n_d1):
                         if ctrl.use_flag and self.v_flag != None:
-                            if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                                self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag(i_d1)}]")
-                            else:
-                                self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(i_d1)}]")
+                            self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag(i_d1)))
                         current_s_offset = 0 if i_d0 == 0 else (self.s_stride_d1() if i_d0 == 1 else self.s_offset(i_d0 - 2))
                         self._emit(buffer_load_dword(f"{self.v_dst()}+{i_dst*vgpr_per_vector}", f"{self.v_os(i_d1)}", f"{self.s_ptr()}", current_s_offset, 0))
                         if ctrl.use_flag and self.v_flag != None:
@@ -818,10 +790,7 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
         def try_exec_flag_start(idx):
             #if ctrl.use_flag and self.v_flag != None:
             if self.v_flag != None:
-                if ctrl.arch_name == AMDGPU_ARCH_GFX1030:
-                    self._emit(f"v_cmpx_le_u32 1, v[{self.v_flag(idx)}]")
-                else:
-                    self._emit(f"v_cmpx_le_u32 vcc, 1, v[{self.v_flag(idx)}]")
+                self._emit(v_cmpx_le_u32("vcc", 1, self.v_flag(idx)))
 
         def try_exec_flag_finish():
             #if ctrl.use_flag and self.v_flag != None:
