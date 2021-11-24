@@ -1,4 +1,8 @@
 from typing import Dict, List, Type
+from bokeh.models import CustomJS
+from bokeh.models import renderers
+from bokeh.models.layouts import Row
+from bokeh.models.widgets.groups import CheckboxGroup
 import networkx as nx
 
 from bokeh.io import output_file, show
@@ -13,6 +17,7 @@ from bokeh.palettes import Spectral4
 from bokeh.plotting import from_networkx
 
 from python.codegen.generator_instructions import flow_control_base, instr_label_base,  reg_allocator_base
+from python.codegen.gpu_arch.gfx10XX.GFX10 import smem_base
 from python.codegen.gpu_data_types import *
 from python.codegen.gpu_instruct import inst_base
 
@@ -25,6 +30,9 @@ class instruction_graph():
             self.is_var = is_var
             self.connections_out:List[instruction_graph.Node] = []
             self.connections_in:List[instruction_graph.Node] = []
+
+            self.position_dep_before:List[instruction_graph.Node] = []
+            self.position_dep_after:List[instruction_graph.Node] = []
         
         def get_networkx_node(self):
             return (self.id, {'name':self.name, 'color':'blue'})
@@ -48,6 +56,12 @@ class instruction_graph():
         self.vert_list.append(cur_vert)
         self._max_node_id += 1
         return cur_vert
+    
+    def _bound_new_pos_vert(self, vert:Node, vert_range:tuple):
+        vertexes_before = self.vert_list[vert_range[0]:vert_range[1]]
+        vert.position_dep_before.extend(vertexes_before)
+        for v in vertexes_before:
+            v.position_dep_after.append(v)
 
     def _build_graph(self):
         i_list = self.instructions_list
@@ -64,13 +78,34 @@ class instruction_graph():
         self.vert_list = []
         base_subNodes = List[instruction_graph.Node]
         baseSubNodes_list:List[base_subNodes] = []
+
+        position_constraints_enabled = True
+#        if(position_constraints_enabled):
+        last_label_pos = 0
+        last_smem_pos = 0
+        first_vertex_from_label_block = 0
         
         for i in i_list:
             #pseudo instractions ignored
             if issubclass(type(i),(reg_allocator_base, flow_control_base, instr_label_base)):
                 continue
-
+            
+            if issubclass(type(i),(instr_label_base)) and not position_constraints_enabled:
+                continue
+            
             cur_vert = self._add_new_vert_node(i.label)
+
+            if(position_constraints_enabled):
+                if issubclass(type(i),(instr_label_base)):
+                    vert_range = (last_label_pos, len(self.vert_list)-1)
+                    self._bound_new_pos_vert(cur_vert, vert_range)
+                    last_label_pos = vert_range[1]+1
+                elif issubclass(type(i), (smem_base)):
+                    vert_range = (last_smem_pos, last_smem_pos)
+                    self._bound_new_pos_vert(cur_vert, vert_range)
+                    last_smem_pos =  len(self.vert_list)
+
+
 
             src_regs = i.get_srs_regs()
 
@@ -335,8 +370,30 @@ class instruction_graph():
             plot.on_event(Tap, update_node_highlight)
             curdoc().add_root(plot)
 
+        
 
         plot.renderers.append(graph_renderer)
 
+        checkbox = CheckboxGroup(labels=["data dep", "Position dep"],
+                                active=[0, 1], width=100)
+        
+        update_edges_args = dict(
+            edge_renderer=graph_renderer.edge_renderer,
+            checkbox=checkbox
+        )
+
+        update_edges_str = """
+            edge_renderer.visible = 0 in checkbox.active;  
+            
+        """
+
+        update_edges2 = CustomJS(
+            args=update_edges_args,
+            code=update_edges_str,
+        )
+        checkbox.js_on_change('active', update_edges2)
+        #graph_renderer.visible=False
+
         output_file("interactive_graphs.html")
-        show(plot)
+
+        show(Row(plot,checkbox))
