@@ -5,7 +5,7 @@ from python.codegen.gpu_data_types import *
 
 class dpp16_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST0:Union[regVar,None,Any], DST1:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.DPP16, INSTRUCTION)
 		self.DST0 = DST0 
 		self.DST1 = DST1 
 		self.SRC0 = SRC0 
@@ -18,7 +18,7 @@ class dpp16_base(inst_base):
 class dpp16_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_add_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_add_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_add_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_add_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -45,7 +45,7 @@ class dpp16_instr_caller(inst_caller_base):
 	def v_ceil_f32_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_ceil_f32_dpp', vdst, None, vsrc, None, None, MODIFIERS))
-	def v_cndmask_b32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_cndmask_b32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_cndmask_b32_dpp', vdst, None, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_cos_f16_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
@@ -276,7 +276,7 @@ class dpp16_instr_caller(inst_caller_base):
 	def v_sqrt_f32_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_sqrt_f32_dpp', vdst, None, vsrc, None, None, MODIFIERS))
-	def v_sub_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_sub_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_sub_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_sub_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -288,7 +288,7 @@ class dpp16_instr_caller(inst_caller_base):
 	def v_sub_nc_u32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_sub_nc_u32_dpp', vdst, None, vsrc0, vsrc1, None, MODIFIERS))
-	def v_subrev_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_subrev_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp16_ctrl row_mask bank_mask bound_ctrl fi"""
 		return self.ic_pb(dpp16_base('v_subrev_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_subrev_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -314,7 +314,7 @@ class dpp16_instr_caller(inst_caller_base):
 		return self.ic_pb(dpp16_base('v_xor_b32_dpp', vdst, None, vsrc0, vsrc1, None, MODIFIERS))
 class dpp8_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST0:Union[regVar,None,Any], DST1:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.DPP8, INSTRUCTION)
 		self.DST0 = DST0 
 		self.DST1 = DST1 
 		self.SRC0 = SRC0 
@@ -327,7 +327,7 @@ class dpp8_base(inst_base):
 class dpp8_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_add_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_add_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_add_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_add_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -354,7 +354,7 @@ class dpp8_instr_caller(inst_caller_base):
 	def v_ceil_f32_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_ceil_f32_dpp', vdst, None, vsrc, None, None, MODIFIERS))
-	def v_cndmask_b32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_cndmask_b32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_cndmask_b32_dpp', vdst, None, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_cos_f16_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
@@ -585,7 +585,7 @@ class dpp8_instr_caller(inst_caller_base):
 	def v_sqrt_f32_dpp(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_sqrt_f32_dpp', vdst, None, vsrc, None, None, MODIFIERS))
-	def v_sub_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_sub_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_sub_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_sub_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -597,7 +597,7 @@ class dpp8_instr_caller(inst_caller_base):
 	def v_sub_nc_u32_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_sub_nc_u32_dpp', vdst, None, vsrc0, vsrc1, None, MODIFIERS))
-	def v_subrev_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:regVar, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_subrev_co_ci_u32_dpp(self, vdst:regVar, vcc_DST1:VCC_reg, vsrc0:regVar, vsrc1:regVar, vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp8_sel fi"""
 		return self.ic_pb(dpp8_base('v_subrev_co_ci_u32_dpp', vdst, vcc_DST1, vsrc0, vsrc1, vcc_SRC2, MODIFIERS))
 	def v_subrev_f16_dpp(self, vdst:regVar, vsrc0:regVar, vsrc1:regVar, MODIFIERS:str=''):
@@ -623,7 +623,7 @@ class dpp8_instr_caller(inst_caller_base):
 		return self.ic_pb(dpp8_base('v_xor_b32_dpp', vdst, None, vsrc0, vsrc1, None, MODIFIERS))
 class ds_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.DS, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1098,7 +1098,7 @@ class ds_instr_caller(inst_caller_base):
 		return self.ic_pb(ds_base('ds_xor_src2_b64', None, vaddr, None, None, MODIFIERS))
 class exp_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], SRC3:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.EXP, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1111,12 +1111,12 @@ class exp_base(inst_base):
 class exp_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def exp(self, tgt:regVar, vsrc0:regVar, vsrc1:regVar, vsrc2:regVar, vsrc3:regVar, MODIFIERS:str=''):
+	def exp(self, tgt:'tgt', vsrc0:Union[regVar,off_reg], vsrc1:Union[regVar,off_reg], vsrc2:Union[regVar,off_reg], vsrc3:Union[regVar,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: done compr vm"""
 		return self.ic_pb(exp_base('exp', tgt, vsrc0, vsrc1, vsrc2, vsrc3, MODIFIERS))
 class flat_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.FLAT, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1290,231 +1290,231 @@ class flat_instr_caller(inst_caller_base):
 	def flat_store_short_d16_hi(self, vaddr:regVar, vdata:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: offset11 glc slc dlc"""
 		return self.ic_pb(flat_base('flat_store_short_d16_hi', None, vaddr, vdata, None, MODIFIERS))
-	def global_atomic_add(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_add(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_add', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_add_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_add_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_add_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_and(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_and(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_and', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_and_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_and_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_and_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_cmpswap(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_cmpswap(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_cmpswap', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_cmpswap_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_cmpswap_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_cmpswap_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_dec(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_dec(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_dec', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_dec_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_dec_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_dec_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_fmax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_fmax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_fmax', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_fmax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_fmax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_fmax_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_fmin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_fmin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_fmin', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_fmin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_fmin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_fmin_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_inc(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_inc(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_inc', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_inc_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_inc_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_inc_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_or(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_or(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_or', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_or_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_or_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_or_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_smax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_smax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_smax', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_smax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_smax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_smax_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_smin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_smin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_smin', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_smin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_smin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_smin_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_sub(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_sub(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_sub', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_sub_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_sub_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_sub_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_swap(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_swap(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_swap', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_swap_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_swap_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_swap_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_umax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_umax(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_umax', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_umax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_umax_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_umax_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_umin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_umin(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_umin', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_umin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_umin_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_umin_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_xor(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_xor(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_xor', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_atomic_xor_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_atomic_xor_x2(self, vdst:regVar, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc"""
 		return self.ic_pb(flat_base('global_atomic_xor_x2', vdst, vaddr, vdata, saddr, MODIFIERS))
-	def global_load_dword(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_dword(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_dword', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_dwordx2(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_dwordx2(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_dwordx2', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_dwordx3(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_dwordx3(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_dwordx3', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_dwordx4(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_dwordx4(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_dwordx4', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_sbyte(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_sbyte(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_sbyte', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_sbyte_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_sbyte_d16(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_sbyte_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_sbyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_sbyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_sbyte_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_short_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_short_d16(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_short_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_short_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_short_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_short_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_sshort(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_sshort(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_sshort', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_ubyte(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_ubyte(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_ubyte', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_ubyte_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_ubyte_d16(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_ubyte_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_ubyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_ubyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_ubyte_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_load_ushort(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_load_ushort(self, vdst:regVar, vaddr:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_load_ushort', vdst, vaddr, saddr, None, MODIFIERS))
-	def global_store_byte(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_byte(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_byte', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_byte_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_byte_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_byte_d16_hi', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_dword(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_dword(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_dword', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_dwordx2(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_dwordx2(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_dwordx2', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_dwordx3(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_dwordx3(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_dwordx3', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_dwordx4(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_dwordx4(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_dwordx4', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_short(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_short(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_short', None, vaddr, vdata, saddr, MODIFIERS))
-	def global_store_short_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def global_store_short_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('global_store_short_d16_hi', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_load_dword(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_dword(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_dword', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_dwordx2(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_dwordx2(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_dwordx2', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_dwordx3(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_dwordx3(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_dwordx3', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_dwordx4(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_dwordx4(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_dwordx4', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_sbyte(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_sbyte(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_sbyte', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_sbyte_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_sbyte_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_sbyte_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_sbyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_sbyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_sbyte_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_short_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_short_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_short_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_short_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_short_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_short_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_sshort(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_sshort(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_sshort', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_ubyte(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_ubyte(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_ubyte', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_ubyte_d16(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_ubyte_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_ubyte_d16', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_ubyte_d16_hi(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_ubyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_ubyte_d16_hi', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_load_ushort(self, vdst:regVar, vaddr:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_load_ushort(self, vdst:regVar, vaddr:Union[regVar,off_reg], saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_load_ushort', vdst, vaddr, saddr, None, MODIFIERS))
-	def scratch_store_byte(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_byte(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_byte', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_byte_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_byte_d16_hi(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_byte_d16_hi', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_dword(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_dword(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_dword', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_dwordx2(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_dwordx2(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_dwordx2', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_dwordx3(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_dwordx3(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_dwordx3', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_dwordx4(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_dwordx4(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_dwordx4', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_short(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_short(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_short', None, vaddr, vdata, saddr, MODIFIERS))
-	def scratch_store_short_d16_hi(self, vaddr:regVar, vdata:regVar, saddr:regVar, MODIFIERS:str=''):
+	def scratch_store_short_d16_hi(self, vaddr:Union[regVar,off_reg], vdata:regVar, saddr:Union[regVar,VCC_reg,TTMP_reg,off_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: offset12s glc slc dlc"""
 		return self.ic_pb(flat_base('scratch_store_short_d16_hi', None, vaddr, vdata, saddr, MODIFIERS))
 class mimg_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.MIMG, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1526,333 +1526,333 @@ class mimg_base(inst_base):
 class mimg_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def image_atomic_add(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_add(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_add', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_and(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_and(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_and', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_cmpswap(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_cmpswap(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_cmpswap', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_dec(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_dec(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_dec', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_fcmpswap(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_fcmpswap(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_fcmpswap', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_fmax(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_fmax(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_fmax', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_fmin(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_fmin(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_fmin', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_inc(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_inc(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_inc', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_or(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_or(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_or', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_smax(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_smax(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_smax', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_smin(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_smin(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_smin', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_sub(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_sub(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_sub', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_swap(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_swap(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_swap', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_umax(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_umax(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_umax', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_umin(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_umin(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_umin', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_atomic_xor(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_atomic_xor(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_atomic_xor', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_gather4(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_b(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_b(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_b', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_b_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_b_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_b_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_b_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_b_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_b(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_b(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_b', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_b_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_b_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_b_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_b_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_b_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_l(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_l(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_l', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_l_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_l_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_l_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_lz(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_lz(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_lz', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_lz_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_c_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_c_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_c_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_l(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_l(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_l', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_l_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_l_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_l_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_lz(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_lz(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_lz', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_lz_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_gather4_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_gather4_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_gather4_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_get_lod(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_get_lod(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_get_lod', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_get_resinfo(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_get_resinfo(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_get_resinfo', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_load', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load_mip(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load_mip(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_load_mip', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load_mip_pck(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load_mip_pck(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_load_mip_pck', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load_mip_pck_sgn(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load_mip_pck_sgn(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_load_mip_pck_sgn', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load_pck(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load_pck(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_load_pck', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_load_pck_sgn(self, vdst:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_load_pck_sgn(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe"""
 		return self.ic_pb(mimg_base('image_load_pck_sgn', vdst, vaddr, srsrc, None, MODIFIERS))
-	def image_sample(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_b(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_b(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_b', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_b_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_b_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_b_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_b_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_b_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_b(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_b(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_b', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_b_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_b_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_b_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_b_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_b_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_b_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_b_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_cl_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_cl_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cd_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cd_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cd_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_cl_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_cl_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_d_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_d_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_d_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_l(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_l(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_l', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_l_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_l_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_l_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_lz(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_lz(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_lz', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_lz_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_c_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_c_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_c_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_cl_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_cl_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cd_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cd_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cd_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_cl(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_cl(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_cl', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_cl_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_cl_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_cl_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_cl_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_cl_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_cl_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_d_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_d_o_g16(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_d_o_g16', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_l(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_l(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_l', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_l_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_l_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_l_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_lz(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_lz(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_lz', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_lz_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_lz_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_sample_o(self, vdst:regVar, vaddr:regVar, srsrc:regVar, ssamp:regVar, MODIFIERS:str=''):
+	def image_sample_o(self, vdst:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], ssamp:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 tfe lwe d16"""
 		return self.ic_pb(mimg_base('image_sample_o', vdst, vaddr, srsrc, ssamp, MODIFIERS))
-	def image_store(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_store(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_store', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_store_mip(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_store_mip(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe d16"""
 		return self.ic_pb(mimg_base('image_store_mip', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_store_mip_pck(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_store_mip_pck(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_store_mip_pck', None, vdata, vaddr, srsrc, MODIFIERS))
-	def image_store_pck(self, vdata:regVar, vaddr:regVar, srsrc:regVar, MODIFIERS:str=''):
+	def image_store_pck(self, vdata:regVar, vaddr:regVar, srsrc:Union[regVar,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: dmask dim unorm glc slc dlc a16 lwe"""
 		return self.ic_pb(mimg_base('image_store_pck', None, vdata, vaddr, srsrc, MODIFIERS))
 class mtbuf_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], SRC3:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.MTBUF, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1865,57 +1865,57 @@ class mtbuf_base(inst_base):
 class mtbuf_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def tbuffer_load_format_d16_x(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_d16_x(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_d16_x', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_d16_xy(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_d16_xy(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_d16_xy', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_d16_xyz(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_d16_xyz(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_d16_xyz', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_d16_xyzw(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_d16_xyzw(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_d16_xyzw', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_x(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_x(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_x', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_xy(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_xy(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_xy', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_xyz(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_xyz(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_xyz', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_load_format_xyzw(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_load_format_xyzw(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mtbuf_base('tbuffer_load_format_xyzw', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def tbuffer_store_format_d16_x(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_d16_x(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_d16_x', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_d16_xy(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_d16_xy(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_d16_xy', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_d16_xyz(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_d16_xyz(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_d16_xyz', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_d16_xyzw(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_d16_xyzw(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_d16_xyzw', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_x(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_x(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_x', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_xy(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_xy(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_xy', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_xyz(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_xyz(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_xyz', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def tbuffer_store_format_xyzw(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def tbuffer_store_format_xyzw(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: ufmt idxen offen offset12 glc slc"""
 		return self.ic_pb(mtbuf_base('tbuffer_store_format_xyzw', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
 class mubuf_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], SRC3:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.MUBUF, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -1928,223 +1928,223 @@ class mubuf_base(inst_base):
 class mubuf_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def buffer_atomic_add(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_add(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_add', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_add_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_add_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_add_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_and(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_and(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_and', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_and_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_and_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_and_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_cmpswap(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_cmpswap(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_cmpswap', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_cmpswap_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_cmpswap_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_cmpswap_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_dec(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_dec(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_dec', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_dec_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_dec_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_dec_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fcmpswap(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fcmpswap(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fcmpswap', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fcmpswap_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fcmpswap_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fcmpswap_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fmax(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fmax(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fmax', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fmax_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fmax_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fmax_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fmin(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fmin(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fmin', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_fmin_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_fmin_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_fmin_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_inc(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_inc(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_inc', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_inc_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_inc_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_inc_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_or(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_or(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_or', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_or_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_or_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_or_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_smax(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_smax(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_smax', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_smax_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_smax_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_smax_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_smin(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_smin(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_smin', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_smin_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_smin_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_smin_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_sub(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_sub(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_sub', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_sub_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_sub_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_sub_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_swap(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_swap(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_swap', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_swap_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_swap_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_swap_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_umax(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_umax(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_umax', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_umax_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_umax_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_umax_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_umin(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_umin(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_umin', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_umin_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_umin_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_umin_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_xor(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_xor(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_xor', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_atomic_xor_x2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_atomic_xor_x2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_atomic_xor_x2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
 	def buffer_gl0_inv(self):
 		return self.ic_pb(mubuf_base('buffer_gl0_inv', None, None, None, None, None, ''))
 	def buffer_gl1_inv(self):
 		return self.ic_pb(mubuf_base('buffer_gl1_inv', None, None, None, None, None, ''))
-	def buffer_load_dword(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_dword(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_dword', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_dwordx2(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_dwordx2(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_dwordx2', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_dwordx3(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_dwordx3(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_dwordx3', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_dwordx4(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_dwordx4(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_dwordx4', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_d16_x(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_d16_x(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_d16_x', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_d16_xy(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_d16_xy(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_d16_xy', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_d16_xyz(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_d16_xyz(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_d16_xyz', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_d16_xyzw(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_d16_xyzw(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_d16_xyzw', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_x(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_x(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_format_x', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_xy(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_xy(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_xy', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_xyz(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_xyz(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_xyz', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_format_xyzw(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_format_xyzw(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_format_xyzw', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_sbyte(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_sbyte(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_sbyte', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_sbyte_d16(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_sbyte_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_sbyte_d16', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_sbyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_sbyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_sbyte_d16_hi', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_short_d16(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_short_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_short_d16', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_short_d16_hi(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_short_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_short_d16_hi', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_sshort(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_sshort(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_sshort', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_ubyte(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_ubyte(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_ubyte', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_ubyte_d16(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_ubyte_d16(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_ubyte_d16', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_ubyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_ubyte_d16_hi(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc"""
 		return self.ic_pb(mubuf_base('buffer_load_ubyte_d16_hi', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_load_ushort(self, vdst:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_load_ushort(self, vdst:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc dlc lds"""
 		return self.ic_pb(mubuf_base('buffer_load_ushort', vdst, vaddr, srsrc, soffset, None, MODIFIERS))
-	def buffer_store_byte(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_byte(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_byte', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_byte_d16_hi(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_byte_d16_hi(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_byte_d16_hi', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_dword(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_dword(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_dword', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_dwordx2(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_dwordx2(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_dwordx2', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_dwordx3(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_dwordx3(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_dwordx3', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_dwordx4(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_dwordx4(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_dwordx4', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_d16_x(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_d16_x(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_d16_x', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_d16_xy(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_d16_xy(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_d16_xy', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_d16_xyz(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_d16_xyz(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_d16_xyz', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_d16_xyzw(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_d16_xyzw(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_d16_xyzw', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_x(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_x(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_x', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_xy(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_xy(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_xy', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_xyz(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_xyz(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_xyz', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_format_xyzw(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_format_xyzw(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_format_xyzw', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_short(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_short(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_short', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
-	def buffer_store_short_d16_hi(self, vdata:regVar, vaddr:Union[regVar], srsrc:regVar, soffset:Union[regVar,const], MODIFIERS:str=''):
+	def buffer_store_short_d16_hi(self, vdata:regVar, vaddr:Union[regVar,off_reg], srsrc:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: idxen offen offset12 glc slc"""
 		return self.ic_pb(mubuf_base('buffer_store_short_d16_hi', None, vdata, vaddr, srsrc, soffset, MODIFIERS))
 class sdwa_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST0:Union[regVar,None,Any], DST1:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SDWA, INSTRUCTION)
 		self.DST0 = DST0 
 		self.DST1 = DST1 
 		self.SRC0 = SRC0 
@@ -2157,553 +2157,553 @@ class sdwa_base(inst_base):
 class sdwa_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_add_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,const], src1:Union[regVar,const], vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_add_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_add_co_ci_u32_sdwa', vdst, vcc_DST1, src0, src1, vcc_SRC2, MODIFIERS))
-	def v_add_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_add_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_add_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_add_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_add_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_add_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_add_nc_u32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_and_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_and_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_and_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_ashrrev_i32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_ashrrev_i32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_ashrrev_i32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_bfrev_b32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_bfrev_b32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_bfrev_b32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ceil_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_ceil_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_ceil_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ceil_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_ceil_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_ceil_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cmp_class_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_class_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_class_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_class_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_class_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_class_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_eq_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_eq_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_f_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_f_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_f_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_f_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_f_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_f_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_f_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_f_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ge_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ge_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_gt_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_gt_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_le_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_le_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lg_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lg_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lg_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lg_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lg_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lg_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_lt_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_lt_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ne_i16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ne_i16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ne_i16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ne_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ne_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ne_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ne_u16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ne_u16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ne_u16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ne_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ne_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ne_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_neq_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_neq_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_neq_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_neq_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_neq_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_neq_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nge_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nge_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nge_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nge_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nge_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nge_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ngt_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ngt_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ngt_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ngt_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_ngt_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_ngt_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nle_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nle_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nle_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nle_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nle_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nle_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlg_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nlg_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nlg_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlg_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nlg_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nlg_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlt_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nlt_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nlt_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlt_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_nlt_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_nlt_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_o_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_o_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_o_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_o_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_o_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_o_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_t_i32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_t_i32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_t_i32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_t_u32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_t_u32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_t_u32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_tru_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_tru_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_tru_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_tru_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_tru_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_tru_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_u_f16_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_u_f16_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_u_f16_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_u_f32_sdwa(self, sdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmp_u_f32_sdwa(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmp_u_f32_sdwa', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_class_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_class_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_class_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_class_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_class_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_class_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_eq_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_eq_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_f_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_f_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_f_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_f_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_f_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_f_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_f_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_f_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ge_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ge_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_gt_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_gt_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_le_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_le_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lg_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lg_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lg_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lg_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lg_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lg_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_lt_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_lt_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ne_i16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ne_i16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ne_i16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ne_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ne_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ne_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ne_u16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ne_u16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ne_u16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ne_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ne_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ne_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_neq_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_neq_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_neq_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_neq_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_neq_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_neq_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nge_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nge_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nge_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nge_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nge_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nge_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ngt_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ngt_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ngt_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ngt_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_ngt_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_ngt_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nle_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nle_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nle_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nle_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nle_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nle_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlg_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nlg_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nlg_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlg_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nlg_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nlg_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlt_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nlt_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nlt_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlt_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_nlt_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_nlt_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_o_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_o_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_o_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_o_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_o_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_o_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_t_i32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_t_i32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_t_i32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_t_u32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_t_u32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_t_u32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_tru_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_tru_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_tru_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_tru_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_tru_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_tru_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_u_f16_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_u_f16_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_u_f16_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_u_f32_sdwa(self, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_cmpx_u_f32_sdwa(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cmpx_u_f32_sdwa', None, None, src0, src1, None, MODIFIERS))
-	def v_cndmask_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_cndmask_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_cndmask_b32_sdwa', vdst, None, src0, src1, vcc_SRC2, MODIFIERS))
-	def v_cos_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cos_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cos_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cos_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cos_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cos_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f16_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f16_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f16_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f16_i16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f16_i16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f16_i16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f16_u16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f16_u16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f16_u16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_i32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_i32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_i32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_u32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_u32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_u32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte0_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte0_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_ubyte0_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte1_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte1_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_ubyte1_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte2_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte2_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_ubyte2_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte3_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte3_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_f32_ubyte3_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_flr_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_flr_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_flr_i32_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_i16_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_i32_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_norm_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_norm_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_norm_i16_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_norm_u16_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_norm_u16_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_norm_u16_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_off_f32_i4_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_off_f32_i4_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_off_f32_i4_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_rpi_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_rpi_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_rpi_i32_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_u16_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_u16_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_u16_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_u32_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_cvt_u32_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_cvt_u32_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_exp_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_exp_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_exp_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_exp_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_exp_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_exp_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ffbh_i32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_ffbh_i32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_ffbh_i32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ffbh_u32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_ffbh_u32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_ffbh_u32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ffbl_b32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_ffbl_b32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_ffbl_b32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_floor_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_floor_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_floor_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_floor_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_floor_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_floor_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_fract_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_fract_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_fract_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_fract_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_fract_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_fract_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_exp_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_frexp_exp_i16_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_frexp_exp_i16_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_exp_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_frexp_exp_i32_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_frexp_exp_i32_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_mant_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_frexp_mant_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_frexp_mant_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_mant_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_frexp_mant_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_frexp_mant_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_ldexp_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_ldexp_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_ldexp_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_log_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_log_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_log_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_log_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_log_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_log_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_lshlrev_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_lshlrev_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_lshlrev_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_lshrrev_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_lshrrev_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_lshrrev_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_max_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_max_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_max_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_max_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_i32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_max_i32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_max_i32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_u32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_max_u32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_max_u32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_min_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_min_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_min_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_min_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_i32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_min_i32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_min_i32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_u32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_min_u32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_min_u32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mov_b32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_mov_b32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_mov_b32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_movreld_b32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_movreld_b32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_movreld_b32_sdwa', vdst, None, src, None, None, MODIFIERS))
 	def v_movrels_b32_sdwa(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
@@ -2715,103 +2715,103 @@ class sdwa_instr_caller(inst_caller_base):
 	def v_movrelsd_b32_sdwa(self, vdst:regVar, vsrc:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_movrelsd_b32_sdwa', vdst, None, vsrc, None, None, MODIFIERS))
-	def v_mul_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_hi_i32_i24_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_hi_i32_i24_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_hi_i32_i24_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_hi_u32_u24_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_hi_u32_u24_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_hi_u32_u24_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_i32_i24_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_i32_i24_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_i32_i24_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_legacy_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_legacy_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_legacy_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_u32_u24_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_mul_u32_u24_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_mul_u32_u24_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_not_b32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_not_b32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_not_b32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_or_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_or_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_or_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_rcp_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rcp_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rcp_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rcp_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rcp_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rcp_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rcp_iflag_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rcp_iflag_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rcp_iflag_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rndne_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rndne_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rndne_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rndne_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rndne_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rndne_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rsq_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rsq_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rsq_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_rsq_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_rsq_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_rsq_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sat_pk_u8_i16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_sat_pk_u8_i16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_sat_pk_u8_i16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sin_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_sin_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_sin_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sin_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_sin_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_sin_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sqrt_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_sqrt_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_sqrt_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sqrt_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_sqrt_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_sqrt_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_sub_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,const], src1:Union[regVar,const], vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_sub_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_sub_co_ci_u32_sdwa', vdst, vcc_DST1, src0, src1, vcc_SRC2, MODIFIERS))
-	def v_sub_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_sub_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_sub_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_sub_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_sub_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_sub_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_sub_nc_u32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,const], src1:Union[regVar,const], vcc_SRC2:regVar, MODIFIERS:str=''):
+	def v_subrev_co_ci_u32_sdwa(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], vcc_SRC2:VCC_reg, MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_subrev_co_ci_u32_sdwa', vdst, vcc_DST1, src0, src1, vcc_SRC2, MODIFIERS))
-	def v_subrev_f16_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_subrev_f16_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_subrev_f16_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_f32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_subrev_f32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_subrev_f32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_subrev_nc_u32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_subrev_nc_u32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_trunc_f16_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_trunc_f16_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_trunc_f16_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_trunc_f32_sdwa(self, vdst:regVar, src:Union[regVar,const], MODIFIERS:str=''):
+	def v_trunc_f32_sdwa(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod dst_sel dst_unused src0_sel"""
 		return self.ic_pb(sdwa_base('v_trunc_f32_sdwa', vdst, None, src, None, None, MODIFIERS))
-	def v_xnor_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_xnor_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_xnor_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
-	def v_xor_b32_sdwa(self, vdst:regVar, src0:Union[regVar,const], src1:Union[regVar,const], MODIFIERS:str=''):
+	def v_xor_b32_sdwa(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dst_sel dst_unused src0_sel src1_sel"""
 		return self.ic_pb(sdwa_base('v_xor_b32_sdwa', vdst, None, src0, src1, None, MODIFIERS))
 class smem_base(inst_base): 
@@ -2828,193 +2828,193 @@ class smem_base(inst_base):
 class smem_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def s_atc_probe(self, probe:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int]):
+	def s_atc_probe(self, probe:int, sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t]):
 		return self.ic_pb(smem_base('s_atc_probe', None, probe, sbase, soffset, ''))
-	def s_atc_probe_buffer(self, probe:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int]):
+	def s_atc_probe_buffer(self, probe:int, sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t]):
 		return self.ic_pb(smem_base('s_atc_probe_buffer', None, probe, sbase, soffset, ''))
-	def s_atomic_add(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_add(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_add', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_add_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_add_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_add_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_and(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_and(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_and', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_and_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_and_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_and_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_cmpswap(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_cmpswap(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_cmpswap', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_cmpswap_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_cmpswap_x2(self, sdata:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_cmpswap_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_dec(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_dec(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_dec', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_dec_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_dec_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_dec_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_inc(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_inc(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_inc', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_inc_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_inc_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_inc_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_or(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_or(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_or', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_or_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_or_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_or_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_smax(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_smax(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_smax', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_smax_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_smax_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_smax_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_smin(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_smin(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_smin', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_smin_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_smin_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_smin_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_sub(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_sub(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_sub', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_sub_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_sub_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_sub_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_swap(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_swap(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_swap', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_swap_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_swap_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_swap_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_umax(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_umax(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_umax', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_umax_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_umax_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_umax_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_umin(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_umin(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_umin', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_umin_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_umin_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_umin_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_xor(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_xor(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_xor', None, sdata, sbase, soffset, MODIFIERS))
-	def s_atomic_xor_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_atomic_xor_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_atomic_xor_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_add(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_add(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_add', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_add_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_add_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_add_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_and(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_and(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_and', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_and_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_and_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_and_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_cmpswap(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_cmpswap(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_cmpswap', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_cmpswap_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_cmpswap_x2(self, sdata:Union[regVar,TTMP_reg], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_cmpswap_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_dec(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_dec(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_dec', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_dec_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_dec_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_dec_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_inc(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_inc(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_inc', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_inc_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_inc_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_inc_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_or(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_or(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_or', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_or_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_or_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_or_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_smax(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_smax(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_smax', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_smax_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_smax_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_smax_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_smin(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_smin(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_smin', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_smin_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_smin_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_smin_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_sub(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_sub(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_sub', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_sub_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_sub_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_sub_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_swap(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_swap(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_swap', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_swap_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_swap_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_swap_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_umax(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_umax(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_umax', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_umax_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_umax_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_umax_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_umin(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_umin(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_umin', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_umin_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_umin_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_umin_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_xor(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_xor(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_xor', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_atomic_xor_x2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_atomic_xor_x2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_atomic_xor_x2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_load_dword(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_load_dword(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_buffer_load_dword', sdst, sbase, soffset, None, MODIFIERS))
-	def s_buffer_load_dwordx16(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_load_dwordx16(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_buffer_load_dwordx16', sdst, sbase, soffset, None, MODIFIERS))
-	def s_buffer_load_dwordx2(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_load_dwordx2(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_buffer_load_dwordx2', sdst, sbase, soffset, None, MODIFIERS))
-	def s_buffer_load_dwordx4(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_load_dwordx4(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_buffer_load_dwordx4', sdst, sbase, soffset, None, MODIFIERS))
-	def s_buffer_load_dwordx8(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_load_dwordx8(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_buffer_load_dwordx8', sdst, sbase, soffset, None, MODIFIERS))
-	def s_buffer_store_dword(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_store_dword(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_store_dword', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_store_dwordx2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_store_dwordx2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_store_dwordx2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_buffer_store_dwordx4(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,uimm20_t,int], MODIFIERS:str=''):
+	def s_buffer_store_dwordx4(self, sdata:Union[regVar,TTMP_reg], sbase:Union[regVar,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,uimm20_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_buffer_store_dwordx4', None, sdata, sbase, soffset, MODIFIERS))
-	def s_dcache_discard(self, sbase:regVar, soffset:Union[regVar,simm21_t,int]):
+	def s_dcache_discard(self, sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t]):
 		return self.ic_pb(smem_base('s_dcache_discard', None, sbase, soffset, None, ''))
-	def s_dcache_discard_x2(self, sbase:regVar, soffset:Union[regVar,simm21_t,int]):
+	def s_dcache_discard_x2(self, sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t]):
 		return self.ic_pb(smem_base('s_dcache_discard_x2', None, sbase, soffset, None, ''))
 	def s_dcache_inv(self):
 		return self.ic_pb(smem_base('s_dcache_inv', None, None, None, None, ''))
@@ -3024,55 +3024,55 @@ class smem_instr_caller(inst_caller_base):
 		return self.ic_pb(smem_base('s_get_waveid_in_workgroup', None, None, None, None, ''))
 	def s_gl1_inv(self):
 		return self.ic_pb(smem_base('s_gl1_inv', None, None, None, None, ''))
-	def s_load_dword(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_load_dword(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dword', sdst, sbase, soffset, None, MODIFIERS))
-	def s_load_dwordx16(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_load_dwordx16(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dwordx16', sdst, sbase, soffset, None, MODIFIERS))
-	def s_load_dwordx2(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_load_dwordx2(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dwordx2', sdst, sbase, soffset, None, MODIFIERS))
-	def s_load_dwordx4(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_load_dwordx4(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dwordx4', sdst, sbase, soffset, None, MODIFIERS))
-	def s_load_dwordx8(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_load_dwordx8(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dwordx8', sdst, sbase, soffset, None, MODIFIERS))
 	def s_memrealtime(self):
 		return self.ic_pb(smem_base('s_memrealtime', None, None, None, None, ''))
 	def s_memtime(self):
 		return self.ic_pb(smem_base('s_memtime', None, None, None, None, ''))
-	def s_scratch_load_dword(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_load_dword(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_scratch_load_dword', sdst, sbase, soffset, None, MODIFIERS))
-	def s_scratch_load_dwordx2(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_load_dwordx2(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_scratch_load_dwordx2', sdst, sbase, soffset, None, MODIFIERS))
-	def s_scratch_load_dwordx4(self, sdst:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_load_dwordx4(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_scratch_load_dwordx4', sdst, sbase, soffset, None, MODIFIERS))
-	def s_scratch_store_dword(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_store_dword(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_scratch_store_dword', None, sdata, sbase, soffset, MODIFIERS))
-	def s_scratch_store_dwordx2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_store_dwordx2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_scratch_store_dwordx2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_scratch_store_dwordx4(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_scratch_store_dwordx4(self, sdata:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_scratch_store_dwordx4', None, sdata, sbase, soffset, MODIFIERS))
-	def s_store_dword(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_store_dword(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_store_dword', None, sdata, sbase, soffset, MODIFIERS))
-	def s_store_dwordx2(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_store_dwordx2(self, sdata:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_store_dwordx2', None, sdata, sbase, soffset, MODIFIERS))
-	def s_store_dwordx4(self, sdata:regVar, sbase:regVar, soffset:Union[regVar,simm21_t,int], MODIFIERS:str=''):
+	def s_store_dwordx4(self, sdata:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc"""
 		return self.ic_pb(smem_base('s_store_dwordx4', None, sdata, sbase, soffset, MODIFIERS))
 class sop1_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SOP1, INSTRUCTION)
 		self.DST = DST 
 		self.SRC = SRC 
 	def __str__(self): 
@@ -3081,139 +3081,139 @@ class sop1_base(inst_base):
 class sop1_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def s_abs_i32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_abs_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_abs_i32', sdst, ssrc))
-	def s_and_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_and_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_and_saveexec_b32', sdst, ssrc))
-	def s_and_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_and_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_and_saveexec_b64', sdst, ssrc))
-	def s_andn1_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn1_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn1_saveexec_b32', sdst, ssrc))
-	def s_andn1_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn1_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn1_saveexec_b64', sdst, ssrc))
-	def s_andn1_wrexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn1_wrexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn1_wrexec_b32', sdst, ssrc))
-	def s_andn1_wrexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn1_wrexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn1_wrexec_b64', sdst, ssrc))
-	def s_andn2_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn2_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn2_saveexec_b32', sdst, ssrc))
-	def s_andn2_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn2_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn2_saveexec_b64', sdst, ssrc))
-	def s_andn2_wrexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn2_wrexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn2_wrexec_b32', sdst, ssrc))
-	def s_andn2_wrexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_andn2_wrexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_andn2_wrexec_b64', sdst, ssrc))
-	def s_bcnt0_i32_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bcnt0_i32_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bcnt0_i32_b32', sdst, ssrc))
-	def s_bcnt0_i32_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bcnt0_i32_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bcnt0_i32_b64', sdst, ssrc))
-	def s_bcnt1_i32_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bcnt1_i32_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bcnt1_i32_b32', sdst, ssrc))
-	def s_bcnt1_i32_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bcnt1_i32_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bcnt1_i32_b64', sdst, ssrc))
-	def s_bitreplicate_b64_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bitreplicate_b64_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bitreplicate_b64_b32', sdst, ssrc))
-	def s_bitset0_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bitset0_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bitset0_b32', sdst, ssrc))
-	def s_bitset0_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bitset0_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bitset0_b64', sdst, ssrc))
-	def s_bitset1_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bitset1_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bitset1_b32', sdst, ssrc))
-	def s_bitset1_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_bitset1_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_bitset1_b64', sdst, ssrc))
-	def s_brev_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_brev_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_brev_b32', sdst, ssrc))
-	def s_brev_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_brev_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_brev_b64', sdst, ssrc))
-	def s_cmov_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_cmov_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_cmov_b32', sdst, ssrc))
-	def s_cmov_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_cmov_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_cmov_b64', sdst, ssrc))
-	def s_ff0_i32_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_ff0_i32_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_ff0_i32_b32', sdst, ssrc))
-	def s_ff0_i32_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_ff0_i32_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_ff0_i32_b64', sdst, ssrc))
-	def s_ff1_i32_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_ff1_i32_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_ff1_i32_b32', sdst, ssrc))
-	def s_ff1_i32_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_ff1_i32_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_ff1_i32_b64', sdst, ssrc))
-	def s_flbit_i32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_flbit_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_flbit_i32', sdst, ssrc))
-	def s_flbit_i32_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_flbit_i32_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_flbit_i32_b32', sdst, ssrc))
-	def s_flbit_i32_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_flbit_i32_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_flbit_i32_b64', sdst, ssrc))
-	def s_flbit_i32_i64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_flbit_i32_i64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_flbit_i32_i64', sdst, ssrc))
 	def s_getpc_b64(self):
 		return self.ic_pb(sop1_base('s_getpc_b64', None, None))
-	def s_mov_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_mov_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_mov_b32', sdst, ssrc))
-	def s_mov_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_mov_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_mov_b64', sdst, ssrc))
-	def s_movreld_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_movreld_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_movreld_b32', sdst, ssrc))
-	def s_movreld_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_movreld_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_movreld_b64', sdst, ssrc))
-	def s_movrels_b32(self, sdst:regVar, ssrc:regVar):
+	def s_movrels_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
 		return self.ic_pb(sop1_base('s_movrels_b32', sdst, ssrc))
-	def s_movrels_b64(self, sdst:regVar, ssrc:regVar):
+	def s_movrels_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
 		return self.ic_pb(sop1_base('s_movrels_b64', sdst, ssrc))
-	def s_movrelsd_2_b32(self, sdst:regVar, ssrc:regVar):
+	def s_movrelsd_2_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
 		return self.ic_pb(sop1_base('s_movrelsd_2_b32', sdst, ssrc))
-	def s_nand_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_nand_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_nand_saveexec_b32', sdst, ssrc))
-	def s_nand_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_nand_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_nand_saveexec_b64', sdst, ssrc))
-	def s_nor_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_nor_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_nor_saveexec_b32', sdst, ssrc))
-	def s_nor_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_nor_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_nor_saveexec_b64', sdst, ssrc))
-	def s_not_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_not_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_not_b32', sdst, ssrc))
-	def s_not_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_not_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_not_b64', sdst, ssrc))
-	def s_or_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_or_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_or_saveexec_b32', sdst, ssrc))
-	def s_or_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_or_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_or_saveexec_b64', sdst, ssrc))
-	def s_orn1_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_orn1_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_orn1_saveexec_b32', sdst, ssrc))
-	def s_orn1_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_orn1_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_orn1_saveexec_b64', sdst, ssrc))
-	def s_orn2_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_orn2_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_orn2_saveexec_b32', sdst, ssrc))
-	def s_orn2_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_orn2_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_orn2_saveexec_b64', sdst, ssrc))
-	def s_quadmask_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_quadmask_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_quadmask_b32', sdst, ssrc))
-	def s_quadmask_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_quadmask_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_quadmask_b64', sdst, ssrc))
 	def s_rfe_b64(self):
 		return self.ic_pb(sop1_base('s_rfe_b64', None, None))
 	def s_setpc_b64(self):
 		return self.ic_pb(sop1_base('s_setpc_b64', None, None))
-	def s_sext_i32_i16(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_sext_i32_i16(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_sext_i32_i16', sdst, ssrc))
-	def s_sext_i32_i8(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_sext_i32_i8(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_sext_i32_i8', sdst, ssrc))
-	def s_swappc_b64(self, sdst:regVar, ssrc:regVar):
+	def s_swappc_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
 		return self.ic_pb(sop1_base('s_swappc_b64', sdst, ssrc))
-	def s_wqm_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_wqm_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_wqm_b32', sdst, ssrc))
-	def s_wqm_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_wqm_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_wqm_b64', sdst, ssrc))
-	def s_xnor_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_xnor_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_xnor_saveexec_b32', sdst, ssrc))
-	def s_xnor_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_xnor_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_xnor_saveexec_b64', sdst, ssrc))
-	def s_xor_saveexec_b32(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_xor_saveexec_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_xor_saveexec_b32', sdst, ssrc))
-	def s_xor_saveexec_b64(self, sdst:regVar, ssrc:Union[regVar,literal,const, int]):
+	def s_xor_saveexec_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_xor_saveexec_b64', sdst, ssrc))
 class sop2_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SOP2, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -3223,111 +3223,111 @@ class sop2_base(inst_base):
 class sop2_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def s_absdiff_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_absdiff_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_absdiff_i32', sdst, ssrc0, ssrc1))
-	def s_add_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_add_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_add_i32', sdst, ssrc0, ssrc1))
-	def s_add_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_add_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_add_u32', sdst, ssrc0, ssrc1))
-	def s_addc_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_addc_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_addc_u32', sdst, ssrc0, ssrc1))
-	def s_and_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_and_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_and_b32', sdst, ssrc0, ssrc1))
-	def s_and_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_and_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_and_b64', sdst, ssrc0, ssrc1))
-	def s_andn2_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_andn2_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_andn2_b32', sdst, ssrc0, ssrc1))
-	def s_andn2_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_andn2_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_andn2_b64', sdst, ssrc0, ssrc1))
-	def s_ashr_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_ashr_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_ashr_i32', sdst, ssrc0, ssrc1))
-	def s_ashr_i64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_ashr_i64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_ashr_i64', sdst, ssrc0, ssrc1))
-	def s_bfe_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfe_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfe_i32', sdst, ssrc0, ssrc1))
-	def s_bfe_i64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfe_i64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfe_i64', sdst, ssrc0, ssrc1))
-	def s_bfe_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfe_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfe_u32', sdst, ssrc0, ssrc1))
-	def s_bfe_u64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfe_u64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfe_u64', sdst, ssrc0, ssrc1))
-	def s_bfm_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfm_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfm_b32', sdst, ssrc0, ssrc1))
-	def s_bfm_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bfm_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_bfm_b64', sdst, ssrc0, ssrc1))
-	def s_cselect_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cselect_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_cselect_b32', sdst, ssrc0, ssrc1))
-	def s_cselect_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cselect_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_cselect_b64', sdst, ssrc0, ssrc1))
-	def s_lshl1_add_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl1_add_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl1_add_u32', sdst, ssrc0, ssrc1))
-	def s_lshl2_add_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl2_add_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl2_add_u32', sdst, ssrc0, ssrc1))
-	def s_lshl3_add_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl3_add_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl3_add_u32', sdst, ssrc0, ssrc1))
-	def s_lshl4_add_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl4_add_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl4_add_u32', sdst, ssrc0, ssrc1))
-	def s_lshl_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl_b32', sdst, ssrc0, ssrc1))
-	def s_lshl_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshl_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshl_b64', sdst, ssrc0, ssrc1))
-	def s_lshr_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshr_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshr_b32', sdst, ssrc0, ssrc1))
-	def s_lshr_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_lshr_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_lshr_b64', sdst, ssrc0, ssrc1))
-	def s_max_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_max_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_max_i32', sdst, ssrc0, ssrc1))
-	def s_max_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_max_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_max_u32', sdst, ssrc0, ssrc1))
-	def s_min_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_min_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_min_i32', sdst, ssrc0, ssrc1))
-	def s_min_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_min_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_min_u32', sdst, ssrc0, ssrc1))
-	def s_mul_hi_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_mul_hi_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_mul_hi_i32', sdst, ssrc0, ssrc1))
-	def s_mul_hi_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_mul_hi_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_mul_hi_u32', sdst, ssrc0, ssrc1))
-	def s_mul_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_mul_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_mul_i32', sdst, ssrc0, ssrc1))
-	def s_nand_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_nand_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_nand_b32', sdst, ssrc0, ssrc1))
-	def s_nand_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_nand_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_nand_b64', sdst, ssrc0, ssrc1))
-	def s_nor_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_nor_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_nor_b32', sdst, ssrc0, ssrc1))
-	def s_nor_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_nor_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_nor_b64', sdst, ssrc0, ssrc1))
-	def s_or_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_or_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_or_b32', sdst, ssrc0, ssrc1))
-	def s_or_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_or_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_or_b64', sdst, ssrc0, ssrc1))
-	def s_orn2_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_orn2_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_orn2_b32', sdst, ssrc0, ssrc1))
-	def s_orn2_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_orn2_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_orn2_b64', sdst, ssrc0, ssrc1))
-	def s_pack_hh_b32_b16(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_pack_hh_b32_b16(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_pack_hh_b32_b16', sdst, ssrc0, ssrc1))
-	def s_pack_lh_b32_b16(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_pack_lh_b32_b16(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_pack_lh_b32_b16', sdst, ssrc0, ssrc1))
-	def s_pack_ll_b32_b16(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_pack_ll_b32_b16(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_pack_ll_b32_b16', sdst, ssrc0, ssrc1))
-	def s_sub_i32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_sub_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_sub_i32', sdst, ssrc0, ssrc1))
-	def s_sub_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_sub_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_sub_u32', sdst, ssrc0, ssrc1))
-	def s_subb_u32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_subb_u32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_subb_u32', sdst, ssrc0, ssrc1))
-	def s_xnor_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_xnor_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_xnor_b32', sdst, ssrc0, ssrc1))
-	def s_xnor_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_xnor_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_xnor_b64', sdst, ssrc0, ssrc1))
-	def s_xor_b32(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_xor_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_xor_b32', sdst, ssrc0, ssrc1))
-	def s_xor_b64(self, sdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_xor_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop2_base('s_xor_b64', sdst, ssrc0, ssrc1))
 class sopc_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SOPC, INSTRUCTION)
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
 	def __str__(self): 
@@ -3336,45 +3336,45 @@ class sopc_base(inst_base):
 class sopc_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def s_bitcmp0_b32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bitcmp0_b32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_bitcmp0_b32', ssrc0, ssrc1))
-	def s_bitcmp0_b64(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bitcmp0_b64(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_bitcmp0_b64', ssrc0, ssrc1))
-	def s_bitcmp1_b32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bitcmp1_b32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_bitcmp1_b32', ssrc0, ssrc1))
-	def s_bitcmp1_b64(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_bitcmp1_b64(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_bitcmp1_b64', ssrc0, ssrc1))
-	def s_cmp_eq_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_eq_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_eq_i32', ssrc0, ssrc1))
-	def s_cmp_eq_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_eq_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_eq_u32', ssrc0, ssrc1))
-	def s_cmp_eq_u64(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_eq_u64(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_eq_u64', ssrc0, ssrc1))
-	def s_cmp_ge_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_ge_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_ge_i32', ssrc0, ssrc1))
-	def s_cmp_ge_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_ge_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_ge_u32', ssrc0, ssrc1))
-	def s_cmp_gt_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_gt_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_gt_i32', ssrc0, ssrc1))
-	def s_cmp_gt_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_gt_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_gt_u32', ssrc0, ssrc1))
-	def s_cmp_le_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_le_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_le_i32', ssrc0, ssrc1))
-	def s_cmp_le_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_le_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_le_u32', ssrc0, ssrc1))
-	def s_cmp_lg_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_lg_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_lg_i32', ssrc0, ssrc1))
-	def s_cmp_lg_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_lg_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_lg_u32', ssrc0, ssrc1))
-	def s_cmp_lg_u64(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_lg_u64(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_lg_u64', ssrc0, ssrc1))
-	def s_cmp_lt_i32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_lt_i32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_lt_i32', ssrc0, ssrc1))
-	def s_cmp_lt_u32(self, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,literal,const, int]):
+	def s_cmp_lt_u32(self, ssrc0:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sopc_base('s_cmp_lt_u32', ssrc0, ssrc1))
 class sopk_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SOPK, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -3384,66 +3384,67 @@ class sopk_base(inst_base):
 class sopk_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def s_addk_i32(self, sdst:regVar, imm16:imm16_t):
+	def s_addk_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_addk_i32', sdst, imm16, None))
-	def s_call_b64(self, sdst:regVar, label:label_t):
+	def s_call_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], label:label_t):
 		return self.ic_pb(sopk_base('s_call_b64', sdst, label, None))
-	def s_cmovk_i32(self, sdst:regVar, imm16:imm16_t):
+	def s_cmovk_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmovk_i32', sdst, imm16, None))
-	def s_cmpk_eq_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_eq_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_eq_i32', None, ssrc, imm16))
-	def s_cmpk_eq_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_eq_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_eq_u32', None, ssrc, imm16))
-	def s_cmpk_ge_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_ge_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_ge_i32', None, ssrc, imm16))
-	def s_cmpk_ge_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_ge_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_ge_u32', None, ssrc, imm16))
-	def s_cmpk_gt_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_gt_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_gt_i32', None, ssrc, imm16))
-	def s_cmpk_gt_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_gt_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_gt_u32', None, ssrc, imm16))
-	def s_cmpk_le_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_le_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_le_i32', None, ssrc, imm16))
-	def s_cmpk_le_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_le_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_le_u32', None, ssrc, imm16))
-	def s_cmpk_lg_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_lg_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lg_i32', None, ssrc, imm16))
-	def s_cmpk_lg_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_lg_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lg_u32', None, ssrc, imm16))
-	def s_cmpk_lt_i32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_lt_i32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lt_i32', None, ssrc, imm16))
-	def s_cmpk_lt_u32(self, ssrc:regVar, imm16:imm16_t):
+	def s_cmpk_lt_u32(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_cmpk_lt_u32', None, ssrc, imm16))
-	def s_getreg_b32(self, sdst:regVar, hwreg:regVar):
+	def s_getreg_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], hwreg:'hwreg'):
 		return self.ic_pb(sopk_base('s_getreg_b32', sdst, hwreg, None))
-	def s_movk_i32(self, sdst:regVar, imm16:imm16_t):
+	def s_movk_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_movk_i32', sdst, imm16, None))
-	def s_mulk_i32(self, sdst:regVar, imm16:imm16_t):
+	def s_mulk_i32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_mulk_i32', sdst, imm16, None))
-	def s_setreg_b32(self, hwreg:regVar, ssrc:regVar):
+	def s_setreg_b32(self, hwreg:'hwreg', ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg]):
 		return self.ic_pb(sopk_base('s_setreg_b32', hwreg, ssrc, None))
-	def s_setreg_imm32_b32(self, hwreg:regVar, simm32:simm32_t):
+	def s_setreg_imm32_b32(self, hwreg:'hwreg', simm32:simm32_t):
 		return self.ic_pb(sopk_base('s_setreg_imm32_b32', hwreg, simm32, None))
-	def s_subvector_loop_begin(self, sdst:regVar, label:label_t):
+	def s_subvector_loop_begin(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], label:label_t):
 		return self.ic_pb(sopk_base('s_subvector_loop_begin', sdst, label, None))
-	def s_subvector_loop_end(self, sdst:regVar, label:label_t):
+	def s_subvector_loop_end(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], label:label_t):
 		return self.ic_pb(sopk_base('s_subvector_loop_end', sdst, label, None))
 	def s_version(self):
 		return self.ic_pb(sopk_base('s_version', None, None, None))
-	def s_waitcnt_expcnt(self, ssrc:regVar, imm16:imm16_t):
+	def s_waitcnt_expcnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_expcnt', None, ssrc, imm16))
-	def s_waitcnt_lgkmcnt(self, ssrc:regVar, imm16:imm16_t):
+	def s_waitcnt_lgkmcnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_lgkmcnt', None, ssrc, imm16))
-	def s_waitcnt_vmcnt(self, ssrc:regVar, imm16:imm16_t):
+	def s_waitcnt_vmcnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_vmcnt', None, ssrc, imm16))
-	def s_waitcnt_vscnt(self, ssrc:regVar, imm16:imm16_t):
+	def s_waitcnt_vscnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, ssrc, imm16))
+	
 	def s_wait(self, vmcnt, expcnt=0, lgkmcnt=0):
 		cnt = vmcnt | (expcnt << 4) | (lgkmcnt << 8)
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, 'null', cnt))
 class sopp_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, SRC:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.SOPP, INSTRUCTION)
 		self.SRC = SRC 
 	def __str__(self): 
 		args_l = filter(None.__ne__, [self.SRC]) 
@@ -3523,7 +3524,7 @@ class sopp_instr_caller(inst_caller_base):
 		return self.ic_pb(sopp_base('s_wakeup', None))
 class vintrp_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VINTRP, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -3533,15 +3534,15 @@ class vintrp_base(inst_base):
 class vintrp_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_interp_mov_f32(self, vdst:regVar, param:regVar, attr:regVar):
+	def v_interp_mov_f32(self, vdst:regVar, param:'param', attr:'attr'):
 		return self.ic_pb(vintrp_base('v_interp_mov_f32', vdst, param, attr))
-	def v_interp_p1_f32(self, vdst:regVar, vsrc:regVar, attr:regVar):
+	def v_interp_p1_f32(self, vdst:regVar, vsrc:regVar, attr:'attr'):
 		return self.ic_pb(vintrp_base('v_interp_p1_f32', vdst, vsrc, attr))
-	def v_interp_p2_f32(self, vdst:regVar, vsrc:regVar, attr:regVar):
+	def v_interp_p2_f32(self, vdst:regVar, vsrc:regVar, attr:'attr'):
 		return self.ic_pb(vintrp_base('v_interp_p2_f32', vdst, vsrc, attr))
 class vop1_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VOP1, INSTRUCTION)
 		self.DST = DST 
 		self.SRC = SRC 
 	def __str__(self): 
@@ -3550,111 +3551,111 @@ class vop1_base(inst_base):
 class vop1_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_bfrev_b32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_bfrev_b32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_bfrev_b32', vdst, src))
-	def v_ceil_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ceil_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_ceil_f16', vdst, src))
-	def v_ceil_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ceil_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_ceil_f32', vdst, src))
-	def v_ceil_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ceil_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_ceil_f64', vdst, src))
 	def v_clrexcp(self):
 		return self.ic_pb(vop1_base('v_clrexcp', None, None))
-	def v_cos_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cos_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cos_f16', vdst, src))
-	def v_cos_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cos_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cos_f32', vdst, src))
-	def v_cvt_f16_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f16_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f16_f32', vdst, src))
-	def v_cvt_f16_i16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f16_i16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int]):
 		return self.ic_pb(vop1_base('v_cvt_f16_i16', vdst, src))
-	def v_cvt_f16_u16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f16_u16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int]):
 		return self.ic_pb(vop1_base('v_cvt_f16_u16', vdst, src))
-	def v_cvt_f32_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_f16', vdst, src))
-	def v_cvt_f32_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_f64', vdst, src))
-	def v_cvt_f32_i32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_i32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_i32', vdst, src))
-	def v_cvt_f32_u32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_u32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_u32', vdst, src))
-	def v_cvt_f32_ubyte0(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_ubyte0(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_ubyte0', vdst, src))
-	def v_cvt_f32_ubyte1(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_ubyte1(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_ubyte1', vdst, src))
-	def v_cvt_f32_ubyte2(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_ubyte2(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_ubyte2', vdst, src))
-	def v_cvt_f32_ubyte3(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f32_ubyte3(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f32_ubyte3', vdst, src))
-	def v_cvt_f64_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f64_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f64_f32', vdst, src))
-	def v_cvt_f64_i32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f64_i32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f64_i32', vdst, src))
-	def v_cvt_f64_u32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_f64_u32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_f64_u32', vdst, src))
-	def v_cvt_flr_i32_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_flr_i32_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_flr_i32_f32', vdst, src))
-	def v_cvt_i16_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_i16_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_i16_f16', vdst, src))
-	def v_cvt_i32_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_i32_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_i32_f32', vdst, src))
-	def v_cvt_i32_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_i32_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_i32_f64', vdst, src))
-	def v_cvt_norm_i16_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_norm_i16_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_norm_i16_f16', vdst, src))
-	def v_cvt_norm_u16_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_norm_u16_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_norm_u16_f16', vdst, src))
-	def v_cvt_off_f32_i4(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_off_f32_i4(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_off_f32_i4', vdst, src))
-	def v_cvt_rpi_i32_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_rpi_i32_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_rpi_i32_f32', vdst, src))
-	def v_cvt_u16_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_u16_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_u16_f16', vdst, src))
-	def v_cvt_u32_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_u32_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_u32_f32', vdst, src))
-	def v_cvt_u32_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_u32_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_cvt_u32_f64', vdst, src))
-	def v_exp_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_exp_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_exp_f16', vdst, src))
-	def v_exp_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_exp_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_exp_f32', vdst, src))
-	def v_ffbh_i32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbh_i32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_ffbh_i32', vdst, src))
-	def v_ffbh_u32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbh_u32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_ffbh_u32', vdst, src))
-	def v_ffbl_b32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbl_b32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_ffbl_b32', vdst, src))
-	def v_floor_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_floor_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_floor_f16', vdst, src))
-	def v_floor_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_floor_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_floor_f32', vdst, src))
-	def v_floor_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_floor_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_floor_f64', vdst, src))
-	def v_fract_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_fract_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_fract_f16', vdst, src))
-	def v_fract_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_fract_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_fract_f32', vdst, src))
-	def v_fract_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_fract_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_fract_f64', vdst, src))
-	def v_frexp_exp_i16_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i16_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_exp_i16_f16', vdst, src))
-	def v_frexp_exp_i32_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i32_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_exp_i32_f32', vdst, src))
-	def v_frexp_exp_i32_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i32_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_exp_i32_f64', vdst, src))
-	def v_frexp_mant_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_mant_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_mant_f16', vdst, src))
-	def v_frexp_mant_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_mant_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_mant_f32', vdst, src))
-	def v_frexp_mant_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_mant_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_frexp_mant_f64', vdst, src))
-	def v_log_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_log_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_log_f16', vdst, src))
-	def v_log_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_log_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_log_f32', vdst, src))
-	def v_mov_b32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_mov_b32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_mov_b32', vdst, src))
-	def v_movreld_b32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_movreld_b32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_movreld_b32', vdst, src))
 	def v_movrels_b32(self, vdst:regVar, vsrc:regVar):
 		return self.ic_pb(vop1_base('v_movrels_b32', vdst, vsrc))
@@ -3664,57 +3665,57 @@ class vop1_instr_caller(inst_caller_base):
 		return self.ic_pb(vop1_base('v_movrelsd_b32', vdst, vsrc))
 	def v_nop(self):
 		return self.ic_pb(vop1_base('v_nop', None, None))
-	def v_not_b32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_not_b32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_not_b32', vdst, src))
 	def v_pipeflush(self):
 		return self.ic_pb(vop1_base('v_pipeflush', None, None))
-	def v_rcp_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rcp_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rcp_f16', vdst, src))
-	def v_rcp_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rcp_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rcp_f32', vdst, src))
-	def v_rcp_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rcp_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_rcp_f64', vdst, src))
-	def v_rcp_iflag_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rcp_iflag_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rcp_iflag_f32', vdst, src))
-	def v_readfirstlane_b32(self, sdst:regVar, src:regVar):
+	def v_readfirstlane_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src:Union[regVar,lds_direct_t]):
 		return self.ic_pb(vop1_base('v_readfirstlane_b32', sdst, src))
-	def v_rndne_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rndne_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rndne_f16', vdst, src))
-	def v_rndne_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rndne_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rndne_f32', vdst, src))
-	def v_rndne_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rndne_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_rndne_f64', vdst, src))
-	def v_rsq_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rsq_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rsq_f16', vdst, src))
-	def v_rsq_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rsq_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_rsq_f32', vdst, src))
-	def v_rsq_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_rsq_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_rsq_f64', vdst, src))
-	def v_sat_pk_u8_i16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sat_pk_u8_i16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_sat_pk_u8_i16', vdst, src))
-	def v_sin_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sin_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_sin_f16', vdst, src))
-	def v_sin_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sin_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_sin_f32', vdst, src))
-	def v_sqrt_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sqrt_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_sqrt_f16', vdst, src))
-	def v_sqrt_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sqrt_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_sqrt_f32', vdst, src))
-	def v_sqrt_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sqrt_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_sqrt_f64', vdst, src))
 	def v_swap_b32(self, vdst:regVar, vsrc:regVar):
 		return self.ic_pb(vop1_base('v_swap_b32', vdst, vsrc))
 	def v_swaprel_b32(self, vdst:regVar, vsrc:regVar):
 		return self.ic_pb(vop1_base('v_swaprel_b32', vdst, vsrc))
-	def v_trunc_f16(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_trunc_f16(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_trunc_f16', vdst, src))
-	def v_trunc_f32(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_trunc_f32(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop1_base('v_trunc_f32', vdst, src))
-	def v_trunc_f64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_trunc_f64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop1_base('v_trunc_f64', vdst, src))
 class vop2_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST0:Union[regVar,None,Any], DST1:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VOP2, INSTRUCTION)
 		self.DST0 = DST0 
 		self.DST1 = DST1 
 		self.SRC0 = SRC0 
@@ -3726,105 +3727,105 @@ class vop2_base(inst_base):
 class vop2_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_add_co_ci_u32(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar, vcc_SRC2:regVar):
+	def v_add_co_ci_u32(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar, vcc_SRC2:VCC_reg):
 		return self.ic_pb(vop2_base('v_add_co_ci_u32', vdst, vcc_DST1, src0, vsrc1, vcc_SRC2))
-	def v_add_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_add_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_add_f16', vdst, None, src0, vsrc1, None))
-	def v_add_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_add_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_add_f32', vdst, None, src0, vsrc1, None))
-	def v_add_nc_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_add_nc_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_add_nc_u32', vdst, None, src0, vsrc1, None))
-	def v_and_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_and_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_and_b32', vdst, None, src0, vsrc1, None))
-	def v_ashrrev_i32(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_ashrrev_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_ashrrev_i32', vdst, None, src0, vsrc1, None))
-	def v_cndmask_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar, vcc_SRC2:regVar):
+	def v_cndmask_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar, vcc_SRC2:VCC_reg):
 		return self.ic_pb(vop2_base('v_cndmask_b32', vdst, None, src0, vsrc1, vcc_SRC2))
-	def v_cvt_pkrtz_f16_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cvt_pkrtz_f16_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_cvt_pkrtz_f16_f32', vdst, None, src0, vsrc1, None))
-	def v_fmaak_f16(self, vdst:regVar, src0:regVar, vsrc1:regVar, simm32:regVar):
+	def v_fmaak_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], vsrc1:regVar, simm32:simm32_t):
 		return self.ic_pb(vop2_base('v_fmaak_f16', vdst, None, src0, vsrc1, simm32))
-	def v_fmaak_f32(self, vdst:regVar, src0:regVar, vsrc1:regVar, simm32:regVar):
+	def v_fmaak_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], vsrc1:regVar, simm32:simm32_t):
 		return self.ic_pb(vop2_base('v_fmaak_f32', vdst, None, src0, vsrc1, simm32))
-	def v_fmac_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_fmac_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_fmac_f16', vdst, None, src0, vsrc1, None))
-	def v_fmac_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_fmac_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_fmac_f32', vdst, None, src0, vsrc1, None))
-	def v_fmamk_f16(self, vdst:regVar, src0:regVar, simm32:regVar, vsrc2:regVar):
+	def v_fmamk_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], simm32:simm32_t, vsrc2:regVar):
 		return self.ic_pb(vop2_base('v_fmamk_f16', vdst, None, src0, simm32, vsrc2))
-	def v_fmamk_f32(self, vdst:regVar, src0:regVar, simm32:regVar, vsrc2:regVar):
+	def v_fmamk_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], simm32:simm32_t, vsrc2:regVar):
 		return self.ic_pb(vop2_base('v_fmamk_f32', vdst, None, src0, simm32, vsrc2))
-	def v_ldexp_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_ldexp_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_ldexp_f16', vdst, None, src0, vsrc1, None))
-	def v_lshlrev_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_lshlrev_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_lshlrev_b32', vdst, None, src0, vsrc1, None))
-	def v_lshrrev_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_lshrrev_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_lshrrev_b32', vdst, None, src0, vsrc1, None))
-	def v_mac_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mac_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mac_f32', vdst, None, src0, vsrc1, None))
-	def v_mac_legacy_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mac_legacy_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mac_legacy_f32', vdst, None, src0, vsrc1, None))
-	def v_madak_f32(self, vdst:regVar, src0:regVar, vsrc1:regVar, simm32:regVar):
+	def v_madak_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], vsrc1:regVar, simm32:simm32_t):
 		return self.ic_pb(vop2_base('v_madak_f32', vdst, None, src0, vsrc1, simm32))
-	def v_madmk_f32(self, vdst:regVar, src0:regVar, simm32:regVar, vsrc2:regVar):
+	def v_madmk_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const], simm32:simm32_t, vsrc2:regVar):
 		return self.ic_pb(vop2_base('v_madmk_f32', vdst, None, src0, simm32, vsrc2))
-	def v_max_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_max_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_max_f16', vdst, None, src0, vsrc1, None))
-	def v_max_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_max_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_max_f32', vdst, None, src0, vsrc1, None))
-	def v_max_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_max_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_max_i32', vdst, None, src0, vsrc1, None))
-	def v_max_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_max_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_max_u32', vdst, None, src0, vsrc1, None))
-	def v_min_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_min_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_min_f16', vdst, None, src0, vsrc1, None))
-	def v_min_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_min_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_min_f32', vdst, None, src0, vsrc1, None))
-	def v_min_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_min_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_min_i32', vdst, None, src0, vsrc1, None))
-	def v_min_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_min_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_min_u32', vdst, None, src0, vsrc1, None))
-	def v_mul_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_f16', vdst, None, src0, vsrc1, None))
-	def v_mul_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_f32', vdst, None, src0, vsrc1, None))
-	def v_mul_hi_i32_i24(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_hi_i32_i24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_hi_i32_i24', vdst, None, src0, vsrc1, None))
-	def v_mul_hi_u32_u24(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_hi_u32_u24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_hi_u32_u24', vdst, None, src0, vsrc1, None))
-	def v_mul_i32_i24(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_i32_i24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_i32_i24', vdst, None, src0, vsrc1, None))
-	def v_mul_legacy_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_legacy_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_legacy_f32', vdst, None, src0, vsrc1, None))
-	def v_mul_u32_u24(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_mul_u32_u24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_mul_u32_u24', vdst, None, src0, vsrc1, None))
-	def v_or_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_or_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_or_b32', vdst, None, src0, vsrc1, None))
-	def v_pk_fmac_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_pk_fmac_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_pk_fmac_f16', vdst, None, src0, vsrc1, None))
-	def v_sub_co_ci_u32(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar, vcc_SRC2:regVar):
+	def v_sub_co_ci_u32(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar, vcc_SRC2:VCC_reg):
 		return self.ic_pb(vop2_base('v_sub_co_ci_u32', vdst, vcc_DST1, src0, vsrc1, vcc_SRC2))
-	def v_sub_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_sub_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_sub_f16', vdst, None, src0, vsrc1, None))
-	def v_sub_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_sub_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_sub_f32', vdst, None, src0, vsrc1, None))
-	def v_sub_nc_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_sub_nc_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_sub_nc_u32', vdst, None, src0, vsrc1, None))
-	def v_subrev_co_ci_u32(self, vdst:regVar, vcc_DST1:regVar, src0:regVar, vsrc1:regVar, vcc_SRC2:regVar):
+	def v_subrev_co_ci_u32(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar, vcc_SRC2:VCC_reg):
 		return self.ic_pb(vop2_base('v_subrev_co_ci_u32', vdst, vcc_DST1, src0, vsrc1, vcc_SRC2))
-	def v_subrev_f16(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_subrev_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_subrev_f16', vdst, None, src0, vsrc1, None))
-	def v_subrev_f32(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_subrev_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_subrev_f32', vdst, None, src0, vsrc1, None))
-	def v_subrev_nc_u32(self, vdst:regVar, src0:regVar, vsrc1:regVar):
+	def v_subrev_nc_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_subrev_nc_u32', vdst, None, src0, vsrc1, None))
-	def v_xnor_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_xnor_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_xnor_b32', vdst, None, src0, vsrc1, None))
-	def v_xor_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_xor_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vop2_base('v_xor_b32', vdst, None, src0, vsrc1, None))
 class vop3_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST0:Union[regVar,None,Any], DST1:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VOP3, INSTRUCTION)
 		self.DST0 = DST0 
 		self.DST1 = DST1 
 		self.SRC0 = SRC0 
@@ -3837,917 +3838,917 @@ class vop3_base(inst_base):
 class vop3_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_add3_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_add3_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_add3_u32', vdst, None, src0, src1, src2, ''))
-	def v_add_co_ci_u32_e64(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, ssrc2:regVar, MODIFIERS:str=''):
+	def v_add_co_ci_u32_e64(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc2:Union[regVar,VCC_reg,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_add_co_ci_u32_e64', vdst, sdst, src0, src1, ssrc2, MODIFIERS))
-	def v_add_co_u32(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_add_co_u32(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_add_co_u32', vdst, sdst, src0, src1, None, MODIFIERS))
-	def v_add_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_add_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_add_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_add_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_add_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_add_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_add_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_lshl_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_add_lshl_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_add_lshl_u32', vdst, None, src0, src1, src2, ''))
-	def v_add_nc_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_add_nc_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_add_nc_i16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_nc_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_add_nc_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_add_nc_i32', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_nc_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_add_nc_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_add_nc_u16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_add_nc_u32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_add_nc_u32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_add_nc_u32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_alignbit_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int]):
+	def v_alignbit_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_alignbit_b32', vdst, None, src0, src1, src2, ''))
-	def v_alignbyte_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int]):
+	def v_alignbyte_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_alignbyte_b32', vdst, None, src0, src1, src2, ''))
-	def v_and_b32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_and_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_and_b32_e64', vdst, None, src0, src1, None, ''))
-	def v_and_or_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_and_or_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_and_or_b32', vdst, None, src0, src1, src2, ''))
-	def v_ashrrev_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_ashrrev_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_ashrrev_i16', vdst, None, src0, src1, None, ''))
-	def v_ashrrev_i32_e64(self, vdst:regVar, src0:regVar, src1:regVar):
+	def v_ashrrev_i32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_ashrrev_i32_e64', vdst, None, src0, src1, None, ''))
-	def v_ashrrev_i64(self, vdst:regVar, src0:regVar, src1:Union[regVar,literal,const, int]):
+	def v_ashrrev_i64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_ashrrev_i64', vdst, None, src0, src1, None, ''))
-	def v_bcnt_u32_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_bcnt_u32_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_bcnt_u32_b32', vdst, None, src0, src1, None, ''))
-	def v_bfe_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_bfe_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_bfe_i32', vdst, None, src0, src1, src2, ''))
-	def v_bfe_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_bfe_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_bfe_u32', vdst, None, src0, src1, src2, ''))
-	def v_bfi_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_bfi_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_bfi_b32', vdst, None, src0, src1, src2, ''))
-	def v_bfm_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_bfm_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_bfm_b32', vdst, None, src0, src1, None, ''))
-	def v_bfrev_b32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_bfrev_b32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_bfrev_b32_e64', vdst, None, src, None, None, ''))
-	def v_ceil_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_ceil_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ceil_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_ceil_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_ceil_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ceil_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_ceil_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_ceil_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ceil_f64_e64', vdst, None, src, None, None, MODIFIERS))
 	def v_clrexcp_e64(self):
 		return self.ic_pb(vop3_base('v_clrexcp_e64', None, None, None, None, None, ''))
-	def v_cmp_class_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_class_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_class_f16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_class_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_class_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_class_f32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_class_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_class_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_class_f64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_eq_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_eq_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_eq_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_eq_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_eq_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_eq_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_eq_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_eq_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_eq_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_eq_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_eq_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_eq_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_eq_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_eq_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_eq_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_f_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_f_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_f_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_f_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_f_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_f_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_f_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_f_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_f_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_f_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_f_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_f_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_f_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_f_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_f_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_f_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_f_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_f_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_f_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_ge_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ge_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_ge_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ge_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_ge_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ge_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ge_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ge_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_ge_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ge_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ge_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_ge_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ge_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ge_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ge_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_gt_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_gt_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_gt_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_gt_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_gt_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_gt_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_gt_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_gt_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_gt_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_gt_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_gt_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_gt_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_gt_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_gt_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_gt_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_le_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_le_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_le_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_le_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_le_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_le_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_le_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_le_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_le_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_le_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_le_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_le_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_le_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_le_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_le_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lg_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_lg_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lg_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lg_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_lg_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lg_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lg_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_lg_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lg_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_lt_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lt_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_lt_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lt_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_lt_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_lt_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_lt_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_lt_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lt_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_lt_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lt_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_lt_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lt_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_lt_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lt_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_lt_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_lt_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_lt_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_lt_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_i16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ne_i16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_i16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_ne_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ne_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_u16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ne_u16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_u16_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_ne_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_ne_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_ne_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_ne_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_neq_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_neq_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_neq_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_neq_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_neq_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_neq_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_neq_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_neq_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_neq_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nge_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nge_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nge_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nge_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nge_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nge_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nge_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_nge_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nge_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ngt_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_ngt_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ngt_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ngt_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_ngt_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ngt_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_ngt_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_ngt_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_ngt_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nle_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nle_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nle_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nle_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nle_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nle_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nle_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_nle_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nle_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlg_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nlg_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlg_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlg_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nlg_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlg_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlg_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_nlg_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlg_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlt_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nlt_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlt_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlt_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_nlt_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlt_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_nlt_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_nlt_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_nlt_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_o_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_o_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_o_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_o_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_o_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_o_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_o_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_o_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_o_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_t_i32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_t_i32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_t_i32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_t_i64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_t_i64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_t_i64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_t_u32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmp_t_u32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_t_u32_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_t_u64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmp_t_u64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmp_t_u64_e64', sdst, None, src0, src1, None, ''))
-	def v_cmp_tru_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_tru_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_tru_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_tru_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_tru_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_tru_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_tru_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_tru_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_tru_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_u_f16_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_u_f16_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_u_f16_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_u_f32_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmp_u_f32_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_u_f32_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmp_u_f64_e64(self, sdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmp_u_f64_e64(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmp_u_f64_e64', sdst, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_class_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_class_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_class_f16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_class_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_class_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_class_f32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_class_f64_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_class_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_class_f64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_eq_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_eq_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_eq_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_eq_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_eq_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_eq_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_eq_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_eq_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_eq_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_eq_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_eq_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_eq_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_eq_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_eq_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_eq_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_f_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_f_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_f_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_f_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_f_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_f_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_f_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_f_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_f_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_f_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_f_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_f_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_f_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_f_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_f_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_f_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_f_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_f_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_f_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_ge_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ge_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_ge_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ge_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_ge_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ge_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ge_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ge_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_ge_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ge_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ge_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_ge_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ge_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ge_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ge_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_gt_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_gt_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_gt_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_gt_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_gt_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_gt_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_gt_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_gt_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_gt_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_gt_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_gt_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_gt_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_gt_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_gt_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_gt_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_le_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_le_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_le_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_le_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_le_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_le_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_le_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_le_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_le_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_le_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_le_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_le_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_le_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_le_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_le_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lg_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_lg_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lg_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lg_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_lg_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lg_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lg_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_lg_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lg_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_lt_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lt_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_lt_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lt_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_lt_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_lt_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_lt_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_lt_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lt_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_lt_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lt_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_lt_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lt_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_lt_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lt_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_lt_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_lt_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_lt_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_lt_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_i16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ne_i16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_i16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_ne_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ne_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_u16_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ne_u16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_u16_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_ne_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_ne_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_ne_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_ne_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_neq_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_neq_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_neq_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_neq_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_neq_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_neq_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_neq_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_neq_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_neq_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nge_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nge_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nge_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nge_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nge_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nge_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nge_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_nge_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nge_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ngt_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_ngt_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ngt_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ngt_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_ngt_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ngt_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_ngt_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_ngt_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_ngt_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nle_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nle_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nle_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nle_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nle_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nle_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nle_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_nle_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nle_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlg_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nlg_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlg_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlg_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nlg_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlg_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlg_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_nlg_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlg_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlt_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nlt_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlt_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlt_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_nlt_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlt_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_nlt_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_nlt_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_nlt_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_o_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_o_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_o_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_o_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_o_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_o_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_o_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_o_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_o_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_t_i32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_t_i32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_t_i32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_t_i64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_t_i64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_t_i64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_t_u32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cmpx_t_u32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_t_u32_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_t_u64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_cmpx_t_u64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cmpx_t_u64_e64', None, None, src0, src1, None, ''))
-	def v_cmpx_tru_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_tru_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_tru_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_tru_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_tru_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_tru_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_tru_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_tru_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_tru_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_u_f16_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_u_f16_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_u_f16_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_u_f32_e64(self, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cmpx_u_f32_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_u_f32_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cmpx_u_f64_e64(self, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cmpx_u_f64_e64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cmpx_u_f64_e64', None, None, src0, src1, None, MODIFIERS))
-	def v_cndmask_b32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, ssrc2:regVar):
+	def v_cndmask_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc2:Union[regVar,VCC_reg,TTMP_reg]):
 		return self.ic_pb(vop3_base('v_cndmask_b32_e64', vdst, None, src0, src1, ssrc2, ''))
-	def v_cos_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cos_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cos_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cos_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cos_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cos_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cubeid_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_cubeid_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cubeid_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_cubema_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_cubema_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cubema_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_cubesc_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_cubesc_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cubesc_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_cubetc_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_cubetc_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cubetc_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_cvt_f16_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f16_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f16_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f16_i16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f16_i16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f16_i16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f16_u16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f16_u16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f16_u16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_i32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_i32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_i32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_u32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_u32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_u32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte0_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte0_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_ubyte0_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte1_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte1_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_ubyte1_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte2_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte2_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_ubyte2_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f32_ubyte3_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f32_ubyte3_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f32_ubyte3_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f64_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f64_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f64_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f64_i32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f64_i32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f64_i32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_f64_u32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_f64_u32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_f64_u32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_flr_i32_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_flr_i32_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_flr_i32_f32_e64', vdst, None, src, None, None, ''))
-	def v_cvt_i16_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_i16_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_i16_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_i32_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_i32_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_i32_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_i32_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_i32_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_i32_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_norm_i16_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_norm_i16_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_norm_i16_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_norm_u16_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_norm_u16_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_norm_u16_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_off_f32_i4_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_off_f32_i4_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_cvt_off_f32_i4_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_pk_i16_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cvt_pk_i16_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_pk_i16_i32', vdst, None, src0, src1, None, ''))
-	def v_cvt_pk_u16_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cvt_pk_u16_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_pk_u16_u32', vdst, None, src0, src1, None, ''))
-	def v_cvt_pk_u8_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_cvt_pk_u8_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_pk_u8_f32', vdst, None, src0, src1, src2, ''))
-	def v_cvt_pknorm_i16_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cvt_pknorm_i16_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_cvt_pknorm_i16_f16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_cvt_pknorm_i16_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cvt_pknorm_i16_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_pknorm_i16_f32', vdst, None, src0, src1, None, ''))
-	def v_cvt_pknorm_u16_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cvt_pknorm_u16_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_cvt_pknorm_u16_f16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_cvt_pknorm_u16_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_cvt_pknorm_u16_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_pknorm_u16_f32', vdst, None, src0, src1, None, ''))
-	def v_cvt_pkrtz_f16_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_cvt_pkrtz_f16_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_pkrtz_f16_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_cvt_rpi_i32_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_cvt_rpi_i32_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_cvt_rpi_i32_f32_e64', vdst, None, src, None, None, ''))
-	def v_cvt_u16_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_u16_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_u16_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_u32_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_u32_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_u32_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_cvt_u32_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_cvt_u32_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_cvt_u32_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_div_fixup_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_div_fixup_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_div_fixup_f16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_div_fixup_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_div_fixup_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_div_fixup_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_div_fixup_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_div_fixup_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_div_fixup_f64', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_div_fmas_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_div_fmas_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_div_fmas_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_div_fmas_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_div_fmas_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_div_fmas_f64', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_div_scale_f32(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_div_scale_f32(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_div_scale_f32', vdst, vcc_DST1, src0, src1, src2, ''))
-	def v_div_scale_f64(self, vdst:regVar, vcc_DST1:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int]):
+	def v_div_scale_f64(self, vdst:regVar, vcc_DST1:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_div_scale_f64', vdst, vcc_DST1, src0, src1, src2, ''))
-	def v_exp_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_exp_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_exp_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_exp_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_exp_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_exp_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_ffbh_i32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbh_i32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_ffbh_i32_e64', vdst, None, src, None, None, ''))
-	def v_ffbh_u32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbh_u32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_ffbh_u32_e64', vdst, None, src, None, None, ''))
-	def v_ffbl_b32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_ffbl_b32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_ffbl_b32_e64', vdst, None, src, None, None, ''))
-	def v_floor_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_floor_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_floor_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_floor_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_floor_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_floor_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_floor_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_floor_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_floor_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_fma_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_fma_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_fma_f16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_fma_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_fma_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fma_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_fma_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_fma_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fma_f64', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_fmac_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_fmac_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fmac_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_fmac_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_fmac_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fmac_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_fract_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_fract_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fract_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_fract_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_fract_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fract_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_fract_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_fract_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_fract_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_exp_i16_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i16_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_frexp_exp_i16_f16_e64', vdst, None, src, None, None, ''))
-	def v_frexp_exp_i32_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i32_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_frexp_exp_i32_f32_e64', vdst, None, src, None, None, ''))
-	def v_frexp_exp_i32_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_frexp_exp_i32_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_frexp_exp_i32_f64_e64', vdst, None, src, None, None, ''))
-	def v_frexp_mant_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_frexp_mant_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_frexp_mant_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_mant_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_frexp_mant_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_frexp_mant_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_frexp_mant_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_frexp_mant_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_frexp_mant_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_interp_mov_f32_e64(self, vdst:regVar, param:regVar, attr:regVar, MODIFIERS:str=''):
+	def v_interp_mov_f32_e64(self, vdst:regVar, param:'param', attr:'attr', MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_interp_mov_f32_e64', vdst, None, param, attr, None, MODIFIERS))
-	def v_interp_p1_f32_e64(self, vdst:regVar, vsrc:regVar, attr:regVar, MODIFIERS:str=''):
+	def v_interp_p1_f32_e64(self, vdst:regVar, vsrc:regVar, attr:'attr', MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_interp_p1_f32_e64', vdst, None, vsrc, attr, None, MODIFIERS))
-	def v_interp_p1ll_f16(self, vdst:regVar, vsrc:regVar, attr:regVar, MODIFIERS:str=''):
+	def v_interp_p1ll_f16(self, vdst:regVar, vsrc:regVar, attr:'attr', MODIFIERS:str=''):
 		""":param str MODIFIERS: high clamp omod"""
 		return self.ic_pb(vop3_base('v_interp_p1ll_f16', vdst, None, vsrc, attr, None, MODIFIERS))
-	def v_interp_p1lv_f16(self, vdst:regVar, vsrc0:regVar, attr:regVar, vsrc2:regVar, MODIFIERS:str=''):
+	def v_interp_p1lv_f16(self, vdst:regVar, vsrc0:regVar, attr:'attr', vsrc2:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: high clamp omod"""
 		return self.ic_pb(vop3_base('v_interp_p1lv_f16', vdst, None, vsrc0, attr, vsrc2, MODIFIERS))
-	def v_interp_p2_f16(self, vdst:regVar, vsrc0:regVar, attr:regVar, vsrc2:regVar, MODIFIERS:str=''):
+	def v_interp_p2_f16(self, vdst:regVar, vsrc0:regVar, attr:'attr', vsrc2:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: high clamp"""
 		return self.ic_pb(vop3_base('v_interp_p2_f16', vdst, None, vsrc0, attr, vsrc2, MODIFIERS))
-	def v_interp_p2_f32_e64(self, vdst:regVar, vsrc:regVar, attr:regVar, MODIFIERS:str=''):
+	def v_interp_p2_f32_e64(self, vdst:regVar, vsrc:regVar, attr:'attr', MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_interp_p2_f32_e64', vdst, None, vsrc, attr, None, MODIFIERS))
-	def v_ldexp_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_ldexp_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ldexp_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_ldexp_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_ldexp_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ldexp_f32', vdst, None, src0, src1, None, MODIFIERS))
-	def v_ldexp_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_ldexp_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_ldexp_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_lerp_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_lerp_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lerp_u8', vdst, None, src0, src1, src2, ''))
-	def v_log_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_log_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_log_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_log_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_log_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_log_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_lshl_add_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_lshl_add_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshl_add_u32', vdst, None, src0, src1, src2, ''))
-	def v_lshl_or_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_lshl_or_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshl_or_b32', vdst, None, src0, src1, src2, ''))
-	def v_lshlrev_b16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_lshlrev_b16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_lshlrev_b16', vdst, None, src0, src1, None, ''))
-	def v_lshlrev_b32_e64(self, vdst:regVar, src0:regVar, src1:regVar):
+	def v_lshlrev_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshlrev_b32_e64', vdst, None, src0, src1, None, ''))
-	def v_lshlrev_b64(self, vdst:regVar, src0:regVar, src1:Union[regVar,literal,const, int]):
+	def v_lshlrev_b64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshlrev_b64', vdst, None, src0, src1, None, ''))
-	def v_lshrrev_b16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_lshrrev_b16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_lshrrev_b16', vdst, None, src0, src1, None, ''))
-	def v_lshrrev_b32_e64(self, vdst:regVar, src0:regVar, src1:regVar):
+	def v_lshrrev_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshrrev_b32_e64', vdst, None, src0, src1, None, ''))
-	def v_lshrrev_b64(self, vdst:regVar, src0:regVar, src1:Union[regVar,literal,const, int]):
+	def v_lshrrev_b64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_lshrrev_b64', vdst, None, src0, src1, None, ''))
-	def v_mac_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mac_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mac_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mac_legacy_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mac_legacy_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mac_legacy_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mad_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_mad_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mad_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mad_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_mad_i16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_i32_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:regVar, MODIFIERS:str=''):
+	def v_mad_i32_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_mad_i32_i16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_i32_i24(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_mad_i32_i24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mad_i32_i24', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_i64_i32(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mad_i64_i32(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mad_i64_i32', vdst, sdst, src0, src1, src2, MODIFIERS))
-	def v_mad_legacy_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_mad_legacy_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mad_legacy_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mad_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_mad_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_u32_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:regVar, MODIFIERS:str=''):
+	def v_mad_u32_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_mad_u32_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_u32_u24(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_mad_u32_u24(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mad_u32_u24', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mad_u64_u32(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mad_u64_u32(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mad_u64_u32', vdst, sdst, src0, src1, src2, MODIFIERS))
-	def v_max3_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_max3_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_max3_f16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_max3_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_max3_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_max3_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_max3_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_max3_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_max3_i16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_max3_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_max3_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_max3_i32', vdst, None, src0, src1, src2, ''))
-	def v_max3_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_max3_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_max3_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_max3_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_max3_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_max3_u32', vdst, None, src0, src1, src2, ''))
-	def v_max_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_max_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_max_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_max_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_max_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_max_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_max_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_max_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_max_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_max_i16', vdst, None, src0, src1, None, ''))
-	def v_max_i32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_max_i32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_max_i32_e64', vdst, None, src0, src1, None, ''))
-	def v_max_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_max_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_max_u16', vdst, None, src0, src1, None, ''))
-	def v_max_u32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_max_u32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_max_u32_e64', vdst, None, src0, src1, None, ''))
-	def v_mbcnt_hi_u32_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mbcnt_hi_u32_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mbcnt_hi_u32_b32', vdst, None, src0, src1, None, ''))
-	def v_mbcnt_lo_u32_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mbcnt_lo_u32_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mbcnt_lo_u32_b32', vdst, None, src0, src1, None, ''))
-	def v_med3_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_med3_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_med3_f16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_med3_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_med3_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_med3_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_med3_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_med3_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_med3_i16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_med3_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_med3_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_med3_i32', vdst, None, src0, src1, src2, ''))
-	def v_med3_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_med3_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_med3_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_med3_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_med3_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_med3_u32', vdst, None, src0, src1, src2, ''))
-	def v_min3_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_min3_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_min3_f16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_min3_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_min3_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_min3_f32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_min3_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_min3_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_min3_i16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_min3_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_min3_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_min3_i32', vdst, None, src0, src1, src2, ''))
-	def v_min3_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_min3_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_min3_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_min3_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_min3_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_min3_u32', vdst, None, src0, src1, src2, ''))
-	def v_min_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_min_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_min_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_min_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_min_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_min_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_min_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_min_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_min_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_min_i16', vdst, None, src0, src1, None, ''))
-	def v_min_i32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_min_i32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_min_i32_e64', vdst, None, src0, src1, None, ''))
-	def v_min_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_min_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_min_u16', vdst, None, src0, src1, None, ''))
-	def v_min_u32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_min_u32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_min_u32_e64', vdst, None, src0, src1, None, ''))
-	def v_mov_b32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_mov_b32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_mov_b32_e64', vdst, None, src, None, None, ''))
-	def v_movreld_b32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_movreld_b32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_movreld_b32_e64', vdst, None, src, None, None, ''))
 	def v_movrels_b32_e64(self, vdst:regVar, vsrc:regVar):
 		return self.ic_pb(vop3_base('v_movrels_b32_e64', vdst, None, vsrc, None, None, ''))
@@ -4755,197 +4756,197 @@ class vop3_instr_caller(inst_caller_base):
 		return self.ic_pb(vop3_base('v_movrelsd_2_b32_e64', vdst, None, vsrc, None, None, ''))
 	def v_movrelsd_b32_e64(self, vdst:regVar, vsrc:regVar):
 		return self.ic_pb(vop3_base('v_movrelsd_b32_e64', vdst, None, vsrc, None, None, ''))
-	def v_mqsad_pk_u16_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mqsad_pk_u16_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mqsad_pk_u16_u8', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mqsad_u32_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, vsrc2:regVar, MODIFIERS:str=''):
+	def v_mqsad_u32_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], vsrc2:regVar, MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mqsad_u32_u8', vdst, None, src0, src1, vsrc2, MODIFIERS))
-	def v_msad_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_msad_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_msad_u8', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_mul_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mul_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mul_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mul_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mul_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_mul_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mul_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_hi_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mul_hi_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mul_hi_i32', vdst, None, src0, src1, None, ''))
-	def v_mul_hi_i32_i24_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mul_hi_i32_i24_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mul_hi_i32_i24_e64', vdst, None, src0, src1, None, ''))
-	def v_mul_hi_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mul_hi_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mul_hi_u32', vdst, None, src0, src1, None, ''))
-	def v_mul_hi_u32_u24_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mul_hi_u32_u24_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mul_hi_u32_u24_e64', vdst, None, src0, src1, None, ''))
-	def v_mul_i32_i24_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mul_i32_i24_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mul_i32_i24_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_legacy_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mul_legacy_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mul_legacy_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mul_lo_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int]):
+	def v_mul_lo_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int]):
 		return self.ic_pb(vop3_base('v_mul_lo_u16', vdst, None, src0, src1, None, ''))
-	def v_mul_lo_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_mul_lo_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_mul_lo_u32', vdst, None, src0, src1, None, ''))
-	def v_mul_u32_u24_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_mul_u32_u24_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_mul_u32_u24_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_mullit_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_mullit_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_mullit_f32', vdst, None, src0, src1, src2, MODIFIERS))
 	def v_nop_e64(self):
 		return self.ic_pb(vop3_base('v_nop_e64', None, None, None, None, None, ''))
-	def v_not_b32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_not_b32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_not_b32_e64', vdst, None, src, None, None, ''))
-	def v_or3_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_or3_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_or3_b32', vdst, None, src0, src1, src2, ''))
-	def v_or_b32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_or_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_or_b32_e64', vdst, None, src0, src1, None, ''))
-	def v_pack_b32_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_pack_b32_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel"""
 		return self.ic_pb(vop3_base('v_pack_b32_f16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_perm_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_perm_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_perm_b32', vdst, None, src0, src1, src2, ''))
-	def v_permlane16_b32(self, vdst:regVar, vdata:regVar, ssrc1:Union[regVar,const], ssrc2:Union[regVar,const], MODIFIERS:str=''):
+	def v_permlane16_b32(self, vdst:regVar, vdata:regVar, ssrc1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], ssrc2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp_op_sel"""
 		return self.ic_pb(vop3_base('v_permlane16_b32', vdst, None, vdata, ssrc1, ssrc2, MODIFIERS))
-	def v_permlanex16_b32(self, vdst:regVar, vdata:regVar, ssrc1:Union[regVar,const], ssrc2:Union[regVar,const], MODIFIERS:str=''):
+	def v_permlanex16_b32(self, vdst:regVar, vdata:regVar, ssrc1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], ssrc2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const], MODIFIERS:str=''):
 		""":param str MODIFIERS: dpp_op_sel"""
 		return self.ic_pb(vop3_base('v_permlanex16_b32', vdst, None, vdata, ssrc1, ssrc2, MODIFIERS))
 	def v_pipeflush_e64(self):
 		return self.ic_pb(vop3_base('v_pipeflush_e64', None, None, None, None, None, ''))
-	def v_qsad_pk_u16_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_qsad_pk_u16_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_qsad_pk_u16_u8', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_rcp_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rcp_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rcp_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rcp_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rcp_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rcp_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rcp_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rcp_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rcp_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rcp_iflag_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rcp_iflag_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rcp_iflag_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_readlane_b32(self, sdst:regVar, src0:regVar, ssrc1:Union[regVar,const]):
+	def v_readlane_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,lds_direct_t], ssrc1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,iconst]):
 		return self.ic_pb(vop3_base('v_readlane_b32', sdst, None, src0, ssrc1, None, ''))
-	def v_rndne_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rndne_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rndne_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rndne_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rndne_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rndne_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rndne_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rndne_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rndne_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rsq_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rsq_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rsq_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rsq_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rsq_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rsq_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_rsq_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_rsq_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_rsq_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sad_hi_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_sad_hi_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sad_hi_u8', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_sad_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_sad_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sad_u16', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_sad_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_sad_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sad_u32', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_sad_u8(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_sad_u8(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sad_u8', vdst, None, src0, src1, src2, MODIFIERS))
-	def v_sat_pk_u8_i16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int]):
+	def v_sat_pk_u8_i16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int]):
 		return self.ic_pb(vop3_base('v_sat_pk_u8_i16_e64', vdst, None, src, None, None, ''))
-	def v_sin_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sin_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sin_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sin_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sin_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sin_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sqrt_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sqrt_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sqrt_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sqrt_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sqrt_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sqrt_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sqrt_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sqrt_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sqrt_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_sub_co_ci_u32_e64(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, ssrc2:regVar, MODIFIERS:str=''):
+	def v_sub_co_ci_u32_e64(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc2:Union[regVar,VCC_reg,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sub_co_ci_u32_e64', vdst, sdst, src0, src1, ssrc2, MODIFIERS))
-	def v_sub_co_u32(self, vdst:regVar, sdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_sub_co_u32(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sub_co_u32', vdst, sdst, src0, src1, None, MODIFIERS))
-	def v_sub_f16_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_sub_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sub_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_f32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_sub_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_sub_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_nc_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sub_nc_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel clamp"""
 		return self.ic_pb(vop3_base('v_sub_nc_i16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_nc_i32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_sub_nc_i32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sub_nc_i32', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_nc_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_sub_nc_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sub_nc_u16', vdst, None, src0, src1, None, MODIFIERS))
-	def v_sub_nc_u32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_sub_nc_u32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_sub_nc_u32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_co_ci_u32_e64(self, vdst:regVar, sdst:regVar, src0:regVar, src1:regVar, ssrc2:regVar, MODIFIERS:str=''):
+	def v_subrev_co_ci_u32_e64(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], ssrc2:Union[regVar,VCC_reg,TTMP_reg], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_subrev_co_ci_u32_e64', vdst, sdst, src0, src1, ssrc2, MODIFIERS))
-	def v_subrev_co_u32(self, vdst:regVar, sdst:regVar, src0:regVar, src1:regVar, MODIFIERS:str=''):
+	def v_subrev_co_u32(self, vdst:regVar, sdst:Union[regVar,VCC_reg,TTMP_reg], src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_subrev_co_u32', vdst, sdst, src0, src1, None, MODIFIERS))
-	def v_subrev_f16_e64(self, vdst:regVar, src0:regVar, src1:regVar, MODIFIERS:str=''):
+	def v_subrev_f16_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_subrev_f16_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_f32_e64(self, vdst:regVar, src0:regVar, src1:regVar, MODIFIERS:str=''):
+	def v_subrev_f32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_subrev_f32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_subrev_nc_u32_e64(self, vdst:regVar, src0:regVar, src1:regVar, MODIFIERS:str=''):
+	def v_subrev_nc_u32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp"""
 		return self.ic_pb(vop3_base('v_subrev_nc_u32_e64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_trig_preop_f64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_trig_preop_f64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_trig_preop_f64', vdst, None, src0, src1, None, MODIFIERS))
-	def v_trunc_f16_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_trunc_f16_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_trunc_f16_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_trunc_f32_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_trunc_f32_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_trunc_f32_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_trunc_f64_e64(self, vdst:regVar, src:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_trunc_f64_e64(self, vdst:regVar, src:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: clamp omod"""
 		return self.ic_pb(vop3_base('v_trunc_f64_e64', vdst, None, src, None, None, MODIFIERS))
-	def v_writelane_b32(self, vdst:regVar, ssrc0:Union[regVar,literal,const, int], ssrc1:Union[regVar,const]):
+	def v_writelane_b32(self, vdst:regVar, ssrc0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], ssrc1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,iconst]):
 		return self.ic_pb(vop3_base('v_writelane_b32', vdst, None, ssrc0, ssrc1, None, ''))
-	def v_xad_u32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_xad_u32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_xad_u32', vdst, None, src0, src1, src2, ''))
-	def v_xnor_b32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_xnor_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_xnor_b32_e64', vdst, None, src0, src1, None, ''))
-	def v_xor3_b32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar):
+	def v_xor3_b32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_xor3_b32', vdst, None, src0, src1, src2, ''))
-	def v_xor_b32_e64(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar):
+	def v_xor_b32_e64(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(vop3_base('v_xor_b32_e64', vdst, None, src0, src1, None, ''))
 class vop3p_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any], SRC2:Union[regVar,None,Any], MODIFIERS:str): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VOP3P, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -4957,75 +4958,75 @@ class vop3p_base(inst_base):
 class vop3p_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_fma_mix_f32(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_fma_mix_f32(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: m_op_sel m_op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_fma_mix_f32', vdst, src0, src1, src2, MODIFIERS))
-	def v_fma_mixhi_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_fma_mixhi_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: m_op_sel m_op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_fma_mixhi_f16', vdst, src0, src1, src2, MODIFIERS))
-	def v_fma_mixlo_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_fma_mixlo_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: m_op_sel m_op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_fma_mixlo_f16', vdst, src0, src1, src2, MODIFIERS))
-	def v_pk_add_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_pk_add_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi neg_lo neg_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_add_f16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_add_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_add_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_add_i16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_add_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_add_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_add_u16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_ashrrev_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_ashrrev_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_ashrrev_i16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_fma_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, src2:regVar, MODIFIERS:str=''):
+	def v_pk_fma_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi neg_lo neg_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_fma_f16', vdst, src0, src1, src2, MODIFIERS))
-	def v_pk_lshlrev_b16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_lshlrev_b16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_lshlrev_b16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_lshrrev_b16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_lshrrev_b16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_lshrrev_b16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_mad_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_mad_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_mad_i16', vdst, src0, src1, src2, MODIFIERS))
-	def v_pk_mad_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], src2:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_mad_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], src2:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_mad_u16', vdst, src0, src1, src2, MODIFIERS))
-	def v_pk_max_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_pk_max_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi neg_lo neg_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_max_f16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_max_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_max_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_max_i16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_max_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_max_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_max_u16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_min_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_pk_min_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi neg_lo neg_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_min_f16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_min_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_min_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_min_i16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_min_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_min_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_min_u16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_mul_f16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:regVar, MODIFIERS:str=''):
+	def v_pk_mul_f16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,const,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi neg_lo neg_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_mul_f16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_mul_lo_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_mul_lo_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi"""
 		return self.ic_pb(vop3p_base('v_pk_mul_lo_u16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_sub_i16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_sub_i16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_sub_i16', vdst, src0, src1, None, MODIFIERS))
-	def v_pk_sub_u16(self, vdst:regVar, src0:Union[regVar,literal,const, int], src1:Union[regVar,literal,const, int], MODIFIERS:str=''):
+	def v_pk_sub_u16(self, vdst:regVar, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], src1:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,iconst,ival_t,int], MODIFIERS:str=''):
 		""":param str MODIFIERS: op_sel op_sel_hi clamp"""
 		return self.ic_pb(vop3p_base('v_pk_sub_u16', vdst, src0, src1, None, MODIFIERS))
 class vopc_base(inst_base): 
 	def __init__(self, INSTRUCTION:str, DST:Union[regVar,None,Any], SRC0:Union[regVar,None,Any], SRC1:Union[regVar,None,Any]): 
-		super().__init__(instruction_type.SMEM, INSTRUCTION)
+		super().__init__(instruction_type.VOPC, INSTRUCTION)
 		self.DST = DST 
 		self.SRC0 = SRC0 
 		self.SRC1 = SRC1 
@@ -5035,383 +5036,383 @@ class vopc_base(inst_base):
 class vopc_instr_caller(inst_caller_base): 
 	def __init__(self, insturction_container) -> None:
      		super().__init__(insturction_container)
-	def v_cmp_class_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_class_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_class_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_class_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_class_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_class_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_class_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_class_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_class_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_eq_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_eq_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_eq_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_f_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_f_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_f_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_f_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_f_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_f_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_f_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_f_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_f_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_ge_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ge_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ge_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_gt_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_gt_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_gt_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_le_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_le_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_le_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_le_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_le_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_le_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_le_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_le_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_le_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_le_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_le_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_lg_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lg_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lg_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_lg_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lg_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lg_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_lg_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lg_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lg_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_lt_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_lt_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_lt_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_i16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_i16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_i16', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_u16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_u16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_u16', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_ne_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ne_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ne_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_neq_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_neq_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_neq_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_neq_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_neq_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_neq_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_neq_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_neq_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_neq_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_nge_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nge_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nge_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_nge_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nge_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nge_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_nge_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nge_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nge_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_ngt_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ngt_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ngt_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_ngt_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ngt_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ngt_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_ngt_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_ngt_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_ngt_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_nle_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nle_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nle_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_nle_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nle_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nle_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_nle_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nle_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nle_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_nlg_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlg_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlg_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_nlg_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlg_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlg_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_nlg_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlg_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlg_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_nlt_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlt_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlt_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_nlt_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlt_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlt_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_nlt_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_nlt_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_nlt_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_o_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_o_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_o_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_o_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_o_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_o_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_o_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_o_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_o_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_t_i32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_t_i32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_t_i32', vcc_DST, src0, vsrc1))
-	def v_cmp_t_i64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_t_i64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_t_i64', vcc_DST, src0, vsrc1))
-	def v_cmp_t_u32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_t_u32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_t_u32', vcc_DST, src0, vsrc1))
-	def v_cmp_t_u64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_t_u64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_t_u64', vcc_DST, src0, vsrc1))
-	def v_cmp_tru_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_tru_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_tru_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_tru_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_tru_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_tru_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_tru_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_tru_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_tru_f64', vcc_DST, src0, vsrc1))
-	def v_cmp_u_f16(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_u_f16(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_u_f16', vcc_DST, src0, vsrc1))
-	def v_cmp_u_f32(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_u_f32(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_u_f32', vcc_DST, src0, vsrc1))
-	def v_cmp_u_f64(self, vcc_DST:regVar, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmp_u_f64(self, vcc_DST:VCC_reg, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmp_u_f64', vcc_DST, src0, vsrc1))
-	def v_cmpx_class_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_class_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_class_f16', None, src0, vsrc1))
-	def v_cmpx_class_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_class_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_class_f32', None, src0, vsrc1))
-	def v_cmpx_class_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_class_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_class_f64', None, src0, vsrc1))
-	def v_cmpx_eq_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_f16', None, src0, vsrc1))
-	def v_cmpx_eq_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_f32', None, src0, vsrc1))
-	def v_cmpx_eq_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_f64', None, src0, vsrc1))
-	def v_cmpx_eq_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_i16', None, src0, vsrc1))
-	def v_cmpx_eq_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_i32', None, src0, vsrc1))
-	def v_cmpx_eq_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_i64', None, src0, vsrc1))
-	def v_cmpx_eq_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_u16', None, src0, vsrc1))
-	def v_cmpx_eq_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_u32', None, src0, vsrc1))
-	def v_cmpx_eq_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_eq_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_eq_u64', None, src0, vsrc1))
-	def v_cmpx_f_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_f16', None, src0, vsrc1))
-	def v_cmpx_f_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_f32', None, src0, vsrc1))
-	def v_cmpx_f_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_f64', None, src0, vsrc1))
-	def v_cmpx_f_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_i32', None, src0, vsrc1))
-	def v_cmpx_f_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_i64', None, src0, vsrc1))
-	def v_cmpx_f_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_u32', None, src0, vsrc1))
-	def v_cmpx_f_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_f_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_f_u64', None, src0, vsrc1))
-	def v_cmpx_ge_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_f16', None, src0, vsrc1))
-	def v_cmpx_ge_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_f32', None, src0, vsrc1))
-	def v_cmpx_ge_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_f64', None, src0, vsrc1))
-	def v_cmpx_ge_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_i16', None, src0, vsrc1))
-	def v_cmpx_ge_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_i32', None, src0, vsrc1))
-	def v_cmpx_ge_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_i64', None, src0, vsrc1))
-	def v_cmpx_ge_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_u16', None, src0, vsrc1))
-	def v_cmpx_ge_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_u32', None, src0, vsrc1))
-	def v_cmpx_ge_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ge_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ge_u64', None, src0, vsrc1))
-	def v_cmpx_gt_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_f16', None, src0, vsrc1))
-	def v_cmpx_gt_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_f32', None, src0, vsrc1))
-	def v_cmpx_gt_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_f64', None, src0, vsrc1))
-	def v_cmpx_gt_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_i16', None, src0, vsrc1))
-	def v_cmpx_gt_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_i32', None, src0, vsrc1))
-	def v_cmpx_gt_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_i64', None, src0, vsrc1))
-	def v_cmpx_gt_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_u16', None, src0, vsrc1))
-	def v_cmpx_gt_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_u32', None, src0, vsrc1))
-	def v_cmpx_gt_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_gt_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_gt_u64', None, src0, vsrc1))
-	def v_cmpx_le_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_f16', None, src0, vsrc1))
-	def v_cmpx_le_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_f32', None, src0, vsrc1))
-	def v_cmpx_le_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_f64', None, src0, vsrc1))
-	def v_cmpx_le_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_i16', None, src0, vsrc1))
-	def v_cmpx_le_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_i32', None, src0, vsrc1))
-	def v_cmpx_le_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_i64', None, src0, vsrc1))
-	def v_cmpx_le_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_u16', None, src0, vsrc1))
-	def v_cmpx_le_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_u32', None, src0, vsrc1))
-	def v_cmpx_le_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_le_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_le_u64', None, src0, vsrc1))
-	def v_cmpx_lg_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lg_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lg_f16', None, src0, vsrc1))
-	def v_cmpx_lg_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lg_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lg_f32', None, src0, vsrc1))
-	def v_cmpx_lg_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lg_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lg_f64', None, src0, vsrc1))
-	def v_cmpx_lt_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_f16', None, src0, vsrc1))
-	def v_cmpx_lt_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_f32', None, src0, vsrc1))
-	def v_cmpx_lt_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_f64', None, src0, vsrc1))
-	def v_cmpx_lt_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_i16', None, src0, vsrc1))
-	def v_cmpx_lt_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_i32', None, src0, vsrc1))
-	def v_cmpx_lt_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_i64', None, src0, vsrc1))
-	def v_cmpx_lt_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_u16', None, src0, vsrc1))
-	def v_cmpx_lt_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_u32', None, src0, vsrc1))
-	def v_cmpx_lt_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_lt_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_lt_u64', None, src0, vsrc1))
-	def v_cmpx_ne_i16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_i16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_i16', None, src0, vsrc1))
-	def v_cmpx_ne_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_i32', None, src0, vsrc1))
-	def v_cmpx_ne_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_i64', None, src0, vsrc1))
-	def v_cmpx_ne_u16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_u16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,iconst,ival_t,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_u16', None, src0, vsrc1))
-	def v_cmpx_ne_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_u32', None, src0, vsrc1))
-	def v_cmpx_ne_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ne_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ne_u64', None, src0, vsrc1))
-	def v_cmpx_neq_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_neq_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_neq_f16', None, src0, vsrc1))
-	def v_cmpx_neq_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_neq_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_neq_f32', None, src0, vsrc1))
-	def v_cmpx_neq_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_neq_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_neq_f64', None, src0, vsrc1))
-	def v_cmpx_nge_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nge_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nge_f16', None, src0, vsrc1))
-	def v_cmpx_nge_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nge_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nge_f32', None, src0, vsrc1))
-	def v_cmpx_nge_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nge_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nge_f64', None, src0, vsrc1))
-	def v_cmpx_ngt_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ngt_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ngt_f16', None, src0, vsrc1))
-	def v_cmpx_ngt_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ngt_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ngt_f32', None, src0, vsrc1))
-	def v_cmpx_ngt_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_ngt_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_ngt_f64', None, src0, vsrc1))
-	def v_cmpx_nle_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nle_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nle_f16', None, src0, vsrc1))
-	def v_cmpx_nle_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nle_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nle_f32', None, src0, vsrc1))
-	def v_cmpx_nle_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nle_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nle_f64', None, src0, vsrc1))
-	def v_cmpx_nlg_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlg_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlg_f16', None, src0, vsrc1))
-	def v_cmpx_nlg_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlg_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlg_f32', None, src0, vsrc1))
-	def v_cmpx_nlg_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlg_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlg_f64', None, src0, vsrc1))
-	def v_cmpx_nlt_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlt_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlt_f16', None, src0, vsrc1))
-	def v_cmpx_nlt_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlt_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlt_f32', None, src0, vsrc1))
-	def v_cmpx_nlt_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_nlt_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_nlt_f64', None, src0, vsrc1))
-	def v_cmpx_o_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_o_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_o_f16', None, src0, vsrc1))
-	def v_cmpx_o_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_o_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_o_f32', None, src0, vsrc1))
-	def v_cmpx_o_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_o_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_o_f64', None, src0, vsrc1))
-	def v_cmpx_t_i32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_t_i32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_t_i32', None, src0, vsrc1))
-	def v_cmpx_t_i64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_t_i64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_t_i64', None, src0, vsrc1))
-	def v_cmpx_t_u32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_t_u32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_t_u32', None, src0, vsrc1))
-	def v_cmpx_t_u64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_t_u64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_t_u64', None, src0, vsrc1))
-	def v_cmpx_tru_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_tru_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_tru_f16', None, src0, vsrc1))
-	def v_cmpx_tru_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_tru_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_tru_f32', None, src0, vsrc1))
-	def v_cmpx_tru_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_tru_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_tru_f64', None, src0, vsrc1))
-	def v_cmpx_u_f16(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_u_f16(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_u_f16', None, src0, vsrc1))
-	def v_cmpx_u_f32(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_u_f32(self, src0:Union[regVar,VCC_reg,TTMP_reg,M0_reg,EXEC_reg,SCC_bit,lds_direct_t,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_u_f32', None, src0, vsrc1))
-	def v_cmpx_u_f64(self, src0:Union[regVar,literal,const, int], vsrc1:regVar):
+	def v_cmpx_u_f64(self, src0:Union[regVar,VCC_reg,TTMP_reg,EXEC_reg,SCC_bit,const,int], vsrc1:regVar):
 		return self.ic_pb(vopc_base('v_cmpx_u_f64', None, src0, vsrc1))
