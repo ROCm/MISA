@@ -3020,8 +3020,8 @@ class smem_instr_caller(inst_caller_base):
 		return self.ic_pb(smem_base('s_dcache_inv', None, None, None, None, ''))
 	def s_dcache_wb(self):
 		return self.ic_pb(smem_base('s_dcache_wb', None, None, None, None, ''))
-	def s_get_waveid_in_workgroup(self):
-		return self.ic_pb(smem_base('s_get_waveid_in_workgroup', None, None, None, None, ''))
+	def s_get_waveid_in_workgroup(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t]):
+		return self.ic_pb(smem_base('s_get_waveid_in_workgroup', sdst, None, None, None, ''))
 	def s_gl1_inv(self):
 		return self.ic_pb(smem_base('s_gl1_inv', None, None, None, None, ''))
 	def s_load_dword(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
@@ -3039,10 +3039,10 @@ class smem_instr_caller(inst_caller_base):
 	def s_load_dwordx8(self, sdst:Union[regVar,TTMP_reg], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_load_dwordx8', sdst, sbase, soffset, None, MODIFIERS))
-	def s_memrealtime(self):
-		return self.ic_pb(smem_base('s_memrealtime', None, None, None, None, ''))
-	def s_memtime(self):
-		return self.ic_pb(smem_base('s_memtime', None, None, None, None, ''))
+	def s_memrealtime(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t]):
+		return self.ic_pb(smem_base('s_memrealtime', sdst, None, None, None, ''))
+	def s_memtime(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t]):
+		return self.ic_pb(smem_base('s_memtime', sdst, None, None, None, ''))
 	def s_scratch_load_dword(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t], sbase:Union[regVar,VCC_reg,TTMP_reg], soffset:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,simm21_t], MODIFIERS:str=''):
 		""":param str MODIFIERS: glc dlc"""
 		return self.ic_pb(smem_base('s_scratch_load_dword', sdst, sbase, soffset, None, MODIFIERS))
@@ -3145,8 +3145,8 @@ class sop1_instr_caller(inst_caller_base):
 		return self.ic_pb(sop1_base('s_flbit_i32_b64', sdst, ssrc))
 	def s_flbit_i32_i64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_flbit_i32_i64', sdst, ssrc))
-	def s_getpc_b64(self):
-		return self.ic_pb(sop1_base('s_getpc_b64', None, None))
+	def s_getpc_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg]):
+		return self.ic_pb(sop1_base('s_getpc_b64', sdst, None))
 	def s_mov_b32(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_mov_b32', sdst, ssrc))
 	def s_mov_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
@@ -3189,10 +3189,10 @@ class sop1_instr_caller(inst_caller_base):
 		return self.ic_pb(sop1_base('s_quadmask_b32', sdst, ssrc))
 	def s_quadmask_b64(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_quadmask_b64', sdst, ssrc))
-	def s_rfe_b64(self):
-		return self.ic_pb(sop1_base('s_rfe_b64', None, None))
-	def s_setpc_b64(self):
-		return self.ic_pb(sop1_base('s_setpc_b64', None, None))
+	def s_rfe_b64(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
+		return self.ic_pb(sop1_base('s_rfe_b64', None, ssrc))
+	def s_setpc_b64(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t]):
+		return self.ic_pb(sop1_base('s_setpc_b64', None, ssrc))
 	def s_sext_i32_i16(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
 		return self.ic_pb(sop1_base('s_sext_i32_i16', sdst, ssrc))
 	def s_sext_i32_i8(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg,SCC_bit,const,int]):
@@ -3428,8 +3428,8 @@ class sopk_instr_caller(inst_caller_base):
 		return self.ic_pb(sopk_base('s_subvector_loop_begin', sdst, label, None))
 	def s_subvector_loop_end(self, sdst:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], label:label_t):
 		return self.ic_pb(sopk_base('s_subvector_loop_end', sdst, label, None))
-	def s_version(self):
-		return self.ic_pb(sopk_base('s_version', None, None, None))
+	def s_version(self, imm16:imm16_t):
+		return self.ic_pb(sopk_base('s_version', None, imm16, None))
 	def s_waitcnt_expcnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_expcnt', None, ssrc, imm16))
 	def s_waitcnt_lgkmcnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
@@ -3438,7 +3438,7 @@ class sopk_instr_caller(inst_caller_base):
 		return self.ic_pb(sopk_base('s_waitcnt_vmcnt', None, ssrc, imm16))
 	def s_waitcnt_vscnt(self, ssrc:Union[regVar,VCC_reg,TTMP_reg,null_t,M0_reg,EXEC_reg], imm16:imm16_t):
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, ssrc, imm16))
-	
+		
 	def s_wait(self, vmcnt, expcnt=0, lgkmcnt=0):
 		cnt = vmcnt | (expcnt << 4) | (lgkmcnt << 8)
 		return self.ic_pb(sopk_base('s_waitcnt_vscnt', None, 'null', cnt))
@@ -3454,36 +3454,36 @@ class sopp_instr_caller(inst_caller_base):
      		super().__init__(insturction_container)
 	def s_barrier(self):
 		return self.ic_pb(sopp_base('s_barrier', None))
-	def s_branch(self):
-		return self.ic_pb(sopp_base('s_branch', None))
-	def s_cbranch_cdbgsys(self):
-		return self.ic_pb(sopp_base('s_cbranch_cdbgsys', None))
-	def s_cbranch_cdbgsys_and_user(self):
-		return self.ic_pb(sopp_base('s_cbranch_cdbgsys_and_user', None))
-	def s_cbranch_cdbgsys_or_user(self):
-		return self.ic_pb(sopp_base('s_cbranch_cdbgsys_or_user', None))
-	def s_cbranch_cdbguser(self):
-		return self.ic_pb(sopp_base('s_cbranch_cdbguser', None))
-	def s_cbranch_execnz(self):
-		return self.ic_pb(sopp_base('s_cbranch_execnz', None))
-	def s_cbranch_execz(self):
-		return self.ic_pb(sopp_base('s_cbranch_execz', None))
-	def s_cbranch_scc0(self):
-		return self.ic_pb(sopp_base('s_cbranch_scc0', None))
-	def s_cbranch_scc1(self, label):
+	def s_branch(self, label:label_t):
+		return self.ic_pb(sopp_base('s_branch', label))
+	def s_cbranch_cdbgsys(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_cdbgsys', label))
+	def s_cbranch_cdbgsys_and_user(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_cdbgsys_and_user', label))
+	def s_cbranch_cdbgsys_or_user(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_cdbgsys_or_user', label))
+	def s_cbranch_cdbguser(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_cdbguser', label))
+	def s_cbranch_execnz(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_execnz', label))
+	def s_cbranch_execz(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_execz', label))
+	def s_cbranch_scc0(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_scc0', label))
+	def s_cbranch_scc1(self, label:label_t):
 		return self.ic_pb(sopp_base('s_cbranch_scc1', label))
-	def s_cbranch_vccnz(self):
-		return self.ic_pb(sopp_base('s_cbranch_vccnz', None))
-	def s_cbranch_vccz(self):
-		return self.ic_pb(sopp_base('s_cbranch_vccz', None))
-	def s_clause(self):
-		return self.ic_pb(sopp_base('s_clause', None))
+	def s_cbranch_vccnz(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_vccnz', label))
+	def s_cbranch_vccz(self, label:label_t):
+		return self.ic_pb(sopp_base('s_cbranch_vccz', label))
+	def s_clause(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_clause', imm16))
 	def s_code_end(self):
 		return self.ic_pb(sopp_base('s_code_end', None))
-	def s_decperflevel(self):
-		return self.ic_pb(sopp_base('s_decperflevel', None))
-	def s_denorm_mode(self):
-		return self.ic_pb(sopp_base('s_denorm_mode', None))
+	def s_decperflevel(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_decperflevel', imm16))
+	def s_denorm_mode(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_denorm_mode', imm16))
 	def s_endpgm(self):
 		return self.ic_pb(sopp_base('s_endpgm', None))
 	def s_endpgm_ordered_ps_done(self):
@@ -3492,34 +3492,34 @@ class sopp_instr_caller(inst_caller_base):
 		return self.ic_pb(sopp_base('s_endpgm_saved', None))
 	def s_icache_inv(self):
 		return self.ic_pb(sopp_base('s_icache_inv', None))
-	def s_incperflevel(self):
-		return self.ic_pb(sopp_base('s_incperflevel', None))
-	def s_inst_prefetch(self):
-		return self.ic_pb(sopp_base('s_inst_prefetch', None))
-	def s_nop(self):
-		return self.ic_pb(sopp_base('s_nop', None))
-	def s_round_mode(self):
-		return self.ic_pb(sopp_base('s_round_mode', None))
-	def s_sendmsg(self):
-		return self.ic_pb(sopp_base('s_sendmsg', None))
-	def s_sendmsghalt(self):
-		return self.ic_pb(sopp_base('s_sendmsghalt', None))
-	def s_sethalt(self):
-		return self.ic_pb(sopp_base('s_sethalt', None))
-	def s_setkill(self):
-		return self.ic_pb(sopp_base('s_setkill', None))
-	def s_setprio(self):
-		return self.ic_pb(sopp_base('s_setprio', None))
-	def s_sleep(self):
-		return self.ic_pb(sopp_base('s_sleep', None))
-	def s_trap(self):
-		return self.ic_pb(sopp_base('s_trap', None))
+	def s_incperflevel(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_incperflevel', imm16))
+	def s_inst_prefetch(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_inst_prefetch', imm16))
+	def s_nop(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_nop', imm16))
+	def s_round_mode(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_round_mode', imm16))
+	def s_sendmsg(self, msg:'msg'):
+		return self.ic_pb(sopp_base('s_sendmsg', msg))
+	def s_sendmsghalt(self, msg:'msg'):
+		return self.ic_pb(sopp_base('s_sendmsghalt', msg))
+	def s_sethalt(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_sethalt', imm16))
+	def s_setkill(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_setkill', imm16))
+	def s_setprio(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_setprio', imm16))
+	def s_sleep(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_sleep', imm16))
+	def s_trap(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_trap', imm16))
 	def s_ttracedata(self):
 		return self.ic_pb(sopp_base('s_ttracedata', None))
-	def s_ttracedata_imm(self):
-		return self.ic_pb(sopp_base('s_ttracedata_imm', None))
-	def s_waitcnt(self, SRC:int):
-		return self.ic_pb(sopp_base('s_waitcnt', SRC))
+	def s_ttracedata_imm(self, imm16:imm16_t):
+		return self.ic_pb(sopp_base('s_ttracedata_imm', imm16))
+	def s_waitcnt(self, waitcnt:int):
+		return self.ic_pb(sopp_base('s_waitcnt', waitcnt))
 	def s_wakeup(self):
 		return self.ic_pb(sopp_base('s_wakeup', None))
 class vintrp_base(inst_base): 
