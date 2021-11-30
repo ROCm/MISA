@@ -57,11 +57,10 @@ class instruction_graph():
         self._max_node_id += 1
         return cur_vert
     
-    def _bound_new_pos_vert(self, vert:Node, vert_range:tuple):
-        vertexes_before = self.vert_list[vert_range[0]:vert_range[1]]
+    def _bound_vert_by_pos(self, vert:Node, vertexes_before:List[Node]):
         vert.position_dep_before.extend(vertexes_before)
         for v in vertexes_before:
-            v.position_dep_after.append(v)
+            v.position_dep_after.append(vert)
 
     def _build_graph(self):
         i_list = self.instructions_list
@@ -87,7 +86,7 @@ class instruction_graph():
         
         for i in i_list:
             #pseudo instractions ignored
-            if issubclass(type(i),(reg_allocator_base, flow_control_base, instr_label_base)):
+            if issubclass(type(i),(reg_allocator_base, flow_control_base)):
                 continue
             
             if issubclass(type(i),(instr_label_base)) and not position_constraints_enabled:
@@ -95,16 +94,29 @@ class instruction_graph():
             
             cur_vert = self._add_new_vert_node(i.label)
 
+            # Two labels define a code segment.
+            # Instructions declared inside a segment cannot move beyond the labels 
+            #   defining this segment.
             if(position_constraints_enabled):
+                cur_vert_pos = len(self.vert_list) - 1
+                # Bound new label to instructions from last segment.
                 if issubclass(type(i),(instr_label_base)):
-                    vert_range = (last_label_pos, len(self.vert_list)-1)
-                    self._bound_new_pos_vert(cur_vert, vert_range)
-                    last_label_pos = vert_range[1]+1
-                elif issubclass(type(i), (smem_base)):
-                    vert_range = (last_smem_pos, last_smem_pos)
-                    self._bound_new_pos_vert(cur_vert, vert_range)
-                    last_smem_pos =  len(self.vert_list)
+                    vert_range = slice(last_label_pos, cur_vert_pos)
+                    vertexes_before = self.vert_list[vert_range]
+                    self._bound_vert_by_pos(cur_vert, vertexes_before)
+                    last_label_pos = cur_vert_pos
+                else:
+                    # Boud new instruction to last label.
+                    vert_range = slice(last_label_pos, last_label_pos+1)
+                    vertexes_before = self.vert_list[vert_range]
+                    self._bound_vert_by_pos(cur_vert, vertexes_before)
 
+                # Bound current mem_op tp the previous
+                if issubclass(type(i), (smem_base)):
+                    vert_range = slice(last_smem_pos, last_smem_pos+1)
+                    vertexes_before = self.vert_list[vert_range]
+                    self._bound_vert_by_pos(cur_vert, vertexes_before)
+                    last_smem_pos =  cur_vert_pos
 
 
             src_regs = i.get_srs_regs()
@@ -154,8 +166,26 @@ class instruction_graph():
                         baseSubNodes_list.append(empty_base_subNodes)
                     
                     cur_baseSubNodes = baseSubNodes_list[index]
+                    
+                    if(position_constraints_enabled):
+                        # Write in register only afther read.
+                        cur_w_nodes = cur_baseSubNodes[dst_view[0]:dst_view[1]]
+                        for cur_node in cur_w_nodes:
+                            clean_connections = [
+                                *filter(lambda x: not x is cur_vert, cur_node.connections_out)
+                            ]
+                            self._bound_vert_by_pos(cur_vert, clean_connections)
+
+                    #update var after write
                     for i, j in zip(range(dst_view[0],dst_view[1]), range(dst_view[1]-dst_view[0])):
                         cur_baseSubNodes[i] = cur_sub_var[j]
+                    
+                    
+        
+        #remove from hw_reg_init self directed edge
+        hw_reg_init = self.vert_list[0]
+        hw_reg_init.position_dep_before.pop(0)
+        hw_reg_init.position_dep_after.pop(0)
 
 
 
@@ -225,7 +255,10 @@ class instruction_graph():
             id = i.id
             for dst_var in i.connections_out:
                 for dst_vert in dst_var.connections_out:
-                    G.add_edge(id, dst_vert.id)
+                    G.add_edge(id, dst_vert.id, data_dep=True)
+            
+            for after_vert in i.position_dep_after:
+                G.add_edge(id, after_vert.id, data_dep=False)
         
         self.set_Ypos_BFS(G, 0)
         return G
@@ -370,7 +403,22 @@ class instruction_graph():
             plot.on_event(Tap, update_node_highlight)
             curdoc().add_root(plot)
 
-        
+        edge_dep_t = graph_renderer.edge_renderer.data_source.data['data_dep']
+        edge_start = graph_renderer.edge_renderer.data_source.data['start']
+        edge_end = graph_renderer.edge_renderer.data_source.data['end']
+
+        data_dep = {'start': [], 'end': [], 'data_dep' : []}
+        pos_dep = {'start': [], 'end': [], 'data_dep' : []}
+
+        for i in range(len(edge_start)):
+            if(edge_dep_t[i] == True):
+                data_dep['start'].append(edge_start[i])
+                data_dep['end'].append(edge_end[i])
+                data_dep['data_dep'].append(edge_dep_t[i])
+            else:
+                pos_dep['start'].append(edge_start[i])
+                pos_dep['end'].append(edge_end[i])
+                pos_dep['data_dep'].append(edge_dep_t[i])
 
         plot.renderers.append(graph_renderer)
 
@@ -379,12 +427,27 @@ class instruction_graph():
         
         update_edges_args = dict(
             edge_renderer=graph_renderer.edge_renderer,
-            checkbox=checkbox
+            checkbox=checkbox, 
+            data_dep=data_dep,
+            pos_dep=pos_dep
         )
 
         update_edges_str = """
-            edge_renderer.visible = 0 in checkbox.active;  
-            
+            var new_data_edge = {'start': [], 'end': [], 'data_dep' : []};
+            if (checkbox.active.includes(0)){
+                new_data_edge['start'] = new_data_edge['start'].concat(data_dep['start']);
+                new_data_edge['end'] = new_data_edge['end'].concat(data_dep['end']);
+                new_data_edge['data_dep'] = new_data_edge['data_dep'].concat(data_dep['data_dep']);
+            }
+            if (checkbox.active.includes(1)){
+                new_data_edge['start'] = new_data_edge['start'].concat(pos_dep['start']);
+                new_data_edge['end'] = new_data_edge['end'].concat(pos_dep['end']);
+                new_data_edge['data_dep'] = new_data_edge['data_dep'].concat(pos_dep['data_dep']);
+            }
+
+            edge_renderer.data_source.data = new_data_edge;
+            edge_renderer.data_source.change.emit();
+            console.log('checkbox: active=' + checkbox.active, checkbox.toString())
         """
 
         update_edges2 = CustomJS(
