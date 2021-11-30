@@ -6,6 +6,14 @@ class reg_type(Enum):
     sgpr = 's'
     vgpr = 'v'
 
+class const_val():
+    def __init__(self, val) -> None:
+        self.label = val
+        self.val = val
+            
+    def __str__(self) -> str:
+        return f' {self.val}' 
+
 
 class const():
     def __init__(self, val) -> None:
@@ -26,6 +34,20 @@ class const():
     def __str__(self) -> str:
         return f' {self.val}'
 
+class iconst():
+    def __init__(self, val) -> None:
+        self.label = val
+        if(type(val) is int):
+            if(val <= 64 and val >= -16):
+                self.val = val
+            else:
+                assert False
+        else:
+            assert False
+    
+    def __str__(self) -> str:
+        return f' {self.val}'
+
 class literal():
     def __init__(self, val) -> None:
         self.label = val
@@ -37,44 +59,40 @@ class literal():
     def __str__(self) -> str:
         return f' {self.val}'        
 
-class imm16_t():
+class imm16_t(const_val):
     def __init__(self, val) -> None:
-        self.label = val
         if(type(val) is int and (val <= 65535) and (val >= -32768)):
-            self.val = val
+            super().__init__(val=val)
         else:
             assert False
             
     def __str__(self) -> str:
         return f' {self.val}'   
 
-class simm32_t():
+class simm32_t(const_val):
     def __init__(self, val) -> None:
-        self.label = val
         if(type(val) is int and (val < 1**32) and (val >= -(1**32))):
-            self.val = val
+            super().__init__(val=val)
         else:
             assert False
             
     def __str__(self) -> str:
         return f' {self.val}' 
 
-class simm21_t():
+class simm21_t(const_val):
     def __init__(self, val) -> None:
-        self.label = val
         if(type(val) is int and (val < 1**20) and (val >= -(1**20) )):
-            self.val = val
+            super().__init__(val=val)
         else:
             assert False
             
     def __str__(self) -> str:
         return f' {self.val}'  
 
-class uimm20_t():
+class uimm20_t(const_val):
     def __init__(self, val) -> None:
-        self.label = val
         if(type(val) is int and (val < 1**20) and (val >= 0)):
-            self.val = val
+            super().__init__(val=val)
         else:
             assert False
             
@@ -535,3 +553,73 @@ class  _EXEC_HI(EXEC_reg):
         assert(l == r)
         
         return self
+
+SCC_reg_block = reg_block('scc', reg_type.sgpr, -1, 1)
+
+class SCC_bit(regVar):
+    def __init__(self):
+        super().__init__(SCC_reg_block.label, SCC_reg_block, 0, 2)
+    
+    def set_lable(self, label:str):
+        raise AttributeError( "'SCC_bit' object has no attribute 'set_lable'" )
+
+    def define(self):
+        raise AttributeError( "'SCC_bit' object has no attribute 'define'" )
+
+    def define_as(self, label:str):
+        raise AttributeError( "'SCC_bit' object has no attribute 'define_as'" )
+
+    def __getitem__(self, key):
+        l = 0
+        r = 0
+        if(type(key) is tuple):
+            assert len(key) == 2
+            r = key[1]
+            l = key[0]
+        elif (type(key) is slice):
+            r = key.stop
+            l = key.start
+        else:
+            l = key
+            r = key
+        #send label without reg_type prefix
+        assert(l == r)
+        
+        return self
+
+    def __str__(self) -> str:
+        return f'{self.label}'
+
+class off_reg(const_val):
+    def __init__(self):
+        super().__init__(val='off')
+
+off = off_reg()    
+
+class null_t(const_val):
+    def __init__(self):
+        super().__init__(val='null')
+
+class lds_direct_t(const_val):
+    def __init__(self):
+        super().__init__(val='lds_direct')
+
+class ival_t(const_val):
+    def __init__(self, val:str):
+        syntax = ['shared_base', 'shared_limit', 'private_base', 'private_limit', 'pops_exiting_wave_id']
+        if(val in syntax):
+            super().__init__(val=val)
+
+class  TTMP_reg(regVar):
+    def __init__(self, TTMP_reg_block, size):
+        super().__init__('ttmp', TTMP_reg_block, reg_offset = 0, regVar_size=size)
+    
+    def set_lable(self, label:str):
+        raise AttributeError( "'TTMP_reg' object has no attribute 'set_lable'" )
+
+    def define(self):
+        raise AttributeError( "'TTMP_reg' object has no attribute 'define'" )
+
+    def define_as(self, label:str):
+        raise AttributeError( "'TTMP_reg' object has no attribute 'define_as'" )
+
