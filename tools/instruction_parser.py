@@ -10,6 +10,9 @@ from bs4 import element as bs4Element
 import re
 import itertools
 
+from urllib.parse import urljoin
+
+
 
 class instr_type():
 
@@ -137,7 +140,7 @@ def add_new_instruction_input_t(input_dict, new_input_t, base_url=None, href=Non
         with open(file_name) as fp:
             soup = BeautifulSoup(fp, "html.parser")
     else:
-        url_file = urlopen(base_url+href)
+        url_file = urlopen(urljoin(base_url,href))
         soup = BeautifulSoup(url_file, "html.parser")
         
     new_t = parse_instruction_input_from_soup(soup)
@@ -146,7 +149,7 @@ def add_new_instruction_input_t(input_dict, new_input_t, base_url=None, href=Non
 def parse_instruction_name(l:str):
     return l.translate(str.maketrans('', '', '— '))
 
-def parse_instruction_argument(arg:bs4Element.Tag):
+def parse_instruction_argument(arg:bs4Element.Tag, base_url):
     type_name = arg['href']
     name = arg.string
 
@@ -155,24 +158,22 @@ def parse_instruction_argument(arg:bs4Element.Tag):
     else:
         ret = (name, type_name[:type_name.index('.')])
         if(not( ret[1] in instruction_args_d)):
-            add_new_instruction_input_t(instruction_args_d, ret[1],'https://llvm.org/docs/AMDGPU/', type_name)
+            add_new_instruction_input_t(instruction_args_d, ret[1], base_url, type_name)
 
     return ret
 
-def parse_argument_mod(a_type:bs4Element.Tag)->str:
-    name, type_name = parse_instruction_argument(a_type)
+def parse_argument_mod(a_type:bs4Element.Tag, base_url)->str:
+    name, type_name = parse_instruction_argument(a_type, base_url)
     if(type_name in ['gfx10_m', 'gfx10_dst']):
         return type_name
     return ''
 
 
-def parse_gfx_instruction_html_file(fileName):
+def parse_gfx_instruction_html_file(soup:BeautifulSoup, base_url):
     instr_types:List[instr_type] = []
 
-    with open(fileName) as fp:
-        soup = BeautifulSoup(fp, "html.parser")
-    inst = soup.find("section", id="instructions") 
-    inst_pack_list = inst.find_all("section")
+    inst = soup.find("div","section", id="instructions") 
+    inst_pack_list = inst.find_all("div", "section")
 
 
     for i_p in inst_pack_list:
@@ -189,12 +190,12 @@ def parse_gfx_instruction_html_file(fileName):
             if(type(i) == bs4Element.Tag):
                 if(i.name == 'a'):
                     if(next_elem_is_arg_mod):
-                        a_type = parse_argument_mod(i)
+                        a_type = parse_argument_mod(i, base_url)
                         if(a_type != ''):
                             curent_pack.add_opt_type_to_last_arg(a_type)
                         next_elem_is_arg_mod=False
                     else:
-                        arg_name, type_name = parse_instruction_argument(i)
+                        arg_name, type_name = parse_instruction_argument(i, base_url)
                         curent_pack.add_arg_to_last_inst(arg_name, last_offset, type_name)
                 elif(i.name == 'strong'):
                     curent_pack.arg_format_append(i.string, last_offset)
@@ -380,6 +381,8 @@ def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--infile', nargs='?', type=argparse.FileType('r'),
                            default=sys.stdin)
+    argparser.add_argument('--inURL', nargs='?', action='store',
+                           default=None)
     argparser.add_argument('--class_suffix', nargs='?',default='')
     argparser.add_argument('--outfile', nargs='?', type=argparse.FileType('w'),
                            default=sys.stdout)
@@ -391,8 +394,17 @@ def main():
         outfile = open(out_name, "r")
 
     print('Reading', args.infile.name)
-    
-    instr_types = parse_gfx_instruction_html_file(args.infile.name)
+    url = args.inURL
+    if(url):
+        base_url = urljoin(url, '.')
+        url_file = urlopen(url)
+        soup = BeautifulSoup(url_file, "html.parser")
+    else:
+        base_url = 'https://llvm.org/docs/AMDGPU/'
+        with open(args.infile.name) as fp:
+            soup = BeautifulSoup(fp, "html.parser")
+        
+    instr_types = parse_gfx_instruction_html_file(soup=soup, base_url=base_url)
     
     print('Writing', outfile.name)
     
