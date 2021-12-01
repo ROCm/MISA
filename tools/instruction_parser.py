@@ -66,28 +66,31 @@ class instr_type():
         last_arg = self.last_inst.arg_list[-1]
         last_arg.opt_type = opt_type
 
-instruction_args_d = {
-    'gfx10_vcc':'VCC_reg',
-    'gfx10_m':'None',
-    'gfx10_m_1':'None',
-    'gfx10_type_deviation':'info_ignore',
-    'gfx10_tgt':"'tgt'",
-    'gfx10_opt':'opt',
-    'gfx10_dst':'info_ignore',
-    'gfx10_probe':'int',
-    'gfx10_imm16':'imm16_t',
-    'gfx10_imm16_1':'imm16_t',
-    'gfx10_imm16_2':'imm16_t',
-    'gfx10_simm32': 'simm32_t',
-    'gfx10_simm32_1': 'simm32_t',
-    'gfx10_simm32_2': 'simm32_t',
-    'gfx10_label': 'label_t',
-    'gfx10_hwreg': "'hwreg'",
-    'gfx10_waitcnt': 'int',
-    'gfx10_attr': "'attr'",
-    'gfx10_msg': "'msg'",
-    'gfx10_param': "'param'",
-    'gfx10_fx_operand':'info_ignore'}
+instruction_args_d = {}
+
+instruction_args_replacement = {
+    'vcc':'VCC_reg',
+    'm':'None',
+    'm_1':'None',
+    'type_deviation':'info_ignore',
+    'tgt':"'tgt'",
+    'opt':'opt',
+    'dst':'info_ignore',
+    'probe':'int',
+    'imm16':'imm16_t',
+    'imm16_1':'imm16_t',
+    'imm16_2':'imm16_t',
+    'simm32': 'simm32_t',
+    'simm32_1': 'simm32_t',
+    'simm32_2': 'simm32_t',
+    'label': 'label_t',
+    'hwreg': "'hwreg'",
+    'waitcnt': 'int',
+    'attr': "'attr'",
+    'msg': "'msg'",
+    'param': "'param'",
+    'fx_operand':'info_ignore',
+    'imask':"'imask'"}
 
 from collections import OrderedDict
 
@@ -95,7 +98,7 @@ def parse_instruction_input_from_soup(soup:BeautifulSoup):
     operand_types:List[str] = []
     
     known_types_renaming = {
-        'v':'regVar', 's':'regVar',
+        'v':'regVar', 's':'regVar', 'a':'regVar',
         'vccz':'VCC_reg', 'vcc':'VCC_reg',
         'm0' : 'M0_reg', 'ttmp' : "TTMP_reg",
         'execz':'EXEC_reg', 'exec':'EXEC_reg', 
@@ -158,7 +161,13 @@ def parse_instruction_argument(arg:bs4Element.Tag, base_url):
     else:
         ret = (name, type_name[:type_name.index('.')])
         if(not( ret[1] in instruction_args_d)):
-            add_new_instruction_input_t(instruction_args_d, ret[1], base_url, type_name)
+            i_str = '_'.join(re.split('_', ret[1])[1:])
+            if (not( i_str in instruction_args_replacement)):
+                add_new_instruction_input_t(instruction_args_d, ret[1], base_url, type_name)
+            else:
+                replace = instruction_args_replacement[i_str]
+                instruction_args_d[ ret[1] ] = replace
+
 
     return ret
 
