@@ -44,14 +44,13 @@ class tensor_descriptor(object):
             tmp_lower_coord = list()
             for t, u in zip(trans, self.upper_ids[itrans]):
                 co = [current_upper_coord[i] for i in u]
-                #print(f'type:{type(t)}, co:{co}, u:{u}, {self.upper_ids[itrans]}')
                 tmp_lower_coord.append(t.calculate_lower_index(co))
 
             unsorted_lower_coord = tensor_util_flatten(tmp_lower_coord)
             unsorted_lower_dims = tensor_util_flatten(self.lower_ids[itrans])
 
             _, sorted_lower_coord = tensor_util_sort_pairs(unsorted_lower_dims, unsorted_lower_coord)
-            #print(f'up coord:{current_upper_coord}, low coord:{sorted_lower_coord}')
+            # print(f'up coord:{current_upper_coord}, low coord:{sorted_lower_coord}')
             current_upper_coord = sorted_lower_coord
 
         return current_upper_coord[0]
@@ -336,13 +335,12 @@ class trans_embed(object):
         return [sum(x * y for x, y in zip(upper_idx, self.coefficients))]
 
 class trans_grouped_slice(object):
-    def __init__(self, low_lengths, start_lengths, end_lengths):
+    def __init__(self, low_lengths, start_coord, slice_lengths):
         '''
-        here start_lengths actually is the starting coord.
         e.g.
         low_lengths     : [4, 2, 1]
-        start_lengths   : [0, 0, 0]
-        end_lengths     : [1, 2, 1]
+        start_coord     : [0, 0, 0]
+        slice_lengths   : [1, 2, 1]
         
         hence will slice in index
             slice 1#: [0, 0, 0], [0, 1, 0]
@@ -350,13 +348,12 @@ class trans_grouped_slice(object):
             slice 1#: [2, 0, 0], [2, 1, 0]
             slice 1#: [3, 0, 0], [3, 1, 0]
         '''
-        assert len(low_lengths) == len(start_lengths)
-        assert len(low_lengths) == len(end_lengths)
-        for s, e, l in zip(start_lengths, end_lengths, low_lengths):
+        assert len(low_lengths) == len(start_coord)
+        assert len(low_lengths) == len(slice_lengths)
+        for s, e, l in zip(start_coord, slice_lengths, low_lengths):
             assert s <= l and s <= e and e <= l
-        self.start_lengths = start_lengths
-        self.end_lengths = end_lengths
-        self.up_lengths = [y - x for x, y in zip(start_lengths, end_lengths)]
+        self.start_coord = start_coord
+        self.up_lengths = slice_lengths
 
     def get_upper_lengths(self):
         return self.up_lengths
@@ -369,7 +366,7 @@ class trans_grouped_slice(object):
 
     def calculate_lower_index(self, upper_idx):
         _assert_trans_is_valid_upper_idx(self, upper_idx)
-        return [x + y for x, y in zip(self.start_lengths, upper_idx)]
+        return [x + y for x, y in zip(self.start_coord, upper_idx)]
 
 class trans_vectorize(object):
     def __init__(self, low_length, vector_size):
