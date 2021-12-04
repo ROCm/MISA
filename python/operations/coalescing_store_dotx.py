@@ -26,6 +26,7 @@
 
 import math
 from .shared_memory import *
+from ..igemm import igemm_base
 from .global_memory import *
 from .dotx_mapping import *
 import copy
@@ -579,7 +580,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 if no_s_out_offset:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index()}], {igemm_base.igemm_log2(ctrl.vector_write_out)}, v[{v_co_sub_m_index()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
                                         self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
@@ -589,7 +591,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                     #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out}, v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                             else:
@@ -598,7 +600,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                     #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(i_m * ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
                                     self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * i_m * ctrl.vector_write_out}, v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
@@ -667,8 +669,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
-                            self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
-                            self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
+                            self._emit(v_cmp_gt_u32("vcc", s_k(), v_tmp0()))
+                            self._emit(f"s_and_saveexec_b32 s[{s_tmp6(4)}], vcc_lo")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
                         cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
