@@ -19,12 +19,12 @@ from bokeh.plotting import from_networkx
 from python.codegen.generator_instructions import flow_control_base, instr_label_base,  reg_allocator_base
 from python.codegen.gpu_arch.gfx10XX.GFX10 import smem_base
 from python.codegen.gpu_data_types import *
-from python.codegen.gpu_instruct import inst_base
+from python.codegen.gpu_instruct import inst_base, instruction_type
 
 class instruction_graph():
     
     class Node():
-        def __init__(self, name:str, id:int, is_var:bool = False) -> None:
+        def __init__(self, name:str, id:int, is_var:bool = False, color='blue', line_dash=[]) -> None:
             self.name = name
             self.id = id
             self.is_var = is_var
@@ -33,9 +33,12 @@ class instruction_graph():
 
             self.position_dep_before:List[instruction_graph.Node] = []
             self.position_dep_after:List[instruction_graph.Node] = []
+
+            self.color = color
+            self.line_dash = line_dash
         
         def get_networkx_node(self):
-            return (self.id, {'name':self.name, 'color':'blue'})
+            return (self.id, {'name':self.name, 'color':self.color, 'line_dash':self.line_dash})
 
     def __init__(self, instructions_list:List[inst_base]) -> None:
         self.instructions_list = instructions_list
@@ -47,12 +50,12 @@ class instruction_graph():
 
 
     def _add_new_var_node(self, name) -> Node:
-        new_var = instruction_graph.Node(name, self._max_sub_var_id, True)
+        new_var = instruction_graph.Node(name, self._max_sub_var_id, is_var=True)
         self._max_sub_var_id += 1
         return new_var
     
-    def _add_new_vert_node(self, name):
-        cur_vert = instruction_graph.Node(name, self._max_node_id, False)
+    def _add_new_vert_node(self, name, color='blue', line_dash=[]):
+        cur_vert = instruction_graph.Node(name, self._max_node_id, is_var=False, color=color, line_dash=line_dash)
         self.vert_list.append(cur_vert)
         self._max_node_id += 1
         return cur_vert
@@ -61,6 +64,8 @@ class instruction_graph():
         vert.position_dep_before.extend(vertexes_before)
         for v in vertexes_before:
             v.position_dep_after.append(vert)
+
+
 
     def _build_graph(self):
         i_list = self.instructions_list
@@ -83,7 +88,66 @@ class instruction_graph():
         last_label_pos = 0
         last_smem_pos = 0
         first_vertex_from_label_block = 0
+        def get_gfx10_instructions_sets():
+            i_t = instruction_type
+
+            def is_scalar(inst:inst_base):
+                if (inst.inst_type in [i_t.SOP1, i_t.SOP2, i_t.SOPC, i_t.SOPK, i_t.SOPP, i_t.VOP3P, i_t.SMEM]):
+                    return True
+                return False
+            def is_vector(inst:inst_base):
+                if (inst.inst_type in [i_t.VOPC, i_t.VOP1, i_t.VOP2, i_t.VOP3, i_t.VOP3P, i_t.DPP8, i_t.DPP16, i_t.VINTRP, i_t.VMEM]):
+                    return True
+                return False
+            def is_memory(inst:inst_base):
+                if (inst.inst_type in [i_t.VMEM, i_t.SMEM, i_t.MTBUF, i_t.MUBUF, i_t.DS, i_t.FLAT]):
+                    return True
+                if(inst.label in ['s_waitcnt']):
+                    return True
+                return False
+            def is_program_flow(inst:inst_base):
+                if (inst.inst_type in [i_t.SOPP, i_t.FLOW_CONTROL]):
+                    #if(not (inst.label in ['s_nop', 's_waitcnt'])):
+                    return True
+                if(inst.inst_type is i_t.SOPK and inst.label in 
+                    ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
+                    return True
+                return False
+            def is_exec_dependent(inst:inst_base):
+                if( is_vector(inst) or (inst.label in [i_t.EXP, i_t.MTBUF, i_t.MUBUF, i_t.DS, i_t.FLAT]) ):
+                    return True
+                return False
+
+            return { 
+                'scalar' : is_scalar,
+                'vector' : is_vector,
+                'memory' : is_memory,
+                'program_flow' : is_program_flow,
+                'exec_dep' : is_exec_dependent
+            }
+
+        def get_instruction_color(inst:inst_base, inst_set:Dict):
+            t = inst
+            i_t = instruction_type
+            
+            if (inst_set['memory'](t)):
+                return 'red'
+            if(inst_set['program_flow'](t)):
+                return 'green'
+            if(inst_set['vector'](t)):
+                return 'blue'
+            if (inst_set['scalar'](t)):
+                return 'yellow'
+            if(t in [i_t.HW_REG_INIT]):
+                return 'black'
+            
         
+        def get_instruction_dash(inst:inst_base, inst_set:Dict):
+            if(inst_set['scalar'](inst)):
+                return [3, 3]
+            return []
+        
+        is_gfx10_instruct_set = get_gfx10_instructions_sets()
         for i in i_list:
             #pseudo instractions ignored
             if issubclass(type(i),(reg_allocator_base, flow_control_base)):
@@ -92,7 +156,11 @@ class instruction_graph():
             if issubclass(type(i),(instr_label_base)) and not position_constraints_enabled:
                 continue
             
-            cur_vert = self._add_new_vert_node(i.label)
+            cur_vert = self._add_new_vert_node(
+                i.label, 
+                color=get_instruction_color(i, is_gfx10_instruct_set), 
+                line_dash=get_instruction_dash(i, is_gfx10_instruct_set)
+            )
 
             # Two labels define a code segment.
             # Instructions declared inside a segment cannot move beyond the labels 
@@ -100,7 +168,7 @@ class instruction_graph():
             if(position_constraints_enabled):
                 cur_vert_pos = len(self.vert_list) - 1
                 # Bound new label to instructions from last segment.
-                if issubclass(type(i),(instr_label_base)):
+                if is_gfx10_instruct_set['program_flow'](i):
                     vert_range = slice(last_label_pos, cur_vert_pos)
                     vertexes_before = self.vert_list[vert_range]
                     self._bound_vert_by_pos(cur_vert, vertexes_before)
@@ -112,7 +180,8 @@ class instruction_graph():
                     self._bound_vert_by_pos(cur_vert, vertexes_before)
 
                 # Bound current mem_op tp the previous
-                if issubclass(type(i), (smem_base)):
+                # flat instructions seq in src oreder
+                if is_gfx10_instruct_set['memory'](i):
                     vert_range = slice(last_smem_pos, last_smem_pos+1)
                     vertexes_before = self.vert_list[vert_range]
                     self._bound_vert_by_pos(cur_vert, vertexes_before)
@@ -120,6 +189,9 @@ class instruction_graph():
 
 
             src_regs = i.get_srs_regs()
+
+            if is_gfx10_instruct_set['exec_dep'](i):
+                src_regs.append(EXEC_reg())
 
             for src in src_regs:
                 if(src):
@@ -281,7 +353,7 @@ class instruction_graph():
 
         #graph_renderer = GraphRenderer()
 
-        graph_renderer.node_renderer.glyph = Circle(size=15, fill_color="color")
+        graph_renderer.node_renderer.glyph = Circle(size=15, fill_color="color", line_dash="line_dash", fill_alpha=0.5)
         graph_renderer.node_renderer.selection_glyph = Circle(size=15, fill_color=Spectral4[2])
         graph_renderer.node_renderer.hover_glyph = Circle(size=15, fill_color=Spectral4[1])
 
