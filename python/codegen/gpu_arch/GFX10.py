@@ -1,5 +1,5 @@
-from .gfx10XX.GFX10 import *
-from .gfx10XX.GFX1011 import *
+from .gfx10XX.GFX10_instruction_set import *
+from .gfx10XX.GFX1011_instruction_set import *
 
 
 class gfx1011_1012(dpp16_instr_caller_gfx10Ex,dpp8_instr_caller_gfx10Ex,
