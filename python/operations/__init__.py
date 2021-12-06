@@ -39,3 +39,4 @@ from .nop import *
 from .dotx import *
 from .dotx_mapping import *
 from .dotx_main_loop import *
+from .generic_tensor_transformation import *
