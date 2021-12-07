@@ -295,4 +295,26 @@ class base_HW(sgpr_hw_component, vgpr_hw_component):
 
 class HW_gfx9(base_HW):
     def __init__(self, gpu_instructions_caller_base, sgpr_alloc: Type[base_allocator], vgpr_alloc: Type[base_allocator]) -> None:
-        super().__init__(gpu_instructions_caller_base, sgpr_alloc, vgpr_alloc, 104, 256, 65536)
+        super().__init__(
+            gpu_instructions_caller_base, 
+            sgpr_alloc=sgpr_alloc, vgpr_alloc=vgpr_alloc, 
+            sgpr_size=104, vgpr_size=256, 
+            LDS_size=65536)
+
+class HW_gfx908(base_HW):
+    def __init__(self, gpu_instructions_caller_base, sgpr_alloc: Type[base_allocator], vgpr_alloc: Type[base_allocator]) -> None:
+        super().__init__(
+            gpu_instructions_caller_base, 
+            sgpr_alloc=sgpr_alloc, vgpr_alloc=vgpr_alloc, 
+            sgpr_size=104, vgpr_size=256, 
+            LDS_size=65536)
+    
+    def ABI_HW_setregs(self, Reg_Init_instr:HW_Reg_Init):
+        super().ABI_HW_setregs(Reg_Init_instr=Reg_Init_instr)
+        
+    
+    def get_ABI_active_reg_list(self):
+        sup = super().get_ABI_active_reg_list()
+        return [
+            *sup
+        ]
