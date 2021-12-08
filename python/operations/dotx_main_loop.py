@@ -260,9 +260,14 @@ class dotx_main_loop_t(mc_base_t):
                     self._emit(f_sld_b(v_b((i_rn % local_prefetch_num) * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+.itr_k*{lds_width_n}+{(i_rn + local_prefetch_num) * lds_width_n_per_read}'))
                     ds_waitcnt.push_new_vgpr(v_b((i_rn % local_prefetch_num) * local_buffer_n))
                 
-                if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, local_prefetch_num):
-                    self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
-                    ds_waitcnt.push_new_vgpr(v_b())
+                if dotx_m.lanegroup_repeat_n - local_prefetch_num > 0:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, local_prefetch_num):
+                        self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
+                        ds_waitcnt.push_new_vgpr(v_b())
+                else:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, 0):
+                        self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
+                        ds_waitcnt.push_new_vgpr(v_b())
 
                 if i_rn == dotx_m.lanegroup_repeat_n - 1:
                     self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
@@ -392,10 +397,15 @@ class dotx_main_loop_t(mc_base_t):
                 if i_rn + local_prefetch_num < dotx_m.lanegroup_repeat_n:
                     self._emit(f_sld_b(v_b((i_rn % local_prefetch_num) * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+.itr_k*{lds_width_n}+{(i_rn + local_prefetch_num) * lds_width_n_per_read}'))
                     ds_waitcnt.push_new_vgpr(v_b((i_rn % local_prefetch_num) * local_buffer_n))
-                
-                if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, local_prefetch_num):
-                    self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
-                    ds_waitcnt.push_new_vgpr(v_b())
+                    
+                if dotx_m.lanegroup_repeat_n - local_prefetch_num > 0:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, local_prefetch_num):
+                        self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
+                        ds_waitcnt.push_new_vgpr(v_b())
+                else:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, 0):
+                        self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
+                        ds_waitcnt.push_new_vgpr(v_b())
 
                 if i_rn == dotx_m.lanegroup_repeat_n - 1:
                     self._emit(f_sld_a(v_a(local_buffer_m), v_sld_a_os(), f'{lds_base_m}+(.itr_k+1)*{lds_width_m}+{lds_width_m_per_read}'))
