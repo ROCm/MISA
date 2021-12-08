@@ -73,7 +73,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                      self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n,
                                                                      self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
-                                                                     4, self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
+                                                                     self.tunable.block_size // (self.tunable.lanegroup_wave_m * self.tunable.lanegroup_wave_n * LANEGROUP_SIZE),
+                                                                     self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
                                                                      self.tunable.precision)
             self.dotx_mapping = igemm_dotx_mapping_t(self.mc, ctrl_dotx_mapping)
 
@@ -2003,7 +2004,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"s_lshl_b32 s[{s.s_y_x_c()}], s[{s.s_y_x_c()}], {igemm_log2(data_byte)}")
 
             self._emit(f"v_add_nc_u32 v[{v.v_gtc_ix()}], v[{v.v_gtc_ix()}], s[{s.s_x_dilation_w()}]")
-            self._emit(f"v_add_nc_u32 v[{v.v_gtc_iy()}], v[{v.v_gtc_iy()}], s[{s.s_x_dilation_w()}]")
+            self._emit(f"v_add_nc_u32 v[{v.v_gtc_iy()}], v[{v.v_gtc_iy()}], s[{s.s_y_dilation_h()}]")
 
         self._emit_empty_line()
 
@@ -2140,7 +2141,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 ctrl_dotx_mapping                 = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n,
                                                                         self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
-                                                                        4, self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
+                                                                        self.tunable.block_size // (self.tunable.lanegroup_wave_m * self.tunable.lanegroup_wave_n * LANEGROUP_SIZE),
+                                                                        self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
                                                                         self.tunable.precision)
                 fctrl.dotx_m                      = ctrl_dotx_mapping
                 fctrl.unroll_k                    = self.tunable.gemm_k_per_block

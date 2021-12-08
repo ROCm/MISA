@@ -265,7 +265,7 @@ class dotx_main_loop_t(mc_base_t):
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
                         ds_waitcnt.push_new_vgpr(v_b())
                 else:
-                    if i_rn == dotx_m.lanegroup_repeat_n - local_prefetch_num:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, 0):
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
                         ds_waitcnt.push_new_vgpr(v_b())
 
@@ -403,7 +403,7 @@ class dotx_main_loop_t(mc_base_t):
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
                         ds_waitcnt.push_new_vgpr(v_b())
                 else:
-                    if i_rn == dotx_m.lanegroup_repeat_n - local_prefetch_num:
+                    if i_rn == max(dotx_m.lanegroup_repeat_n - local_prefetch_num, 0):
                         self._emit(f_sld_b(v_b(), v_sld_b_os(), f'{lds_base_n}+(.itr_k+1)*{lds_width_n}'))
                         ds_waitcnt.push_new_vgpr(v_b())
 
