@@ -273,6 +273,40 @@ def unittest_dotx_mapping():
     for ctrl in ctrl_dotx_mapping_fp16:
         print(ctrl.serialize())
 
+def unittest_dotx_coalescing_store():
+    mc = get_default_mc()
+    mc_set_current(mc)
+
+    cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   2,   4,   4,   2,   4, v_dot2c_f32_f16)
+    # cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   4,   2,   4,   2,   4, v_dot2c_f32_f16)
+    precision = 'fp16'
+
+    coalescing_store_groups = 4
+
+    ctrl = ctrl_coalescing_store_dotx_t()
+    ctrl.cdm = cdm                     # ctrl_dotx_mapping_t
+    ctrl.coalescing_groups = coalescing_store_groups
+    ctrl.block_size = cdm.block_size()
+    ctrl.vector_store_m = 1             # global vector store in m/n
+    ctrl.vector_store_n = 8             # ... m, n can't be non-1 at the same time
+    ctrl.vector_fold_m = 1              # due to vector store, we might want to fold m/n
+    ctrl.vector_fold_n = 1              # ... while calculating m/n global index
+    ctrl.precision = 'fp16'             # dotx only support fp16 & int8
+    ctrl.gemm_k_global_split = False
+    ctrl.feat_vgpr_collapse = True
+    ctrl.co_m_update_os_functor = None  # update offset based on current i_m. otherwise use sgpr to update offset
+
+    ctrl.feat_co_m_flag_check = False   # custom flag check, not using internal check
+    ctrl.co_m_flag_check_start_functor = None
+    ctrl.co_m_flag_check_reset_functor = None
+
+    coalescing_store = igemm_coalescing_store_dotx_t(mc, ctrl)
+
+    mc.emit(coalescing_store('v_tmp', 'v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_os', None,
+                    None, 's_out_stride_gemm_m', 's_tmp', 'v_out_flag'))
+
+    print(mc.emitter.get_buffer())
+
 def run_all_unittest():
     # unittest_share_memory()
     #unittest_coalescing_store()
@@ -282,7 +316,8 @@ def run_all_unittest():
     #unittest_coalescing_store_m1_m0_xdlops_iterate()
     # unittest_thread_mapping()
     #unittest_macro()
-    unittest_dotx_mapping()
+    #unittest_dotx_mapping()
+    unittest_dotx_coalescing_store()
 
 if __name__ == '__main__':
     run_all_unittest()

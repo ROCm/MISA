@@ -26,13 +26,14 @@
 # pylint: disable=maybe-no-member
 
 import math
+import copy
 
 class tensor_descriptor(object):
     def __init__(self, trans, lower_ids, upper_ids):
         # list of trans_tuples, this is a iterative record of every transform history
-        self.trans = trans
-        self.lower_ids = lower_ids
-        self.upper_ids = upper_ids
+        self.trans = copy.deepcopy(trans)       # -> attension! copy every trans history, not reference
+        self.lower_ids = lower_ids.copy()
+        self.upper_ids = upper_ids.copy()
 
     def calculate_offset(self, coord):
         '''
@@ -204,14 +205,42 @@ def move_tensor_coordinate(desc, coord, coord_step):
 
     return new_coord
 
+def move_grouped_slice_start_coord(desc, coord_step, index = 0):
+    '''
+    move trans_grouped_slice.start_coord with coord_step
+    index specify which trans_grouped_slice to update, incase there are multiple such transpose
+
+    after this function, desc will be modified
+    '''
+    def step_start_coord(t, step):
+        cur_desc = make_naive_tensor_descriptor_packed(t.low_lengths)
+        new_coord = move_tensor_coordinate(cur_desc, t.start_coord, coord_step)
+        # print(f'__ {t.start_coord} -> {new_coord}, step:{step}')
+        t.start_coord = new_coord
+    search_idx = 0
+    for itrans in range(len(desc.trans)):
+        trans = desc.trans[itrans]
+        for it in range(len(trans)):
+            t = trans[it]
+            if type(t) == trans_grouped_slice:
+                if search_idx == index:
+                    step_start_coord(t, coord_step)
+                else:
+                    search_idx += 1
+
 ################################
 # tensor utility
 
-def tensor_util_split_lengths(groups, lengths, order):
+def tensor_util_split_lengths(groups, lengths, order, mask = list()):
     assert len(order) == len(lengths)
+    if len(mask) == 0:
+        mask = tensor_util_uniform_sequence_gen(len(order), 1)
+    assert len(mask) == len(order)
     g = groups
     split_lengths = lengths.copy()
     for i in order:
+        if not mask[i]:
+            continue
         s = math.gcd(lengths[i], g)
         g = g // s
         split_lengths[i] = lengths[i] // s
@@ -292,7 +321,7 @@ class trans_unmerge(object):
 
 class trans_merge(object):
     def __init__(self, low_lengths):
-        self.low_lengths = low_lengths
+        self.low_lengths = low_lengths.copy()
         self.low_lengths_scan = tensor_util_reverse_exclusive_scan(low_lengths, lambda a, b: a*b, 1)
         self.up_lengths = [tensor_util_reduce(low_lengths, lambda a, b: a*b, 1)]
 
@@ -318,8 +347,8 @@ class trans_merge(object):
 class trans_embed(object):
     def __init__(self, up_lengths, coefficients):
         assert len(up_lengths) == len(coefficients)
-        self.up_lengths = up_lengths
-        self.coefficients = coefficients
+        self.up_lengths = up_lengths.copy()
+        self.coefficients = coefficients.copy()
 
     def get_upper_lengths(self):
         return self.up_lengths
@@ -352,8 +381,9 @@ class trans_grouped_slice(object):
         assert len(low_lengths) == len(slice_lengths)
         for s, e, l in zip(start_coord, slice_lengths, low_lengths):
             assert s <= l and s <= e and e <= l
-        self.start_coord = start_coord
-        self.up_lengths = slice_lengths
+        self.low_lengths = low_lengths.copy()
+        self.start_coord = start_coord.copy()
+        self.up_lengths = slice_lengths.copy()
 
     def get_upper_lengths(self):
         return self.up_lengths
