@@ -634,7 +634,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int fastest_id = -1;
     if(driver->driver_mode == driver_mode_normal){
         int unique_index = 0;
-        std::vector<igemm_gtc_tunable_t> unique_tunables;   // don't use this when gks_iterative is zero, since it will be just the same as the original tunables
+        std::vector<igemm_gtc_tunable_t> unique_tunables;
         for(int i=0; i<tunables.size(); i++){
             if(need_skip_due_to_macro_tile_boundary(&tunables[i]))
                 continue;
@@ -664,6 +664,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
             else{
                 result_t result = launch(&tunables[i], unique_index, -1);
+                unique_tunables.push_back(tunables[i]);
+                unique_tunables.back().gemm_k_global_split = result.gks;
                 if(result.duration_ms < fastest_result.duration_ms){
                     fastest_result = result;
                     fastest_id = unique_index;
