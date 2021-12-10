@@ -46,12 +46,11 @@ class dotx_core_loop_expr(mc_base_t):
     def emit_expr_asm_codes(self):
         self._emit(self.func())
 
-class dotx_core_loop_node(mc_base_t):
-    def __init__(self, mc, name) -> None:
-        mc_base_t.__init__(self, mc)
+class dotx_core_loop_node():
+    def __init__(self, name, first=None, second=None) -> None:
         self.name = name
-        self.first = None
-        self.second = None
+        self.first = first
+        self.second = second
         
     def get_first_node(self):
         return self.first
@@ -59,7 +58,7 @@ class dotx_core_loop_node(mc_base_t):
     def get_second_node(self):
         return self.second
     
-    def set_next_node(self, first):
+    def set_first_node(self, first):
         self.first = first
         
     def set_second_node(self, second):
@@ -73,25 +72,7 @@ def print_ir(node):
         print_ir(node.first)
         print_ir(node.second)
         return
-    
-def print_asm(node):
-    if isinstance(node, dotx_core_loop_expr):
-        print(node.expr_asm_codes())
-        return
-    else:
-        print_asm(node.first)
-        print_asm(node.second)
-        return
-    
-def emit_asm(node):
-    if isinstance(node, dotx_core_loop_expr):
-        node.emit_expr_asm_codes()
-        return
-    else:
-        emit_asm(node.first)
-        emit_asm(node.second)
-        return
-        
+      
 class dotx_core_loop_for_loop(dotx_core_loop_node):
     def __init__(self, mc, name, loop_var="", loop_begin=None, jump_expr=None, loop_end=None, loop_check=None, loop_stmt=None) -> None:
         super().__init__(mc, name)
@@ -103,12 +84,14 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         self.loop_stmt = loop_stmt
         self.name = name
 
-class dotx_core_loop_graph(mc_base_t):
-    def __init__(self, mc, ctrl):
-        mc_base_t.__init__(self, mc)
+class dotx_core_loop_graph():
+    def __init__(self, ctrl, mc=None):
         self.ctrl = ctrl
+        self.base_node = None
+        self.mc = mc
         
     def creat_base_graph(self):
+        
         label_fma_body = 'L_{}_fma_body'.format(self.ctrl.label_prefix)
         label_fma_finishing = 'L_{}_fma_finishing'.format(self.ctrl.label_prefix)
         label_fma_end = 'L_{}_end'.format(self.ctrl.label_prefix)
@@ -140,17 +123,46 @@ class dotx_core_loop_graph(mc_base_t):
         s_knum = self.ctrl.s_knum
         dotx_m = self.ctrl.dotx_m
         
-        base_node = dotx_core_loop_node(mc, "core_loop")
-        node_clear_c = dotx_core_loop_expr(mc, None, ".clear_c")
+        v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, self.ctrl.lds_k_pack, 1, self.ctrl.precision)
         
-        base_for_loop = dotx_core_loop_for_loop(mc, "core_loop")
+        base_node = dotx_core_loop_node("core_loop")
+        node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c")
         
-        sld_a = dotx_core_loop_expr(mc, None, "sld_a")
-        sld_b = dotx_core_loop_expr(mc, None, "sld_b")
-        sst_a = dotx_core_loop_expr(mc, None, "sst_a")
-        sst_b = dotx_core_loop_expr(mc, None, "sst_b")
+        base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop")
         
-    
+        loop_begin_check = dotx_core_loop_expr(self.mc, "loop_begin_check")
+        loop_body = dotx_core_loop_node("loop_body")
+        loop_jump_check = dotx_core_loop_expr(self.mc, "loop_jump_check")
+        
+        base_node.first = node_clear_c
+        base_node.second = base_for_loop
+        
+        base_for_loop.first = loop_body
+        base_for_loop.second = loop_jump_check
+        
+        gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
+        gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
+        sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
+        sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+        sst_a = dotx_core_loop_expr(self.mc, "sst_a", f_sst_a)
+        sst_b = dotx_core_loop_expr(self.mc, "sst_b", f_sst_b)
+        
+        dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+        
+        loop_body.first = gld_a
+        loop_body.second = dotx_core_loop_node("body0")
+        loop_body.second.first = gld_b
+        loop_body.second.second = dotx_core_loop_node("body1")
+        loop_body.second.second.first = sst_a
+        loop_body.second.second.second = dotx_core_loop_node("body2")
+        loop_body.second.second.second.first = sst_b
+        loop_body.second.second.second.second = dotx_core_loop_node("body3")
+        loop_body.second.second.second.second.first = sld_a
+        loop_body.second.second.second.second.second = dotx_core_loop_node("body4")
+        loop_body.second.second.second.second.second.first = sld_b
+        loop_body.second.second.second.second.second.second = dotx
+        
+        self.base_node = base_node
          
 if __name__ == "__main__":
     asm_target = os.path.join('out', 'core_loop_test.s')
@@ -163,19 +175,9 @@ if __name__ == "__main__":
     # create mc
     mc = mc_asm_printer_t(emitter, arch)
     mc_set_current(mc)
-    sld_a = dotx_core_loop_expr(mc, None, "sld_a")
-    sld_b = dotx_core_loop_expr(mc, None, "sld_b")
-    sst_a = dotx_core_loop_expr(mc, None, "sst_a")
-    sst_b = dotx_core_loop_expr(mc, None, "sst_b")
-    core_loop = dotx_core_loop_node(mc, "core_loop")
-    core_loop_0 = dotx_core_loop_node(mc, "core_loop_0")
-    core_loop_1 = dotx_core_loop_node(mc, "core_loop_1")
-    core_loop.first = sld_a
-    core_loop.second = core_loop_0
-    core_loop_0.first = sld_b
-    core_loop_0.second = core_loop_1
-    core_loop_1.first = sst_a
-    core_loop_1.second = sst_b
-    print_ir(core_loop)
+    
+    core_loop_graph = dotx_core_loop_graph(mc, None)
+    core_loop_graph.creat_base_graph()
+    print_ir(core_loop_graph.base_node)
     
         

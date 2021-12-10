@@ -30,6 +30,7 @@ from ..codegen import *
 from .utility import *
 from .dotx_mapping import *
 from .dotx import *
+from .main_loop_graph import *
 
 class ctrl_dotx_main_loop_t(object):
     def __init__(self):
@@ -105,8 +106,41 @@ class ds_waitcnt_t(object):
         for vgpr in vgpr_list:
             max_index = max(max_index, self.vpgr_num_dict[vgpr])
         return self.get_max_num() - max_index
-
+    
 class dotx_main_loop_t(mc_base_t):
+    '''
+    TODO: 
+    '''
+    def __init__(self, mc, ctrl):
+        mc_base_t.__init__(self, mc)
+        self.ctrl = ctrl
+        self.graph = dotx_core_loop_graph(ctrl, mc)
+        
+    def print_ir(self, node):
+        if isinstance(node, dotx_core_loop_expr):
+            print(node.expr_ir())
+            return
+        else:
+            print_ir(node.first)
+            print_ir(node.second)
+            return
+    
+    def emit_graph(self, node):
+        if isinstance(node, dotx_core_loop_expr):
+            self._emit(node.emit_expr_asm_codes())
+            return
+        else:
+            self.emit_graph(node.first)
+            self.emit_graph(node.second)
+            return
+        
+    def emit(self):
+        self.graph.creat_base_graph()
+        #self.print_ir(self.graph.base_node)
+        self.emit_graph(self.graph.base_node)
+        
+
+class dotx_main_loop_t_prev(mc_base_t):
     '''
     TODO: 
     '''
