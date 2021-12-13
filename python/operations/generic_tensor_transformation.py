@@ -35,7 +35,7 @@ class tensor_descriptor(object):
         self.lower_ids = lower_ids.copy()
         self.upper_ids = upper_ids.copy()
 
-    def calculate_offset(self, coord):
+    def calculate_offset(self, coord, verbose = False):
         '''
         iterate to the original low dim
         '''
@@ -47,11 +47,15 @@ class tensor_descriptor(object):
                 co = [current_upper_coord[i] for i in u]
                 tmp_lower_coord.append(t.calculate_lower_index(co))
 
-            unsorted_lower_coord = tensor_util_flatten(tmp_lower_coord)
-            unsorted_lower_dims = tensor_util_flatten(self.lower_ids[itrans])
+            unsorted_lower_coord = tensor_util_flattern(tmp_lower_coord)
+            unsorted_lower_dims = tensor_util_flattern(self.lower_ids[itrans])
 
             _, sorted_lower_coord = tensor_util_sort_pairs(unsorted_lower_dims, unsorted_lower_coord)
-            # print(f'up coord:{current_upper_coord}, low coord:{sorted_lower_coord}')
+            if verbose:
+                ss = ''
+                for t in trans:
+                    ss += str(type(t)) + '->'
+                print(f'    up coord:{current_upper_coord}, low coord:{sorted_lower_coord}, {ss}')
             current_upper_coord = sorted_lower_coord
 
         return current_upper_coord[0]
@@ -67,8 +71,8 @@ class tensor_descriptor(object):
         for trans in last_trans:
             lengths.extend(trans.get_upper_lengths())
 
-        unsorted_lengths = tensor_util_flatten(lengths)
-        unsorted_dims = tensor_util_flatten(self.upper_ids[-1])
+        unsorted_lengths = tensor_util_flattern(lengths)
+        unsorted_dims = tensor_util_flattern(self.upper_ids[-1])
 
         _, sorted_lengths = tensor_util_sort_pairs(unsorted_dims, unsorted_lengths)
 
@@ -83,7 +87,7 @@ class tensor_descriptor(object):
         # upper dims, or visible dims
         last_upper_ids = self.upper_ids[-1]
         # print(*self.upper_ids[-1])
-        return len(tensor_util_flatten(last_upper_ids))
+        return len(tensor_util_flattern(last_upper_ids))
 
 class array_like_iterator(object):
     def __init__(self, array_like):
@@ -123,6 +127,16 @@ class trans_tuple(object):
     def __getitem__(self, idx):
         return self.content[idx]
 
+    def flattern(self):
+        # return a list of flatterned item
+        flat_content = list()
+        for x in self.content:
+            if type(x) == list:
+                flat_content.extend(x)
+            else:
+                flat_content.extend([x])
+        return flat_content
+
 def make_tuple(*args):
     return trans_tuple(*args)
 
@@ -151,6 +165,12 @@ def make_transform_tensor_descriptor(old_desc, new_trans, new_lower_ids, new_upp
     assert (type(new_trans), type(new_lower_ids), type(new_upper_ids)) == (trans_tuple, trans_tuple, trans_tuple)
     assert len(new_trans) == len(new_lower_ids) and len(new_trans) == len(new_upper_ids),   \
             f'trans len:{len(new_trans)}, lower_ids len:{len(new_lower_ids)}, upper_ids len:{len(new_upper_ids)}'
+    assert sorted(new_lower_ids.flattern()) == [x for x in range(len(new_lower_ids.flattern()))], \
+            f'new_lower_ids must be unique :{new_lower_ids.flattern()}'
+    assert sorted(new_upper_ids.flattern()) == [x for x in range(len(new_upper_ids.flattern()))], \
+            f'new_upper_ids must be unique :{new_upper_ids.flattern()}'
+    assert len(old_desc.get_lengths()) == len(new_lower_ids.flattern()), \
+            f'old_desc lengths size:{old_desc.get_lengths()} not match new_lower_ids size:{new_lower_ids.flattern()}'
 
     all_trans     = [*old_desc.trans, new_trans]
     all_lower_ids = [*old_desc.lower_ids, new_lower_ids]
@@ -258,7 +278,7 @@ def tensor_util_arithmetic_sequence_gen(start, end, step):
 def tensor_util_uniform_sequence_gen(size, value):
     return [value] * size
 
-def tensor_util_flatten(nd_lengths):
+def tensor_util_flattern(nd_lengths):
     lengths = list()
     for x in nd_lengths:
         if type(x) == list:
@@ -338,6 +358,7 @@ class trans_merge(object):
         _assert_trans_is_valid_upper_idx(self, upper_idx)
         lower_idx = [0] * self.get_lower_dims()
         idx = upper_idx[0]
+        # print(f'    @@ upper_idx:{upper_idx}, lower_lengths:{self.low_lengths}, low_lengths_scan:{self.low_lengths_scan}')
         for i in range(self.get_lower_dims() - 1):
             lower_idx[i] = idx // self.low_lengths_scan[i]
             idx -= lower_idx[i] * self.low_lengths_scan[i]
