@@ -277,20 +277,19 @@ def unittest_dotx_coalescing_store():
     mc = get_default_mc()
     mc_set_current(mc)
 
-    cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   2,   4,   4,   2,   4, v_dot2c_f32_f16)
-    # cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   4,   2,   4,   2,   4, v_dot2c_f32_f16)
+    # cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   2,   4,   4,   2,   4, v_dot2c_f32_f16)
+    cdm = ctrl_dotx_mapping_t(128, 128,   8,   8,   4,   2,   4,   2,   4, v_dot2c_f32_f16)
     precision = 'fp16'
 
-    coalescing_store_groups = 4
+    coalescing_store_groups = 2
 
     ctrl = ctrl_coalescing_store_dotx_t()
     ctrl.cdm = cdm                     # ctrl_dotx_mapping_t
     ctrl.coalescing_groups = coalescing_store_groups
     ctrl.block_size = cdm.block_size()
-    ctrl.vector_store_m = 1             # global vector store in m/n
-    ctrl.vector_store_n = 8             # ... m, n can't be non-1 at the same time
-    ctrl.vector_fold_m = 1              # due to vector store, we might want to fold m/n
-    ctrl.vector_fold_n = 1              # ... while calculating m/n global index
+    ctrl.vector_store_m = 8             # global vector store in m/n
+    ctrl.vector_fold_m = 8
+    ctrl.vector_store_n = 1             # ... m, n can't be non-1 at the same time
     ctrl.precision = 'fp16'             # dotx only support fp16 & int8
     ctrl.gemm_k_global_split = False
     ctrl.feat_vgpr_collapse = True
@@ -301,6 +300,13 @@ def unittest_dotx_coalescing_store():
     ctrl.co_m_flag_check_reset_functor = None
 
     coalescing_store = igemm_coalescing_store_dotx_t(mc, ctrl)
+
+    mc.emit(coalescing_store.init_co_sub_m_index('v_co_sub_m_index', 'v_tid', 'v_tmp'))
+    mc.emit(';-----------------------------------------------')
+    mc.emit(coalescing_store.init_co_sub_n_index('v_co_sub_n_index', 'v_tid', 'v_tmp'))
+    mc.emit(';-----------------------------------------------')
+    mc.emit(coalescing_store.init_co_lds_offset('v_co_sst', 'v_co_sld', 'v_gemm_im', 'v_gemm_in', 'v_tid', 'v_tmp'))
+    mc.emit(';-----------------------------------------------')
 
     mc.emit(coalescing_store('v_tmp', 'v_c', 'v_co_sst', 'v_co_sld', 's_p_out', 'v_out_os', None,
                     None, 's_out_stride_gemm_m', 's_tmp', 'v_out_flag'))
