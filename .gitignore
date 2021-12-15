@@ -12,3 +12,7 @@ driver/xdnn_conv.h
 *_out/
 *.csv
 *.xml
+*.bc
+*.cui
+*.out
+*.o

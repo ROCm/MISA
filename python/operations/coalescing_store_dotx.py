@@ -26,6 +26,7 @@
 
 import math
 from .shared_memory import *
+from ..igemm import igemm_base
 from .global_memory import *
 from .dotx_mapping import *
 import copy
@@ -422,7 +423,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             return agpr_per_store_group
     '''
 
-    def __call__(self, v_c_tmp, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
+    def __call__(self, v_c_tmp, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, v_store_mask = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
 
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
@@ -579,22 +580,27 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 if no_s_out_offset:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index()}], {igemm_base.igemm_log2(ctrl.vector_write_out)}, v[{v_co_sub_m_index()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
                                         self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
                             elif i_m == 1:
                                 if no_s_out_offset:
+                                    #self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * data_byte}, s[{s_gemm_m1_stride}]")
+                                    #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out}, v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                             else:
                                 if no_s_out_offset:
+                                    #self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {(i_m * ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * data_byte}, s[{s_gemm_m1_stride}]")
+                                    #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(i_m * ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
                                     self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * i_m * ctrl.vector_write_out}, v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
@@ -605,8 +611,17 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 issue_list = []
                 num_sld_total_dword = ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
                 
+                # mask out some threads
+                valid_treads = ctrl.dotx_m.macro_tile_n * (ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n)
+                num_sld_total_dword = num_sld_total_dword // (valid_treads / ctrl.dotx_m.block_size())
+                num_sld_total_dword = int(num_sld_total_dword)
+                
                 self._emit(f"s_waitcnt lgkmcnt(0)")
                 self._emit(f"s_barrier")
+                
+                if v_store_mask != None:
+                    self._emit(v_cmpx_gt_u32("vcc", valid_treads, v_store_mask))
+                
                 for i_d in range(num_sld_total_dword):
                     vgpr_index = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                     sld_offset = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
@@ -623,6 +638,9 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 num_issues_per_ssgroup = len(issue_list) // split_sld_groups
                 assert (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
                 num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // ctrl.vector_write_out // split_sld_groups
+                
+                num_gst_per_ssgroup = num_gst_per_ssgroup // (valid_treads / ctrl.dotx_m.block_size())
+                num_gst_per_ssgroup = int(num_gst_per_ssgroup)
 
                 assert num_sld_total_dword % split_sld_groups == 0, "TODO: need adjust"
                 num_sld_per_ssgroup = num_sld_total_dword // split_sld_groups
@@ -632,11 +650,13 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_per_ssgroup:{num_sld_per_ssgroup}")
                     for i_d in range(num_sld_per_ssgroup):
                         vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
-                        sld_offset = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
+                        sld_offset = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * valid_treads  * data_byte
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
+                        #self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
+                        self._emit(v_cmp_eq_i32("vcc", 1, v_store_flag))
+                        self._emit(f"s_and_saveexec_b32 s[{s_tmp6(4)}], vcc_lo")
                     self._emit(f";   store to global, m index start")
 
                     for i_gst in range(num_gst_per_ssgroup):
@@ -649,8 +669,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
-                            self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
-                            self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
+                            self._emit(v_cmp_gt_u32("vcc", s_k(), v_tmp0()))
+                            self._emit(f"s_and_saveexec_b32 s[{s_tmp6(4)}], vcc_lo")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
                         cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
@@ -664,7 +684,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             if i_gst_flat % 4 != 3:
                                 self._emit(f"v_lshrrev_b32 v[{v_c(cur_vgpr_gst)}], 8, v[{v_c(cur_vgpr_gst)}]")
 
-                        if i_gst_flat != (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) - 1:
+                        if i_gst_flat != (ctrl.get_num_dword_per_group() // (valid_treads / ctrl.dotx_m.block_size()) // ctrl.vector_write_out) - 1:
                             i_m = i_gst + 1
                             # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")
 

@@ -18,12 +18,21 @@ else
     PREC="fp32"
 fi
 
+if [ $# -ge 4 ] ; then
+    ARCH=$4
+else
+    ARCH="gfx908"
+fi
+
 if [ "${LAYOUT}" = "nchw" ] ; then
     LAYOUT_HSACO=""
     LAYOUT_ARG=""
 elif [ "${LAYOUT}" = "nhwc" ] ; then
     LAYOUT_HSACO="_nhwc"
     LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
+elif [ "${LAYOUT}" = "nchwc" ] ; then
+    LAYOUT_HSACO="_nchwc"
+    LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
     echo "wrong layout: ${LAYOUT}"
     exit 1
@@ -43,10 +52,16 @@ else
     exit 1
 fi
 
-echo IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908${LAYOUT_HSACO}${PREC_HSACO}.hsaco
-export IGEMM_HSACO=out/igemm_${DIR}_gtc_gfx908${LAYOUT_HSACO}${PREC_HSACO}.hsaco
+if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] ; then
+    echo "wrong arch: ${ARCH}"
+    exit 1
+fi
+
+echo IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
+export IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
-export IGEMM_SCLK_MHZ=1283
+export IGEMM_TENSOR_CAST_HSACO=out/igemm_gtc_tensor_cast.hsaco
+export IGEMM_SCLK_MHZ=2450
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
@@ -88,6 +103,7 @@ echo "=============================================================== resnet50 b
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
 sleep 2
+exit 1
 echo "=============================================================== resnet50 bs128"
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
