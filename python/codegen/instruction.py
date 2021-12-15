@@ -81,9 +81,9 @@ class inst_mt_operand_t(object):
     def __call__(self):
         def expr_operand(opr):
             if type(self.operand) is str:
-                if self.operand[0] == 's' or (self.operand[0:2] == r'\s'):
+                if self.operand[0] == 's':
                     return f's[{self.operand}]'
-                elif self.operand[0] == 'v' or (self.operand[0:2] == r'\v'):
+                elif self.operand[0] == 'v':
                     if self.operand == 'vcc':
                         return self.operand
                     else:
@@ -183,16 +183,6 @@ class inst_v_cmpx_gt_u32_t(inst_base_t):
             return 'v_cmpx_gt_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
 v_cmpx_gt_u32 = inst_v_cmpx_gt_u32_t()
 
-class inst_v_cmp_gt_u32_t(inst_base_t):
-    def __init__(self):
-        inst_base_t.__init__(self, INST_ENCODING_VOPC)
-    def __call__(self, dst, src0, src1):
-        if mc_get_current().arch_config.arch < 1000:
-            return 'v_cmp_gt_u32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
-        else:
-            return 'v_cmp_gt_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
-v_cmp_gt_u32 = inst_v_cmp_gt_u32_t()
-
 class inst_v_cmpx_ge_u32_t(inst_base_t):
     def __init__(self):
         inst_base_t.__init__(self, INST_ENCODING_VOPC)
@@ -232,13 +222,3 @@ class inst_v_cmpx_eq_i32_t(inst_base_t):
         else:
             return 'v_cmpx_eq_i32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
 v_cmpx_eq_i32 = inst_v_cmpx_eq_i32_t()
-
-class inst_v_cmp_eq_i32_t(inst_base_t):
-    def __init__(self):
-        inst_base_t.__init__(self, INST_ENCODING_VOPC)
-    def __call__(self, dst, src0, src1):
-        if mc_get_current().arch_config.arch < 1000:
-            return 'v_cmp_eq_i32 {}, {}, {}'.format(mt_opr(dst), mt_opr(src0), mt_opr(src1))
-        else:
-            return 'v_cmp_eq_i32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
-v_cmp_eq_i32 = inst_v_cmp_eq_i32_t()

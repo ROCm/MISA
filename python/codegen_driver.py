@@ -104,9 +104,6 @@ class codegen_driver_t(mc_base_t):
         macro_int_div_rem_ss_t(self.mc).emit()
 
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            macro_mdiv_u32_si_t(self.mc).emit()
-            macro_mdiv_u32_vi_t(self.mc).emit()
-            macro_mdiv_u32_rem_vi_t(self.mc).emit()
             macro_mdiv_u32_ss_t(self.mc).emit()
             macro_mdiv_u32_rem_ss_t(self.mc).emit()
             macro_mdiv_u32_vs_t(self.mc).emit()
@@ -137,9 +134,6 @@ class codegen_driver_t(mc_base_t):
             macro_int_div_rem_ss_t(mc).emit()
 
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            macro_mdiv_u32_si_t(mc).emit()
-            macro_mdiv_u32_vi_t(mc).emit()
-            macro_mdiv_u32_rem_vi_t(mc).emit()
             macro_mdiv_u32_ss_t(mc).emit()
             macro_mdiv_u32_rem_ss_t(mc).emit()
             macro_mdiv_u32_vs_t(mc).emit()
