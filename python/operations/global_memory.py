@@ -318,6 +318,7 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         ctrl = self.ctrl
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
+        print(f"ctrl.length_d0={ctrl.length_d0}, n_d1={n_d1}")
         with self._deferred_context():
             i_soffset = 0
             for i_d0 in range(ctrl.length_d0):

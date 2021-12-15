@@ -149,6 +149,8 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
             fp_factor = 4;  // xdlops
         else
             fp_factor = 2;  // dlops
+        if(gcn_arch >= 1000)
+            fp_factor = 2;
     }
     if(data_type == driverInt8){
         if(gcn_arch == 908 || gcn_arch == 910)
