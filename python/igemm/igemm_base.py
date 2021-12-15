@@ -82,6 +82,20 @@ def igemm_log2(v):
     assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
     return int(math.log2(v))
 
+def igemm_division_magic(divisor):
+    '''
+    compute magic num for fast int divison
+    divisor <= pow(2, 31)
+    '''
+    assert(divisor <= pow(2, 31))
+    magic_shift = 0
+    for i in range(31):
+        if pow(2, i) >= divisor:
+            magic_shift = i
+            break
+    magic_num = int(pow(2, 32) * (pow(2, magic_shift) - divisor) / divisor) + 1
+    return magic_num, magic_shift
+
 def igemm_get_epack_length(precision):
         # GetEPackLength
         epack = 1
