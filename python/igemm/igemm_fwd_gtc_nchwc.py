@@ -79,12 +79,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.dotx_mapping = igemm_dotx_mapping_t(self.mc, ctrl_dotx_mapping)
 
             ctrl_coalescing_store = ctrl_coalescing_store_dotx_t()
-            ctrl_coalescing_store.dotx_m = ctrl_dotx_mapping
+            ctrl_coalescing_store.cdm = ctrl_dotx_mapping
             ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store.precision = self.tunable.precision
-            ctrl_coalescing_store.arch_name = AMDGPU_ARCH_GFX1030
 
-            ctrl_coalescing_store.vector_write_out = self.tunable.vector_c                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store.vector_store_m = self.tunable.vector_c                      # TODO: some cases this can be set to other value
+            ctrl_coalescing_store.vector_fold_m = self.tunable.vector_c
             ctrl_coalescing_store.block_size = self.tunable.block_size
 
             self.coalescing_store = igemm_coalescing_store_dotx_t(mc, ctrl_coalescing_store)
@@ -813,7 +813,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                                             num_vgpr_global_load_a + num_vgpr_global_load_b + \
                                             3 * nb_per_thread + 6      # from v_sst_a_os to v_co_sst
                 #v_c_coalescing_num      = outer.tunable.num_agpr_accumulate_c // outer.coalescing_store_groups
-                v_c_coalescing_num      = outer.coalescing_store.ctrl.get_vgpr_usage()
+                v_c_coalescing_num      = outer.coalescing_store.get_vgpr_usage()
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
                 v_c_needed              = v_c_needed if v_c_needed > 0 else 0  # let at least 0
@@ -2268,7 +2268,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.tunable.nxe != 0:
                 self._emit(self.coalescing_store(v.v_tmp(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
-                    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag(), v.v_coalescing_store_index(), s.s_k(), v.v_out_ik(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                    None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag(), s.s_k(), v.v_out_ik(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
                 pass
             else:
                 self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,

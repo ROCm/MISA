@@ -119,8 +119,8 @@ class ctrl_coalescing_store_dotx_t(object):
         for coalescing write out, we assume thread coalescing along N, and it is easy to divide block size
         (256) along a power-of-2 number, but non-power-of-2 is very hard to do so.
         '''
-        if not utility_is_pow2(self.cdm.macro_tile_n):
-            return True
+        # if not utility_is_pow2(self.cdm.macro_tile_n):
+        #     return True
         return False
 
 class igemm_coalescing_store_dotx_t(mc_base_t):
@@ -363,7 +363,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                     make_tuple(0, 1, 2, 3, 4),
                                     make_tuple([0, 1], 2, 3, 4, 5))
 
-            assert num_gst_per_ssgroup * gst_vec == num_sld_issues_per_ssgroup * sst_vec
+            assert num_gst_per_ssgroup * gst_vec == num_sld_issues_per_ssgroup * sst_vec, f'num_gst_per_ssgroup:{num_gst_per_ssgroup}, gst_vec:{gst_vec}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}, sst_vec:{sst_vec}'
             gemm_co_post_desc = make_transform_tensor_descriptor(gemm_co_post_sld_2_desc,
                                     make_tuple( trans_passthrough(gemm_co_post_sld_2_desc.get_length(0)),
                                                 trans_merge([num_sld_issues_per_ssgroup, sst_vec]),
@@ -541,6 +541,18 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
+    def get_vgpr_usage(self):
+        ctrl = self.ctrl
+        if ctrl.feat_vgpr_collapse:
+            vgpr_last_dim_num, split_sld_groups, num_sld_issues_per_ssgroup, num_gst_per_ssgroup, \
+            vgpr_co_split_lengths, gemm_co_split_lengths, \
+            vgpr_co_desc, sst_co_desc, gemm_co_prev_desc, gemm_co_post_desc, sld_co_desc = \
+                    self.get_co_desc()
+            vgpr_lengths = vgpr_co_desc.get_lengths()
+            return tensor_util_reduce(vgpr_lengths, lambda a, b: a*b, 1)
+        else:
+            return ctrl.cxm.total_acc_c() // ctrl.coalescing_groups
+
     def __call__(self, v_c_tmp, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
 
         # if no need s_out_offset, set to integer 0
@@ -678,7 +690,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 if no_s_out_offset:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        # self._emit(f"v_add_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        self._emit(v_add_nc_u32(v_cur_k(), s_block_gtc_ik(), v_co_sub_m_index()))
                                         self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
@@ -686,14 +699,16 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 if no_s_out_offset:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
+                                        #self._emit(f"v_add_u32 v[{v_tmp0()}], 1, v[{v_cur_k()}]")
+                                        self._emit(v_add_nc_u32(v_tmp0(), 1, v_cur_k()))
                                 else:
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                             else:
                                 if no_s_out_offset:
                                     self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                                        #self._emit(f"v_add_u32 v[{v_tmp0()}], {i_m}, v[{v_cur_k()}]")
+                                        self._emit(v_add_nc_u32(v_tmp0(), i_m, v_cur_k()))
                                 else:
                                     self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
@@ -735,7 +750,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
-                            self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                            #self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                            self._emit(v_cmp_gt_u32('vcc', s_k(), v_tmp0()))
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
