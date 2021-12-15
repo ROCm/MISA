@@ -41,7 +41,10 @@ class dotx_core_loop_expr(mc_base_t):
         return self.name
     
     def expr_asm_codes(self):
-        return self.func()
+        if isinstance(self.func, str):
+            return self.func
+        else:
+            return self.func()
     
     def emit_expr_asm_codes(self):
         self._emit(self.func())
@@ -90,6 +93,13 @@ class dotx_core_loop_graph():
         self.base_node = None
         self.mc = mc
         
+    def add_node_comment(self, node, str_comment):
+        comment_expr = dotx_core_loop_expr(self.mc, "comments", str_comment)
+        new_node = dotx_core_loop_node("with_comments: "+node.name)
+        new_node.first = comment_expr
+        new_node.second = node
+        return new_node
+        
     def creat_base_graph(self):
         
         label_fma_body = 'L_{}_fma_body'.format(self.ctrl.label_prefix)
@@ -123,10 +133,35 @@ class dotx_core_loop_graph():
         s_knum = self.ctrl.s_knum
         dotx_m = self.ctrl.dotx_m
         
+        data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(self.ctrl.precision))
+
+        lds_width_m_per_read = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * self.ctrl.lds_k_pack
+        lds_width_n_per_read = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * self.ctrl.lds_k_pack
+        lds_width_m = data_byte * dotx_m.macro_tile_m * self.ctrl.lds_k_pack
+        lds_width_n = data_byte * dotx_m.macro_tile_n * self.ctrl.lds_k_pack
+        lds_single_size = self.ctrl.lds_single_size
+        local_prefetch_num = self.ctrl.local_prefetch_num
+
+        # used as offset:x number. may some 
+        lds_base_m = 0
+        lds_base_n = 0
+        unroll_k = self.ctrl.unroll_k // self.ctrl.lds_k_pack
+        k_per_inst = dotx_m.lanegroup_k_per_thread()
+
+        pad_m = self.ctrl.lds_pad_m
+        pad_n = self.ctrl.lds_pad_n
+
+        thread_m = dotx_m.lanegroup_repeat_m
+        thread_n = dotx_m.lanegroup_repeat_n * 8
+        local_buffer_m = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        local_buffer_n = self.ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        thread_sub_n = local_buffer_n
+        thread_sub_m = local_buffer_m
+        
         v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, self.ctrl.lds_k_pack, 1, self.ctrl.precision)
         
         base_node = dotx_core_loop_node("core_loop")
-        node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c")
+        node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {thread_m * thread_n}")
         
         base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop")
         
@@ -134,8 +169,7 @@ class dotx_core_loop_graph():
         loop_body = dotx_core_loop_node("loop_body")
         loop_jump_check = dotx_core_loop_expr(self.mc, "loop_jump_check")
         
-        base_node.first = node_clear_c
-        base_node.second = base_for_loop
+        
         
         base_for_loop.first = loop_body
         base_for_loop.second = loop_jump_check
@@ -144,10 +178,19 @@ class dotx_core_loop_graph():
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
         sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
         sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
-        sst_a = dotx_core_loop_expr(self.mc, "sst_a", f_sst_a)
-        sst_b = dotx_core_loop_expr(self.mc, "sst_b", f_sst_b)
+        sst_a = dotx_core_loop_node("sst a node", 
+                                    dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
+                                    dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
+        sst_b = dotx_core_loop_node("sst b node", 
+                                    dotx_core_loop_expr(self.mc, "wait b global load", f"s_waitcnt vmcnt(0)"), 
+                                    dotx_core_loop_expr(self.mc, "sst_b", f_sst_b))
         
         dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+        
+        
+        base_node.first = node_clear_c
+        node_before_loop = dotx_core_loop_node("node before core loop", sst_a, sst_b)
+        base_node.second = dotx_core_loop_node("node core loop", node_before_loop, base_for_loop)
         
         loop_body.first = gld_a
         loop_body.second = dotx_core_loop_node("body0")
@@ -161,6 +204,8 @@ class dotx_core_loop_graph():
         loop_body.second.second.second.second.second = dotx_core_loop_node("body4")
         loop_body.second.second.second.second.second.first = sld_b
         loop_body.second.second.second.second.second.second = dotx
+        
+        base_node = self.add_node_comment(base_node, f"; start FMA loop, {thread_m}x{thread_n}")
         
         self.base_node = base_node
          

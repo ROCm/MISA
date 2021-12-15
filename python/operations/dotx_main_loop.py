@@ -127,7 +127,7 @@ class dotx_main_loop_t(mc_base_t):
     
     def emit_graph(self, node):
         if isinstance(node, dotx_core_loop_expr):
-            self._emit(node.emit_expr_asm_codes())
+            self._emit(node.expr_asm_codes())
             return
         else:
             self.emit_graph(node.first)
@@ -140,7 +140,7 @@ class dotx_main_loop_t(mc_base_t):
         self.emit_graph(self.graph.base_node)
         
 
-class dotx_main_loop_t_prev(mc_base_t):
+class dotx_main_loop_t_0(mc_base_t):
     '''
     TODO: 
     '''
