@@ -336,7 +336,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);      // TODO: this is just a reference compare
-            // printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -1036,7 +1036,7 @@ int main(int argc, char **argv) {
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
                 printf(", valid:%s", is_valid ? "y" : "n");
-                //if(assert_when_invalid) assert(is_valid);
+                if(assert_when_invalid) assert(is_valid);
             }
         };
 
