@@ -536,7 +536,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
         with self._deferred_context():
             self._emit(f"; init_co_sub_n_index dotx")
-            if sld_vec == 1:
+            if sst_vec != 1 and sld_vec != 1:
+                assert sst_vec == sld_vec
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(sld_vec)}, v[{v_tid}]")
@@ -555,7 +556,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         else:
             return ctrl.cxm.total_acc_c() // ctrl.coalescing_groups
 
-    def __call__(self, v_c_tmp, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
+    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
 
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
@@ -567,7 +568,6 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         v_c = sym_t(v_c)
-        v_c_tmp = sym_t(v_c_tmp)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
         s_tmp6 = sym_t(s_tmp6)
