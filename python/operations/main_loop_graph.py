@@ -36,6 +36,10 @@ class dotx_core_loop_expr(mc_base_t):
         mc_base_t.__init__(self, mc)
         self.func = func
         self.name = name
+        self.args = ()
+        
+    def expr_set_args(self, *args):
+        self.args = args
         
     def expr_ir(self):
         return self.name
@@ -44,10 +48,10 @@ class dotx_core_loop_expr(mc_base_t):
         if isinstance(self.func, str):
             return self.func
         else:
-            return self.func()
+            return self.func(*self.args)
     
     def emit_expr_asm_codes(self):
-        self._emit(self.func())
+        self._emit(self.expr_asm_codes())
 
 class dotx_core_loop_node():
     def __init__(self, name, first=None, second=None) -> None:
@@ -77,15 +81,36 @@ def print_ir(node):
         return
       
 class dotx_core_loop_for_loop(dotx_core_loop_node):
-    def __init__(self, mc, name, loop_var="", loop_begin=None, jump_expr=None, loop_end=None, loop_check=None, loop_stmt=None) -> None:
-        super().__init__(mc, name)
+    def __init__(self, mc, name, loop_var="", loop_begin=None, loop_step=None, loop_end=None, loop_check=None, loop_label=None) -> None:
+        super().__init__(name)
         self.loop_var = loop_var
         self.loop_begin = loop_begin
-        self.jump_expr = jump_expr
+        self.loop_step = loop_step
         self.loop_end = loop_end
         self.loop_check = loop_check
-        self.loop_stmt = loop_stmt
+        self.loop_label = loop_label
         self.name = name
+        self.mc = mc
+        
+    def form_loop_jump_check(self):
+        if self.second.name != "loop_jump_check":
+            assert False, "please provide a loop jump check node"
+        
+        loop_jump_check_node = self.second
+        mc = self.mc
+        if self.loop_check == "gt":
+            expr = dotx_core_loop_expr(mc, "loop expr", f"s_sub_i32 s[{self.loop_var()}], s[{self.loop_var()}], {self.loop_step}")
+            cond = dotx_core_loop_expr(mc, "condition", f"s_cmp_gt_i32 s[{self.loop_var()}], {self.loop_end}")
+        else:
+            assert False, "not support condition"
+            
+        jump_branch = dotx_core_loop_expr(mc, "branch", f"s_cbranch_scc1 {self.loop_label}")
+        loop_jump_check_node.first = expr
+        loop_jump_check_node.second = dotx_core_loop_node("branch jump", cond, jump_branch)
+        
+    def form_loop_body(self):
+        pass
+        
 
 class dotx_core_loop_graph():
     def __init__(self, ctrl, mc=None):
@@ -163,21 +188,23 @@ class dotx_core_loop_graph():
         base_node = dotx_core_loop_node("core_loop")
         node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {thread_m * thread_n}")
         
-        base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop")
+        base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop", s_kitr, s_knum, unroll_k, 0, "gt", label_fma_body)
         
         loop_begin_check = dotx_core_loop_expr(self.mc, "loop_begin_check")
         loop_body = dotx_core_loop_node("loop_body")
-        loop_jump_check = dotx_core_loop_expr(self.mc, "loop_jump_check")
+        loop_jump_check = dotx_core_loop_node("loop_jump_check")
         
-        
-        
-        base_for_loop.first = loop_body
+        base_for_loop.first = dotx_core_loop_node("loop body with label", dotx_core_loop_expr(self.mc, "loop label", label_fma_body+':'), loop_body)
         base_for_loop.second = loop_jump_check
+        
+        base_for_loop.form_loop_jump_check()
         
         gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
         sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
+        sld_a.expr_set_args(v_a(), v_sld_a_os(), lds_base_m)
         sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+        sld_b.expr_set_args(v_b(), v_sld_b_os(), lds_base_n)
         sst_a = dotx_core_loop_node("sst a node", 
                                     dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
                                     dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
@@ -186,6 +213,7 @@ class dotx_core_loop_graph():
                                     dotx_core_loop_expr(self.mc, "sst_b", f_sst_b))
         
         dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+        dotx.expr_set_args(v_c(), v_a(), v_b())
         
         
         base_node.first = node_clear_c

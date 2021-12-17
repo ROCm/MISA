@@ -127,7 +127,10 @@ class dotx_main_loop_t(mc_base_t):
     
     def emit_graph(self, node):
         if isinstance(node, dotx_core_loop_expr):
-            self._emit(node.expr_asm_codes())
+            if "label" in node.name:
+                self._emit_front(node.expr_asm_codes())
+            else:
+                self._emit(node.expr_asm_codes())
             return
         else:
             self.emit_graph(node.first)
