@@ -52,6 +52,43 @@ def test_0():
     assert desc_3.calculate_offset(coord) == 23
 
 
+def test_1():
+    vgpr_lengths = list([2, 2, 4, 8])
+    vgpr_desc = make_naive_tensor_descriptor_packed(vgpr_lengths)
+
+    vgpr_split_lengths = tensor_util_split_lengths(4, vgpr_lengths, [0, 1, 2, 3], [1, 0, 0, 1])
+
+    start_coord = [0, 0, 0, 0]
+    start_coord = move_tensor_coordinate(vgpr_desc, start_coord, vgpr_split_lengths)
+    start_coord = move_tensor_coordinate(vgpr_desc, start_coord, vgpr_split_lengths)
+    start_coord = move_tensor_coordinate(vgpr_desc, start_coord, vgpr_split_lengths)
+
+    vgpr_split_desc = make_transform_tensor_descriptor(vgpr_desc, 
+                                    make_tuple(trans_grouped_slice(vgpr_desc.get_lengths(),
+                                                start_coord,
+                                                vgpr_split_lengths)),
+                                    make_tuple([0, 1, 2, 3]),
+                                    make_tuple([0, 1, 2, 3]))
+
+    print(f'lengths:{vgpr_lengths} -> {vgpr_split_lengths}, start coord:{start_coord}')
+    assert vgpr_split_lengths == [1, 2, 4, 4]
+
+    sst_vec = 2
+    vgpr_co_desc = make_transform_tensor_descriptor(vgpr_split_desc, 
+                                    make_tuple(
+                                            trans_passthrough(vgpr_split_desc.get_length(0)),
+                                            trans_passthrough(vgpr_split_desc.get_length(1)),
+                                            trans_passthrough(vgpr_split_desc.get_length(2)),
+                                            trans_vectorize(vgpr_split_desc.get_length(3), sst_vec),
+                                        ),
+                                    make_tuple(0, 1, 2, 3),
+                                    make_tuple(0, 1, 2, 3))
+
+    for vgpr_coord in itertools.product(*[range(d) for d in vgpr_co_desc.get_lengths()]):
+        vgpr_index = vgpr_co_desc.calculate_offset(list(vgpr_coord))
+        print(f'coord:{list(vgpr_coord)}, offset:{vgpr_index}')
+
 if __name__ == '__main__':
     test_0()
+    test_1()
  
