@@ -31,81 +31,6 @@ from .utility import *
 from .dotx_mapping import *
 from .dotx import *
 from .main_loop_graph import *
-
-class ctrl_dotx_main_loop_t(object):
-    def __init__(self):
-        self.dotx_m                      = None
-        self.unroll_k                    = 0
-        self.label_prefix                = ''                      # usually be kernel name of caller kernel
-        self.data_type                   = AMDGPU_PRECISION_FP32
-        
-        self.lds_single_size             = 0                    # in byte, should be power of 2
-        self.lds_buffer_num              = 2
-        self.local_prefetch_num          = 1
-
-        # functor
-        self.global_load_a_functor       = None
-        self.global_load_b_functor       = None
-        self.shared_store_a_functor      = None
-        self.shared_store_b_functor      = None
-        self.shared_load_a_functor       = None
-        self.shared_load_b_functor       = None
-        self.move_slice_window_a_functor = None
-        self.move_slice_window_b_functor = None
-
-        # sympol type
-        self.v_a                         = None
-        self.v_b                         = None
-        self.v_c                         = None
-        self.v_gld_a                     = None
-        self.v_gld_b                     = None
-        self.v_sld_a_os                  = None
-        self.v_sld_b_os                  = None
-        self.v_sst_a_os                  = None
-        self.v_sst_b_os                  = None
-        self.s_kitr                      = None
-        self.s_knum                      = None
-
-        # arch and fma type
-        self.arch_name                   = AMDGPU_ARCH_GFX1030
-        self.precision                   = 'fp16'
-
-        # below is in unit of pixel, not considered data bytes
-        self.lds_k_pack                  = 1
-        self.lds_pad_m                   = 0        # pad how many pixels per m row
-        self.lds_pad_n                   = 0        # pad how many pixels per n row
-
-class ds_waitcnt_t(object):
-    '''
-    TODO: compute lds wait count num
-    '''
-    def __init__(self) -> None:
-        super().__init__()
-        self.max_num = 0
-        self.vpgr_num_dict = dict()
-        self.waited_vgprs = set()
-
-    def push_new_vgpr(self, vgpr):
-        self.vpgr_num_dict[vgpr] = self.max_num
-        self.max_num = self.max_num + 1
-        
-        self.waited_vgprs.discard(vgpr)
-
-    def get_max_num(self):
-        return max(self.vpgr_num_dict.values())
-
-    def compute_waitcnt(self, vgpr_list):
-        assert isinstance(vgpr_list, list)
-        do_not_need_swait = True
-        for vgpr in vgpr_list:
-            do_not_need_swait = do_not_need_swait and (vgpr in self.waited_vgprs)
-        if do_not_need_swait:
-            return -1
-        self.waited_vgprs.update(vgpr_list)
-        max_index = 0
-        for vgpr in vgpr_list:
-            max_index = max(max_index, self.vpgr_num_dict[vgpr])
-        return self.get_max_num() - max_index
     
 class dotx_main_loop_t(mc_base_t):
     '''
@@ -132,10 +57,13 @@ class dotx_main_loop_t(mc_base_t):
             else:
                 self._emit(node.expr_asm_codes())
             return
-        else:
+        elif isinstance(node, dotx_core_loop_node):
+            print(node.name)
             self.emit_graph(node.first)
             self.emit_graph(node.second)
             return
+        else:
+            assert False, f"wrong node"
         
     def emit(self):
         self.graph.creat_base_graph()
