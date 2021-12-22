@@ -670,14 +670,12 @@ public:
             karg.y             = y;
             karg.x             = x;
             karg.group         = group;
-            if(tunable->merge_e){
-                uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
-                uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
-                uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
-                karg.y = (s_move_slice_k_y << 24) | karg.y;
-                karg.x = (s_move_slice_k_x << 24) | karg.x;
-                karg.c = (s_move_slice_k_c << 24) | karg.c;
-            }
+            uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
+            uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
+            uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
+            karg.y = (s_move_slice_k_y << 24) | karg.y;
+            karg.x = (s_move_slice_k_x << 24) | karg.x;
+            karg.c = (s_move_slice_k_c << 24) | karg.c;
 #if USE_MAGIC_DIV
             int gemm_n = n * ho * wo;
             int gemm_m = k / group;
@@ -691,13 +689,11 @@ public:
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            if(tunable->merge_e){
-                magic_div_u32_t mdiv_4 = magic_div_u32_gen(y*x);
-                magic_div_u32_t mdiv_5 = magic_div_u32_gen(x);
-                karg.magic_4           = mdiv_4.magic;
-                karg.magic_5           = mdiv_5.magic;
-                karg.shift_pack_1      = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
-            }
+            magic_div_u32_t mdiv_4 = magic_div_u32_gen(y*x);
+            magic_div_u32_t mdiv_5 = magic_div_u32_gen(x);
+            karg.magic_4           = mdiv_4.magic;
+            karg.magic_5           = mdiv_5.magic;
+            karg.shift_pack_1      = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
