@@ -204,6 +204,22 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
     def form_loop_jump_to_begin(self):
         jump_branch = dotx_core_loop_expr(self.mc, "branch", f"s_branch {self.loop_label}")
         return jump_branch
+    
+    def append_new_node(self, new_node, node_stack, next_node_name):
+        assert isinstance(node_stack, list) and isinstance(node_stack[-1], dotx_core_loop_node), f"wrong stack type"
+        assert isinstance(new_node, dotx_core_loop_node) or isinstance(new_node, dotx_core_loop_expr), f"wrong node to append"
+        assert isinstance(next_node_name, str)
+        
+        tmp_node = node_stack.pop()
+        tmp_node.first = new_node
+        tmp_node.second = dotx_core_loop_node(next_node_name)
+        node_stack.append(tmp_node.second)
+        
+    def finish_stack(self, node_stack):
+        tmp_node = node_stack.pop()
+        expr_empty_line = dotx_core_loop_expr(self.mc, "empty line", "")
+        tmp_node.first = expr_empty_line
+        tmp_node.second = expr_empty_line
         
     def form_loop_body(self, ctrl):
         assert isinstance(ctrl, ctrl_dotx_main_loop_t), "wrong ctrl type"
@@ -383,8 +399,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             tmp_node.second = dotx_core_loop_node(f"next dotx node")
             stack.append(tmp_node.second)
             
-        for i_rn in range(dotx_m.lanegroup_repeat_n):
-            if i_rn > 0:
+        for i_rn in range(dotx_m.lanegroup_repeat_n - 1):
+            if i_rn > 0 and dotx_m.lanegroup_repeat_n > local_prefetch_num:
                 sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
                 sld_b.expr_set_args(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k+1}*{lds_width_n}+{(i_rn - 1) * lds_width_n_per_read}')
                 ds_waitcnt.push_new_vgpr(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n))
@@ -405,15 +421,6 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     tmp_node = stack.pop()
                     tmp_node.first = wait_lgkmcnt
                     tmp_node.second = dotx_core_loop_node("after wait cnt")
-                    stack.append(tmp_node.second)
-
-                if i_rn == dotx_m.lanegroup_repeat_n - 1 and i_rm > 0:
-                    sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
-                    sld_a.expr_set_args(v_a((i_rm - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(i_rm - 1)*lds_width_m_per_read}')
-                    ds_waitcnt.push_new_vgpr(v_a((i_rm - 1) * local_buffer_m))
-                    tmp_node = stack.pop()
-                    tmp_node.first = sld_a
-                    tmp_node.second = dotx_core_loop_node("after prefetch a")
                     stack.append(tmp_node.second)
 
                 dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
@@ -512,10 +519,189 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         stack.append(tmp_node.second)
         
         # finishing branch 
+        loop_finishing_label = dotx_core_loop_expr(self.mc, "loop finish label", self.loop_label_finish+':')
+        tmp_node = stack.pop()
+        tmp_node.first = loop_finishing_label
+        tmp_node.second = dotx_core_loop_node(f"after label")
+        stack.append(tmp_node.second)
         
+        wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for all sld", f's_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_b.get_issues()})')
+        tmp_node = stack.pop()
+        tmp_node.first = wait_lgkmcnt
+        tmp_node.second = dotx_core_loop_node(f"last n dotx in finish branch")
+        stack.append(tmp_node.second)
+        for i_rm in range(dotx_m.lanegroup_repeat_m):
+            # compute index for three matrice
+            i_rn = dotx_m.lanegroup_repeat_n - 1
+            c_index = i_rm * thread_n + i_rn * 8
+            a_index = (i_rm % local_prefetch_num) * local_buffer_m
+            b_index = (i_rn % local_prefetch_num) * local_buffer_n 
+            
+            dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+            dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
+            tmp_node = stack.pop()
+            tmp_node.first = dotx
+            tmp_node.second = dotx_core_loop_node(f"last dotx")
+            stack.append(tmp_node.second)
+            
+        loop_end_node = self.form_loop_end_body(ctrl)
+        self.append_new_node(loop_end_node, stack, "finish")
+        self.finish_stack(stack)
         
         return loop_body
+    
+    def form_loop_end_body(self, ctrl):
+        assert isinstance(ctrl, ctrl_dotx_main_loop_t), "wrong ctrl type"
+        
+        expr_empty_line = dotx_core_loop_expr(self.mc, "empty line", "")
+        
+        f_sld_a = ctrl.shared_load_a_functor
+        f_sld_b = ctrl.shared_load_b_functor
 
+        v_a = ctrl.v_a
+        v_b = ctrl.v_b
+        v_c = ctrl.v_c
+        
+        v_sld_a_os = ctrl.v_sld_a_os
+        v_sld_b_os = ctrl.v_sld_b_os
+        
+        dotx_m = ctrl.dotx_m
+        
+        data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(ctrl.precision))
+
+        lds_width_m_per_read = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * ctrl.lds_k_pack
+        lds_width_n_per_read = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * ctrl.lds_k_pack
+        lds_width_m = data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack
+        lds_width_n = data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack
+        local_prefetch_num = ctrl.local_prefetch_num
+        
+        assert local_prefetch_num <= dotx_m.lanegroup_repeat_m or local_prefetch_num <= dotx_m.lanegroup_repeat_n, "prefetch too much"
+        assert not(local_prefetch_num < dotx_m.lanegroup_repeat_m and local_prefetch_num < dotx_m.lanegroup_repeat_n), "can not re-use prefetch for both side"
+
+        # used as offset:x number. may some 
+        lds_base_m = 0
+        lds_base_n = 0
+        unroll_k = ctrl.unroll_k // ctrl.lds_k_pack
+
+        thread_m = dotx_m.lanegroup_repeat_m
+        thread_n = dotx_m.lanegroup_repeat_n * 8
+        local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
+        
+        v_dotx_k = macro_dotx_mxnxk_t(self.mc, 1, 1, ctrl.lds_k_pack, 1, ctrl.precision)
+        
+        sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
+        sld_a.expr_set_args(v_a(), v_sld_a_os(), lds_base_m)
+        sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+        sld_b.expr_set_args(v_b(), v_sld_b_os(), lds_base_n)
+        
+        loop_end_body = dotx_core_loop_node("loop end body")
+        stack = [loop_end_body]
+        loop_end_label = dotx_core_loop_expr(self.mc, "loop end label", self.loop_label_end+':')
+        
+        self.append_new_node(loop_end_label, stack, "node after body")
+        
+        wait_all_lgkm = dotx_core_loop_expr(self.mc, "wait all lds", f"s_waitcnt lgkmcnt(0)")
+        barrier = dotx_core_loop_expr(self.mc, "barrier", f"s_barrier")
+        wait_sst_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
+        
+        self.append_new_node(wait_sst_node, stack, "end loop dotx")
+        
+        ds_waitcnt = ds_waitcnt_t()
+        
+        prefetch_a = []
+        prefetch_b = []
+        local_prefetch = []
+        for i_prefetch in range(local_prefetch_num):
+            sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
+            sld_a.expr_set_args(v_a(i_prefetch * local_buffer_m), v_sld_a_os(), lds_base_m + i_prefetch * lds_width_m_per_read)
+            sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+            sld_b.expr_set_args(v_b(i_prefetch * local_buffer_n), v_sld_b_os(), lds_base_n + i_prefetch * lds_width_m_per_read)
+            prefetch_a.append(sld_a)
+            prefetch_b.append(sld_b)
+            
+        local_prefetch[0:0] = prefetch_b
+        local_prefetch[1:1] = prefetch_a
+        
+        node_local_prefecth = dotx_core_loop_node("local refetch node")
+        stack_prefetch = [node_local_prefecth]
+        for expr_local_prefetch in local_prefetch:
+            self.append_new_node(expr_local_prefetch, stack_prefetch, f"local prefetch")
+            ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0])
+            
+        self.finish_stack(stack_prefetch)
+            
+        self.append_new_node(node_local_prefecth, stack, "loop end main loop")
+        # form repeat k 
+        for i_k in range(unroll_k - 1):
+            for i_rn in range(dotx_m.lanegroup_repeat_n):
+                if i_rn > 0:
+                    sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+                    sld_b.expr_set_args(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k+1}*{lds_width_n}+{(i_rn - 1) * lds_width_n_per_read}')
+                    ds_waitcnt.push_new_vgpr(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n))
+                    
+                    self.append_new_node(sld_b, stack, "after prefetch b")
+                    
+                for i_rm in range(dotx_m.lanegroup_repeat_m):
+                    # compute index for three matrice
+                    c_index = i_rm * thread_n + i_rn * 8
+                    a_index = (i_rm % local_prefetch_num) * local_buffer_m
+                    b_index = (i_rn % local_prefetch_num) * local_buffer_n 
+                    lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
+                    if lgkmcnt != -1:
+                        wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for dotx {i_k, i_rm, i_rn}", f's_waitcnt lgkmcnt({lgkmcnt})')
+                        
+                        self.append_new_node(wait_lgkmcnt, stack, "after wait cnt")
+                    
+                    if i_rn == dotx_m.lanegroup_repeat_n - 1 and i_rm > 0:
+                        sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
+                        sld_a.expr_set_args(v_a((i_rm - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(i_rm - 1)*lds_width_m_per_read}')
+                        ds_waitcnt.push_new_vgpr(v_a((i_rm - 1) * local_buffer_m))
+                        
+                        self.append_new_node(sld_a, stack, "after prefetch a")
+                        
+                    dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+                    dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
+                    
+                    self.append_new_node(dotx, stack, f"dotx node next {i_k, i_rm, i_rn}")
+                    
+            sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
+            sld_a.expr_set_args(v_a((local_prefetch_num - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(local_prefetch_num - 1)*lds_width_m_per_read}')
+            ds_waitcnt.push_new_vgpr(v_a(local_buffer_m))
+            sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+            sld_b.expr_set_args(v_b((local_prefetch_num - 1) * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k + 1}*{lds_width_n}+{(local_prefetch_num - 1)*lds_width_n_per_read}')
+            ds_waitcnt.push_new_vgpr(v_b(local_buffer_n))
+            sld_a_b = dotx_core_loop_node("last sld a/b", sld_a, sld_b)
+            
+            self.append_new_node(sld_a_b, stack, f"next dotx node")
+            
+        for i_rn in range(dotx_m.lanegroup_repeat_n):
+            if i_rn > 0 and dotx_m.lanegroup_repeat_n > local_prefetch_num:
+                sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
+                sld_b.expr_set_args(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k+1}*{lds_width_n}+{(i_rn - 1) * lds_width_n_per_read}')
+                ds_waitcnt.push_new_vgpr(v_b(((i_rn - 1) % i_prefetch)* local_buffer_n))
+                
+                self.append_new_node(sld_b, stack, "after prefetch b")
+            
+            for i_rm in range(dotx_m.lanegroup_repeat_m):
+                # compute index for three matrice
+                c_index = i_rm * thread_n + i_rn * 8
+                a_index = (i_rm % local_prefetch_num) * local_buffer_m
+                b_index = (i_rn % local_prefetch_num) * local_buffer_n 
+                lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
+                if lgkmcnt != -1:
+                    wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for dotx {i_k, i_rm, i_rn}", f's_waitcnt lgkmcnt({lgkmcnt})')
+                    
+                    self.append_new_node(wait_lgkmcnt, stack, "after wait cnt")
+
+                dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+                dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
+                self.append_new_node(dotx, stack, f"dotx node next {i_k, i_rm, i_rn}")
+                
+        self.finish_stack(stack)
+        
+        return loop_end_body
+        
 class dotx_core_loop_graph():
     def __init__(self, ctrl, mc=None):
         self.ctrl = ctrl
