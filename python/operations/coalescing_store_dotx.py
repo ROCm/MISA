@@ -26,22 +26,27 @@
 
 import math
 from .shared_memory import *
-from ..igemm import igemm_base
 from .global_memory import *
 from .dotx_mapping import *
+from .generic_tensor_transformation import *
 import copy
 import itertools
 
 MAX_LGKMCNT = 64    # 0...63
 
 class ctrl_coalescing_store_dotx_t(object):
+    '''
+    like xdlops, we still assume register within single thread first loop over m direction
+    '''
     def __init__(self):
-        self.dotx_m = None # ctrl_dotx_mapping_t
+        self.cdm = None                     # ctrl_dotx_mapping_t
         self.coalescing_groups = 1
         self.block_size = 256
-        self.vector_write_out = 1
-        self.precision = 'fp32'
-        self.arch_name = AMDGPU_ARCH_GFX1030
+        self.vector_store_m = 1             # global vector store in m/n
+        self.vector_store_n = 1             # ... m, n can't be non-1 at the same time
+        self.vector_fold_m = 1              # due to vector store, we might want to fold m/n
+        self.vector_fold_n = 1              # ... while calculating m/n global index    -> ignore now
+        self.precision = 'fp16'             # dotx only support fp16 & int8
         self.gemm_k_global_split = False
         self.feat_vgpr_collapse = True
         self.co_m_update_os_functor = None  # update offset based on current i_m. otherwise use sgpr to update offset
@@ -50,39 +55,7 @@ class ctrl_coalescing_store_dotx_t(object):
         self.co_m_flag_check_start_functor = None
         self.co_m_flag_check_reset_functor = None
 
-    def get_length_m_groups(self):
-        ''' agpr per thread in m dimension '''
-        return self.dotx_m.lanegroup_repeat_m * self.dotx_m.lanegroup_tile_m
-
-    def get_length_n_groups(self):
-        ''' agpr per thread in n dimension '''
-        return self.dotx_m.lanegroup_repeat_n
-
-    def get_length_m_max_groups(self):
-        ''' maximum number of agpr along m dimension per thread can be divided into groups.
-            but consider LDS load/store, we want to utilize the fact that every lanegroup is a 4x64 matrix,
-            which might be distributed along multiple blocks (like 4x4x1), or every block contains multiple lanegroups(like 16x16x1, 32x32x1)
-            henve in m dimension there always have a granularity of 4 per thread, that is continuous along m dimension.
-            we want to use a single ds_write_b128/ds_read_b128 to deal with this granularity (which implies a transpose)
-            hence we do not want split inside the "4" granularity within a thread
-        '''
-        return self.get_length_m_groups() // (LANEGROUP_SIZE if self.vector_write_out == 1 else 1)
-
-    def get_subgroups(self):
-        def split_ndim_length(total_length, dim_lengths):
-            assert type(dim_lengths) in (list, tuple)
-            length = total_length
-            split_length = list()
-            for d in dim_lengths:
-                s = math.gcd(d, length)
-                length = length // s
-                split_length.append(s)
-            return tuple(split_length)
-
-        # assert self.get_length_m_groups() % self.coalescing_groups == 0, \
-        #     f"if coalescing groups:{self.coalescing_groups} larger than single xdlops agpr number along m:{self.get_length_m_groups()}, can not do this split"
-        assert self.get_length_m_max_groups() % self.coalescing_groups == 0, \
-            f"if coalescing groups:{self.coalescing_groups} larger than maximum single xdlops agpr(divided by 4) number along m:{self.get_length_m_max_groups()}, can not do this split"
+    def get_m_split_lengths(self):
         l_mg = self.get_length_m_groups()
         l_ng = self.get_length_n_groups()
         num_m_groups = math.gcd(self.coalescing_groups, l_mg)
@@ -90,64 +63,65 @@ class ctrl_coalescing_store_dotx_t(object):
 
         assert num_n_groups == 1, "if have multiple groups along n dimension, coalesing is meaningless"
 
-        # for lanegroup_per_cluster, since within thread will not contain this, so must specify this to 1
-        split_m_lengths = (self.dotx_m.lanegroup_repeat_m, self.dotx_m.lanegroup_tile_m)
-        g_mr, g_mt = split_ndim_length(num_m_groups, split_m_lengths)
-        assert g_mt == 1, 'we do not want to split inside this granularity within a thread'
+        m_lengths = [self.cdm.lanegroup_repeat_m, self.cdm.lanegroup_m_per_thread()]
+        split_lengths = tensor_util_split_lengths(num_m_groups, m_lengths,
+                                            tensor_util_arithmetic_sequence_gen(0, len(m_lengths), 1))
 
-        return g_mr, g_mt # groups in m_repeat, m_step, lanegroup_m_per_wave, lanegroup_m_per_block, lanegroup_m_per_thread
+        return split_lengths
+
+    def get_lanegroup_granularity_m(self):
+        '''
+        dotx granularity is unlike xdlops(4), it has 8x register along m direction
+        but we need to further sub divide into a number that can use single ds_write_b128
+        '''
+        l_mr, l_mt = self.get_m_split_lengths()
+        return math.gcd(l_mt, 4)
+
+    def get_length_m_groups(self):
+        ''' agpr per thread in m dimension '''
+        return self.cdm.lanegroup_repeat_m * self.cdm.lanegroup_m_per_thread()
+
+    def get_length_n_groups(self):
+        ''' agpr per thread in n dimension '''
+        return self.cdm.lanegroup_repeat_n * self.cdm.lanegroup_n_per_thread()
+
+    def get_subgroups(self):
+        # assert self.get_length_m_max_groups() % self.coalescing_groups == 0
+
+        # assert g_mt == 1, 'we do not want to split inside this granularity within a thread'
+
+        split_lengths = self.get_m_split_lengths()
+        m_lengths = [self.cdm.lanegroup_repeat_m, self.cdm.lanegroup_m_per_thread()]
+
+        g_mr, g_mt = m_lengths[0] // split_lengths[0], m_lengths[1] // split_lengths[1]
+
+        return g_mr, g_mt
 
     def get_subgroup_length(self):
         g_mr, g_mt = self.get_subgroups()
-        # self.dotx_m.wave_repeat_m, self.dotx_m.wave_step_m, self.dotx_m.lanegroup_m_per_wave(), self.dotx_m.lanegroup_m_per_block(), self.dotx_m.lanegroup_m_per_thread()
 
-        l_mr = self.dotx_m.lanegroup_repeat_m // g_mr
-        l_mt = self.dotx_m.lanegroup_tile_m // g_mt
+        l_mr = self.cdm.lanegroup_repeat_m // g_mr
+        l_mt = self.cdm.lanegroup_m_per_thread() // g_mt
+        if self.vector_store_m != 1:
+            assert l_mt % self.vector_store_m == 0, 'can not write out vector_m in single coalescing group'
         return l_mr, l_mt
 
     def get_num_dword_per_group(self):
-        assert self.dotx_m.lanegroup_repeat_m * self.dotx_m.lanegroup_tile_m * self.dotx_m.lanegroup_repeat_n % self.coalescing_groups == 0, \
-                f"total_acc_c:{self.dotx_m.lanegroup_repeat_m * self.dotx_m.lanegroup_tile_m * self.dotx_m.lanegroup_repeat_n}, coalescing_groups:{self.coalescing_groups}, m_groups:{self.get_length_m_groups()}, inst:{self.dotx_m.inst_mfma.m}x{self.dotx_m.inst_mfma.n}x{self.dotx_m.inst_mfma.k}"
-        return self.dotx_m.lanegroup_repeat_m * self.dotx_m.lanegroup_tile_m * self.dotx_m.lanegroup_repeat_n // self.coalescing_groups
-
-    def get_m_index_per_group(self):
-        pass
-
-    def get_co_sub_m_index(self):
-        pass
-
-    def get_vgpr_usage(self):
         '''
-        return the number of vgpr needed for coalescing store process
+        devide the total register used with the number of groups
         '''
-        agpr_per_store_group = self.dotx_m.total_acc_c() // self.coalescing_groups
-        if self.feat_vgpr_collapse:
-            data_byte = amdgpu_precision_data_byte(self.precision)
-            inst_sld_byte = (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else self.vector_write_out) * data_byte
-            issues_per_ssgroup = 8 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
+        assert self.cdm.total_acc_c() % self.coalescing_groups == 0
+        return self.cdm.total_acc_c() // self.coalescing_groups
 
-            #print(f"self.get_num_dword_per_group() = {self.get_num_dword_per_group()}")
-
-            num_sld_total_dword = self.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if self.vector_write_out == 1 else self.vector_write_out)
-
-            #print(f"num_sld_total_dword={num_sld_total_dword}")
-            total_lgkmcnt = num_sld_total_dword     # TODO: assume sld is single issue
-
-            assert MAX_LGKMCNT % issues_per_ssgroup == 0
-            # print(f"issues_per_ssgroup:{issues_per_ssgroup}, total_lgkmcnt:{total_lgkmcnt}, get_num_dword_per_group:{self.get_num_dword_per_group()}, vector_write_out:{self.vector_write_out}")
-
-            # we need further split based on issues_per_ssgroup
-            split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
-            #print(f"agpr_per_store_group={agpr_per_store_group}")
-
-            agpr_per_store_split_sld_group = (agpr_per_store_group + split_sld_groups - 1) // split_sld_groups
-            assert agpr_per_store_split_sld_group >= 4
-
-            #print(f"agpr_per_store_split_sld_group={agpr_per_store_split_sld_group}")
-
-            return agpr_per_store_split_sld_group
-        else:
-            return agpr_per_store_group
+    def can_skip_coalescing(self):
+        '''
+        currently, this api define CAN skip, but indeed this is MUST skip
+        for coalescing write out, we assume thread coalescing along N, and it is easy to divide block size
+        (256) along a power-of-2 number, but non-power-of-2 is very hard to do so.
+        '''
+        # if not utility_is_pow2(self.cdm.macro_tile_n):
+        #     return True
+        return False
 
 class igemm_coalescing_store_dotx_t(mc_base_t):
     def __init__(self, mc, ctrl):
@@ -158,227 +132,399 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
     def name(self):
         return ''
 
+    def get_smem_co_vector_size(self):
+        '''
+        1. if vector_store_m == 1 and vector_store_n == 1
+            LDS store & read both using lanegroup_granularity_m as vector size, and global write out as single pixel
+
+        2. if vector_store_m != 1 and vector_store_n == 1
+            vector_store_m != 1 means we want to do vector store along m direction.
+            If m is fast changing dimension, actually we dont want this be happen for now. this coalescing store class by default
+            assume thread is conitnuout along n direction, so if m is fast changing, it is better thread is continuous along m,
+            which may violate the assumption. TODO: implement thread continous along m in the future.
+
+            we allow in case that vector_store_m != 1, which is useful in case like NCHWvect_c, where H*W (gemm_n) is still fast changing dim, 
+            only with vect_c=vector_store_m in m dim.
+
+            LDS read/write in vector_store_m, and vector_store_m <= lanegroup_granularity_m
+
+        3. if vector_store_m == 1 and vector_store_n != 1
+            LDS write in 1 pixel unit, LDS read in vector_store_n
+        '''
+        ctrl = self.ctrl
+        l_mr, l_mt = ctrl.get_subgroup_length()
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
+
+        sst_vec, sld_vec, smem_trans = 1, 1, False
+        if ctrl.vector_store_m == 1 and ctrl.vector_store_n == 1:
+            assert ctrl.vector_fold_m == 1
+            vector_size = min(l_mt * data_byte // 4, 1)
+            sst_vec, sld_vec, smem_trans = vector_size, vector_size, False
+        elif ctrl.vector_store_m != 1 and ctrl.vector_store_n == 1:
+            # assert ctrl.get_lanegroup_granularity_m() % ctrl.vector_store_m == 0
+            vector_size = min(l_mt * data_byte // 4, 1)
+            # assert vector_size % ctrl.vector_store_m == 0
+            assert ctrl.vector_store_m % ctrl.vector_fold_m == 0
+            sst_vec, sld_vec, smem_trans = ctrl.vector_store_m, ctrl.vector_store_m, False
+        elif ctrl.vector_store_m == 1 and ctrl.vector_store_n != 1:
+            assert ctrl.vector_fold_m == 1
+            sst_vec, sld_vec, smem_trans = 1, ctrl.vector_store_n, True
+        else:
+            assert False, f'not supported vector_store_m:{ctrl.vector_store_m}, vector_store_n:{ctrl.vector_store_n}'
+        return sst_vec, sld_vec, smem_trans
+
+    def get_gst_vector_size(self):
+        ctrl = self.ctrl
+        if ctrl.vector_store_m == 1 and ctrl.vector_store_n == 1:
+            return 1
+        elif ctrl.vector_store_m != 1 and ctrl.vector_store_n == 1:
+            return ctrl.vector_store_m
+        elif ctrl.vector_store_m == 1 and ctrl.vector_store_n != 1:
+            return ctrl.vector_store_n
+        else:
+            assert False, f'not supported vector_store_m:{ctrl.vector_store_m}, vector_store_n:{ctrl.vector_store_n}'
+
+    def get_co_desc(self):
+        ctrl = self.ctrl
+        assert not (ctrl.vector_store_m != 1 and ctrl.vector_store_n != 1), "currently not support vector store both in m and n direction"
+
+        data_byte = amdgpu_precision_data_byte(ctrl.precision)
+
+        g_mr, g_mt = ctrl.get_subgroups()
+        l_mr, l_mt = ctrl.get_subgroup_length()
+        n_mc = ctrl.cdm.lanegroup_m_per_cluster()       # this is among different thread
+        n_ml = ctrl.cdm.lanegroup_m_per_wave()          # this is among different thread
+        n_mv = ctrl.cdm.waves_per_m()                   # this is among different thread
+
+        n_nc = ctrl.cdm.lanegroup_n_per_cluster()       # this is among different thread
+        n_nl = ctrl.cdm.lanegroup_n_per_wave()          # this is among different thread
+        n_nv = ctrl.cdm.waves_per_n()                   # this is among different thread
+
+        sst_vec, sld_vec, smem_trans = self.get_smem_co_vector_size()
+        assert l_mt % sst_vec == 0
+
+        gst_vec = self.get_gst_vector_size()
+        t_mr, t_nr, t_nt, t_mt = ctrl.cdm.acc_c_lengths()
+
+        # 1. vgpr desc
+        vgpr_lengths = list(ctrl.cdm.acc_c_lengths())
+        vgpr_desc = make_naive_tensor_descriptor_packed(vgpr_lengths)
+
+        # only split along gemm m
+        vgpr_co_split_lengths = tensor_util_split_lengths(ctrl.coalescing_groups, vgpr_lengths, [0, 1, 2, 3], [1, 0, 0, 1])
+        vgpr_split_desc = make_transform_tensor_descriptor(vgpr_desc, 
+                                    make_tuple(trans_grouped_slice(vgpr_desc.get_lengths(),
+                                                                [0, 0, 0, 0],
+                                                                vgpr_co_split_lengths)),
+                                    make_tuple([0, 1, 2, 3]),
+                                    make_tuple([0, 1, 2, 3]))
+
+        assert vgpr_split_desc.get_lengths() == [l_mr, t_nr, t_nt, l_mt]
+
+        vgpr_last_dim_num = l_mt if sst_vec == 1 else sst_vec
+
+        vgpr_co_desc = make_transform_tensor_descriptor(vgpr_split_desc, 
+                                    make_tuple(
+                                            trans_passthrough(vgpr_split_desc.get_length(0)),
+                                            trans_passthrough(vgpr_split_desc.get_length(1)),
+                                            trans_passthrough(vgpr_split_desc.get_length(2)),
+                                            trans_vectorize(vgpr_split_desc.get_length(3), vgpr_last_dim_num),
+                                        ),
+                                    make_tuple(0, 1, 2, 3),
+                                    make_tuple(0, 1, 2, 3))
+
+        # 2. lds store desc
+        sst_co_lengths = [  l_mr,                   # m, within thread
+                            n_mv * n_ml * n_mc,     # m, among different thread
+                            l_mt // sst_vec,        # m, within thread, consider vector fold
+                            t_nr,                   # n, within thread
+                            n_nv * n_nl * n_nc,     # n, among different thread
+                            t_nt,                   # n, within thread
+                            sst_vec * data_byte]    #    store vector  size
+
+        sst_co_desc = make_naive_tensor_descriptor_packed(sst_co_lengths)
+
+        # print(f'vgpr_lengths:{vgpr_lengths}, vgpr_co_split_lengths:{vgpr_co_split_lengths}, vgpr_co_desc:{vgpr_co_desc.get_lengths()}, vgpr_last_dim_num:{vgpr_last_dim_num}, sst_co_lengths:{sst_co_lengths}')
+
+        # 3. gemm desc before/after transpose
+        gemm_m_lengths = [ctrl.cdm.lanegroup_repeat_m,              # thread lengths
+                            ctrl.cdm.waves_per_m(),
+                            ctrl.cdm.lanegroup_m_per_wave(),
+                            ctrl.cdm.lanegroup_m_per_cluster(),
+                            ctrl.cdm.lanegroup_m_per_thread()]      # thread lengths
+        gemm_n_lengths = [ctrl.cdm.lanegroup_repeat_n,              # thread lengths
+                            ctrl.cdm.waves_per_n(),
+                            ctrl.cdm.lanegroup_n_per_wave(),
+                            ctrl.cdm.lanegroup_n_per_cluster(),
+                            ctrl.cdm.lanegroup_n_per_thread()]      # thread lengths
+
+        gemm_m_size = tensor_util_reduce(gemm_m_lengths, lambda a, b: a*b, 1)
+        gemm_n_size = tensor_util_reduce(gemm_n_lengths, lambda a, b: a*b, 1)
+
+        assert gemm_m_size == ctrl.cdm.macro_tile_m and gemm_n_size == ctrl.cdm.macro_tile_n
+
+        gemm_m_split_lengths = tensor_util_split_lengths(
+                                            ctrl.coalescing_groups, gemm_m_lengths,
+                                            [0, 1, 2, 3, 4], [1, 0, 0, 0, 1])
+
+        gemm_lengths = [*gemm_m_lengths, *gemm_n_lengths]           # m*n
+
+        gemm_desc = make_naive_tensor_descriptor_packed(gemm_lengths)
+        gemm_co_split_lengths = tensor_util_split_lengths(
+                                    ctrl.coalescing_groups, gemm_lengths,
+                                    [0, 1, 2, 3, 4,   5, 6, 7, 8, 9],
+                                    [1, 0, 0, 0, 1,   0, 0, 0, 0, 0])
+
+        assert gemm_m_split_lengths == gemm_co_split_lengths[:5]
+
+        gemm_m_slice_size = tensor_util_reduce(gemm_m_split_lengths, lambda a, b: a*b, 1)
+
+        gemm_split_desc = make_transform_tensor_descriptor(gemm_desc, 
+                                    make_tuple(trans_grouped_slice(gemm_desc.get_lengths(),
+                                                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                                                gemm_co_split_lengths)),
+                                    make_tuple([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+                                    make_tuple([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
+
+        # desc before transpose
+        gemm_co_prev_desc = make_transform_tensor_descriptor(gemm_split_desc,
+                                    make_tuple(
+                                        trans_passthrough(gemm_split_desc.get_length(0)),
+                                        trans_passthrough(gemm_split_desc.get_length(1)),
+                                        trans_passthrough(gemm_split_desc.get_length(2)),
+                                        trans_passthrough(gemm_split_desc.get_length(3)),
+                                        trans_passthrough(gemm_split_desc.get_length(4)),
+                                        trans_merge(gemm_n_lengths)),
+                                    make_tuple(0, 1, 2, 3, 4, [5, 6, 7, 8, 9]),
+                                    make_tuple(0, 1, 2, 3, 4, 5))
+
+        assert gemm_co_prev_desc.get_length(4) % sst_vec == 0
+        gemm_co_prev_sst_desc = make_transform_tensor_descriptor(gemm_co_prev_desc,
+                                    make_tuple(
+                                        trans_passthrough(gemm_co_prev_desc.get_length(0)),
+                                        trans_passthrough(gemm_co_prev_desc.get_length(1)),
+                                        trans_passthrough(gemm_co_prev_desc.get_length(2)),
+                                        trans_passthrough(gemm_co_prev_desc.get_length(3)),
+                                        trans_unmerge([gemm_co_prev_desc.get_length(4) // sst_vec, sst_vec]),
+                                        trans_passthrough(gemm_co_prev_desc.get_length(5))),
+                                    make_tuple(0, 1, 2, 3, 4, 5),
+                                    make_tuple(0, 1, 2, 3, [4, 6], 5))
+
+        gemm_co_3d_prev_desc = make_transform_tensor_descriptor(gemm_co_prev_sst_desc,
+                                    make_tuple( trans_merge(gemm_co_prev_sst_desc.get_lengths()[:5]),
+                                                trans_passthrough(gemm_n_size),
+                                                trans_passthrough(sst_vec)),
+                                    make_tuple([0, 1, 2, 3, 4], 5, 6),
+                                    make_tuple(0, 1, 2))
+
+        gemm_co_2d_desc = make_transform_tensor_descriptor(gemm_co_3d_prev_desc,
+                                    make_tuple( trans_passthrough(gemm_co_3d_prev_desc.get_length(0)),
+                                                trans_merge([gemm_n_size, sst_vec])),
+                                    make_tuple(0, [1, 2]),
+                                    make_tuple(0, 1))
+        # print(f'gemm_split_desc:{gemm_split_desc.get_lengths()}, xxxx {gemm_co_2d_desc.get_lengths()}')
+
+        # further more, we need sub-divide m_post_thread_length, because ds_read can not be larger than lgkmcnt max(15)
+        # actually, we want to sub divide ds_read by its vector size.
+        # note, number of gst issue maybe larger than sld issue, but sld issue never be larger than gst issue.
+        # that is, we never want do to multiple ds_read to construct a data, then single global_store_dwordx...
+        max_sld_issues_per_ssgroup = 4 if sld_vec in (2, 4) else 8
+
+        if sst_vec != 1 and sld_vec != 1:
+            # last dim of 3d_prev_desc is gemm_m
+            assert sst_vec == sld_vec
+            gemm_n_post_thread_length = 1
+            gemm_n_post_cluster_length = gemm_n_size // gemm_n_post_thread_length
+            gemm_m_post_cluster_length = ctrl.cdm.block_size() // gemm_n_post_cluster_length
+            gemm_m_post_thread_length = gemm_m_slice_size // gemm_m_post_cluster_length
+
+            assert (gemm_m_post_thread_length // sst_vec) * gemm_m_post_cluster_length == gemm_co_3d_prev_desc.get_length(0)
+
+            gemm_co_post_sld_desc = make_transform_tensor_descriptor(gemm_co_3d_prev_desc,
+                                    make_tuple( trans_unmerge([gemm_m_post_thread_length // sst_vec, gemm_m_post_cluster_length]),
+                                                trans_unmerge([gemm_n_post_cluster_length, gemm_n_post_thread_length]),
+                                                trans_passthrough(sst_vec)),
+                                    make_tuple(0, 1, 2),
+                                    make_tuple([0, 2], [3, 4], 1))
+
+            # split due to max lgkmcnt
+            num_sld_issues_per_ssgroup = utility_gcd(gemm_co_post_sld_desc.get_length(0), max_sld_issues_per_ssgroup)
+            split_sld_groups = gemm_co_post_sld_desc.get_length(0) // num_sld_issues_per_ssgroup
+            assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
+            num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // gst_vec // split_sld_groups
+
+            gemm_co_post_sld_2_desc = make_transform_tensor_descriptor(gemm_co_post_sld_desc,
+                                    make_tuple( trans_unmerge([split_sld_groups, num_sld_issues_per_ssgroup]),
+                                                trans_passthrough(gemm_co_post_sld_desc.get_length(1)),     # sst_vec
+                                                trans_passthrough(gemm_co_post_sld_desc.get_length(2)),     # gemm_m_post_cluster_length
+                                                trans_passthrough(gemm_co_post_sld_desc.get_length(3)),     # gemm_n_post_cluster_length
+                                                trans_passthrough(gemm_co_post_sld_desc.get_length(4)),     # gemm_n_post_thread_length
+                                                ),
+                                    make_tuple(0, 1, 2, 3, 4),
+                                    make_tuple([0, 1], 2, 3, 4, 5))
+
+            assert num_gst_per_ssgroup * gst_vec == num_sld_issues_per_ssgroup * sst_vec, f'num_gst_per_ssgroup:{num_gst_per_ssgroup}, gst_vec:{gst_vec}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}, sst_vec:{sst_vec}'
+            gemm_co_post_desc = make_transform_tensor_descriptor(gemm_co_post_sld_2_desc,
+                                    make_tuple( trans_passthrough(gemm_co_post_sld_2_desc.get_length(0)),
+                                                trans_merge([num_sld_issues_per_ssgroup, sst_vec]),
+                                                trans_passthrough(gemm_co_post_sld_2_desc.get_length(3)),
+                                                trans_passthrough(gemm_co_post_sld_2_desc.get_length(4)),
+                                                trans_passthrough(gemm_co_post_sld_2_desc.get_length(5))),
+                                    make_tuple(0, [1, 2], 3, 4, 5),
+                                    make_tuple(0, 1, 2, 3, 4))
+
+            # 4 lds read desc TODO: better specify
+            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length * sld_vec,
+                                gemm_n_post_cluster_length, gemm_n_post_thread_length * data_byte]
+            sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
+
+        else:
+            assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+            gemm_n_post_thread_length = sld_vec
+            gemm_n_post_cluster_length = gemm_n_size // gemm_n_post_thread_length
+            gemm_m_post_cluster_length = ctrl.cdm.block_size() // gemm_n_post_cluster_length
+            gemm_m_post_thread_length = gemm_co_2d_desc.get_length(0) // gemm_m_post_cluster_length
+
+            # print(f'm:{gemm_m_post_thread_length}x{gemm_m_post_cluster_length}, n:{gemm_n_post_cluster_length}x{gemm_n_post_thread_length}')
+
+            num_sld_issues_per_ssgroup = utility_gcd(gemm_m_post_thread_length, max_sld_issues_per_ssgroup)
+            split_sld_groups = gemm_m_post_thread_length // num_sld_issues_per_ssgroup
+            assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
+            num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // gst_vec // split_sld_groups
+
+            #assert num_sld_issues_per_ssgroup * split_sld_groups * gemm_m_post_cluster_length == gemm_co_2d_desc.get_length(0), f'{num_sld_issues_per_ssgroup} * {split_sld_groups} * {gemm_m_post_cluster_length} == {gemm_co_2d_desc.get_length(0)}'
+            assert gemm_n_post_thread_length * gemm_n_post_cluster_length == gemm_co_2d_desc.get_length(1)
+
+            # desc after transpose
+            gemm_co_post_desc = make_transform_tensor_descriptor(gemm_co_2d_desc,
+                                        make_tuple(trans_unmerge([split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length]),
+                                                    trans_unmerge([gemm_n_post_cluster_length, gemm_n_post_thread_length])),
+                                        make_tuple(0, 1),
+                                        make_tuple([0, 1, 2], [3, 4]))
+
+            # 4 lds read desc
+            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length,
+                                gemm_n_post_cluster_length, gemm_n_post_thread_length * data_byte]
+            sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
+
+        return vgpr_last_dim_num, split_sld_groups, num_sld_issues_per_ssgroup, num_gst_per_ssgroup, \
+                vgpr_co_split_lengths, gemm_co_split_lengths, \
+                vgpr_co_desc, sst_co_desc, gemm_co_prev_desc, gemm_co_post_desc, sld_co_desc
+
     def init_co_lds_offset(self, v_co_sst, v_co_sld, v_gemm_im, v_gemm_in, v_tid, v_tmp4):
         ctrl = self.ctrl
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
-        g_mr, g_mt = ctrl.get_subgroups()
+        t_mr, t_nr, t_nt, t_mt = ctrl.cdm.acc_c_lengths()
         l_mr, l_mt = ctrl.get_subgroup_length()
+        sst_vec, sld_vec, smem_trans = self.get_smem_co_vector_size()
+        gst_vec = self.get_gst_vector_size()
 
         with self._deferred_context():
-            self._emit(f"; init_co_lds_offset for xdlops")
-            '''
-            gemm_m_shrink is in multi-dimension.
-            then, consider that introduced by granularity
-            '''
-            self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(ctrl.dotx_m.lanegroup_m_per_thread())}, v[{v_gemm_im}]")
-            self._emit(f"v_and_b32 v[{v_tmp4}],  {ctrl.dotx_m.lanegroup_m_per_cluster() - 1} v[{v_tmp4}]   ; thread id of lanegroup_m_per_cluster")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(ctrl.dotx_m.lanegroup_m_per_thread())}, v[{v_tmp4}]")
-
-            if ctrl.dotx_m.block_m_per_lanegroup() != 1:
-                length_above_block_m_per_lanegroup = ctrl.dotx_m.lanegroup_m_per_block() * ctrl.dotx_m.lanegroup_m_per_cluster() * \
-                                                    ctrl.dotx_m.lanegroup_m_per_thread()
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+1], {utility_log2(length_above_block_m_per_lanegroup)}, v[{v_gemm_im}]")
-                self._emit(f"v_and_b32 v[{v_tmp4}+1], {ctrl.dotx_m.block_m_per_lanegroup() - 1}  , v[{v_tmp4}+1]   ; thread id of block_m_per_lanegroup")
-                assert length_above_block_m_per_lanegroup % g_mb == 0, f"length_above_block_m_per_lanegroup:{length_above_block_m_per_lanegroup}, g_mb:{g_mb}"
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+1], {utility_log2(length_above_block_m_per_lanegroup // g_mb)}, v[{v_co_sst}]")
-
-            if ctrl.dotx_m.waves_per_m() != 1:
-                length_above_waves_per_m = ctrl.dotx_m.wave_step_m * ctrl.dotx_m.lanegroup_m_per_wave() * \
-                                                    ctrl.dotx_m.lanegroup_m_per_block() * ctrl.dotx_m.block_m_per_lanegroup() * \
-                                                    ctrl.dotx_m.lanegroup_m_per_thread() * ctrl.dotx_m.lanegroup_m_per_cluster()
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}+2], {utility_log2(length_above_waves_per_m)}, v[{v_gemm_im}]  ; thread id of waves_per_m")
-                assert length_above_waves_per_m % (g_ms * g_mw * g_mb) == 0, f"length_above_waves_per_m:{length_above_waves_per_m}, g_ms:{g_ms} g_mw:{g_mw} g_mb:{g_mb}"
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}+2], {utility_log2(length_above_waves_per_m // (g_ms * g_mw * g_mb))}, v[{v_co_sst}]")
-
-            if ctrl.vector_write_out == 1:
-                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sst}]")
-                self._emit(f"v_lshlrev_b32 v[{v_tmp4}+1], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_gemm_in}]   ; implicit transpose with m granularity:{AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M} while store")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.dotx_m.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
+            self._emit(f"; init_co_lds_offset for dotx")
+            if sst_vec != 1 and sld_vec != 1:
+                assert sst_vec == sld_vec
+                assert t_mt % l_mt == 0
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(sst_vec * (t_mt // l_mt))}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp4} + 1],  {utility_log2(sst_vec)}, v[{v_gemm_in}]    ; expand n by {sst_vec}")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n * sst_vec)}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sst_vec:{sst_vec}")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_co_sst}], {utility_log2(ctrl.dotx_m.macro_tile_n)}, v[{v_gemm_in}]")
+                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                assert t_mt % l_mt == 0
+                self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(t_mt // l_mt)}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
+                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
 
-            # gemm_m_shrink = g_mw * g_mb * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # => granularity shrink
-            # gemm_m_shrink = AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M
-            # if gemm_m_shrink != 1:
-            #     self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(gemm_m_shrink)}, v[{v_gemm_im}]")
-            #     self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.dotx_m.macro_tile_n * AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_tmp4}+1]")
-            # else:
-            #     assert False, "impossible"
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}]")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out))}, v[{v_tid}]")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * sld_vec)}, v[{v_tid}]   ; sld vec:{sld_vec} * byte:{data_byte}")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
 
         return self._get_deferred()
 
-    def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp6):
-        def flatten(x):
-            from functools import reduce
-            return reduce(lambda a, b: a*b, x, 1)
+    def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp4):
         ctrl = self.ctrl
-        # need use v_co_sub_m_index to calculate v offset in m direction
-        g_mr, g_ms, g_mw, g_mb, g_mt = ctrl.get_subgroups()
-        l_mr, l_ms, l_mw, l_mb, l_mt = ctrl.get_subgroup_length()
-        n_mc = ctrl.dotx_m.lanegroup_m_per_cluster()       # this iteration is among different thread
-        n_ml = ctrl.dotx_m.block_m_per_lanegroup()         # this iteration is among different thread
-        n_mv = ctrl.dotx_m.waves_per_m()                   # this iteration is among different thread
-        ttm = ctrl.get_transposed_thread_mapping()
-        nd_stride = [l_mt, n_mc, n_ml, g_mb * l_mb, l_mw * g_mw, g_ms * l_ms, n_mv, 1 ]
+
+        l_mr, l_mt = ctrl.get_subgroup_length()
+        t_mr, t_nr, t_nt, t_mt = ctrl.cdm.acc_c_lengths()
+
+        #        gemm_m_lengths = [ctrl.cdm.lanegroup_repeat_m,              # thread lengths
+        #                            ctrl.cdm.waves_per_m(),
+        #                            ctrl.cdm.lanegroup_m_per_wave(),
+        #                            ctrl.cdm.lanegroup_m_per_cluster(),
+        #                            ctrl.cdm.lanegroup_m_per_thread()]      # thread lengths
+        #
+        #        gemm_m_split_lengths = tensor_util_split_lengths(
+        #                                            ctrl.coalescing_groups, gemm_m_lengths,
+        #                                            [0, 1, 2, 3, 4], [1, 0, 0, 0, 1])
+        sst_vec, sld_vec, smem_trans = self.get_smem_co_vector_size()
+        gst_vec = self.get_gst_vector_size()
+
+        cluster_m_len = ctrl.cdm.waves_per_m() * ctrl.cdm.lanegroup_m_per_wave() * ctrl.cdm.lanegroup_m_per_cluster()
+
+        # def pretty_div(n, d):
+        #     assert n % d == 0
+        #     return n // d
 
         with self._deferred_context():
-            self._emit(f"; init_co_sub_m_index xdlops, block_size:{ctrl.dotx_m.block_size()}, macro-tile:{ctrl.dotx_m.macro_tile_m}x{ctrl.dotx_m.macro_tile_n} sub_m_index:{ctrl.get_co_sub_m_index()}")
-            self._emit(f"; g_mr:{g_mr}, g_ms:{g_ms}, g_mw:{g_mw}, g_mb:{g_mb}, g_mt:{g_mt} | l_mr:{l_mr}, l_ms:{l_ms}, l_mw:{l_mw}, l_mb:{l_mb}, l_mt:{l_mt} | n_mc:{n_mc}, n_ml:{n_ml}, n_mv:{n_mv}")
-            self._emit(f"; nd_stride:{nd_stride}")
-            c_m0 = ttm.c_m0()
-            if c_m0 == 1:
-                # give a chance to early exit, only let the co_sub_m to be zero
-                self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")
+            self._emit(f"; init_co_sub_m_index for dotx")
+            if sst_vec != 1 and sld_vec != 1:
+                # last dim of 3d_prev_desc is gemm_m
+                assert sst_vec == sld_vec
+                gemm_n_post_thread_length = 1
+                gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
             else:
-                if ctrl.vector_write_out == 1:
-                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.dotx_m.macro_tile_n)}, v[{v_tid}]   ; get tid along m")
-                else:
-                    self._emit(f"v_lshlrev_b32 v[{v_tmp6}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.dotx_m.macro_tile_n)}, v[{v_tmp6}]  ; get tid along m")
+                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                gemm_n_post_thread_length = sld_vec
+                gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
 
-                v_idx = 0
-                # iterate all dimensions
-                if ctrl.vector_write_out != 1:
-                    # if have vector store, we no longer have granularity, hence every dimension participate in m divide
-                    if l_mt != 1 and c_m0 not in (0, 1):
-                        self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mt - 1}, v[{v_co_sub_m_index}]                   ; => x_mt")
-                        v_idx = v_idx + 1
-                        c_m0  = c_m0 // l_mt
-                        if c_m0 not in (0, 1):
-                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mt)}  ,v[{v_co_sub_m_index}]")
-                if n_mc != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_mc - 1}, v[{v_co_sub_m_index}]                   ; => x_mc")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // n_mc
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_mc)}  ,v[{v_co_sub_m_index}]")
-                if n_ml != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_ml - 1}, v[{v_co_sub_m_index}]                   ; => x_ml")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // n_ml
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_ml)}  ,v[{v_co_sub_m_index}]")
-                if l_mb != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mb - 1}, v[{v_co_sub_m_index}]                   ; => x_mb")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // l_mb
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mb)}  ,v[{v_co_sub_m_index}]")
-                if l_mw != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mw - 1}, v[{v_co_sub_m_index}]                   ; => x_mw")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // l_mw
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_mw)}  ,v[{v_co_sub_m_index}]")
-                if l_ms != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_ms - 1}, v[{v_co_sub_m_index}]                   ; => x_ms")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // l_ms
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(l_ms)}  ,v[{v_co_sub_m_index}]")
-                if n_mv != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {n_mv - 1}, v[{v_co_sub_m_index}]                   ; => x_mv")
-                    v_idx = v_idx + 1
-                    c_m0  = c_m0 // n_mv
-                    if c_m0 not in (0, 1):
-                        self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(n_mv)}  ,v[{v_co_sub_m_index}]")
-                if l_mr != 1 and c_m0 not in (0, 1):
-                    self._emit(f"v_and_b32 v[{v_tmp6}+{v_idx}], {l_mr - 1}, v[{v_co_sub_m_index}]                   ; => x_mr")
-
-                # indeed accoroding to current implementation, at most 2 tmp vgpr is used.
-                # we keep 6 temp here in case in the future there might be different mapping
-                assert v_idx <= 5, "since current we only assign 6 vgpr to do this nd split-merge, so larger than 6 vgpr currently not supported"
-
-                class pretty_accumulate_co_sub_m_t(object):
-                    def __init__(self):
-                        self.first = 1
-                    def __call__(self, v_co_sub_m_index, v_idx, k_multiplier):
-                        '''
-                        return a string to calculate v_co_sub_m_index = v_idx * k_multiplier + v_co_sub_m_index
-                        '''
-                        assert utility_is_pow2(k_multiplier)
-                        if self.first == 1:
-                            self.first = 0
-                            if k_multiplier == 1:
-                                return f"v_mov_b32 v[{v_co_sub_m_index}], v[{v_idx}]"
-                            else:
-                                return f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(k_multiplier)}, v[{v_idx}]"
+            def emit_co_m():
+                gemm_m_cluster_length = ctrl.cdm.block_size() // gemm_n_post_cluster_length
+                with self._deferred_context():
+                    while True:
+                        if gemm_m_cluster_length > 1:
+                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(gemm_n_post_cluster_length)}, v[{v_tid}]  ; {gemm_n_post_cluster_length} cluster per gemm_n")
+                            if sst_vec != 1:
+                                self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(sst_vec)}, v[{v_co_sub_m_index}] ; expand m by sst_vec:{sst_vec}")
                         else:
-                            if k_multiplier == 1:
-                                return  f"v_add_u32 v[{v_co_sub_m_index}], v[{v_idx}], v[{v_co_sub_m_index}]"
-                            else:
-                                return f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_idx}], {utility_log2(k_multiplier)}, v[{v_co_sub_m_index}]"
+                            self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")   # early exist
+                            break
+                        # this is to compute in gemm_m, by 3 d, [l_mr, cluster_m_len, l_mt], so we want to calculate from right to left
 
-                c_m0 = ttm.c_m0()
-                v_idx_r = 0
-                # self._emit(f"v_mov_b32 v[{v_co_sub_m_index}], 0")
-                # if n_mc != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_add_u32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], v[{v_co_sub_m_index}]  ; => accumulate x_mc")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // n_mc
-                # if n_ml != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:1]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ml")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // n_ml
-                # if l_mb != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:2]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mb")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // l_mb
-                # if l_mw != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:3]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mw")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // l_mw
-                # if l_ms != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:4]))}, v[{v_co_sub_m_index}]  ; => accumulate x_ms")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // l_ms
-                # if n_mv != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:5]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mv")
-                #     v_idx_r = v_idx_r + 1
-                #     c_m0    = c_m0 // n_mv
-                # if l_mr != 1 and c_m0 not in (0, 1):
-                #     self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp6}+{v_idx_r}], {utility_log2(flatten(nd_stride[0:6]))}, v[{v_co_sub_m_index}]  ; => accumulate x_mr")
-                accumulate_co_sub_m = pretty_accumulate_co_sub_m_t()
-                if ctrl.vector_write_out != 1:
-                    # if have vector store, we no longer have granularity, hence every dimension participate in m divide
-                    if l_mt != 1 and c_m0 not in (0, 1):
-                        self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", 1) + "      ; => accumulate x_mt")
-                        v_idx_r = v_idx_r + 1
-                        c_m0    = c_m0 // l_mt
-                if n_mc != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:1])) + "      ; => accumulate x_mc")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // n_mc
-                if n_ml != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:2])) + "      ; => accumulate x_ml")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // n_ml
-                if l_mb != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:3])) + "      ; => accumulate x_mb")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // l_mb
-                if l_mw != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:4])) + "      ; => accumulate x_mw")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // l_mw
-                if l_ms != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:5])) + "      ; => accumulate x_ms")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // l_ms
-                if n_mv != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:6])) + "      ; => accumulate x_mv")
-                    v_idx_r = v_idx_r + 1
-                    c_m0    = c_m0 // n_mv
-                if l_mr != 1 and c_m0 not in (0, 1):
-                    self._emit(accumulate_co_sub_m(v_co_sub_m_index, f"{v_tmp6}+{v_idx_r}", flatten(nd_stride[0:7])) + "      ; => accumulate x_mr")
+                        # 1. dim l_mt
+                        if gemm_m_cluster_length > l_mt:
+                            gemm_m_cluster_length = gemm_m_cluster_length // l_mt
+                            if t_mt != l_mt:
+                                self._emit(f"v_and_b32 v[{v_tmp4} + 1], {l_mt - 1},  v[{v_co_sub_m_index}]  ; length distributed within l_mt:{l_mt}")
+                                self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 2], {utility_log2(l_mt)}, v[{v_co_sub_m_index}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp4} + 2], {utility_log2(t_mt)}, v[{v_tmp4} + 1]")
+                        else:
+                            gemm_m_cluster_length = gemm_m_cluster_length // l_mt
+                            break
 
-                # if ctrl.vector_write_out == 1:
-                #     self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M)}, v[{v_co_sub_m_index}]")
+                        # 2. dim cluster_m_len
+                        # if gemm_m_cluster_length > cluster_m_len:
+                        #     gemm_m_cluster_length = pretty_div(gemm_m_cluster_length, cluster_m_len)
+                        #     # nonthing to emit
+                        # else:
+                        #     break
+                        gemm_m_cluster_length = gemm_m_cluster_length // cluster_m_len
 
-                assert v_idx == v_idx_r, "please check!"
+                        # 3. dim l_mr
+                        if gemm_m_cluster_length > l_mr:
+                            gemm_m_cluster_length = gemm_m_cluster_length // l_mr
+                            if t_mr != l_mr:
+                                self._emit(f"v_and_b32 v[{v_tmp4} + 1], {l_mr - 1},  v[{v_co_sub_m_index}]  ; length distributed within l_mr:{l_mr}")
+                                self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 2], {utility_log2(l_mr)}, v[{v_co_sub_m_index}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp4} + 2], {utility_log2(t_mr)}, v[{v_tmp4} + 1]")
+                        else:
+                            gemm_m_cluster_length = gemm_m_cluster_length // l_mr
+                            break
 
+                        break
+
+                assert gemm_m_cluster_length in (0, 1), f'gemm_m_cluster_length:{gemm_m_cluster_length}'
+                return self._get_deferred()
+
+            self._emit(emit_co_m())
+            if ctrl.vector_fold_m != 1:
+                self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.vector_fold_m)}, v[{v_co_sub_m_index}] ; fold sub_m by {ctrl.vector_fold_m}")
         return self._get_deferred()
 
     def init_co_sub_n_index(self, v_co_sub_n_index, v_tid, v_tmp2):
@@ -386,44 +532,31 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         in n dimension, always have one thread per column
         '''
         ctrl = self.ctrl
-        # need use v_co_sub_n_index to calculate v offset in n direction
+        sst_vec, sld_vec, smem_trans = self.get_smem_co_vector_size()
 
         with self._deferred_context():
-            self._emit(f"; init_co_sub_n_index xdlops")
-            if ctrl.vector_write_out == 1:
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.dotx_m.macro_tile_n - 1}, v[{v_tid}]")
+            self._emit(f"; init_co_sub_n_index dotx")
+            if sst_vec != 1 and sld_vec != 1:
+                assert sst_vec == sld_vec
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tid}]")
             else:
-                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(ctrl.vector_write_out)}, v[{v_tid}]")
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.dotx_m.macro_tile_n - 1}, v[{v_tmp2}]")
+                self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(sld_vec)}, v[{v_tid}]")
+                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tmp2}]")
         return self._get_deferred()
 
-    '''
     def get_vgpr_usage(self):
         ctrl = self.ctrl
-        agpr_per_store_group = ctrl.dotx_m.total_acc_c() // ctrl.coalescing_groups
         if ctrl.feat_vgpr_collapse:
-            data_byte = amdgpu_precision_data_byte(ctrl.precision)
-            inst_sld_byte = (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte
-            issues_per_ssgroup = 4 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
-
-            num_sld_total_dword = ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
-
-            total_lgkmcnt = num_sld_total_dword     # TODO: assume sld is single issue
-
-            assert MAX_LGKMCNT % issues_per_ssgroup == 0
-
-            # we need further split based on issues_per_ssgroup
-            split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
-
-            agpr_per_store_split_sld_group = (agpr_per_store_group + split_sld_groups - 1) // split_sld_groups
-            assert agpr_per_store_split_sld_group >= 4
-
-            return agpr_per_store_split_sld_group
+            vgpr_last_dim_num, split_sld_groups, num_sld_issues_per_ssgroup, num_gst_per_ssgroup, \
+            vgpr_co_split_lengths, gemm_co_split_lengths, \
+            vgpr_co_desc, sst_co_desc, gemm_co_prev_desc, gemm_co_post_desc, sld_co_desc = \
+                    self.get_co_desc()
+            vgpr_lengths = vgpr_co_desc.get_lengths()
+            return tensor_util_reduce(vgpr_lengths, lambda a, b: a*b, 1)
         else:
-            return agpr_per_store_group
-    '''
+            return ctrl.cxm.total_acc_c() // ctrl.coalescing_groups
 
-    def __call__(self, v_c_tmp, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, v_store_mask = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
+    def __call__(self, v_c, v_co_sst, v_co_sld, s_p_out, v_out_offset, s_out_offset, s_gemm_m0_stride, s_gemm_m1_stride, s_tmp6, v_store_flag = None, s_k = None, v_cur_k = None, s_block_gtc_ik = None, v_co_sub_m_index = None, v_tmp0 = None):
 
         # if no need s_out_offset, set to integer 0
         # if no need flag to dicide store, set v_store_flag to 0
@@ -431,9 +564,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             from functools import reduce
             return reduce(lambda a, b: a*b, x, 1)
         ctrl = self.ctrl
+        assert not (ctrl.vector_store_m != 1 and ctrl.vector_store_n != 1), "currently not support vector store both in m and n direction"
+
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         v_c = sym_t(v_c)
-        v_c_tmp = sym_t(v_c_tmp)
         v_co_sst = sym_t(v_co_sst)
         v_co_sld = sym_t(v_co_sld)
         s_tmp6 = sym_t(s_tmp6)
@@ -447,257 +581,225 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
         g_mr, g_mt = ctrl.get_subgroups()
         l_mr, l_mt = ctrl.get_subgroup_length()
-        n_mc = ctrl.dotx_m.lanegroup_m_per_cluster()       # this iteration is among different thread
-        n_ml = 1
-        n_mv = ctrl.dotx_m.waves_per_m()                   # this iteration is among different thread
+        n_mc = ctrl.cdm.lanegroup_m_per_cluster()       # this is among different thread
+        n_ml = ctrl.cdm.lanegroup_m_per_wave()          # this is among different thread
+        n_mv = ctrl.cdm.waves_per_m()                   # this is among different thread
 
-        n_nc = ctrl.dotx_m.lanegroup_n_per_cluster()       # this iteration is among different thread
-        n_nl = 1
-        n_nv = ctrl.dotx_m.waves_per_n()                   # this iteration is among different thread
-
-        nd_stride = [n_mc, n_ml, n_mv, 1 ]
+        n_nc = ctrl.cdm.lanegroup_n_per_cluster()       # this is among different thread
+        n_nl = ctrl.cdm.lanegroup_n_per_wave()          # this is among different thread
+        n_nv = ctrl.cdm.waves_per_n()                   # this is among different thread
 
         no_s_out_offset = s_out_offset is None
-        inst_sst_byte = ctrl.vector_write_out * data_byte
-        inst_sld_byte = (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte
 
-        # for xdlops, always consider granularity in column, hence here is always ds_write_b128/ds_read_b128
-        inst_sst = inst_ds_write_t(inst_sst_byte)
-        inst_sld = inst_ds_read_t(inst_sld_byte)
+        sst_vec, sld_vec, smem_trans = self.get_smem_co_vector_size()
+        assert l_mt % sst_vec == 0, f'l_mt:{l_mt}, sst_vec:{sst_vec}'
+
+        gst_vec = self.get_gst_vector_size()
+
+        inst_sst = inst_ds_write_t(sst_vec * data_byte)
+        inst_sld = inst_ds_read_t(sld_vec * data_byte)
         if ctrl.gemm_k_global_split:
-            v_pack = 2 if ctrl.vector_write_out == 2 and data_byte == 2 else 1
-            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte, v_pack) 
+            v_pack = 2 if gst_vec == 2 and data_byte == 2 else 1
+            inst_gst = inst_buffer_atomic_add_dword_t(gst_vec * data_byte, v_pack) 
         else:
-            inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
-       
+            inst_gst = inst_buffer_store_t(gst_vec * data_byte)
 
         s_out_offset_itr = sym_t(s_tmp6(0))
-        # s_thread_m_stride = sym_t(s_tmp4(1))
 
-        #m_index_per_group = ctrl.get_m_index_per_group()
-        # thread_m_stride = ctrl.get_thread_m_stride()
+        t_mr, t_nr, t_nt, t_mt = ctrl.cdm.acc_c_lengths()
 
-        #assert len(m_index_per_group) == ctrl.coalescing_groups
+        vgpr_last_dim_num, split_sld_groups, num_sld_issues_per_ssgroup, num_gst_per_ssgroup, \
+        vgpr_co_split_lengths, gemm_co_split_lengths, \
+        vgpr_co_desc, sst_co_desc, gemm_co_prev_desc, gemm_co_post_desc, sld_co_desc = \
+                self.get_co_desc()
 
-        t_mr, t_nr, t_nt, t_mt = ctrl.dotx_m.acc_c_lengths()
-        s_mr, s_nr, s_nt, s_mt = t_nr * t_nt * t_mt, \
-                                 t_nt * t_mt, \
-                                 t_mt, \
-                                 1
-
-        i_g_list = list()
-        for i_g_mr, i_g_mt in itertools.product(range(g_mr), range(g_mt)):
-            i_g_list.append((i_g_mr, i_g_mt))
+        def vgpr_coord_2_sst_coord(v_coord):
+            # TODO: coordinate remapping
+            assert len(v_coord) == 4
+            s_coord = [0] * 7
+            s_coord[0], s_coord[2], s_coord[3], s_coord[5] = v_coord[0], v_coord[3], v_coord[1], v_coord[2]
+            return s_coord
 
         with self._deferred_context():
-            self._emit(f"; coalescing store, mapping:{ctrl.dotx_m.serialize()}")
-            self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}")
-            self._emit(f"; init_co_sub_m_index xdlops, block_size:{ctrl.dotx_m.block_size()}, macro-tile:{ctrl.dotx_m.macro_tile_m}x{ctrl.dotx_m.macro_tile_n} sub_m_index:{ctrl.get_co_sub_m_index()}")
-            self._emit(f"; g_mr:{g_mr}, g_mt:{g_mt} | l_mr:{l_mr}, l_mt:{l_mt} | n_mc:{n_mc}, n_ml:{n_ml}, n_mv:{n_mv}")
-            self._emit(f"; nd_stride:{nd_stride}")
-
-            self._emit(f"s_mul_i32 s[{s_gemm_m1_stride}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * data_byte}, s[{s_gemm_m1_stride}]")
+            self._emit(f"; coalescing store, mapping:{ctrl.cdm.serialize()}")
+            self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, block_size:{ctrl.cdm.block_size()}")
+            self._emit(f'; gemm_co_prev_desc:{gemm_co_prev_desc.get_lengths()}, gemm_co_split_lengths:{gemm_co_split_lengths}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
+            self._emit(f"s_mul_i32 s[{s_gemm_m1_stride}], {data_byte}, s[{s_gemm_m1_stride}] ; data_byte:{data_byte}")
             self._emit(f"s_barrier")
 
+            gemm_m_co_start_coord = [0, 0, 0, 0, 0]
+            vgpr_co_start_coord = [0, 0, 0, 0]
+
+            accvgpr_consume_list = list()   # record the list for vgpr used to store C matrix, for debug
+
             for i_group in range(ctrl.coalescing_groups):
-                #m_index_start_per_group = m_index_per_group[i_group][0][0]
-                #m0_index_start_per_group, m1_index_start_per_group = ctrl.get_m0_m1_index(m_index_start_per_group)
+                m_index_start_per_group = gemm_co_prev_desc.calculate_offset([0, 0, 0, 0, 0, 0]) // ctrl.cdm.macro_tile_n
 
-                i_g_mr, i_g_mt = i_g_list[i_group]
+                for vgpr_coord in itertools.product(*[range(d) for d in vgpr_co_desc.get_lengths()]):
+                    # vgpr_coord should be a list with length 4
+                    vgpr_index = vgpr_co_desc.calculate_offset(list(vgpr_coord))
+                    sst_coord = vgpr_coord_2_sst_coord(list(vgpr_coord))
+                    sst_offset = sst_co_desc.calculate_offset(sst_coord)
+                    #self._emit(f"; vgpr_coord:{vgpr_coord}, lengths:{vgpr_co_desc.get_lengths()}, sst_coord:{sst_coord}, lengths:{sst_co_desc.get_lengths()}")
 
-                self._emit(f"; start group {i_group}, i_g_mr:{i_g_mr}, i_g_mt:{i_g_mt}")
-                #if not ctrl.can_skip_coalescing():
-                #    self._emit(f"s_barrier")
+                    if ctrl.precision == 'fp16':
+                        for i in range(vgpr_last_dim_num):
+                            # self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + i)}], v[{v_c(vgpr_index + i)}]")
+                            if i % 2 == 0:
+                                self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]")
+                            else:
+                                self._emit(f"v_cvt_f16_f32_sdwa v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]  dst_sel:WORD_1")
+                            accvgpr_consume_list.append(vgpr_index + i)
 
-                vgpr_index_acc = 0
-                for i_mr in range(l_mr):
-                    gpr_m_offset = i_mr * s_mr
-                    sst_m_offset = i_mr * (ctrl.dotx_m.macro_tile_m // ctrl.dotx_m.lanegroup_repeat_m // ctrl.vector_write_out)
-                    #print(f"sst_m_offset={sst_m_offset}")
-                    
-                    #if ctrl.vector_write_out != 1:
-                    #    sst_m_offset = sst_m_offset * l_mt          # ATTENTION! if vector write out, we no longer have shrink granularity, hence need multiply back
-                    # iterate through all m within current group
-                    for i_nr in range(t_nr):
-                        gpr_n_offset = i_nr * s_nr
-                        sst_n_offset = i_nr * n_nv * ctrl.dotx_m.lanegroup_n_per_wave() * n_nl * n_nc
-                        # self._emit(f" => ctrl.dotx_m.wave_step_n:{ctrl.dotx_m.wave_step_n}, ctrl.dotx_m.lanegroup_n_per_wave():{ctrl.dotx_m.lanegroup_n_per_wave()}, n_nl:{n_nl}, n_nc:{n_nc}")
-                        # agpr_index = a_group_start_index + gpr_m_offset + gpr_n_offset
-                        # vgpr_index = gpr_m_offset + gpr_n_offset
-                        vgpr_index = vgpr_index_acc
-                        sst_offset = (sst_m_offset * ctrl.dotx_m.macro_tile_n * ctrl.vector_write_out + \
-                                     sst_n_offset * ctrl.vector_write_out) * data_byte
-                        #assert sst_offset < lds_size_per_group and sst_offset + (m_index_per_group[i_group][-1][0] -  m_index_per_group[i_group][0][0]) * data_byte < lds_size_per_group
+                        #if not smem_trans:
+                        #    for i in range(sst_vec // 2):
+                        #        self._emit(f"v_pack_b32_f16 v[{v_c(vgpr_index + i)}], v[{v_c(vgpr_index + 2 * i)}], v[{v_c(vgpr_index + 2 * i + 1)}]")
 
-                        # for fp16 and bf16, vgpr need to be cast to 16 bits
-                        if ctrl.precision == 'fp16':
-                            
-                            for i in range(ctrl.vector_write_out):
-                                if i % 2 == 0:
-                                    self._emit(f"v_cvt_f16_f32_sdwa v[{v_c_tmp(i // 2)}], v[{v_c(vgpr_index + i)}]")
-                                else:
-                                    self._emit(f"v_cvt_f16_f32_sdwa v[{v_c_tmp(i // 2)}], v[{v_c(vgpr_index + i)}] dst_sel:WORD_1")
-                        elif ctrl.precision == 'int8':
-                            # CAUSION: must have a symbol s_0xff and pre inited with 0xff
+                    elif ctrl.precision == 'int8':
+                        # CAUSION: must have a symbol s_0xff and pre inited with 0xff
+                        if not smem_trans:
+                            for i in range(sst // 4):
+                                vi = vgpr_index + 4 * i
+                                self._emit(f"v_and_b32 v[{v_c(vi + 0)}], s[s_0xff], v[{v_c(vi + 0)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 1)}], s[s_0xff], v[{v_c(vi + 1)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 2)}], s[s_0xff], v[{v_c(vi + 2)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 3)}], 24, v[{v_c(vi + 3)}]")
+
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 1)}],  8, v[{v_c(vi + 1)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 2)}], 16, v[{v_c(vi + 2)}]")
+                                self._emit(f"v_or_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 3)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 1)}], v[{v_c(vi + 2)}]")
+                                for j in range(4):
+                                    accvgpr_consume_list.append(vi + j)
+                        else:
+                            # CAUSION: ds_write_b8 already clamp the value for us. if need other clamp methor, need further consideration
                             pass
 
-                        
-                        idword = sst_offset // (data_byte * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1))
-                        if ctrl.vector_write_out == 1:
-                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset) + \
-                                f"   ; idword:{idword}({idword // ctrl.dotx_m.macro_tile_n},{idword % ctrl.dotx_m.macro_tile_n}),  {sst_m_offset}x{sst_n_offset} |" + \
-                                f" /{(AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)}, i_mr:{i_mr}, x  i_nr:{i_nr}")
-                        else:
-                            self._emit(inst_sst(v_co_sst(), v_c_tmp(), sst_offset) + \
-                                f' ; idword:{idword}({idword // ctrl.dotx_m.macro_tile_n},{idword % ctrl.dotx_m.macro_tile_n}), {sst_m_offset}x{sst_n_offset}, i_mr:{i_mr}, x  i_nr:{i_nr}')
-                        #vgpr_index_acc += (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
-
-                        if ctrl.feat_vgpr_collapse:
-                            if vgpr_index_acc + ctrl.vector_write_out >= ctrl.get_vgpr_usage():
-                                vgpr_index_acc = 0
-                            else:
-                                vgpr_index_acc += ctrl.vector_write_out # to have a balanced vgpr reusage
-                        else:
-                            vgpr_index_acc += AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M     # can always use granularity to increase acc vgpr index
+                    if not smem_trans:
+                        self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset))
+                    else:
+                        for i in range(vgpr_last_dim_num):
+                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cdm.macro_tile_n * data_byte))
 
                 def emit_calculate_out_offset_itr_m(i_m, i_m0, i_m1):
-                    # self._emit(f"; i_m:{i_m},  i_m0:{i_m0}xi_m1:{i_m1}")
-                    comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1})"
+                    comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1}, fold_m:{ctrl.vector_fold_m})"
                     if ctrl.co_m_update_os_functor:
                         self._emit(ctrl.co_m_update_os_functor(i_m, i_m0, i_m1))        # TODO: better sigture
                     else:
                         if s_gemm_m0_stride is not None:
-                            self._emit(f"s_mul_i32 s[{s_tmp6(2)}], {i_m0}, s[{s_gemm_m0_stride}]")
-                            self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m1}, s[{s_gemm_m1_stride}]")
-                            self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(2)}], s[{s_tmp6(3)}]" + comments)
-                            if not no_s_out_offset:
-                                self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_out_offset}], s[{s_out_offset_itr()}] ")
+                            assert False, "not supported"
                         else:
                             '''
                             no m0_stride, which indicate m0, m1 is continuous, no need to deal with m0, m1 seperately
                             '''
-                            if i_m == 0:
+                            i_m_fold = i_m // ctrl.vector_fold_m
+
+                            if i_m_fold == 0:
                                 if no_s_out_offset:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], 0" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index()}], {igemm_base.igemm_log2(ctrl.vector_write_out)}, v[{v_co_sub_m_index()}]")
-                                        self._emit(f"v_add_nc_u32 v[{v_cur_k()}], s[{s_block_gtc_ik()}], v[{v_co_sub_m_index()}]")
+                                        if ctrl.vector_fold_m != 1:
+                                            # attention!, we lshrrev v_co_sub_m_index before. here we need to shift back
+                                            self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index()}], {utility_log2(ctrl.vector_fold_m)}, v[{v_co_sub_m_index()}]")
+                                        self._emit(v_add_nc_u32(v_cur_k(), s_block_gtc_ik(), v_co_sub_m_index()))
                                         self._emit(f"v_mov_b32 v[{v_tmp0()}], v[{v_cur_k()}]")
                                 else:
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_out_offset}]" + comments)
-                            elif i_m == 1:
+                            elif i_m_fold == 1:
                                 if no_s_out_offset:
-                                    #self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * data_byte}, s[{s_gemm_m1_stride}]")
-                                    #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
                                     self._emit(f"s_mov_b32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out}, v[{v_cur_k()}]")
+                                        self._emit(v_add_nc_u32(v_tmp0(), i_m, v_cur_k()))
                                 else:
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_gemm_m1_stride}], s[{s_out_offset}]" + comments)
                             else:
                                 if no_s_out_offset:
-                                    #self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {(i_m * ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * data_byte}, s[{s_gemm_m1_stride}]")
-                                    #self._emit(f"s_add_u32 s[{s_out_offset_itr()}], {(i_m * ctrl.dotx_m.block_size() % ctrl.dotx_m.macro_tile_n) * ctrl.vector_write_out * data_byte}, s[{s_out_offset_itr()}]")
-                                    self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m}, s[{s_gemm_m1_stride}]" + comments)
+                                    self._emit(f"s_mul_i32 s[{s_out_offset_itr()}], {i_m_fold}, s[{s_gemm_m1_stride}]" + comments)
                                     if s_k is not None:
-                                        self._emit(f"v_add_nc_u32 v[{v_tmp0()}], {(ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n) * i_m * ctrl.vector_write_out}, v[{v_cur_k()}]")
+                                        self._emit(v_add_nc_u32(v_tmp0(), i_m, v_cur_k()))
                                 else:
-                                    self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m}, s[{s_gemm_m1_stride}]")
+                                    self._emit(f"s_mul_i32 s[{s_tmp6(3)}], {i_m_fold}, s[{s_gemm_m1_stride}]")
                                     self._emit(f"s_add_u32 s[{s_out_offset_itr()}], s[{s_tmp6(3)}], s[{s_out_offset}]" + comments)
 
                 # emit first calculation before wait for store
-                emit_calculate_out_offset_itr_m(0, 0, 0)
+                emit_calculate_out_offset_itr_m(m_index_start_per_group, 0, 0)
 
                 issue_list = []
-                num_sld_total_dword = ctrl.get_num_dword_per_group() // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out)
-                
-                # mask out some threads
-                valid_treads = ctrl.dotx_m.macro_tile_n * (ctrl.dotx_m.block_size() // ctrl.dotx_m.macro_tile_n)
-                num_sld_total_dword = num_sld_total_dword // (valid_treads / ctrl.dotx_m.block_size())
-                num_sld_total_dword = int(num_sld_total_dword)
-                
+                num_sld_total_dword = ctrl.get_num_dword_per_group() // sld_vec
+
                 self._emit(f"s_waitcnt lgkmcnt(0)")
                 self._emit(f"s_barrier")
-                
-                if v_store_mask != None:
-                    self._emit(v_cmpx_gt_u32("vcc", valid_treads, v_store_mask))
-                
+                self._emit(f"v_cmpx_gt_u32 256, v[v_coalescing_store_index]")
                 for i_d in range(num_sld_total_dword):
-                    vgpr_index = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
-                    sld_offset = i_d * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * ctrl.block_size  * data_byte
-                    # self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
-                    issue_list.append(inst_sld.get_issues(sld_offset))
+                    issue_list.append(1)    # always issue 1
 
-                total_lgkmcnt = utility_flatten_list_accumulate(issue_list)
-                issues_per_ssgroup = 8 if inst_sld_byte == 16 or inst_sld_byte == 8 else 8
-
-                assert MAX_LGKMCNT % issues_per_ssgroup == 0
-
-                # we need further split based on issues_per_ssgroup
-                split_sld_groups = (total_lgkmcnt + issues_per_ssgroup - 1) // issues_per_ssgroup
-                num_issues_per_ssgroup = len(issue_list) // split_sld_groups
-                assert (ctrl.get_num_dword_per_group() // ctrl.vector_write_out) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
-                num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // ctrl.vector_write_out // split_sld_groups
-                
-                num_gst_per_ssgroup = num_gst_per_ssgroup // (valid_treads / ctrl.dotx_m.block_size())
-                num_gst_per_ssgroup = int(num_gst_per_ssgroup)
-
-                assert num_sld_total_dword % split_sld_groups == 0, "TODO: need adjust"
-                num_sld_per_ssgroup = num_sld_total_dword // split_sld_groups
+                gst_desc = make_naive_tensor_descriptor_packed([split_sld_groups, num_gst_per_ssgroup])
+                gst_coord = [0, 0]
 
                 for i_ssgroup in range(split_sld_groups):
-                    
-                    self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_per_ssgroup:{num_sld_per_ssgroup}")
-                    for i_d in range(num_sld_per_ssgroup):
-                        vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
-                        sld_offset = (i_d + i_ssgroup * num_sld_per_ssgroup) * (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else ctrl.vector_write_out) * valid_treads  * data_byte
+                    self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}")
+                    for i_d in range(num_sld_issues_per_ssgroup):
+                        vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                        sld_coord = [i_ssgroup, i_d, 0, 0, 0]
+                        sld_offset = sld_co_desc.calculate_offset(sld_coord)
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
-                    current_issue_list = issue_list[i_ssgroup * num_issues_per_ssgroup : (i_ssgroup+1) * num_issues_per_ssgroup]
+                    current_issue_list = issue_list[i_ssgroup * num_sld_issues_per_ssgroup : (i_ssgroup+1) * num_sld_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        #self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
-                        self._emit(v_cmp_eq_i32("vcc", 1, v_store_flag))
-                        self._emit(f"s_and_saveexec_b32 s[{s_tmp6(4)}], vcc_lo")
-                    self._emit(f";   store to global, m index start")
+                        self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
+                    self._emit(f";   store to global, m index start:{m_index_start_per_group}")
 
                     for i_gst in range(num_gst_per_ssgroup):
-                        i_gst_flat = i_gst + i_ssgroup * num_gst_per_ssgroup
+                        # i_gst_flat = i_gst + i_ssgroup * num_gst_per_ssgroup
+                        i_gst_flat = gst_desc.calculate_offset(gst_coord)
                         if len(current_issue_list) != 0:
-                            if i_gst % (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1) == 0:
-                                i_issues =  (i_gst // (AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M if ctrl.vector_write_out == 1 else 1)) + 1
+                            if i_gst % (sld_vec if gst_vec == 1 else 1) == 0:
+                                i_issues =  (i_gst // (sld_vec if gst_vec == 1 else 1)) + 1
                                 i_issue_list = current_issue_list[i_issues:]
                                 i_issue_cnt = utility_flatten_list_accumulate(i_issue_list) if len(i_issue_list) != 0 else 0
                                 self._emit(f"s_waitcnt lgkmcnt({i_issue_cnt})")
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
-                            self._emit(v_cmp_gt_u32("vcc", s_k(), v_tmp0()))
-                            self._emit(f"s_and_saveexec_b32 s[{s_tmp6(4)}], vcc_lo")
+                            #self._emit(f"v_cmp_gt_u32 vcc, s[{s_k()}], v[{v_tmp0()}]")
+                            self._emit(v_cmp_gt_u32('vcc', s_k(), v_tmp0()))
+                            self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
-                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * ctrl.vector_write_out//(4 // data_byte)
-                        lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and ctrl.vector_write_out == 1 else 0
+                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec//(4 // data_byte)
+                        lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and gst_vec == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
                             self._emit(f"s_or_b64 exec, exec, s[{s_tmp6(4)}:{s_tmp6(5)}]")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_reset_functor())
-                        if ctrl.precision == 'int8' and ctrl.vector_write_out == 1:
+                        if ctrl.precision == 'int8' and gst_vec == 1:
                             if i_gst_flat % 4 != 3:
                                 self._emit(f"v_lshrrev_b32 v[{v_c(cur_vgpr_gst)}], 8, v[{v_c(cur_vgpr_gst)}]")
 
-                        if i_gst_flat != (ctrl.get_num_dword_per_group() // (valid_treads / ctrl.dotx_m.block_size()) // ctrl.vector_write_out) - 1:
-                            i_m = i_gst + 1
-                            # self._emit(f"; >>>>>> i_m :{i_m}, i_gst:{i_gst}, m_index_per_group[i_group][0]:{m_index_per_group[i_group][0]}")
+                        if i_gst_flat != (ctrl.get_num_dword_per_group() // gst_vec) - 1:
+                            gst_coord = move_tensor_coordinate(gst_desc, gst_coord, [1, 1])
+                            # TODO: this is ugly. better unify this by further transpose of gemm_co_post_desc
+                            next_i_ssgroup = gst_coord[0]
+                            if sst_vec != 1 and sld_vec != 1:
+                                next_i_gst = gst_coord[1] * gst_vec
+                            else:
+                                next_i_gst = gst_coord[1]            # in this case, gst_vec actually is the same as last dim of gemm_co_post_desc
+                            gemm_coord_next = [next_i_ssgroup, next_i_gst, 0, 0, 0]
 
-                            emit_calculate_out_offset_itr_m(i_m, 0, 0)
+                            # print(f'gemm_coord_next:{gemm_coord_next}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}, gst_vec:{gst_vec}, num_gst_per_ssgroup:{num_gst_per_ssgroup}, split_sld_groups:{split_sld_groups}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}, i_gst_flat:{i_gst_flat}')
+                            im_next = gemm_co_post_desc.calculate_offset(gemm_coord_next) // ctrl.cdm.macro_tile_n
+                            # print(f'gemm_coord_next:{gemm_coord_next},{gemm_co_post_desc.calculate_offset(gemm_coord_next)}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}, num_gst_per_ssgroup:{num_gst_per_ssgroup}, gst_vec:{gst_vec}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
+
+                            emit_calculate_out_offset_itr_m(im_next, 0, 0)
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
                         self._emit(f"s_mov_b64 exec, -1")
 
-                if ctrl.feat_vgpr_collapse:
-                    agpr_per_store_group = ctrl.dotx_m.total_acc_c() // ctrl.coalescing_groups
-                    assert ctrl.get_vgpr_usage() == ((agpr_per_store_group + split_sld_groups - 1) // split_sld_groups), f"vgpr_usage:{ctrl.get_vgpr_usage()}, agpr_per_store_group:{agpr_per_store_group}, split_sld_groups:{split_sld_groups}"
+                # move slice window for next loop
+                move_grouped_slice_start_coord(gemm_co_prev_desc, gemm_co_split_lengths)
+                move_grouped_slice_start_coord(gemm_co_post_desc, gemm_co_split_lengths)
+                move_grouped_slice_start_coord(vgpr_co_desc, vgpr_co_split_lengths)
+            
             # do some assert
-            #agpr_consume_list.sort()
-            #assert agpr_consume_list == [x for x in range(ctrl.dotx_m.total_acc_c())], f"agpr_consume_list:{agpr_consume_list}"
-            #if agpr_consume_list != [x for x in range(ctrl.dotx_m.total_acc_c())]:
-            #    self._emit(f"; [WRONG!] agpr ~~~~~~~~, {agpr_consume_list}")
+            accvgpr_consume_list.sort()
+            assert accvgpr_consume_list == [x for x in range(ctrl.cdm.total_acc_c())], f"accvgpr_consume_list:{accvgpr_consume_list}"
+
         return self._get_deferred()

@@ -71,7 +71,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             assert not tunable.tensor_a_pass_through, "currently not support pass through a while do merge e"
 
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
-        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS and not igemm_use_lanegroup_thread_mapping(self.tunable):
             assert (self.tunable.gemm_m_per_thread * self.tunable.gemm_m_repeat) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by thread m {self.tunable.gemm_m_per_thread}x{self.tunable.gemm_m_repeat}"
 
@@ -97,6 +97,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
             ctrl_coalescing_store.adjust_optimal_coalescing_groups()        # in m1_m0 order, must adjust 
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
+
+        elif self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS and igemm_use_lanegroup_thread_mapping(self.tunable):
+            ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
+                                    self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n, self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
+                                    self.tunable.block_size // self.tunable.wave_size, self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n, self.tunable.precision)
 
         else:
             def flatten(x):

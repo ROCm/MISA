@@ -336,7 +336,7 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);      // TODO: this is just a reference compare
-            // printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -636,7 +636,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int fastest_id = -1;
     if(driver->driver_mode == driver_mode_normal){
         int unique_index = 0;
-        std::vector<igemm_gtc_tunable_t> unique_tunables;   // don't use this when gks_iterative is zero, since it will be just the same as the original tunables
+        std::vector<igemm_gtc_tunable_t> unique_tunables;
         for(int i=0; i<tunables.size(); i++){
             if(need_skip_due_to_macro_tile_boundary(&tunables[i]))
                 continue;
@@ -666,6 +666,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
             else{
                 result_t result = launch(&tunables[i], unique_index, -1);
+                unique_tunables.push_back(tunables[i]);
+                unique_tunables.back().gemm_k_global_split = result.gks;
                 if(result.duration_ms < fastest_result.duration_ms){
                     fastest_result = result;
                     fastest_id = unique_index;
@@ -1036,7 +1038,7 @@ int main(int argc, char **argv) {
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
                 printf(", valid:%s", is_valid ? "y" : "n");
-                //if(assert_when_invalid) assert(is_valid);
+                if(assert_when_invalid) assert(is_valid);
             }
         };
 
