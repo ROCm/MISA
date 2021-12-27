@@ -58,7 +58,7 @@ class dotx_main_loop_t(mc_base_t):
                 self._emit(node.expr_asm_codes())
             return
         elif isinstance(node, dotx_core_loop_node):
-            print(node.name)
+            #print(node.name)
             self.emit_graph(node.first)
             self.emit_graph(node.second)
             return
