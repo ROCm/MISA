@@ -32,7 +32,7 @@ from .igemm_base import *
 IGEMM_FWD_GTC_NCHW_PACK_IN_FLAG = 0
 # IGEMM_FWD_GTC_NCHW_P_INTERLEAVE_GLD = False     # p tensor interleave
 IGEMM_FWD_GTC_NCHW_ACCVGPR_UNIFIED = True   # used in gfx90a
-IGEMM_FWD_GTC_NCHWC_DEBUG = 0
+IGEMM_FWD_GTC_NCHWC_DEBUG = 1
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -139,7 +139,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             else:
                 self.declare_arg("s_in_offset")     # use this as c itr, since other dimension of input is voffset
             self.declare_arg("v_wei_os")
-            self.declare_arg("s_move_slice_k_stride_c")                  # this is indeed gemm_k * data_byte, same for input/weight
+            self.declare_arg("s_move_slice_k_stride_c")        
+            self.declare_arg("s_move_slice_k_stride_gemm_k")    # this is gemm_k * data_byte
             self.options = options
 
         def name(self):
@@ -151,7 +152,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self._emit(f"s_addc_u32 s[{self.s_in_base(1)}], 0, s[{self.s_in_base(1)}]")
             else:
                 self._emit(f"s_add_u32 s[{self.s_in_offset()}],  s[{self.s_move_slice_k_stride_c()}], s[{self.s_in_offset()}]")
-            self._emit(f"v_add_nc_u32 v[{self.v_wei_os()}], s[{self.s_move_slice_k_stride_c()}], v[{self.v_wei_os()}]")
+            self._emit(f"v_add_nc_u32 v[{self.v_wei_os()}], s[{self.s_move_slice_k_stride_gemm_k()}], v[{self.v_wei_os()}]")
             self._emit_empty_line()
 
     class macro_move_slice_window_block_wise_t(macro_base_t):
@@ -440,6 +441,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.s_block_gtc_inb            = sym_t("s_block_gtc_inb"           , sseq(1))
 
             self.s_move_slice_k_stride_gemm_k   = sym_t("s_move_slice_k_stride_gemm_k"  , sseq(1))
+            
+            self.s_move_slice_k_stride_c    = sym_t("s_move_slice_k_stride_c"  , sseq(1))
 
             self.s_knum                     = sym_t("s_knum"                    , 3)
 
@@ -456,13 +459,14 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.s_move_slice_k_y           = sym_t("s_move_slice_k_y"          , sseq(1))
             self.s_move_slice_k_x           = sym_t("s_move_slice_k_x"          , sseq(1))
             self.s_move_slice_k_c           = sym_t("s_move_slice_k_c"          , sseq(1))
-            self.s_diff_in_os_acc_c_y_x     = sym_t("s_diff_in_os_acc_c_y_x"    , self.s_block_gtc_ig.value)
-            self.s_diff_in_os_ovf_y_acc_c   = sym_t("s_diff_in_os_ovf_y_acc_c"  , 0)
-            self.s_diff_in_os_ovf_x_acc_y   = sym_t("s_diff_in_os_ovf_x_acc_y"  , self.s_dim_br.value)
-            self.s_diff_in_iwi_acc_x        = sym_t("s_diff_in_iwi_acc_x"       , self.s_dim_mp.value)
-            self.s_diff_in_iwi_ovf_x        = sym_t("s_diff_in_iwi_ovf_x"       , self.s_dim_np.value)
-            self.s_diff_in_ihi_acc_y        = sym_t("s_diff_in_ihi_acc_y"       , self.s_pad_w.value)
-            self.s_y_x_c                    = sym_t("s_y_x_c"                   , self.s_pad_h.value)
+            if outer.tunable.nxe != 0:
+                self.s_diff_in_os_acc_c_y_x     = sym_t("s_diff_in_os_acc_c_y_x"    , self.s_block_gtc_ig.value)
+                self.s_diff_in_os_ovf_y_acc_c   = sym_t("s_diff_in_os_ovf_y_acc_c"  , 0)
+                self.s_diff_in_os_ovf_x_acc_y   = sym_t("s_diff_in_os_ovf_x_acc_y"  , self.s_dim_br.value)
+                self.s_diff_in_iwi_acc_x        = sym_t("s_diff_in_iwi_acc_x"       , self.s_dim_mp.value)
+                self.s_diff_in_iwi_ovf_x        = sym_t("s_diff_in_iwi_ovf_x"       , self.s_dim_np.value)
+                self.s_diff_in_ihi_acc_y        = sym_t("s_diff_in_ihi_acc_y"       , self.s_pad_w.value)
+                self.s_y_x_c                    = sym_t("s_y_x_c"                   , self.s_pad_h.value)
 
             self.s_kitr                     = sym_t("s_kitr"                    , 1)
             if outer.tunable.precision == 'int8':
@@ -1102,11 +1106,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit_empty_line()
         self._emit(f"; calculate index")
 
-        self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_y()}], s[{s.s_y()}], 24")
-        self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_x()}], s[{s.s_x()}], 24")
-        self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_c()}], s[{s.s_c()}], 24")
-        self._emit(f"s_and_b32 s[{s.s_y()}], s[{s.s_tmp()}], s[{s.s_y()}]")
-        self._emit(f"s_and_b32 s[{s.s_x()}], s[{s.s_tmp()}], s[{s.s_x()}]")
+        if self.tunable.nxe != 0:
+            self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_y()}], s[{s.s_y()}], 24")
+            self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_x()}], s[{s.s_x()}], 24")
+            self._emit(f"s_lshr_b32 s[{s.s_move_slice_k_c()}], s[{s.s_c()}], 24")
+            self._emit(f"s_and_b32 s[{s.s_y()}], s[{s.s_tmp()}], s[{s.s_y()}]")
+            self._emit(f"s_and_b32 s[{s.s_x()}], s[{s.s_tmp()}], s[{s.s_x()}]")
         self._emit(f"s_and_b32 s[{s.s_c()}], s[{s.s_tmp()}], s[{s.s_c()}]")
         # calculate stride, not shift data byte yet
         # input
@@ -1146,8 +1151,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         if self.tunable.gemm_k_global_split:
             self._emit(f"s_lshr_b32 s[{s.s_knum()}], s[{s.s_wei_stride_k()}], s[{s.s_gemmk_split()}]")
         else:
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_y()}]")
-            self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_tmp()}], s[{s.s_c()}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_y()}]")
+                self._emit(f"s_mul_i32 s[{s.s_knum()}], s[{s.s_tmp()}], s[{s.s_c()}]")
+            else:
+                self._emit(f"s_mov_b32 s[{s.s_knum()}], s[{s.s_c()}]")
 
         # pad gemm_m, gemm_n
         self._emit(f"s_mul_i32 s[{s.s_dim_br()}], s[{s.s_ho() if self.tunable.nxe != 0 else s.s_hi()}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}]")
@@ -1265,6 +1273,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_add_nc_u32 v[{v.v_in_ihi_list(0)}], v[{v.v_in_ihi_list(0)}], v[{v.v_sst_a_os()}]")
             self._emit(f"v_mul_lo_u32 v[{v.v_sld_a_os()}], s[{s.s_dilation_w()}], v[{v.v_gtc_ix()}]")
             self._emit(f"v_add_nc_u32 v[{v.v_in_iwi_list(0)}], v[{v.v_in_iwi_list(0)}], v[{v.v_sld_a_os()}]")
+        else:
+            self._emit(f"v_mov_b32 v[{v.v_gtc_ic()}], v[{v.v_gtc_iec()}]")
 
         self._emit(f"v_cmp_gt_u32  s[{s.s_n()}], v[{v.v_in_in()}]")
         self._emit(f"v_cndmask_b32 v[{v.v_tmp()}], 0, 1")
@@ -1408,10 +1418,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], s[{s.s_tmp()}]")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x31014000")
-            self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_y()}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_x()}], s[{s.s_y()}]")
             self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_k()}], {self.tunable.vector_c}")
             self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], s[{s.s_c()}]")
-            self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], s[{s.s_tmp()}]")
+            if self.tunable.nxe != 0:
+                self._emit(f"s_mul_i32 s[{s.s_tmp(2)}], s[{s.s_tmp(2)}], s[{s.s_tmp()}]")
             self._emit(f"s_mul_i32 s[{s.s_tmp()}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
             self._emit(f"s_mul_hi_u32 s[{s.s_tmp(1)}], s[{s.s_block_gtc_ig()}], s[{s.s_tmp(2)}]")
             self._emit(f"s_sub_u32 s[{s.s_p_wei(2)}], s[{s.s_p_wei(2)}], s[{s.s_tmp()}]")
@@ -1602,10 +1614,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"v_bfe_u32 v[{v.v_wei_flag(0)}], v[{v.v_wei_tmp_pack()}], {0}, 1")
         w_flag_cnt = w_flag_cnt + 1
 
-        # if self.tunable.nxe != 0:
-        #     self._emit(f"s_mov_b32 s[{s.s_tmp()}], {na_ce1}")
-        #     self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_tmp()}], {igemm_log2(data_byte)}")
-        # else:
+        if self.tunable.nxe != 0:
+            pass
+        else:
+            self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_in_stride_c()}], {data_byte * na_ce}")
+            
         self._emit(f"s_lshl_b32 s[{s.s_move_slice_k_stride_gemm_k()}], s[{s.s_k()}], {igemm_log2(self.tunable.gemm_k_per_block * data_byte)}")
 
         if w_flag_cnt < nk_per_thread:
@@ -1699,9 +1712,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 with self._deferred_context():
                     self._emit(m_move_slice_window(
                                 s.s_p_in() if self.tunable.tensor_a_pass_through else s.s_in_offset(),
-                                *(v.v_gtc_ic_itr(), v.v_in_flag(), v.v_wei_flag(), v.v_tmp(), s.s_c()) if self.is_pad_c() else (),
                                 v.v_wei_os(),
-                                s.s_move_slice_k_stride_c()))
+                                s.s_move_slice_k_stride_c(),
+                                s.s_move_slice_k_stride_gemm_k()))
                 return self._get_deferred()
 
         def move_slice_window_a():
