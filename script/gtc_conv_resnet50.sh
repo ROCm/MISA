@@ -107,9 +107,11 @@ echo "=============================================================== resnet50 b
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n 256 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+if [ "${ARCH}" != "gfx1030" ]; then
+    ./out/conv_driver.exe $CONV -n 256 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+fi
 sleep 2
-exit 1
+#exit 1
 echo "=============================================================== resnet50 bs128"
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
@@ -133,4 +135,6 @@ echo "=============================================================== resnet50 b
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n 128 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+if [ "${ARCH}" != "gfx1030" ]; then
+    ./out/conv_driver.exe $CONV -n 128 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+fi
