@@ -61,7 +61,13 @@ echo IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_TENSOR_CAST_HSACO=out/igemm_gtc_tensor_cast.hsaco
-export IGEMM_SCLK_MHZ=2450
+if [ "${ARCH}" = "gfx90a" ]; then
+    export IGEMM_SCLK_MHZ=1700
+elif [ "${ARCH}" = "gfx908" ]; then
+    export IGEMM_SCLK_MHZ=1502
+elif [ "${ARCH}" = "gfx1030" ] ; then
+    export IGEMM_SCLK_MHZ=2450
+fi
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
