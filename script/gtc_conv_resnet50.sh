@@ -61,7 +61,13 @@ echo IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_HSACO=out/igemm_${DIR}_gtc_${ARCH}${LAYOUT_HSACO}${PREC_HSACO}.hsaco
 export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_TENSOR_CAST_HSACO=out/igemm_gtc_tensor_cast.hsaco
-export IGEMM_SCLK_MHZ=2450
+if [ "${ARCH}" = "gfx90a" ]; then
+    export IGEMM_SCLK_MHZ=1700
+elif [ "${ARCH}" = "gfx908" ]; then
+    export IGEMM_SCLK_MHZ=1502
+elif [ "${ARCH}" = "gfx1030" ] ; then
+    export IGEMM_SCLK_MHZ=2450
+fi
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
@@ -101,9 +107,11 @@ echo "=============================================================== resnet50 b
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n 256 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+if [ "${ARCH}" != "gfx1030" ]; then
+    ./out/conv_driver.exe $CONV -n 256 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+fi
 sleep 2
-exit 1
+#exit 1
 echo "=============================================================== resnet50 bs128"
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
@@ -127,4 +135,6 @@ echo "=============================================================== resnet50 b
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 128 -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n 128 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+if [ "${ARCH}" != "gfx1030" ]; then
+    ./out/conv_driver.exe $CONV -n 128 -c 3 -H 230 -W 230 -k 64 -y 7 -x 7 -p 0 -q 0 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
+fi
