@@ -54,6 +54,11 @@ class ctrl_coalescing_store_dotx_t(object):
         self.feat_co_m_flag_check = False   # custom flag check, not using internal check
         self.co_m_flag_check_start_functor = None
         self.co_m_flag_check_reset_functor = None
+        self.div_v_const_func = None
+        self.div_rem_v_const_func = None
+        
+    def get_gemmn_ratio(self):
+        return self.cdm.block_size() / ((self.cdm.block_size() // self.cdm.macro_tile_n) * self.cdm.macro_tile_n)
 
     def get_m_split_lengths(self):
         l_mg = self.get_length_m_groups()
@@ -352,6 +357,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             split_sld_groups = gemm_co_post_sld_desc.get_length(0) // num_sld_issues_per_ssgroup
             assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
             num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // gst_vec // split_sld_groups
+            
+            # recompute num sst when ctrl.cdm.block_size() % gemm_n_size != 0
+            gemmn_ratio = ctrl.get_gemmn_ratio()
+            num_gst_per_ssgroup = int(num_gst_per_ssgroup * gemmn_ratio)
 
             gemm_co_post_sld_2_desc = make_transform_tensor_descriptor(gemm_co_post_sld_desc,
                                     make_tuple( trans_unmerge([split_sld_groups, num_sld_issues_per_ssgroup]),
@@ -391,6 +400,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             split_sld_groups = gemm_m_post_thread_length // num_sld_issues_per_ssgroup
             assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
             num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // gst_vec // split_sld_groups
+            
+            # recompute num sst when ctrl.cdm.block_size() % gemm_n_size != 0
+            gemmn_ratio = ctrl.cdm.block_size() / ((ctrl.cdm.block_size() // gemm_n_size) * gemm_n_size)
+            num_gst_per_ssgroup = int(num_gst_per_ssgroup * gemmn_ratio)
 
             #assert num_sld_issues_per_ssgroup * split_sld_groups * gemm_m_post_cluster_length == gemm_co_2d_desc.get_length(0), f'{num_sld_issues_per_ssgroup} * {split_sld_groups} * {gemm_m_post_cluster_length} == {gemm_co_2d_desc.get_length(0)}'
             assert gemm_n_post_thread_length * gemm_n_post_cluster_length == gemm_co_2d_desc.get_length(1)
@@ -426,7 +439,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 assert t_mt % l_mt == 0
                 self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(sst_vec * (t_mt // l_mt))}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
                 self._emit(f"v_lshlrev_b32 v[{v_tmp4} + 1],  {utility_log2(sst_vec)}, v[{v_gemm_in}]    ; expand n by {sst_vec}")
-                self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n * sst_vec)}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sst_vec:{sst_vec}")
+                #self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n * sst_vec)}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sst_vec:{sst_vec}")
+                self._emit(f"v_mad_u32_u24 v[{v_co_sst}], v[{v_tmp4}], {ctrl.cdm.macro_tile_n * sst_vec}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sst_vec:{sst_vec}")
             else:
                 assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
                 assert t_mt % l_mt == 0
@@ -479,7 +493,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 with self._deferred_context():
                     while True:
                         if gemm_m_cluster_length > 1:
-                            self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(gemm_n_post_cluster_length)}, v[{v_tid}]  ; {gemm_n_post_cluster_length} cluster per gemm_n")
+                            #self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(gemm_n_post_cluster_length)}, v[{v_tid}]  ; {gemm_n_post_cluster_length} cluster per gemm_n")
+                            ctrl.div_v_const_func(v_co_sub_m_index, v_tid, gemm_n_post_cluster_length, v_tmp4)
                             if sst_vec != 1:
                                 self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(sst_vec)}, v[{v_co_sub_m_index}] ; expand m by sst_vec:{sst_vec}")
                         else:
@@ -538,7 +553,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; init_co_sub_n_index dotx")
             if sst_vec != 1 and sld_vec != 1:
                 assert sst_vec == sld_vec
-                self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tid}]")
+                ctrl.div_rem_v_const_func(v_co_sub_n_index, None, v_tid, ctrl.cdm.macro_tile_n, v_tmp2)
+                #self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(sld_vec)}, v[{v_tid}]")
                 self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tmp2}]")
@@ -725,11 +741,13 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 emit_calculate_out_offset_itr_m(m_index_start_per_group, 0, 0)
 
                 issue_list = []
-                num_sld_total_dword = ctrl.get_num_dword_per_group() // sld_vec
+                gemmn_ratio = ctrl.get_gemmn_ratio()
+                num_sld_total_dword = int(ctrl.get_num_dword_per_group() // sld_vec * gemmn_ratio)
 
                 self._emit(f"s_waitcnt lgkmcnt(0)")
                 self._emit(f"s_barrier")
-                self._emit(f"v_cmpx_gt_u32 256, v[v_coalescing_store_index]")
+                valid_threads = int(ctrl.cdm.block_size() / gemmn_ratio)
+                self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
                 for i_d in range(num_sld_total_dword):
                     issue_list.append(1)    # always issue 1
 
@@ -745,7 +763,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_sld_issues_per_ssgroup : (i_ssgroup+1) * num_sld_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        self._emit(v_cmpx_eq_u32("vcc", 1, v_store_flag))
+                        self._emit(v_cmp_eq_i32("vcc", 1, v_store_flag))
+                        self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                     self._emit(f";   store to global, m index start:{m_index_start_per_group}")
 
                     for i_gst in range(num_gst_per_ssgroup):
@@ -775,7 +794,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             if i_gst_flat % 4 != 3:
                                 self._emit(f"v_lshrrev_b32 v[{v_c(cur_vgpr_gst)}], 8, v[{v_c(cur_vgpr_gst)}]")
 
-                        if i_gst_flat != (ctrl.get_num_dword_per_group() // gst_vec) - 1:
+                        if i_gst_flat != (int(ctrl.get_num_dword_per_group() * gemmn_ratio) // gst_vec) - 1:
                             gst_coord = move_tensor_coordinate(gst_desc, gst_coord, [1, 1])
                             # TODO: this is ugly. better unify this by further transpose of gemm_co_post_desc
                             next_i_ssgroup = gst_coord[0]

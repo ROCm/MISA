@@ -63,6 +63,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self.wei_thread_copy_ndim = len(wei_thread_copy_index)
         assert self.in_thread_copy_ndim in (0, 1, 2)
         assert self.wei_thread_copy_ndim in (0, 1, 2)
+        
+        self.div_v_const_func = div_u32_vi_t(mc)
+        self.div_rem_v_const_func = div_rem_u32_vi_t(mc)
 
         self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
@@ -86,6 +89,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             ctrl_coalescing_store.vector_store_m = self.tunable.vector_c                      # TODO: some cases this can be set to other value
             ctrl_coalescing_store.vector_fold_m = self.tunable.vector_c
             ctrl_coalescing_store.block_size = self.tunable.block_size
+            
+            ctrl_coalescing_store.div_v_const_func = self.div_v_const_func
+            ctrl_coalescing_store.div_rem_v_const_func = self.div_rem_v_const_func
 
             self.coalescing_store = igemm_coalescing_store_dotx_t(mc, ctrl_coalescing_store)
 
