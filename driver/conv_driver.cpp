@@ -265,7 +265,7 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
 }
 
 template <typename Dst_T, typename Src_T>
-void block_wise_tensor_copy(Dst_T *p_dst, Src_T *p_src, int tid, int block_size, int total_size)
+void block_wise_tensor_copy(Dst_T *p_dst, Src_T *p_src, int tid, size_t block_size, size_t total_size)
 {
     for (int i = tid; i < total_size; i += block_size) {
         p_dst[i] = static_cast<Dst_T>(p_src[i]);
