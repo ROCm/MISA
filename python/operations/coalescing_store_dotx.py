@@ -747,7 +747,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 self._emit(f"s_waitcnt lgkmcnt(0)")
                 self._emit(f"s_barrier")
                 valid_threads = int(ctrl.cdm.block_size() / gemmn_ratio)
-                self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
+                
                 for i_d in range(num_sld_total_dword):
                     issue_list.append(1)    # always issue 1
 
@@ -756,6 +756,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
                 for i_ssgroup in range(split_sld_groups):
                     self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}")
+                    self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
                     for i_d in range(num_sld_issues_per_ssgroup):
                         vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                         sld_coord = [i_ssgroup, i_d, 0, 0, 0]
