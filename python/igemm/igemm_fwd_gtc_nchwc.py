@@ -1763,6 +1763,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
                 fctrl.precision                   = self.tunable.precision
                 fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
+                fctrl.local_prefetch_num_m        = self.tunable.local_prefetch_num_m
 
                 fctrl.lds_k_pack                  = self.tunable.vector_c
 
