@@ -31,7 +31,7 @@ import subprocess
 
 # NOTE: if following set to True, better parse '-V 0' to conv_driver
 # since result can never be correct
-MC_DEBUG_IGNORE_LDS_IO = False
+MC_DEBUG_IGNORE_LDS_IO = True
 MC_DEBUG_IGNORE_GLOBAL_IO = False
 
 class mc_get_version_t(object):
