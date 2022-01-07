@@ -601,17 +601,17 @@ class inst_ds_read_t(object):
         return '' if offset == 0 else 'offset:{}'.format(offset)
     def __call__(self, vdst, vaddr, offset):
         if self.bytes == 1:
-            return '{str_ds_read}_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_u8 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}'
         if self.bytes == 2:
-            return '{str_ds_read}_u16 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_u16 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}'
         if self.bytes == 4:
-            return '{str_ds_read}_b32 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_b32 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}'
         if self.bytes == 8:
-            return '{str_ds_read}_b64 v[{}:{}+1], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_b64 v[{vdst}:{vdst}+1], v[{vaddr}] {self.get_offset(offset)}'
         if self.bytes == 12:
-            return '{str_ds_read}_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_b96 v[{vdst}:{vdst}+2], v[{vaddr}] {self.get_offset(offset)}'
         if self.bytes == 16:
-            return '{str_ds_read}_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return f'{str_ds_read}_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}'
         assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1
@@ -629,20 +629,20 @@ class inst_ds_write_t(object):
 
     def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
         if self.bytes == 1:
-            return '{str_ds_write}_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            return f'{str_ds_write}_b8 v[{vaddr}], v[{vdata}] {self.get_offset(offset)}'
         if self.bytes == 2:
             if lo_hi == 0:
-                return '{str_ds_write}_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+                return f'{str_ds_write}_b16 v[{vaddr}], v[{vdata}] {self.get_offset(offset)}'
             else:
-                return '{str_ds_write}_b16_d16_hi v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+                return f'{str_ds_write}_b16_d16_hi v[{vaddr}], v[{vdata}] {self.get_offset(offset)}'
         if self.bytes == 4:
-            return '{str_ds_write}_b32 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            return f'{str_ds_write}_b32 v[{vaddr}], v[{vdata}] {self.get_offset(offset)}'
         if self.bytes == 8:
-            return '{str_ds_write}_b64 v[{}], v[{}:{}+1] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return f'{str_ds_write}_b64 v[{vaddr}], v[{vdata}:{vdata}+1] {self.get_offset(offset)}'
         if self.bytes == 12:
-            return '{str_ds_write}_b96 v[{}], v[{}:{}+2] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return f'{str_ds_write}_b96 v[{vaddr}], v[{vdata}:{vdata}+2] {self.get_offset(offset)}'
         if self.bytes == 16:
-            return '{str_ds_write}_b128 v[{}], v[{}:{}+3] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return f'{str_ds_write}_b128 v[{vaddr}], v[{vdata}:{vdata}+3] {self.get_offset(offset)}'
         assert False
 
     def get_issues(self, sst_offset = 0):
