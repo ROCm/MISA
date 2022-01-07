@@ -28,7 +28,7 @@ import sys
 from ..codegen import *
 
 CLOSE_BUFFER_LOAD = 1
-CLOSE_BUFFER_STORE = 0
+CLOSE_BUFFER_STORE = 1
 
 class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
