@@ -27,6 +27,8 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
+CLOSE_BUFFER_LOAD = 1
+
 class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, data_byte):
@@ -37,6 +39,24 @@ class inst_buffer_load_t(object):
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
+
+        if CLOSE_BUFFER_LOAD:
+            if self.data_byte == 1:
+                return f";buffer_load_ubyte v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 2:
+                return f";buffer_load_short_d16 v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 4:
+                return f";buffer_load_dword v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 8:
+                return f";buffer_load_dwordx2 v[{vdst}:{vdst}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 12:
+                return f";buffer_load_dwordx3 v[{vdst}:{vdst}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 16:
+                return f";buffer_load_dwordx4 v[{vdst}:{vdst}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+
+            assert False
+        else:
+            pass
 
         if self.data_byte == 1:
             return f"buffer_load_ubyte v[{vdst}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
