@@ -307,6 +307,8 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     double s1 = 0.0;
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
+    int print_every_pixel = env_get_int("PRINT_EVERY_PIXEL", 0);
+    int print_nrms = env_get_int("PRINT_NRMS", 0);
     int igemm_valid_float = env_get_int("VALID_FLOAT", 1);
     int dump_pred_dword = env_get_int("DUMP_PRED", 0);
     size_t pp_err = 0;
@@ -336,7 +338,8 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         if(igemm_per_pixel_check){
             double delta = ABS(ABS(ri - pi) / ri);      // TODO: this is just a reference compare
-            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
+            if(print_every_pixel)
+                printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
             if (delta > 3e-5) {
                 if(igemm_per_pixel_check_print){
                     if (pp_err < 100)
@@ -353,7 +356,8 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
     }
     double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
     double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
-    // printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
+    if(print_nrms)
+        printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
     return (computed_nrms < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)
@@ -387,7 +391,8 @@ static inline bool valid_vector(const float *ref, const T *pred, size_t n,
 
         }
     }
-    // printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
+    if(print_nrms)
+        printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
     return (sqrt(s0 / s1) < nrms)
 #ifdef PER_PIXEL_CHECK
            && (pp_err == 0)

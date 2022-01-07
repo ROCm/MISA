@@ -41,6 +41,7 @@ class ctrl_dotx_main_loop_t(object):
         self.lds_single_size             = 0                    # in byte, should be power of 2
         self.lds_buffer_num              = 2
         self.local_prefetch_num          = 1
+        self.local_prefetch_num_m        = 2
 
         # functor
         self.global_load_a_functor       = None
@@ -247,9 +248,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
 
         lds_single_size = ctrl.lds_single_size
         local_prefetch_num = ctrl.local_prefetch_num
+        local_prefetch_num_m = ctrl.local_prefetch_num_m
         
-        assert local_prefetch_num <= dotx_m.lanegroup_repeat_m or local_prefetch_num <= dotx_m.lanegroup_repeat_n, "prefetch too much"
-        assert not(local_prefetch_num < dotx_m.lanegroup_repeat_m and local_prefetch_num < dotx_m.lanegroup_repeat_n), "can not re-use prefetch for both side"
+        assert local_prefetch_num_m <= dotx_m.lanegroup_repeat_m or local_prefetch_num <= dotx_m.lanegroup_repeat_n, "prefetch too much"
+        assert not(local_prefetch_num_m < dotx_m.lanegroup_repeat_m and local_prefetch_num < dotx_m.lanegroup_repeat_n), "can not re-use prefetch for both side"
 
         # used as offset:x number. may some 
         lds_base_m = 0
@@ -335,7 +337,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             # compute index for three matrice
             i_rn = dotx_m.lanegroup_repeat_n - 1
             c_index = i_rm * thread_n + i_rn * 8
-            a_index = (i_rm % local_prefetch_num) * local_buffer_m
+            a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
             b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
             dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
@@ -356,7 +358,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         i_rn = dotx_m.lanegroup_repeat_n - 1
         i_rm = dotx_m.lanegroup_repeat_m - 1
         c_index = i_rm * thread_n + i_rn * 8
-        a_index = (i_rm % local_prefetch_num) * local_buffer_m
+        a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
         b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
         dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
         dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
@@ -375,7 +377,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             # compute index for three matrice
             i_rn = dotx_m.lanegroup_repeat_n - 1
             c_index = i_rm * thread_n + i_rn * 8
-            a_index = (i_rm % local_prefetch_num) * local_buffer_m
+            a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
             b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
             dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
@@ -419,9 +421,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         lds_width_m = data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack
         lds_width_n = data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack
         local_prefetch_num = ctrl.local_prefetch_num
+        local_prefetch_num_m = ctrl.local_prefetch_num_m
         
-        assert local_prefetch_num <= dotx_m.lanegroup_repeat_m or local_prefetch_num <= dotx_m.lanegroup_repeat_n, "prefetch too much"
-        assert not(local_prefetch_num < dotx_m.lanegroup_repeat_m and local_prefetch_num < dotx_m.lanegroup_repeat_n), "can not re-use prefetch for both side"
+        assert local_prefetch_num_m <= dotx_m.lanegroup_repeat_m or local_prefetch_num <= dotx_m.lanegroup_repeat_n, "prefetch too much"
+        assert not(local_prefetch_num_m < dotx_m.lanegroup_repeat_m and local_prefetch_num < dotx_m.lanegroup_repeat_n), "can not re-use prefetch for both side"
 
         # used as offset:x number. may some 
         lds_base_m = 0
@@ -451,12 +454,14 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         prefetch_a = []
         prefetch_b = []
         local_prefetch = []
-        for i_prefetch in range(local_prefetch_num):
+        for i_prefetch in range(local_prefetch_num_m):
             sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
             sld_a.expr_set_args(v_a(i_prefetch * local_buffer_m), v_sld_a_os(), lds_base_m + i_prefetch * lds_width_m_per_read)
+            prefetch_a.append(sld_a)
+            
+        for i_prefetch in range(local_prefetch_num):
             sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
             sld_b.expr_set_args(v_b(i_prefetch * local_buffer_n), v_sld_b_os(), lds_base_n + i_prefetch * lds_width_n_per_read)
-            prefetch_a.append(sld_a)
             prefetch_b.append(sld_b)
             
         local_prefetch[0:0] = prefetch_b
@@ -482,7 +487,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                 for i_rm in range(dotx_m.lanegroup_repeat_m):
                     # compute index for three matrice
                     c_index = i_rm * thread_n + i_rn * 8
-                    a_index = (i_rm % local_prefetch_num) * local_buffer_m
+                    a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
                     b_index = ((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
                     lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
                     if lgkmcnt != -1:
@@ -491,7 +496,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     
                     if i_rn == dotx_m.lanegroup_repeat_n - 1 and i_rm > 0:
                         sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
-                        sld_a.expr_set_args(v_a((i_rm - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k}*{lds_width_m}+{(i_rm+1)*lds_width_m_per_read}')
+                        sld_a.expr_set_args(v_a((i_rm - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k+1}*{lds_width_m}+{(i_rm-1)*lds_width_m_per_read}')
                         ds_waitcnt.push_new_vgpr(v_a((i_rm - 1) * local_buffer_m))
                         self.append_new_node(sld_a, stack, "after prefetch a")
                         
@@ -500,8 +505,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     self.append_new_node(dotx, stack, f"dotx node next {i_k, i_rm, i_rn}")
                     
             sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
-            sld_a.expr_set_args(v_a((local_prefetch_num - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(local_prefetch_num - 1)*lds_width_m_per_read}')
-            ds_waitcnt.push_new_vgpr(v_a(local_buffer_m))
+            sld_a.expr_set_args(v_a((local_prefetch_num_m - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(local_prefetch_num_m - 1)*lds_width_m_per_read}')
+            ds_waitcnt.push_new_vgpr(v_a((local_prefetch_num_m - 1) * local_buffer_m))
             sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
             sld_b.expr_set_args(v_b((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k + 1}*{lds_width_n}+{(local_prefetch_num - 1)*lds_width_n_per_read}')
             ds_waitcnt.push_new_vgpr(v_b((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num * local_buffer_n))
@@ -519,7 +524,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             for i_rm in range(repeat_m):
                 # compute index for three matrice
                 c_index = i_rm * thread_n + i_rn * 8
-                a_index = (i_rm % local_prefetch_num) * local_buffer_m
+                a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
                 b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
                 lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
                 if lgkmcnt != -1:

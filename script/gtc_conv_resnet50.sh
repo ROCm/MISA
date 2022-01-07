@@ -71,6 +71,8 @@ fi
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
+export IGEMM_RAND_INT=0
+export PRINT_NRMS=0
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
