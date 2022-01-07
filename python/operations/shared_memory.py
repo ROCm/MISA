@@ -29,7 +29,7 @@ import sys
 from ..codegen import *
 from .utility import *
 
-CLOSE_DS_READ = 0
+CLOSE_DS_READ = 1
 CLOSE_DS_WRITE = 0
 
 if CLOSE_DS_READ:
