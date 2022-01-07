@@ -27,7 +27,7 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-CLOSE_BUFFER_LOAD = 0
+CLOSE_BUFFER_LOAD = 1
 CLOSE_BUFFER_STORE = 0
 
 class inst_buffer_load_t(object):
