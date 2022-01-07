@@ -27,7 +27,8 @@ from __future__ import print_function
 import sys
 from ..codegen import *
 
-CLOSE_BUFFER_LOAD = 1
+CLOSE_BUFFER_LOAD = 0
+CLOSE_BUFFER_STORE = 0
 
 class inst_buffer_load_t(object):
     ''' TODO: this implementation always offen '''
@@ -83,6 +84,29 @@ class inst_buffer_store_t(object):
         else:
             soffset_str = f"s[{soffset}]"
 
+        if CLOSE_BUFFER_STORE:
+            if self.data_byte == 1:
+                if lo_hi == 0:
+                    return f"buffer_store_byte v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+                else:
+                    return f"buffer_store_byte_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 2:
+                if lo_hi == 0:
+                    return f"buffer_store_short v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+                else:
+                    return f"buffer_store_short_d16_hi v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 4:
+                return f"buffer_store_dword v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 8:
+                return f"buffer_store_dwordx2 v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 12:
+                return f"buffer_store_dwordx3 v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 16:
+                return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            assert False
+        else:
+            pass
+
         if self.data_byte == 1:
             if lo_hi == 0:
                 return f"buffer_store_byte v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
@@ -114,6 +138,15 @@ class inst_buffer_atomic_add_dword_t(object):
             soffset_str = "0"
         else:
             soffset_str = f"s[{soffset}]"
+
+        if CLOSE_BUFFER_STORE:
+            if self.data_byte == 4 and self.pack == 1:
+                return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            if self.data_byte == 4 and self.pack == 2:
+                return f"buffer_atomic_pk_add_f16 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            assert False, f"data_byte:{self.data_byte}, pack:{self.pack}"
+        else:
+            pass
 
         if self.data_byte == 4 and self.pack == 1:
             return f"buffer_atomic_add_f32 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"

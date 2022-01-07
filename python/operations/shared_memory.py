@@ -29,6 +29,19 @@ import sys
 from ..codegen import *
 from .utility import *
 
+CLOSE_DS_READ = 0
+CLOSE_DS_WRITE = 0
+
+if CLOSE_DS_READ:
+    str_ds_read = ";ds_read"
+else:
+    str_ds_read = "ds_read"
+
+if CLOSE_DS_WRITE:
+    str_ds_write = ";ds_write"
+else:
+    str_ds_write = "ds_write"
+
 class amdgpu_swap_sequencer_t(object):
     '''
     partial-transpose 2d matrix in register, by using swap.
@@ -290,25 +303,25 @@ class inst_ds_read2_likely_t(mc_base_t):
         def emit_read2_b32(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_read2_b32 v[{v_dst((2*n, 2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sld_base + sld_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
+                    self._emit(f'{str_ds_read}2_b32 v[{v_dst((2*n, 2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sld_base + sld_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
             return self._get_deferred()
 
         def emit_read2st64_b32(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_read2st64_b32 v[{v_dst((2*n,2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{((self.sld_base + sld_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
+                    self._emit(f'{str_ds_read}2st64_b32 v[{v_dst((2*n,2*n+1))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{((self.sld_base + sld_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
             return self._get_deferred()
 
         def emit_read2_b64(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_read2_b64 v[{v_dst((4*n, 4*n+3))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sld_base + sld_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
+                    self._emit(f'{str_ds_read}2_b64 v[{v_dst((4*n, 4*n+3))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sld_base + sld_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
             return self._get_deferred()
 
         def emit_read2st64_b64(sld_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_read2st64_b64 v[{v_dst((4*n,4*n+3))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sld_base + sld_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+                    self._emit(f'{str_ds_read}2st64_b64 v[{v_dst((4*n,4*n+3))}], v[{v_sld_os()}], offset0:{((self.sld_base + sld_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sld_base + sld_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
             return self._get_deferred()
 
         def likely_emit(sld_offset = 0):
@@ -401,143 +414,7 @@ class inst_ds_read2_likely_accumulate_offset_t(mc_base_t):
         # TODO: might have bug
         return self.ds_read2_likely.get_issues()
 
-
 '''
-class inst_ds_write2_likely_t(mc_base_t):   
-    def name(self):
-        return ''
-    def __init__(self, mc, tunable, vec_count, vec_byte, vec_stride, sst_base):
-        igemm_v4r1_dynamic_t.__init__(self, mc, tunable)
-        self.vec_count        = vec_count
-        self.vec_byte     = vec_byte
-        self.vec_stride   = vec_stride
-        (self.sst_base + sst_offset)     = sst_base
-    def likely_write2_b32(self):
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % 4 == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sst_base + sst_offset) // 4) + (self.vec_stride // 4) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2st64_b32(self):
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % (4*64) == 0) and (self.vec_stride % 4 == 0):
-            if ((self.sst_base + sst_offset) // (4*64)) + (self.vec_stride // (4*64)) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2_b64(self):
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % 8 == 0) and (self.vec_stride % 8 == 0):
-            if ((self.sst_base + sst_offset) // 8) + (self.vec_stride // 8) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def likely_write2st64_b64(self):
-        if self.vec_count % 2 != 0:
-            return False
-        if ((self.sst_base + sst_offset) % (8*64) == 0) and (self.vec_stride % (8*64) == 0):
-            if ((self.sst_base + sst_offset) // (8*64)) + (self.vec_stride // (8*64)) * (self.vec_count - 1) < 256:
-                return True
-        return False
-    def __call__(self, v_src, v_sst):
-        v_src = sym_t(v_src)
-        v_sst = sym_t(v_sst)
-        def emit_write2_fallback():
-            with self._deferred_context():
-                if self.vec_byte == 1:
-                    for n in range(self.vec_count):
-                        self._emit('ds_write_b32 v[{}], v[{}] offset:{}'.format(v_sst(), v_src(n), (self.sst_base + sst_offset) + n * self.vec_stride))
-                elif self.vec_byte == 2:
-                    if self.vec_count == 1:
-                        self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(1), (self.sst_base + sst_offset) ))
-                    else:
-                        swap_start = (self.vec_count*self.vec_byte) // 2
-                        for n in range(self.vec_count // 2):
-                            self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n + 1), v_src(2*n + swap_start)))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n), v_src(2*n + 1), (self.sst_base + sst_offset) + 2*n * self.vec_stride))
-                            self._emit('ds_write_b64 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(2*n + swap_start) , v_src(2*n + swap_start + 1), (self.sst_base + sst_offset) + (2*n+1) * self.vec_stride))
-                elif self.vec_byte == 4:
-                    if self.vec_count == 1:
-                        self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(), v_src(3), (self.sst_base + sst_offset) ))
-                    else:
-                        # though we use algorithm in swap_seq to interleave swap with ds_write, but it is still wise to use extra tmp register for swap is half speed
-                        swap_list = amdgpu_swap_sequencer_t(self.vec_count , self.vec_byte)()
-                        # print('self.vec_count:{}, self.vec_byte:{}, {}'.format(self.vec_count , self.vec_byte, swap_list))
-                        for n in range(self.vec_count):
-                            sw = swap_list[n]
-                            if type(sw) is str:
-                                pass
-                            else:
-                                for sw_item in sw:
-                                    self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(sw_item[0]) , v_src(sw_item[1]) ))
-                            self._emit('ds_write_b128 v[{}], v[{}:{}] offset:{}'.format(v_sst(), v_src(4*n), v_src(4*n + 3), (self.sst_base + sst_offset) + n * self.vec_stride))
-                else:
-                    assert False, 'unsupported vector size'
-            return self._get_deferred()
-
-        def emit_write2_b32():
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit('ds_write2_b32 v[{}], v[{}], v[{}], offset0:{}, offset1:{}'.format(v_sst(),
-                                v_src(2*n), v_src(2*n+1),
-                                ((self.sst_base + sst_offset)//4)+2*n*(self.vec_stride//4), ((self.sst_base + sst_offset)//4)+(2*n+1)*(self.vec_stride//4)))
-            return self._get_deferred()
-
-        def emit_write2st64_b32():
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit('ds_write2st64_b32 v[{}], v[{}], v[{}], offset0:{}, offset1:{}'.format(v_sst(),
-                                v_src(2*n), v_src(2*n+1),
-                                ((self.sst_base + sst_offset)//(4*64))+2*n*(self.vec_stride//(4*64)), ((self.sst_base + sst_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))))
-            return self._get_deferred()
-
-        def emit_write2_b64():
-            swap_start = (self.vec_count*self.vec_byte) // 2
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n+1), v_src(2*n+swap_start)))
-                    self._emit('ds_write2_b64 v[{}], v[{}:{}], v[{}:{}], offset0:{}, offset1:{}'.format(v_sst(),
-                            v_src(2*n), v_src(2*n+1), v_src(2*n+swap_start), v_src(2*n+swap_start+1),
-                            ((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8), ((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)))
-            return self._get_deferred()
-
-        def emit_write2st64_b64():
-            swap_start = (self.vec_count*self.vec_byte) // 2
-            with self._deferred_context():
-                for n in range(self.vec_count // 2):
-                    self._emit('v_swap_b32 v[{}], v[{}]'.format(v_src(2*n+1), v_src(2*n+swap_start)))
-                    self._emit('ds_write2st64_b64 v[{}], v[{}:{}], v[{}:{}], offset0:{}, offset1:{}'.format(v_sst(),
-                            v_src(2*n), v_src(2*n+1), v_src(2*n+swap_start), v_src(2*n+swap_start+1),
-                            ((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64)), ((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))))
-            return self._get_deferred()
-
-        def likely_emit():
-            if self.vec_byte == 1:
-                if self.likely_write2_b32():
-                    return emit_write2_b32()
-                if self.likely_write2st64_b32():
-                    return emit_write2st64_b32()
-                return emit_write2_fallback()
-            if self.vec_byte == 2:
-                if self.likely_write2_b64():
-                    return emit_write2_b64()
-                if self.likely_write2st64_b64():
-                    return emit_write2st64_b64()
-                return emit_write2_fallback()
-            return emit_write2_fallback()
-
-        return likely_emit()
-    def emit(self):
-        assert False, 'dont use emit of this'
-    def get_issues(self):
-        if self.vec_byte == 1:
-            if self.likely_write2_b32() or self.likely_write2st64_b32():
-                return self.vec_count // 2
-        if self.vec_byte == 2:
-            if self.likely_write2_b64() or self.likely_write2st64_b64():
-                return self.vec_count // 2
-        return self.vec_count
 '''
 
 class inst_ds_write2_oneshot_t(mc_base_t):
@@ -577,21 +454,21 @@ class inst_ds_write2_oneshot_t(mc_base_t):
             if self.vec_byte == 4:
                 if self.can_write2(offset0, offset1):
                     if self.can_write2st64(offset0, offset1):
-                        self._emit(f'ds_write2st64_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // (4*64)}, offset1:{offset1 // (4*64)}')
+                        self._emit(f'{str_ds_write}2st64_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // (4*64)}, offset1:{offset1 // (4*64)}')
                     else:
-                        self._emit(f'ds_write2_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // 4}, offset1:{offset1 // 4}')
+                        self._emit(f'{str_ds_write}2_b32 v[{v_addr}], v[{v_src0}], v[{v_src1}], offset0:{offset0 // 4}, offset1:{offset1 // 4}')
                 else:
-                    self._emit(f'ds_write_b32 v[{v_addr}], v[{v_src0}], offset:{offset0}')
-                    self._emit(f'ds_write_b32 v[{v_addr}], v[{v_src1}], offset:{offset1}')
+                    self._emit(f'{str_ds_write}_b32 v[{v_addr}], v[{v_src0}], offset:{offset0}')
+                    self._emit(f'{str_ds_write}_b32 v[{v_addr}], v[{v_src1}], offset:{offset1}')
             elif self.vec_byte == 8:
                 if self.can_write2(offset0, offset1):
                     if self.can_write2st64(offset0, offset1):
-                        self._emit(f'ds_write2st64_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // (8*64)}, offset1:{offset1 // (8*64)}')
+                        self._emit(f'{str_ds_write}2st64_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // (8*64)}, offset1:{offset1 // (8*64)}')
                     else:
-                        self._emit(f'ds_write2_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // 8}, offset1:{offset1 // 8}')
+                        self._emit(f'{str_ds_write}2_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1], v[{v_src1}:{v_src1}+1], offset0:{offset0 // 8}, offset1:{offset1 // 8}')
                 else:
-                    self._emit(f'ds_write_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1] offset:{offset0}')
-                    self._emit(f'ds_write_b64 v[{v_addr}], v[{v_src1}:{v_src1}+1] offset:{offset1}')
+                    self._emit(f'{str_ds_write}_b64 v[{v_addr}], v[{v_src0}:{v_src0}+1] offset:{offset0}')
+                    self._emit(f'{str_ds_write}_b64 v[{v_addr}], v[{v_src1}:{v_src1}+1] offset:{offset1}')
             else:
                 assert False
         return self._get_deferred()
@@ -662,25 +539,25 @@ class inst_ds_write2_likely_t(mc_base_t):
         def emit_write2_b32(sst_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{((self.sst_base + sst_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sst_base + sst_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
+                    self._emit(f'{str_ds_write}2_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{((self.sst_base + sst_offset)//4)+2*n*(self.vec_stride//4)}, offset1:{((self.sst_base + sst_offset)//4)+(2*n+1)*(self.vec_stride//4)}')
             return self._get_deferred()
 
         def emit_write2st64_b32(sst_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2st64_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{((self.sst_base + sst_offset)//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{((self.sst_base + sst_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
+                    self._emit(f'{str_ds_write}2st64_b32 v[{v_sst()}], v[{v_src(2*n)}], v[{v_src(2*n+1)}], offset0:{((self.sst_base + sst_offset)//(4*64))+2*n*(self.vec_stride//(4*64))}, offset1:{((self.sst_base + sst_offset)//(4*64))+(2*n+1)*(self.vec_stride//(4*64))}')
             return self._get_deferred()
 
         def emit_write2_b64(sst_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
+                    self._emit(f'{str_ds_write}2_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//8)+2*n*(self.vec_stride//8)}, offset1:{((self.sst_base + sst_offset)//8)+(2*n+1)*(self.vec_stride//8)}')
             return self._get_deferred()
 
         def emit_write2st64_b64(sst_offset = 0):
             with self._deferred_context():
                 for n in range(self.vec_count // 2):
-                    self._emit(f'ds_write2st64_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
+                    self._emit(f'{str_ds_write}2st64_b64 v[{v_sst()}], v[{v_src((4*n, 4*n+1))}], v[{v_src((4*n+2, 4*n+3))}], offset0:{((self.sst_base + sst_offset)//(8*64))+2*n*(self.vec_stride//(8*64))}, offset1:{((self.sst_base + sst_offset)//(8*64))+(2*n+1)*(self.vec_stride//(8*64))}')
             return self._get_deferred()
 
         def likely_emit(sst_offset = 0):
@@ -724,17 +601,17 @@ class inst_ds_read_t(object):
         return '' if offset == 0 else 'offset:{}'.format(offset)
     def __call__(self, vdst, vaddr, offset):
         if self.bytes == 1:
-            return 'ds_read_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
         if self.bytes == 2:
-            return 'ds_read_u16 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_u16 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
         if self.bytes == 4:
-            return 'ds_read_b32 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_b32 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
         if self.bytes == 8:
-            return 'ds_read_b64 v[{}:{}+1], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_b64 v[{}:{}+1], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 12:
-            return 'ds_read_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 16:
-            return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+            return '{str_ds_read}_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1
@@ -752,20 +629,20 @@ class inst_ds_write_t(object):
 
     def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
         if self.bytes == 1:
-            return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            return '{str_ds_write}_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 2:
             if lo_hi == 0:
-                return 'ds_write_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+                return '{str_ds_write}_b16 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
             else:
-                return 'ds_write_b16_d16_hi v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+                return '{str_ds_write}_b16_d16_hi v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 4:
-            return 'ds_write_b32 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
+            return '{str_ds_write}_b32 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 8:
-            return 'ds_write_b64 v[{}], v[{}:{}+1] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return '{str_ds_write}_b64 v[{}], v[{}:{}+1] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
         if self.bytes == 12:
-            return 'ds_write_b96 v[{}], v[{}:{}+2] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return '{str_ds_write}_b96 v[{}], v[{}:{}+2] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
         if self.bytes == 16:
-            return 'ds_write_b128 v[{}], v[{}:{}+3] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
+            return '{str_ds_write}_b128 v[{}], v[{}:{}+3] {}'.format(vaddr, vdata, vdata, self.get_offset(offset))
         assert False
 
     def get_issues(self, sst_offset = 0):
