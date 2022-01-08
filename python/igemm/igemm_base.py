@@ -430,7 +430,7 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.gemm_k_global_split == 1 and self.precision == 'bf16':
             self.use_fp32_atomic_add_for_fp16_data = 1
 
-        self.coalescing_store_groups = (self.gemm_m_per_block * self.gemm_n_per_block) // (self.lds_total // (amdgpu_precision_data_byte(self.precision) if self.use_fp32_atomic_add_for_fp16_data == 0 else 4))
+        self.coalescing_store_groups = math.ceil((self.gemm_m_per_block * self.gemm_n_per_block) / (self.lds_total // (amdgpu_precision_data_byte(self.precision) if self.use_fp32_atomic_add_for_fp16_data == 0 else 4)))
 
         if self.coalescing_store_groups == 0:
             self.coalescing_store_groups = 1        # this means LDS size is already bigger than c matrix all pixel. just use one group is ok
@@ -452,6 +452,14 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.lds_total = shrinked_lds_buffer_num * self.lds_single
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
+            c_vgpr_sst = self.lanegroup_repeat_m * self.lanegroup_tile_m // self.coalescing_store_groups
+            dotx_length_in_m = self.vector_c
+            assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
+            if c_vgpr_sst % dotx_length_in_m != 0:
+                self.coalescing_store_groups = self.lanegroup_repeat_m * self.lanegroup_tile_m // dotx_length_in_m
+                print(self.coalescing_store_groups)
+            
 
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.lds_total >= lds_a_pad + lds_b_pad:
