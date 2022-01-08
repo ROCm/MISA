@@ -458,8 +458,6 @@ class igemm_gtc_tunable_parameter_t(object):
             assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
             if c_vgpr_sst % dotx_length_in_m != 0:
                 self.coalescing_store_groups = self.lanegroup_repeat_m * self.lanegroup_tile_m // dotx_length_in_m
-                print(self.coalescing_store_groups)
-            
 
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.lds_total >= lds_a_pad + lds_b_pad:
