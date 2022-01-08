@@ -88,7 +88,9 @@ else
     exit 1
 fi
 
-./out/conv_driver.exe ${CONV} -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
+./out/conv_driver.exe ${CONV} -n 104 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
+
+#./out/conv_driver.exe ${CONV} -n 120 -c 256 -H 38 -W 38 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
 
 #./out/conv_driver.exe $CONV -n 1024 -c 1 -H 512 -W 1024 -k 1 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
 #./out/conv_driver.exe $CONV -n 4096 -c 1 -H 512 -W 1024 -k 1 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
