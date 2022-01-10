@@ -205,7 +205,7 @@ class macro_mdiv_u32_si_t(macro_base_t):
         self.declare_arg("s_numer")
         self.declare_arg("magic")
         self.declare_arg("shift")
-        self.declare_arg("s_tmp")
+        self.declare_arg("s_tmp")   # can be the same as s_quot
     def expr(self):
         self._emit(f"s_mul_hi_u32 s[{self.s_tmp()}], {self.magic()}, s[{self.s_numer()}]")
         self._emit(f"s_add_u32 s[{self.s_tmp()}], s[{self.s_tmp()}], s[{self.s_numer()}]")
@@ -234,13 +234,40 @@ class div_u32_vi_t(mc_base_t):
     
     def __call__(self, v_quot, v_numer, denom, v_tmp):
         assert isinstance(denom, int)
-        if utility_is_pow2(denom):
-            self._emit(f"v_lshrrev_b32 v[{v_quot}], {utility_log2(denom)}, v[{v_numer}]")
-        else:
-            d_magic, d_shift = utility_division_magic(denom)
-            mdiv_u32_vi = macro_mdiv_u32_vi_t(self.mc)
-            self._emit(mdiv_u32_vi(v_quot, v_numer, str(d_magic), str(d_shift), v_tmp))
-        
+        with self._deferred_context():
+            if utility_is_pow2(denom):
+                self._emit(f"v_lshrrev_b32 v[{v_quot}], {utility_log2(denom)}, v[{v_numer}]")
+            else:
+                d_magic, d_shift = utility_division_magic(denom)
+                mdiv_u32_vi = macro_mdiv_u32_vi_t(self.mc)
+                self._emit(mdiv_u32_vi(v_quot, v_numer, str(d_magic), str(d_shift), v_tmp))
+        return self._get_deferred()
+
+class div_u32_si_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def __call__(self, s_quot, s_numer, denom, s_tmp):
+        assert isinstance(denom, int)
+        with self._deferred_context():
+            if utility_is_pow2(denom):
+                self._emit(f"s_lshr_b32 s[{s_quot}], s[{s_numer}], {utility_log2(denom)}")
+            else:
+                d_magic, d_shift = utility_division_magic(denom)
+                mdiv_u32_si = macro_mdiv_u32_si_t(self.mc)
+                self._emit(mdiv_u32_si(s_quot, s_numer, str(d_magic), str(d_shift), s_tmp))
+        return self._get_deferred()
+
+class mul_u32_si_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def __call__(self, s_o, s_i, multiplier):
+        assert isinstance(multiplier, int)
+        with self._deferred_context():
+            if utility_is_pow2(multiplier):
+                self._emit(f"s_lshl_b32 s[{s_o}], s[{s_i}], {utility_log2(multiplier)}")
+            else:
+                self._emit(f"s_mul_i32 s[{s_o}], s[{s_i}], {multiplier}")
+        return self._get_deferred()
 
 class macro_mdiv_u32_rem_vi_t(macro_base_t):
     def name(self):
@@ -266,16 +293,18 @@ class div_rem_u32_vi_t(mc_base_t):
     
     def __call__(self, v_rem, v_quot, v_numer, denom, v_tmp):
         assert isinstance(denom, int)
-        if utility_is_pow2(denom):
-            if v_quot != None:
-                self._emit(f"v_lshrrev_b32 v[{v_quot}], {utility_log2(denom)}, v[{v_numer}]")
-            self._emit(f"v_and_b32 v[{v_rem}], {denom - 1}, v[{v_numer}]")
-        else:
-            if v_quot == None:
-                v_quot = v_tmp + "+1"
-            d_magic, d_shift = utility_division_magic(denom)
-            mdiv_rem_u32_vi = macro_mdiv_u32_rem_vi_t(self.mc)
-            self._emit(mdiv_rem_u32_vi(v_rem, v_quot, v_numer, str(d_magic), str(d_shift), str(denom), v_tmp))
+        with self._deferred_context():
+            if utility_is_pow2(denom):
+                if v_quot != None:
+                    self._emit(f"v_lshrrev_b32 v[{v_quot}], {utility_log2(denom)}, v[{v_numer}]")
+                self._emit(f"v_and_b32 v[{v_rem}], {denom - 1}, v[{v_numer}]")
+            else:
+                if v_quot == None:
+                    v_quot = v_tmp + "+1"
+                d_magic, d_shift = utility_division_magic(denom)
+                mdiv_rem_u32_vi = macro_mdiv_u32_rem_vi_t(self.mc)
+                self._emit(mdiv_rem_u32_vi(v_rem, v_quot, v_numer, str(d_magic), str(d_shift), str(denom), v_tmp))
+        return self._get_deferred()
 
 class macro_mdiv_u32_ss_t(macro_base_t):
     def name(self):

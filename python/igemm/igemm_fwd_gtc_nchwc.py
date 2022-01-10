@@ -1036,8 +1036,6 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         nk_per_thread = ta_k_vec_c // self.tunable.vector_c
 
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            m_mdiv_u32_si = macro_mdiv_u32_si_t(self.mc)
-            m_mdiv_u32_vi = macro_mdiv_u32_rem_vi_t(self.mc)
             m_mdiv_u32_vs = macro_mdiv_u32_rem_vs_t(self.mc)
             m_mdiv_u32_ss = macro_mdiv_u32_rem_ss_t(self.mc)
         else:
@@ -1046,13 +1044,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             m_int_div_rem_ss = macro_int_div_rem_ss_t(self.mc)
 
         s_dummy = sym_t("s_dummy")
-        
-        magic_n_per_block, shift_n_per_block = igemm_division_magic(self.tunable.gemm_n_per_block)
-        magic_m_per_block, shift_m_per_block = igemm_division_magic(self.tunable.gemm_m_per_block)
-        magic_n_per_block = str(magic_n_per_block)
-        shift_n_per_block = str(shift_n_per_block)
-        magic_m_per_block = str(magic_m_per_block)
-        shift_m_per_block = str(shift_m_per_block)
+
+        m_div_u32_si = div_u32_si_t(self.mc)
+        m_mul_u32_si = mul_u32_si_t(self.mc)
 
         k_pack = self.get_k_pack()
         k_pack_src_mat = k_pack
@@ -1167,33 +1161,20 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"s_mul_i32 s[{s.s_dim_br()}], s[{s.s_ho() if self.tunable.nxe != 0 else s.s_hi()}], s[{s.s_wo() if self.tunable.nxe != 0 else s.s_wi()}]")
         self._emit(f"s_mul_i32 s[{s.s_dim_nr()}], s[{s.s_n()}], s[{s.s_dim_br()}]")
         self._emit(f"s_add_u32 s[{s.s_tmp(2)}], {self.tunable.gemm_n_per_block - 1}, s[{s.s_dim_nr()}]")
-        if igemm_is_pow2(self.tunable.gemm_n_per_block):
-            self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp(2)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-            self._emit(f"s_lshl_b32 s[{s.s_dim_np()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        else:
-            self._emit(m_mdiv_u32_si(s.s_tmp(1), s.s_tmp(2), magic_n_per_block, shift_n_per_block, s.s_tmp()))
-            self._emit(f"s_mul_i32 s[{s.s_dim_np()}], s[{s.s_tmp(1)}], {self.tunable.gemm_n_per_block}")
+        
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_tmp(2), self.tunable.gemm_n_per_block, s.s_tmp()))
+        self._emit(m_mul_u32_si(s.s_dim_np(), s.s_tmp(1), self.tunable.gemm_n_per_block))
             
         self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_m_per_block - 1}, s[{s.s_k()}]")
-        if igemm_is_pow2(self.tunable.gemm_m_per_block):
-            self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-            self._emit(f"s_lshl_b32 s[{s.s_dim_mp()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-        else:
-            self._emit(m_mdiv_u32_si(s.s_tmp(1), s.s_tmp(), magic_m_per_block, shift_m_per_block, s.s_tmp()))
-            self._emit(f"s_mul_i32 s[{s.s_dim_mp()}], s[{s.s_tmp(1)}], {self.tunable.gemm_m_per_block}")
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_tmp(), self.tunable.gemm_m_per_block, s.s_tmp(1)))
+        self._emit(m_mul_u32_si(s.s_dim_mp(), s.s_tmp(1), self.tunable.gemm_m_per_block))
 
         self._emit_empty_line()
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}, source_access_order:{self.tunable.source_access_order}")
 
         # calculate group index
-        if igemm_is_pow2(self.tunable.gemm_m_per_block):
-            self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_dim_mp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-        else:
-            self._emit(m_mdiv_u32_si(s.s_tmp(), s.s_dim_mp(), magic_m_per_block, shift_m_per_block, s.s_tmp()))
-        if igemm_is_pow2(self.tunable.gemm_n_per_block):
-            self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_dim_np()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        else:
-            self._emit(m_mdiv_u32_si(s.s_tmp(1), s.s_dim_np(), magic_n_per_block, shift_n_per_block, s.s_tmp()))
+        self._emit(m_div_u32_si(s.s_tmp(), s.s_dim_mp(), self.tunable.gemm_m_per_block, s.s_tmp()))
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_dim_np(), self.tunable.gemm_n_per_block, s.s_tmp(1)))
         self._emit(f"s_mul_i32 s[0], s[{s.s_tmp(1)}], s[{s.s_tmp()}]")
         if self.tunable.gemm_k_global_split:
             # calculate block ic
@@ -1212,10 +1193,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"s_mov_b32 s[{s.s_bx()}], s[{s.s_tmp(4)}]")
 
         if self.tunable.source_access_order == IGEMM_GTC_TUNABLE_SOURCE_ACCESS_ORDER_GEMM_M_GEMM_N:
-            if igemm_is_pow2(self.tunable.gemm_n_per_block):
-                self._emit(f"s_lshr_b32 s[0], s[{s.s_dim_np()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-            else:
-                self._emit(m_mdiv_u32_si('0', s.s_dim_np(), magic_n_per_block, shift_n_per_block, s.s_tmp()))
+            self._emit(m_div_u32_si('0', s.s_dim_np(), self.tunable.gemm_n_per_block, s.s_tmp()))
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080000 ; offset:0, width:8")
                 self._emit(m_mdiv_u32_ss(s.s_tmp(4), s.s_tmp(5), s.s_bx(), s.s_magic_0(), s.s_tmp(3), '0', s.s_tmp()))
@@ -1223,10 +1201,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self._emit(m_int_div_rem_ss(s.s_tmp(4), s.s_tmp(5), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
 
         else:
-            if igemm_is_pow2(self.tunable.gemm_m_per_block):
-                self._emit(f"s_lshr_b32 s[0], s[{s.s_dim_mp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-            else:
-                self._emit(m_mdiv_u32_si('0', s.s_dim_mp(), magic_m_per_block, shift_m_per_block, s.s_tmp()))
+            self._emit(m_div_u32_si('0', s.s_dim_mp(), self.tunable.gemm_m_per_block, s.s_tmp()))
             if IGEMM_GTC_FEAT_MAGIC_DIVISION:
                 self._emit(f"s_bfe_u32 s[{s.s_tmp(3)}], s[{s.s_shift_pack_0()}], 0x00080000 ; offset:0, width:8")
                 self._emit(m_mdiv_u32_ss(s.s_tmp(5), s.s_tmp(4), s.s_bx(), s.s_magic_0(), s.s_tmp(3), '0', s.s_tmp()))
