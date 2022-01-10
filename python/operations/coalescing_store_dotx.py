@@ -494,7 +494,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     while True:
                         if gemm_m_cluster_length > 1:
                             #self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(gemm_n_post_cluster_length)}, v[{v_tid}]  ; {gemm_n_post_cluster_length} cluster per gemm_n")
-                            ctrl.div_v_const_func(v_co_sub_m_index, v_tid, gemm_n_post_cluster_length, v_tmp4)
+                            self._emit(ctrl.div_v_const_func(v_co_sub_m_index, v_tid, gemm_n_post_cluster_length, v_tmp4))
                             if sst_vec != 1:
                                 self._emit(f"v_lshlrev_b32 v[{v_co_sub_m_index}], {utility_log2(sst_vec)}, v[{v_co_sub_m_index}] ; expand m by sst_vec:{sst_vec}")
                         else:
@@ -553,7 +553,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; init_co_sub_n_index dotx")
             if sst_vec != 1 and sld_vec != 1:
                 assert sst_vec == sld_vec
-                ctrl.div_rem_v_const_func(v_co_sub_n_index, None, v_tid, ctrl.cdm.macro_tile_n, v_tmp2)
+                self._emit(ctrl.div_rem_v_const_func(v_co_sub_n_index, None, v_tid, ctrl.cdm.macro_tile_n, v_tmp2))
                 #self._emit(f"v_and_b32 v[{v_co_sub_n_index}], {ctrl.cdm.macro_tile_n - 1}, v[{v_tid}]")
             else:
                 self._emit(f"v_lshlrev_b32 v[{v_tmp2}], {utility_log2(sld_vec)}, v[{v_tid}]")

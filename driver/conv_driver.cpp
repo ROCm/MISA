@@ -917,7 +917,11 @@ int main(int argc, char **argv) {
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
             else if(in_layout == "NCHWC" && fil_layout == "CHWNC"){
-                assert(c % vector_c == 0);
+                if(c % vector_c != 0){
+                    dump_arg(&conv_args);
+                    printf("can't support c:%d with vec_c:%d\n", c, vector_c);
+                    exit(-1);
+                }
                 float* aux_in = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
                 float* aux_wei = (float*)malloc(static_cast<size_t>(k) * c * y * x * sizeof(float));
                 float* aux_out = (float*)malloc(static_cast<size_t>(n) * k * ho * wo * sizeof(float));
