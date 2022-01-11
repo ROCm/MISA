@@ -68,7 +68,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self.div_v_const_func = div_u32_vi_t(mc)
         self.div_rem_v_const_func = div_rem_u32_vi_t(mc)
 
-        self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
+        self.coalescing_store_groups = self.tunable.coalescing_store_groups#igemm_next_pow2(self.tunable.coalescing_store_groups)
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # TODO: add non dlops op
             assert (self.tunable.lanegroup_tile_m * self.tunable.lanegroup_repeat_m) % self.coalescing_store_groups == 0, \
