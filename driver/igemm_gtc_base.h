@@ -511,6 +511,70 @@ static inline size_t igemm_split_batch_size(const args_t *arg, int data_byte)
     return static_cast<size_t>(n) / splited_n;
 }
 
+#define SPATIAL_TILING_FLAG_TLE     0   // input section size should <= a value in var (hi|lo, hi->tile in h, lo->tile in w)
+#define SPATIAL_TILING_FLAG_TEQ     1   // tile size equal to value in var (hi|lo, hi->tile in h, lo->tile in w)
+
+typedef struct {
+    uint32_t tile_w {0};
+    uint32_t tile_h {0};
+} igemm_spatial_tiling_t;
+
+static inline uint32_t
+igemm_find_tile_size_with_upper_bound(uint32_t out_size, size_t upper_bound,
+                uint32_t stride, uint32_t dilation, uint32_t filter)
+{
+    // return tile size so that the required input tile(sec_in) is no larger than upper_bound
+    uint32_t n_tiles = 1; 
+    for( ; n_tiles <= out_size ; n_tiles++){
+        uint32_t tile_size = (out_size + n_tiles - 1) / n_tiles;
+        uint32_t sec_in = (tile_size - 1) * stride + 1 + dilation * (filter - 1);
+        if(sec_in <= upper_bound)
+            break;
+    }
+
+    return (out_size + n_tiles - 1) / n_tiles;
+}
+
+static inline igemm_spatial_tiling_t
+igemm_spatial_tiling(const args_t *arg, uint32_t flag, uint32_t var)
+{
+    int hi = arg->get_int("in_h");
+    int wi = arg->get_int("in_w");
+
+    int stride_h = arg->get_int("conv_stride_h");
+    int stride_w = arg->get_int("conv_stride_w");
+    int dilation_h = arg->get_int("dilation_h");
+    int dilation_w = arg->get_int("dilation_w");
+    int pad_h = arg->get_int("pad_h");
+    int pad_w = arg->get_int("pad_w");
+    int y = arg->get_int("fil_h");
+    int x = arg->get_int("fil_w");
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+    igemm_spatial_tiling_t tiling;
+
+    if(flag == SPATIAL_TILING_FLAG_TLE){
+        uint32_t size_h = var >> 16;
+        uint32_t size_w = var & 0xffff;
+
+        tiling.tile_h = igemm_find_tile_size_with_upper_bound(ho, size_h, stride_h, dilation_h, y);
+        tiling.tile_w = igemm_find_tile_size_with_upper_bound(wo, size_w, stride_w, dilation_w, x);
+    }
+    else if(flag == SPATIAL_TILING_FLAG_TEQ){
+        uint32_t size_h = var >> 16;
+        uint32_t size_w = var & 0xffff;
+
+        assert(size_h <= ho);
+        assert(size_w <= wo);
+
+        tiling.tile_h = size_h;
+        tiling.tile_w = size_w;
+    }
+
+    return tiling;
+}
+
 class igemm_driver_base_t{
 public:
     igemm_driver_base_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_) : 
@@ -601,6 +665,7 @@ public:
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks) = 0;
     virtual std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
+    virtual igemm_spatial_tiling_t get_spatial_tiling(const args_t *arg) = 0;
 
     virtual igemm_gtc_tunable_t heuristic_select_kernel(const args_t *arg) {return igemm_gtc_tunable_t{}; }
     virtual int heuristic_select_gks(const args_t *arg, const igemm_gtc_tunable_t *tunable) {return 0; }

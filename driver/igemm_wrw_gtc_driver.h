@@ -933,6 +933,10 @@ public:
             return gks_list;
         }
     }
+    igemm_spatial_tiling_t get_spatial_tiling(const args_t *arg) override
+    {
+        return igemm_spatial_tiling_t{};
+    }
 };
 
 #endif
