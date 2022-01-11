@@ -110,6 +110,7 @@ class spatial_tiling_t(mc_base_t):
             s_dilation  = sym_t(s_dilation)
 
         with self._deferred_context():
+            self._emit(f"; calculate spatial tiling")
             if ctrl.nxe != 0:
                 self._emit(f"s_mul_i32 s[{s_tos_out()}], s[{s_i_tile()}], s[{s_tile()}]")
                 self._emit(f"s_mul_i32 s[{s_tmp2()}], s[{s_tos_out()}], s[{s_stride()}]")
@@ -142,6 +143,7 @@ class spatial_tiling_t(mc_base_t):
 
                 self._emit(f"s_cmp_ge_u32 s[{s_tos_in()}], s[{s_size()}]")
                 self._emit(f"s_cmov_b32 s[{s_tos_in()}], 0")
+                self._emit_empty_line()
 
             else:
                 self._emit(f"s_sub_u32 s[{s_sec_in()}], s[{s_size()}], s[{s_tos_in()}]")
