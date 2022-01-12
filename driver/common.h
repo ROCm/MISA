@@ -31,6 +31,7 @@
 #include <float.h>
 #include <functional>
 #include <cstdint>
+#include <stdlib.h>
 
 typedef struct {
     int return_code     {-1};
@@ -180,5 +181,20 @@ class bfloat16
 
     std::uint16_t data_;
 };
+
+static inline int env_get_int(const char *var_name, int default_int) {
+    char *v = getenv(var_name);
+    int r = default_int;
+    if (v)
+        r = atoi(v);
+    return r;
+}
+
+static inline char *env_get_str(const char *var_name, char *default_str) {
+    char *v = getenv(var_name);
+    if (v)
+        return v;
+    return default_str;
+}
 
 #endif

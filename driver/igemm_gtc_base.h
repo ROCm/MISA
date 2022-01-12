@@ -554,6 +554,13 @@ igemm_spatial_tiling(const args_t *arg, uint32_t flag, uint32_t var)
 
     igemm_spatial_tiling_t tiling;
 
+    int tile_y = env_get_int("TILE_Y", 0);
+    int tile_x = env_get_int("TILE_X", 0);
+    if(tile_x != 0 && tile_y != 0){
+        flag = SPATIAL_TILING_FLAG_TEQ;
+        var = (tile_y << 16) | tile_x;
+    }
+
     if(flag == SPATIAL_TILING_FLAG_TLE){
         uint32_t size_h = var >> 16;
         uint32_t size_w = var & 0xffff;
