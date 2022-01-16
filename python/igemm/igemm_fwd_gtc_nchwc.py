@@ -1235,10 +1235,10 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(m_mdiv_u32_rem_ss(s.s_i_tile_h(), s.s_block_gtc_ig(), s.s_tmp(2), s.s_magic_6(), s.s_tmp(3), s.s_ntile_h(), s.s_tmp()))
 
         # calculate spatial tiling section size
-        self._emit(m_spatial_tiling(s.s_sec_hi(), s.s_tile_os_hi(), s.s_i_tile_h(), s.s_hi(), s.s_tile_h(), s.s_tmp(),
+        self._emit(m_spatial_tiling(s.s_sec_hi(), s.s_tile_os_hi(), s.s_i_tile_h(), s.s_hi(), s.s_ho() if self.tunable.nxe != 0 else s.s_hi(), s.s_tile_h(), s.s_tmp(),
                     *(s.s_sec_py(), s.s_sec_ho(), s.s_tile_os_ho(), s.s_y(), s.s_pad_h(), s.s_stride_h(), s.s_dilation_h()) \
                         if self.tunable.nxe != 0 else (None, None, None, None, None, None, None)))
-        self._emit(m_spatial_tiling(s.s_sec_wi(), s.s_tile_os_wi(), s.s_i_tile_w(), s.s_wi(), s.s_tile_w(), s.s_tmp(),
+        self._emit(m_spatial_tiling(s.s_sec_wi(), s.s_tile_os_wi(), s.s_i_tile_w(), s.s_wi(), s.s_wo() if self.tunable.nxe != 0 else s.s_wi(), s.s_tile_w(), s.s_tmp(),
                     *(s.s_sec_px(), s.s_sec_wo(), s.s_tile_os_wo(), s.s_x(), s.s_pad_w(), s.s_stride_w(), s.s_dilation_w()) \
                         if self.tunable.nxe != 0 else (None, None, None, None, None, None, None)))
 

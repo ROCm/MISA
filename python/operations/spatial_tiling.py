@@ -90,13 +90,14 @@ class spatial_tiling_t(mc_base_t):
         assert type(ctrl) is ctrl_spatial_tiling_t
         self.ctrl = ctrl
 
-    def __call__(self, s_sec_in, s_tos_in, s_i_tile, s_size, s_tile, s_tmp2,
+    def __call__(self, s_sec_in, s_tos_in, s_i_tile, s_size_in, s_size_out, s_tile, s_tmp2,
                 s_sec_pad, s_sec_out, s_tos_out, s_filter, s_pad, s_stride, s_dilation):
         ctrl = self.ctrl
         s_sec_in        = sym_t(s_sec_in)   # current section input size
         s_tos_in        = sym_t(s_tos_in)   # start offset along input image of this tile
         s_i_tile        = sym_t(s_i_tile)   # current index of tile
-        s_size          = sym_t(s_size)     # original image size
+        s_size_in       = sym_t(s_size_in)  # original input image size
+        s_size_out      = sym_t(s_size_out) # original output image size
         s_tile          = sym_t(s_tile)     # tile size to split this image
         s_tmp2          = sym_t(s_tmp2)
         if ctrl.nxe != 0:
@@ -119,7 +120,7 @@ class spatial_tiling_t(mc_base_t):
                 self._emit(f"s_mul_i32 s[{s_tos_in()}], s[{s_i_tile()}], s[{s_tile()}]")
 
             if ctrl.nxe != 0:
-                self._emit(f"s_sub_u32 s[{s_sec_out()}], s[{s_size()}], s[{s_tos_out()}]")
+                self._emit(f"s_sub_u32 s[{s_sec_out()}], s[{s_size_out()}], s[{s_tos_out()}]")
                 self._emit(f"s_cmp_ge_u32 s[{s_sec_out()}], s[{s_tile()}]")
                 self._emit(f"s_cmov_b32 s[{s_sec_out()}], s[{s_tile()}]")
 
@@ -136,17 +137,17 @@ class spatial_tiling_t(mc_base_t):
                 self._emit(f"s_cmov_b32 s[{s_sec_pad()}], s[{s_tmp2()}]")
                 self._emit(f"s_cmov_b32 s[{s_sec_in()}], s[{s_tmp2(1)}]")
 
-                self._emit(f"s_sub_u32 s[{s_tmp2()}], s[{s_tmp2(1)}], s[{s_size()}]")       # sec_hi -= tmp_sec_end_hi - h;
-                self._emit(f"s_cmp_le_u32 s[{s_tmp2(1)}], s[{s_size()}]")
+                self._emit(f"s_sub_u32 s[{s_tmp2()}], s[{s_tmp2(1)}], s[{s_size_in()}]")       # sec_hi -= tmp_sec_end_hi - h;
+                self._emit(f"s_cmp_le_u32 s[{s_tmp2(1)}], s[{s_size_in()}]")
                 self._emit(f"s_cmov_b32 s[{s_tmp2()}], 0")
                 self._emit(f"s_sub_u32 s[{s_sec_in()}], s[{s_sec_in()}], s[{s_tmp2()}]")
 
-                self._emit(f"s_cmp_ge_u32 s[{s_tos_in()}], s[{s_size()}]")
+                self._emit(f"s_cmp_ge_u32 s[{s_tos_in()}], s[{s_size_in()}]")
                 self._emit(f"s_cmov_b32 s[{s_tos_in()}], 0")
                 self._emit_empty_line()
 
             else:
-                self._emit(f"s_sub_u32 s[{s_sec_in()}], s[{s_size()}], s[{s_tos_in()}]")
+                self._emit(f"s_sub_u32 s[{s_sec_in()}], s[{s_size_in()}], s[{s_tos_in()}]")
                 self._emit(f"s_cmp_ge_u32 s[{s_sec_in()}], s[{s_tile()}]")
                 self._emit(f"s_cmov_b32 s[{s_sec_in()}], s[{s_tile()}]")
 
