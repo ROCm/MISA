@@ -41,8 +41,8 @@ void naive_2d_tiled_conv_iterator(
     size_t sx, size_t sy, size_t dx, size_t dy,
     tiled_conv_func_t tiled_conv)
 {
-    // 2d tiled iterator. each tile we call a section,
-    // since each section size (h/w) may actually different from tile size,
+    // 2d spatial-tile iterator. each tile is a spatial-slice(sps),
+    // since each spatial-slice size (h/w) may actually different from tile size,
     // because of original conv padding.
     // This iterator is responsible for calculating each sec size, and padding of each sec
     // ... to alow each tile becomea an independent conv, with h/w strided
@@ -51,11 +51,11 @@ void naive_2d_tiled_conv_iterator(
 
     assert((tile_w <= wo) && (tile_h <= ho));
 
-    // section size of output
-    size_t tmp_sec_ho = ho - (i_tile_h * tile_h);
-    size_t sec_ho = tmp_sec_ho < tile_h ? tmp_sec_ho : tile_h;
-    size_t tmp_sec_wo = wo - (i_tile_w * tile_w);
-    size_t sec_wo = tmp_sec_wo < tile_w ? tmp_sec_wo : tile_w;
+    // spatial-slice size of output
+    size_t tmp_sps_ho = ho - (i_tile_h * tile_h);
+    size_t sps_ho = tmp_sps_ho < tile_h ? tmp_sps_ho : tile_h;
+    size_t tmp_sps_wo = wo - (i_tile_w * tile_w);
+    size_t sps_wo = tmp_sps_wo < tile_w ? tmp_sps_wo : tile_w;
 
     // start idx along h/w of current tile
     size_t i_tho = i_tile_h * tile_h;
@@ -63,33 +63,33 @@ void naive_2d_tiled_conv_iterator(
     size_t i_thi = sy * i_tho - py;
     size_t i_twi = sx * i_two - px;
 
-    // section size of input, need further modify
-    size_t sec_hi = (sec_ho - 1) * sy + 1 + dy * (fy - 1);
-    size_t sec_wi = (sec_wo - 1) * sx + 1 + dx * (fx - 1);
+    // spatial-slice size of input, need further modify
+    size_t sps_hi = (sps_ho - 1) * sy + 1 + dy * (fy - 1);
+    size_t sps_wi = (sps_wo - 1) * sx + 1 + dx * (fx - 1);
 
-    size_t tmp_sec_end_hi = sec_hi + i_thi;
-    size_t tmp_sec_end_wi = sec_wi + i_twi;
+    size_t tmp_sps_end_hi = sps_hi + i_thi;
+    size_t tmp_sps_end_wi = sps_wi + i_twi;
 
-    size_t sec_py = 0;  // left pad for each sec
-    size_t sec_px = 0;  // left pad for each sec
+    size_t sps_py = 0;  // left pad for each sec
+    size_t sps_px = 0;  // left pad for each sec
 
-    // modify input section size according to left pad
-    if(tmp_sec_end_hi < sec_hi){
-        sec_py = sec_hi - tmp_sec_end_hi;
-        sec_hi = tmp_sec_end_hi;
+    // modify input spatial-slice size according to left pad
+    if(tmp_sps_end_hi < sps_hi){
+        sps_py = sps_hi - tmp_sps_end_hi;
+        sps_hi = tmp_sps_end_hi;
     }
 
-    if(tmp_sec_end_wi < sec_wi){
-        sec_px = sec_wi - tmp_sec_end_wi;
-        sec_wi = tmp_sec_end_wi;
+    if(tmp_sps_end_wi < sps_wi){
+        sps_px = sps_wi - tmp_sps_end_wi;
+        sps_wi = tmp_sps_end_wi;
     }
 
-    // modify input section size according to right pad
-    if(tmp_sec_end_hi > h)
-        sec_hi -= tmp_sec_end_hi - h;
+    // modify input spatial-slice size according to right pad
+    if(tmp_sps_end_hi > h)
+        sps_hi -= tmp_sps_end_hi - h;
 
-    if(tmp_sec_end_wi > w)
-        sec_wi -= tmp_sec_end_wi - w;
+    if(tmp_sps_end_wi > w)
+        sps_wi -= tmp_sps_end_wi - w;
 
     // tile index should start from 0
     if(i_thi < 0 || i_thi >= h)
@@ -97,13 +97,13 @@ void naive_2d_tiled_conv_iterator(
     if(i_twi < 0 || i_twi >= w)
         i_twi = 0;
 
-    // printf("tile_h:%lu, tile_w:%lu, sec_hi:%lu, sec_wi:%lu, sec_ho:%lu, sec_wo:%lu\n", tile_h, tile_w, sec_hi, sec_wi, sec_ho, sec_wo); fflush(stdout);
+    // printf("tile_h:%lu, tile_w:%lu, sps_hi:%lu, sps_wi:%lu, sps_ho:%lu, sps_wo:%lu\n", tile_h, tile_w, sps_hi, sps_wi, sps_ho, sps_wo); fflush(stdout);
 
     // accumulate offset of each tile, and parse to tiled_conv
     p_src_t tile_src = src + i_thi * w + i_twi;
     p_dst_t tile_dst = dst + i_tho * wo + i_two;
 
-    tiled_conv(tile_src, tile_dst, sec_hi, sec_wi, sec_ho, sec_wo, sec_py, sec_px);
+    tiled_conv(tile_src, tile_dst, sps_hi, sps_wi, sps_ho, sps_wo, sps_py, sps_px);
 }
 
 static inline void naive_tiled_conv_fwd_nchw(const float *src, const float *filter,
@@ -125,23 +125,23 @@ static inline void naive_tiled_conv_fwd_nchw(const float *src, const float *filt
     size_t tiles_h = (ho + ty - 1) / ty;
 
     auto tiled_conv = [&](const float * tile_src, float * tile_dst,
-                    size_t sec_hi, size_t sec_wi, size_t sec_ho, size_t sec_wo,
-                    size_t sec_py, size_t sec_px){
+                    size_t sps_hi, size_t sps_wi, size_t sps_ho, size_t sps_wo,
+                    size_t sps_py, size_t sps_px){
         for (size_t ig = 0; ig < group; ig++) {
             for (size_t in = 0; in < n; in++) {
                 for (size_t ik = 0; ik < k_per_group; ik++) {
-                    for (size_t i_sho = 0; i_sho < sec_ho; i_sho++) {
-                        for (size_t i_swo = 0; i_swo < sec_wo; i_swo++) {
+                    for (size_t i_sho = 0; i_sho < sps_ho; i_sho++) {
+                        for (size_t i_swo = 0; i_swo < sps_wo; i_swo++) {
                             double value = .0f;
                             size_t o_idx = in * k * ho * wo + ig * k_per_group * ho * wo + ik * ho * wo + i_sho * wo + i_swo;
                             for (size_t ic = 0; ic < c_per_group; ic++) {
                                 for (size_t ir = 0; ir < fy; ir++) {
-                                    size_t i_shi = sy * i_sho - sec_py + dy * ir;
-                                    if (i_shi < 0 || i_shi >= sec_hi)
+                                    size_t i_shi = sy * i_sho - sps_py + dy * ir;
+                                    if (i_shi < 0 || i_shi >= sps_hi)
                                         continue;
                                     for (size_t is = 0; is < fx; is++) {
-                                        size_t i_swi = sx * i_swo - sec_px + dx * is;
-                                        if (i_swi < 0 || i_swi >= sec_wi)
+                                        size_t i_swi = sx * i_swo - sps_px + dx * is;
+                                        if (i_swi < 0 || i_swi >= sps_wi)
                                             continue;
                                         size_t i_idx = in * c * h * w + ig * c_per_group * h * w + ic * h * w +
                                                 i_shi * w + i_swi;
