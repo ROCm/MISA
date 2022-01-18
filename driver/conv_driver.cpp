@@ -192,21 +192,6 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 #define REPEAT 8
 #define SCLK_MHZ 1283
 
-static inline int env_get_int(const char *var_name, int default_int) {
-    char *v = getenv(var_name);
-    int r = default_int;
-    if (v)
-        r = atoi(v);
-    return r;
-}
-
-static inline char *env_get_str(const char *var_name, char *default_str) {
-    char *v = getenv(var_name);
-    if (v)
-        return v;
-    return default_str;
-}
-
 template <typename T> T gen_rand(T fmin, T fmax) {
     static int init = 0;
     if (!init) {
@@ -563,6 +548,32 @@ std::string log_cmd(const args_t *arg, driverDataType_t driver_data_type, std::s
     return ss.str();
 }
 
+template<typename driver_t>
+std::string get_tiling_string(driver_t * driver, const args_t *conv_args)
+{
+    int hi = conv_args->get_int("in_h");
+    int wi = conv_args->get_int("in_w");
+
+    int stride_h = conv_args->get_int("conv_stride_h");
+    int stride_w = conv_args->get_int("conv_stride_w");
+    int dilation_h = conv_args->get_int("dilation_h");
+    int dilation_w = conv_args->get_int("dilation_w");
+    int pad_h = conv_args->get_int("pad_h");
+    int pad_w = conv_args->get_int("pad_w");
+    int y = conv_args->get_int("fil_h");
+    int x = conv_args->get_int("fil_w");
+
+    int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
+    int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
+
+    igemm_spatial_tiling_t tiling = driver->get_spatial_tiling(conv_args);
+    if((tiling.tile_h == 0 && tiling.tile_w == 0) || 
+        (tiling.tile_h == ho && tiling.tile_w == wo))
+        return "";
+    else{
+        return std::string("[") + std::to_string(tiling.tile_w) + "x" + std::to_string(tiling.tile_h) + "]";
+    }
+}
 
 template<typename driver_t, typename pre_func_t, typename post_func_t>
 void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::vector<igemm_gtc_tunable_t> & tunables, std::string direction,
@@ -603,7 +614,12 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         if(tunable->gemm_k_global_split){
             gks_string = "[" + std::to_string(result.gks) + "]";
         }
-        printf("%s, ", gks_string.c_str());
+        printf("%s", gks_string.c_str());
+        std::string tiling_string = get_tiling_string(driver, conv_args);
+        printf("%s", tiling_string.c_str());
+
+        printf(", ");
+        fflush(stdout);
 
         if (result.return_code != 0){
             printf("not applicable\n");

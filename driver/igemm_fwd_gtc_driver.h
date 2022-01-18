@@ -124,36 +124,39 @@ typedef struct {
 } __attribute__((packed)) igemm_fwd_gtc_nhwc_karg_t;
 
 typedef struct {
-    void *p_in;
-    void *p_wei;
-    void *p_out;
-    int hi;
-    int wi;
-    int n;
-    int k;                      // this is indeed k_per_group
-    int c;                      // this is indeed c_per_group
-    int ho;
-    int wo;
-    int stride_h;
-    int stride_w;
-    int dilation_h;
-    int dilation_w;
-    int pad_h;
-    int pad_w;
-    int y;
-    int x;
-    int group;
+    void    *p_in;
+    void    *p_wei;
+    void    *p_out;
+
+    uint32_t tile_hw;
+    uint32_t ntile_hw;
+    uint32_t hi;
+    uint32_t wi;
+    uint32_t n;
+    uint32_t k;                      // this is indeed k_per_group
+    uint32_t c;                      // this is indeed c_per_group
+    uint32_t group;
+    uint32_t ks;
+
+    uint32_t ho;
+    uint32_t wo;
+    uint32_t stride_hw;
+    uint32_t dilation_hw;
+    uint32_t pad_hw;
+    uint32_t wei_hw;
+    uint32_t move_slice_k;
+
 #if USE_MAGIC_DIV
-    uint32_t magic_0;                       // denom: (gemm_n + n_per_block - 1) / n_per_block
-    uint32_t magic_1;                       // denom: ho*wo
-    uint32_t magic_2;                       // denom: wo
-    uint32_t magic_3;                       // denom: (gemm_m/m_per_block) * (gemm_n/n_per_block)
-    uint32_t magic_4;                       // denom: x*c
-    uint32_t magic_5;                       // denom: c
+    uint32_t magic_0;
+    uint32_t magic_1;
+    uint32_t magic_2;
+    uint32_t magic_3;
+    uint32_t magic_4;
+    uint32_t magic_5;
+    uint32_t magic_6;
+    uint32_t magic_7;
     uint32_t shift_pack_0;
     uint32_t shift_pack_1;
-    uint32_t ks;
-    uint32_t __pack_0;
 #endif
 } __attribute__((packed)) igemm_fwd_gtc_nchwc_karg_t;
 
@@ -227,6 +230,42 @@ static void dump_fwd_karg(igemm_fwd_gtc_nhwc_karg_t * karg){
     std::cout<<std::endl;
 }
 
+static void dump_fwd_karg(igemm_fwd_gtc_nchwc_karg_t * karg){
+    std::cout<<"p_in:"         <<karg->p_in<<",";
+    std::cout<<"p_wei:"        <<karg->p_wei<<",";
+    std::cout<<"p_out:"        <<karg->p_out<<",";
+    std::cout<<"tile_hw:"      <<std::hex<<karg->tile_hw<<std::dec<<",";
+    std::cout<<"ntile_hw:"     <<std::hex<<karg->ntile_hw<<std::dec<<",";
+    std::cout<<"hi:"           <<karg->hi<<",";
+    std::cout<<"wi:"           <<karg->wi<<",";
+    std::cout<<"n:"            <<karg->n<<",";
+    std::cout<<"k:"            <<karg->k<<",";
+    std::cout<<"c:"            <<karg->c<<",";
+    std::cout<<"group:"        <<karg->group<<",";
+    std::cout<<"ks:"           <<karg->ks;
+    std::cout<<"ho:"           <<karg->ho<<",";
+    std::cout<<"wo:"           <<karg->wo<<",";
+    std::cout<<"stride_hw:"    <<std::hex<<karg->stride_hw<<std::dec<<",";
+    std::cout<<"dilation_hw:"  <<std::hex<<karg->dilation_hw<<std::dec<<",";
+    std::cout<<"pad_hw:"       <<std::hex<<karg->pad_hw<<std::dec<<",";
+    std::cout<<"wei_hw:"       <<std::hex<<karg->wei_hw<<std::dec<<",";
+    
+#if USE_MAGIC_DIV
+    std::cout<<"magic_0:"      <<karg->magic_0<<",";
+    std::cout<<"magic_1:"      <<karg->magic_1<<",";
+    std::cout<<"magic_2:"      <<karg->magic_2<<",";
+    std::cout<<"magic_3:"      <<karg->magic_3<<",";
+    std::cout<<"magic_4:"      <<karg->magic_4<<",";
+    std::cout<<"magic_5:"      <<karg->magic_5<<",";
+    std::cout<<"magic_6:"      <<karg->magic_6<<",";
+    std::cout<<"magic_7:"      <<karg->magic_7<<",";
+    std::cout<<"shift_pack_0:" <<karg->shift_pack_0<<",";
+    std::cout<<"shift_pack_1:" <<karg->shift_pack_1<<",";
+#endif
+    
+    std::cout<<std::endl;
+}
+
 class igemm_fwd_gtc_t : public igemm_driver_base_t {
 public:
     igemm_fwd_gtc_t(hipModule_t module_tensor_cast_, hipModule_t module_, driver_mode_t driver_mode_, driverDataType_t data_type_, int warmup_, int repeat_, bool verbose_)
@@ -283,6 +322,8 @@ public:
 
         int gemm_m = 0;
         int gemm_n = 0;
+        uint32_t ntile_h = 1;
+        uint32_t ntile_w = 1;
 
         if(tunable->tensor_layout == "nchw"){
             gemm_m = ((k/group + gemm_m_per_block -1)/gemm_m_per_block) * gemm_m_per_block;
@@ -292,12 +333,17 @@ public:
             // gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
             gemm_n = k / group;
         }else if (tunable->tensor_layout == "nchwc"){
+            igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
+            b = tiling.tile_h * tiling.tile_w;
             gemm_m = k / group;
             gemm_n = n * b;
+            ntile_h   = (ho + tiling.tile_h - 1) / tiling.tile_h;
+            ntile_w   = (wo + tiling.tile_w - 1) / tiling.tile_w;
         }else{
             assert(false);
         }
-        size_t grid_size = static_cast<size_t>(group) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
+        size_t grid_size = static_cast<size_t>(group) * ntile_h * ntile_w * 
+                                        utility_integer_divide_ceil(gemm_m, gemm_m_per_block) *
                                         utility_integer_divide_ceil(gemm_n, gemm_n_per_block);
         assert(grid_size <= 0xffffffffUL);
         return grid_size;
@@ -460,10 +506,6 @@ public:
             if((c / group) % vector_c != 0 || (k / group) % vector_c != 0){
                 return false;
             }
-
-            int gemm_m = k / group;
-            int gemm_n = n * b;
-            int gemm_k = (c / group) * y * x;
 
             if((nxe == 0) && !unit_conv){
                 return false;
@@ -649,52 +691,64 @@ public:
         } else if(tunable->tensor_layout == "nchwc") {
             igemm_fwd_gtc_nchwc_karg_t karg;
             int vector_c       = VECTOR_C_FP16;
+            igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
+            uint32_t ntile_h   = (ho + tiling.tile_h - 1) / tiling.tile_h;
+            uint32_t ntile_w   = (wo + tiling.tile_w - 1) / tiling.tile_w;
             karg.p_in          = p_in;
             karg.p_wei         = p_wei;
             karg.p_out         = p_out;
+            karg.tile_hw       = (tiling.tile_h << 16) | tiling.tile_w;
+            karg.ntile_hw      = (ntile_h << 16) | ntile_w;
             karg.hi            = hi;
             karg.wi            = wi;
             karg.n             = n;
             karg.k             = k / group;
             karg.c             = c / group / vector_c;
+            karg.group         = group;
+            karg.ks            = 1;
+
             karg.ho            = ho;
             karg.wo            = wo;
-            karg.stride_h      = stride_h;
-            karg.stride_w      = stride_w;
-            karg.dilation_h    = dilation_h;
-            karg.dilation_w    = dilation_w;
-            karg.pad_h         = pad_h;
-            karg.pad_w         = pad_w;
-            karg.y             = y;
-            karg.x             = x;
-            karg.group         = group;
+            karg.stride_hw     = (stride_h << 16) | stride_w;
+            karg.dilation_hw   = (dilation_h << 16) | dilation_w;
+            karg.pad_hw        = (pad_h << 16 ) | pad_w;
+            karg.wei_hw        = (y << 16) | x;
+            
             uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
             uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
             uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
-            karg.y = (s_move_slice_k_y << 24) | karg.y;
-            karg.x = (s_move_slice_k_x << 24) | karg.x;
-            karg.c = (s_move_slice_k_c << 24) | karg.c;
+            karg.move_slice_k  = (s_move_slice_k_y << 16) | (s_move_slice_k_x << 8) | s_move_slice_k_c;
+
 #if USE_MAGIC_DIV
-            int gemm_n = n * ho * wo;
+            int gemm_n = n * tiling.tile_h * tiling.tile_w;
             int gemm_m = k / group;
 
             magic_div_u32_t mdiv_0 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
-            magic_div_u32_t mdiv_1 = magic_div_u32_gen(ho*wo);
-            magic_div_u32_t mdiv_2 = magic_div_u32_gen(wo);
-            magic_div_u32_t mdiv_3 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block) * utility_integer_divide_ceil(gemm_n, gemm_n_per_block));
+            magic_div_u32_t mdiv_1 = magic_div_u32_gen(utility_integer_divide_ceil(gemm_m, gemm_m_per_block));
+            magic_div_u32_t mdiv_2 = magic_div_u32_gen(tiling.tile_h);
+            magic_div_u32_t mdiv_3 = magic_div_u32_gen(tiling.tile_w);
+            magic_div_u32_t mdiv_4 = magic_div_u32_gen(y);
+            magic_div_u32_t mdiv_5 = magic_div_u32_gen(x);
+            magic_div_u32_t mdiv_6 = magic_div_u32_gen(ntile_h);
+            magic_div_u32_t mdiv_7 = magic_div_u32_gen(ntile_w);
+
             karg.magic_0        = mdiv_0.magic;
             karg.magic_1        = mdiv_1.magic;
             karg.magic_2        = mdiv_2.magic;
             karg.magic_3        = mdiv_3.magic;
             karg.shift_pack_0   = magic_div_u32_pack_shift(mdiv_0.shift, mdiv_1.shift, mdiv_2.shift, mdiv_3.shift);
-            magic_div_u32_t mdiv_4 = magic_div_u32_gen(y*x);
-            magic_div_u32_t mdiv_5 = magic_div_u32_gen(x);
-            karg.magic_4           = mdiv_4.magic;
-            karg.magic_5           = mdiv_5.magic;
-            karg.shift_pack_1      = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, 0, 0);
+
+            karg.magic_4        = mdiv_4.magic;
+            karg.magic_5        = mdiv_5.magic;
+            karg.magic_6        = mdiv_6.magic;
+            karg.magic_7        = mdiv_7.magic;
+            karg.shift_pack_1   = magic_div_u32_pack_shift(mdiv_4.shift, mdiv_5.shift, mdiv_6.shift, mdiv_7.shift);
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
+
+            //dump_fwd_karg(&karg);
+            //printf("block:%d, grid:%d\n", get_block_size(tunable), get_grid_size(arg, tunable));
         } else {
             assert(0);
         }
@@ -859,6 +913,13 @@ public:
             assert(gks_list.size() != 0);
             return gks_list;
         }
+    }
+
+    igemm_spatial_tiling_t get_spatial_tiling(const args_t *arg) override
+    {
+        uint32_t upper_bound_h = 0xffff;    // 16bit
+        uint32_t upper_bound_w = 0xffff;    // 16bit
+        return igemm_spatial_tiling(arg, SPATIAL_TILING_FLAG_TLE, (upper_bound_h << 16) | upper_bound_w );
     }
 };
 
