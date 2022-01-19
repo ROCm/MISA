@@ -25,6 +25,7 @@
  *******************************************************************************/
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
+#include "../sequence.hpp"
 
 #ifndef BATCHED_TRANSPOSE_OCCUPANCY
 #define BATCHED_TRANSPOSE_OCCUPANCY 4
@@ -194,6 +195,135 @@ struct mapped_vector_type<uchar, 1>
     using type = uchar;
 };
 
+//16p->P16
+template <typename T, typename dst_order>
+inline __device__ void general_4d_reorder_16p(T* dst,
+                                               T* src,
+                                               uint32_t dim_0,
+                                               uint32_t dim_1,
+                                               uint32_t dim_2,
+                                               uint32_t dim_3,
+                                               uint32_t dim_stride,
+                                               uint32_t dim_total,
+                                               uint32_t magic_stride0,
+                                               uint32_t shift_stride0,
+                                               uint32_t magic_stride1,
+                                               uint32_t shift_stride1,
+                                               uint32_t magic_stride2,
+                                               uint32_t shift_stride2)
+{
+    /*
+     * assume input is 0, 1, 2, 3, 
+     */
+    //DIM_3%vectorc==0
+    constexpr auto dorder = dst_order{};
+    uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
+    uint32_t src_index =0, dst_index=0;
+    const uint64_t InOrder[4]  = {dim_0, dim_1, dim_2, dim_3};
+    const uint64_t OutOrder[4] = {InOrder[dorder.at(0)], InOrder[dorder.at(1)], InOrder[dorder.at(2)], InOrder[dorder.at(3)]};
+    const uint64_t dim_src[4]  =  {InOrder[1] * InOrder[2] * InOrder[3], 
+                                   InOrder[2] * InOrder[3], 
+                                   InOrder[3],
+                                   1 };
+    const uint64_t dim_dst[4]  =  {OutOrder[1] * OutOrder[2] * OutOrder[3], 
+                                   OutOrder[2] * OutOrder[3], 
+                                   OutOrder[3],
+                                   1 };
+
+     uint32_t i_src[4] = {0, 0, 0, 0};
+     uint32_t i_dst[4] = {0, 0, 0, 0};
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride)
+    {
+        for (uint32_t k = 0; k < 16; k++)
+        {
+                        //unroll k         block          thread
+            src_index = k*dim_total*256 + dim_id * 256 + threadIdx.x;
+            if(src_index < pixel_total){
+                i_src[0] = magic_div_u32(src_index,                                                   magic_stride0, shift_stride0);
+                i_src[1] = magic_div_u32(src_index -  i_src[0] * dim_src[0],                          magic_stride1, shift_stride1);
+                i_src[2] = magic_div_u32(src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1], magic_stride2, shift_stride2);
+                i_src[3] = src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2];
+                //i_src[0] = (src_index)/dim_src[0];
+                //i_src[1] = (src_index -  i_src[0] * dim_src[0])/dim_src[1];
+                //i_src[2] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1])/dim_src[2];
+                //i_src[3] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2])/dim_src[3];
+    
+                i_dst[0] = i_src[dorder.at(0)];
+                i_dst[1] = i_src[dorder.at(1)];
+                i_dst[2] = i_src[dorder.at(2)];
+                i_dst[3] = i_src[dorder.at(3)];
+    
+                dst_index = i_dst[0] * dim_dst[0] + i_dst[1] * dim_dst[1] + i_dst[2] * dim_dst[2] + i_dst[3] * dim_dst[3];
+                dst[dst_index] = src[src_index];
+            }
+        }
+    }
+}
+template <typename T, typename dst_order>
+inline __device__ void general_4d_reorder_32p(T* dst,
+                                               T* src,
+                                               uint32_t dim_0,
+                                               uint32_t dim_1,
+                                               uint32_t dim_2,
+                                               uint32_t dim_3,
+                                               uint32_t dim_stride,
+                                               uint32_t dim_total,
+                                               uint32_t magic_stride0,
+                                               uint32_t shift_stride0,
+                                               uint32_t magic_stride1,
+                                               uint32_t shift_stride1,
+                                               uint32_t magic_stride2,
+                                               uint32_t shift_stride2)
+{
+    /*
+     * assume input is 0, 1, 2, 3, 
+     */
+    //DIM_3%vectorc==0
+    constexpr auto dorder = dst_order{};
+    uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
+    uint32_t src_index =0, dst_index=0;
+    const uint64_t InOrder[4]  = {dim_0, dim_1, dim_2, dim_3};
+    const uint64_t OutOrder[4] = {InOrder[dorder.at(0)], InOrder[dorder.at(1)], InOrder[dorder.at(2)], InOrder[dorder.at(3)]};
+    const uint64_t dim_src[4]  =  {InOrder[1] * InOrder[2] * InOrder[3], 
+                                   InOrder[2] * InOrder[3], 
+                                   InOrder[3],
+                                   1 };
+    const uint64_t dim_dst[4]  =  {OutOrder[1] * OutOrder[2] * OutOrder[3], 
+                                   OutOrder[2] * OutOrder[3], 
+                                   OutOrder[3],
+                                   1 };
+
+     uint32_t i_src[4] = {0, 0, 0, 0};
+     uint32_t i_dst[4] = {0, 0, 0, 0};
+
+    for(uint32_t dim_id = blockIdx.x; dim_id < dim_total; dim_id += dim_stride)
+    {
+        for (uint32_t k = 0; k < 32; k++)
+        {
+                        //unroll k         block          thread
+            src_index = k*dim_total*256 + dim_id * 256 + threadIdx.x;
+            if(src_index < pixel_total){
+                i_src[0] = magic_div_u32(src_index,                                                   magic_stride0, shift_stride0);
+                i_src[1] = magic_div_u32(src_index -  i_src[0] * dim_src[0],                          magic_stride1, shift_stride1);
+                i_src[2] = magic_div_u32(src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1], magic_stride2, shift_stride2);
+                i_src[3] = src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2];
+                //i_src[0] = (src_index)/dim_src[0];
+                //i_src[1] = (src_index -  i_src[0] * dim_src[0])/dim_src[1];
+                //i_src[2] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1])/dim_src[2];
+                //i_src[3] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2])/dim_src[3];
+    
+                i_dst[0] = i_src[dorder.at(0)];
+                i_dst[1] = i_src[dorder.at(1)];
+                i_dst[2] = i_src[dorder.at(2)];
+                i_dst[3] = i_src[dorder.at(3)];
+    
+                dst_index = i_dst[0] * dim_dst[0] + i_dst[1] * dim_dst[1] + i_dst[2] * dim_dst[2] + i_dst[3] * dim_dst[3];
+                dst[dst_index] = src[src_index];
+            }
+        }
+    }
+}
 template <typename T>
 inline __device__ void batched_transpose_16x16(T* dst,
                                                T* src,
@@ -232,6 +362,7 @@ inline __device__ void batched_transpose_16x16(T* dst,
         __syncthreads();
         if(g_src_h < height && g_src_w < width)
         {
+            //i_n*CHW + i_c*HW + i_hw
             size_t src_index = static_cast<size_t>(dim_in) * height * width +
                                static_cast<size_t>(g_src_h) * width + static_cast<size_t>(g_src_w);
             smem[i_src_h * smem_stride + i_src_w] = src[src_index];
@@ -2341,6 +2472,112 @@ inline __device__ void batched_transpose_64x4(T* dst,
         }
     }
 }
+#define DEFINE_GENERAL_4D_REORDER_KERNEL(                                                                  \
+    tile_trait, dst_order, accept_data_type, cast_data_type, lb_threads_per_block, lb_blocks_per_cu)       \
+    extern "C" __global__ void __launch_bounds__(lb_threads_per_block, lb_blocks_per_cu)                   \
+        general_4d_reorder_##tile_trait##_##accept_data_type##_##dst_order(void* dst,                      \
+                                                                         void* src,                        \
+                                                                         uint32_t dim_0,                   \
+                                                                         uint32_t dim_1,                   \
+                                                                         uint32_t dim_2,                   \
+                                                                         uint32_t dim_3,                   \
+                                                                         uint32_t dim_stride,              \
+                                                                         uint32_t dim_total,               \
+                                                                         uint32_t magic_stride0,           \
+                                                                         uint32_t shift_stride0,           \
+                                                                         uint32_t magic_stride1,           \
+                                                                         uint32_t shift_stride1,           \
+                                                                         uint32_t magic_stride2,           \
+                                                                         uint32_t shift_stride2)          \
+    {                                                                                                      \
+        general_4d_reorder_##tile_trait<cast_data_type, dst_order>(reinterpret_cast<cast_data_type*>(dst), \
+                                                                   reinterpret_cast<cast_data_type*>(src), \
+                                                                   dim_0,                                  \
+                                                                   dim_1,                                  \
+                                                                   dim_2,                                  \
+                                                                   dim_3,                                  \
+                                                                   dim_stride,                             \
+                                                                   dim_total,                              \
+                                                                   magic_stride0,                          \
+                                                                   shift_stride0,                          \
+                                                                   magic_stride1,                          \
+                                                                   shift_stride1,                          \
+                                                                   magic_stride2,                          \
+                                                                   shift_stride2);                         \
+    }
+//default order is 0 1 2 3
+using nchw2ncwh   = sequence<0, 1, 3, 2>;
+using nchw2nhcw   = sequence<0, 2, 1, 3>;
+using nchw2nhwc   = sequence<0, 2, 3, 1>;
+using nchw2nwch   = sequence<0, 3, 1, 2>;//nhwc2nchw
+using nchw2nwhc   = sequence<0, 3, 2, 1>;
+using nchw2cnhw   = sequence<1, 0, 2, 3>;
+using nchw2cnwh   = sequence<1, 0, 3, 2>;
+using nchw2chnw   = sequence<1, 2, 0, 3>;
+using nchw2chwn   = sequence<1, 2, 3, 0>;
+using nchw2cwnh   = sequence<1, 3, 0, 2>;//nchw2chwnc
+using nchw2cwhn   = sequence<1, 3, 2, 0>;
+using nchw2hncw   = sequence<2, 0, 1, 3>;
+using nchw2hnwc   = sequence<2, 0, 3, 1>;
+using nchw2hcnw   = sequence<2, 1, 0, 3>;//nhwc2chwnc
+using nchw2hcwn   = sequence<2, 1, 3, 0>;
+using nchw2hwnc   = sequence<2, 3, 0, 1>;
+using nchw2hwcn   = sequence<2, 3, 1, 0>;
+using nchw2wnch   = sequence<3, 0, 1, 2>;
+using nchw2wnhc   = sequence<3, 0, 2, 1>;
+using nchw2wcnh   = sequence<3, 1, 0, 2>;
+using nchw2wchn   = sequence<3, 1, 2, 0>;
+using nchw2whnc   = sequence<3, 2, 0, 1>;
+using nchw2whcn   = sequence<3, 2, 1, 0>;
+
+
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2ncwh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2nhcw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2nhwc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2nwch, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2nwhc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2cnhw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2cnwh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2chnw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2chwn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2cwnh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2cwhn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hncw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hnwc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hcnw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hcwn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hwnc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2hwcn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2wnch, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2wnhc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2wcnh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2wchn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2whnc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(16p, nchw2whcn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2ncwh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2nhcw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2nhwc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2nwch, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2nwhc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2cnhw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2cnwh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2chnw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2chwn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2cwnh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2cwhn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hncw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hnwc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hcnw, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hcwn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hwnc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2hwcn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2wnch, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2wnhc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2wcnh, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2wchn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2whnc, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
+DEFINE_GENERAL_4D_REORDER_KERNEL(32p, nchw2whcn, dword, float, 256, BATCHED_TRANSPOSE_OCCUPANCY)
 
 #define DEFINE_BATCHED_TRANSPOSE_KERNEL(                                                       \
     tile_trait, accept_data_type, cast_data_type, lb_threads_per_block, lb_blocks_per_cu)      \

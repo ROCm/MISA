@@ -165,7 +165,7 @@ static inline bool valid_vector(const float *ref, const float *pred, int n,
 static inline bool valid_vector_binary(int8_t *ref, int8_t *pred, size_t bytes) {
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     size_t err = 0;
-    for(size_t i = 0; i < bytes ; i++){
+    for(int i = 0; i < bytes ; i++){
         // {
         //     uint32_t r = 0;
         //     uint32_t p = 0;
@@ -219,13 +219,58 @@ void cpu_nhwc2nchw(T * dst, T * src, uint64_t N, uint64_t C, uint64_t H, uint64_
     }
 }
 
+//nchwc
+template<typename T>
+void cpu_nchw2nchwc(T * dst, T * src, uint64_t N, uint64_t C, uint64_t H, uint64_t W, uint64_t vec_c)
+{
+    for(uint64_t i_n = 0; i_n < N; i_n++){
+        for(uint64_t i_h = 0; i_h < H; i_h++){
+            for(uint64_t i_w = 0; i_w < W; i_w++){
+                for(uint64_t i_c =0 ; i_c < C; i_c++){
+                    uint64_t idx_nchwc = i_n * C * H * W + 
+                                        (i_c/vec_c) * H * W * vec_c +
+                                         i_h * W * vec_c +
+                                         i_w * vec_c +
+                                        (i_c%vec_c);
+                    uint64_t idx_nchw = i_n * C * H * W + i_c * H * W + i_h * W + i_w;
+                    dst[idx_nchwc] = src[idx_nchw];
+                }
+            }
+        }
+    }
+}
+
+template<typename T>
+void cpu_nchwc2nchw(T * dst, T * src, uint64_t N, uint64_t C, uint64_t H, uint64_t W, uint64_t vec_c)
+{
+    for(uint64_t i_n = 0; i_n < N; i_n++){
+        for(uint64_t i_c =0 ; i_c < C; i_c++){
+            for(uint64_t i_h = 0; i_h < H; i_h++){
+                for(uint64_t i_w = 0; i_w < W; i_w++){
+                    uint64_t idx_nchwc = i_n * C * H * W + 
+                                        (i_c/vec_c) * H * W * vec_c +
+                                         i_h * W * vec_c +
+                                         i_w * vec_c +
+                                        (i_c%vec_c);
+                    uint64_t idx_nchw = i_n * C * H * W + i_c * H * W + i_h * W + i_w;
+                    dst[idx_nchw] = src[idx_nchwc];
+                }
+            }
+        }
+    }
+}
+
 #define WARMUP 3
 #define REPEAT 7
-#define     TRANSPOSE_HSACO    "batched_transpose.hsaco"
+#define TRANSPOSE_HSACO    "out/batched_transpose.hsaco"
 
 int main(int argc, char ** argv){
     if(argc < 5){
         printf("%s N C H W\n", argv[0]);
+        return -1;
+    }
+    if(argc > 6){
+        printf("Too many argument\n");
         return -1;
     }
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
@@ -235,9 +280,12 @@ int main(int argc, char ** argv){
     uint64_t C = std::stoull(std::string(argv[2]));
     uint64_t H = std::stoull(std::string(argv[3]));
     uint64_t W = std::stoull(std::string(argv[4]));
+    uint64_t vec_c;
+    if(argc == 5) vec_c = C;
+    else          vec_c = std::stoull(std::string(argv[5]));
 
     size_t size_byte = 4;
-    char * fp = env_get_str("FP", "32");
+    const char* fp = env_get_str("FP", "32");
     std::string fp_str(fp);
     if(fp_str == "32")
         size_byte = 4;
@@ -250,7 +298,8 @@ int main(int argc, char ** argv){
         return -1;
     }
 
-    char * hsaco = env_get_str("TRANSPOSE_HSACO", TRANSPOSE_HSACO);
+    const char* hsaco = env_get_str("TRANSPOSE_HSACO", TRANSPOSE_HSACO);
+    //std::cout<<hsaco<<std::endl;
     gpu_nhwc_nchw_transpose_init(hsaco);
 
     void * src_cpu = malloc(N*C*H*W*size_byte);
@@ -304,6 +353,43 @@ int main(int argc, char ** argv){
             cpu_nhwc2nchw<int8_t>(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(src_cpu), N, C, H, W);
     };
 
+    //nchwc
+    auto launch_gpu_nchw2nchwc = [&](const transpose_kernel_param_t * kparam){
+        if(fp_str == "32")
+            gpu_nchw2nhwc<float>(reinterpret_cast<float*>  (dst_gpu), reinterpret_cast<float*> (src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+        else if(fp_str == "16")
+            gpu_nchw2nhwc<ushort>(reinterpret_cast<ushort*>(dst_gpu), reinterpret_cast<ushort*>(src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+        else if(fp_str == "8")
+            gpu_nchw2nhwc<int8_t>(reinterpret_cast<int8_t*>(dst_gpu), reinterpret_cast<int8_t*>(src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+    };
+
+    auto launch_gpu_nchwc2nchw = [&](const transpose_kernel_param_t * kparam){
+        if(fp_str == "32")
+            gpu_nhwc2nchw<float>(reinterpret_cast<float*>  (dst_gpu), reinterpret_cast<float*> (src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+        else if(fp_str == "16")
+            gpu_nhwc2nchw<ushort>(reinterpret_cast<ushort*>(dst_gpu), reinterpret_cast<ushort*>(src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+        else if(fp_str == "8")
+            gpu_nhwc2nchw<int8_t>(reinterpret_cast<int8_t*>(dst_gpu), reinterpret_cast<int8_t*>(src_gpu), N*C/vec_c, vec_c, H, W, kparam);
+    };
+
+    auto launch_cpu_nchw2nchwc = [&](){
+        if(fp_str == "32")
+            cpu_nchw2nchwc<float>(reinterpret_cast<float*>  (dst_cpu), reinterpret_cast<float*> (src_cpu), N, C, H, W, vec_c);
+        else if(fp_str == "16")
+            cpu_nchw2nchwc<ushort>(reinterpret_cast<ushort*>(dst_cpu), reinterpret_cast<ushort*>(src_cpu), N, C, H, W, vec_c);
+        else if(fp_str == "8")
+            cpu_nchw2nchwc<int8_t>(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(src_cpu), N, C, H, W, vec_c);
+    };
+
+    auto launch_cpu_nchwc2nchw = [&](){
+        if(fp_str == "32")
+            cpu_nchwc2nchw<float>(reinterpret_cast<float*>  (dst_cpu), reinterpret_cast<float*> (src_cpu), N, C, H, W, vec_c);
+        else if(fp_str == "16")
+            cpu_nchwc2nchw<ushort>(reinterpret_cast<ushort*>(dst_cpu), reinterpret_cast<ushort*>(src_cpu), N, C, H, W, vec_c);
+        else if(fp_str == "8")
+            cpu_nchwc2nchw<int8_t>(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(src_cpu), N, C, H, W, vec_c);
+    };
+
     auto test_nchw2nhwc = [&](const transpose_kernel_param_t *transpose_kparam){
         // nchw2nhwc
         float kernel_time = 0;
@@ -316,7 +402,7 @@ int main(int argc, char ** argv){
             HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
 
             for(int i=0; i< warmup; i++){
-                launch_gpu_nchw2nhwc(transpose_kparam);
+                launch_gpu_nchw2nchwc(transpose_kparam);
             }
 
             HIP_CALL(hipEventCreate(&start));
@@ -325,7 +411,7 @@ int main(int argc, char ** argv){
             HIP_CALL(hipEventRecord(start, 0) );
 
             for(int i=0; i< repeat; i++){
-                launch_gpu_nchw2nhwc(transpose_kparam);
+                launch_gpu_nchw2nchwc(transpose_kparam);
             }
             
             HIP_CALL(hipEventRecord(stop, 0) );
@@ -336,7 +422,7 @@ int main(int argc, char ** argv){
 
             kernel_time = kernel_time / repeat;
 
-            launch_cpu_nchw2nhwc();
+            launch_cpu_nchw2nchwc();
 
             HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
 
@@ -346,7 +432,7 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nchw2nhwc fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+        printf("[nchw2nhwc fp%s] N:%lu, C:%lu, H:%lu, W:%lu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->ediv_x, transpose_kparam->ediv_y);
         fflush(stdout);
@@ -366,7 +452,7 @@ int main(int argc, char ** argv){
             HIP_CALL(hipMemset(dst_gpu, 0, N*C*H*W*size_byte));
 
             for(int i=0; i< warmup; i++){
-                launch_gpu_nhwc2nchw(transpose_kparam);
+                launch_gpu_nchwc2nchw(transpose_kparam);
             }
 
             HIP_CALL(hipEventCreate(&start));
@@ -375,7 +461,7 @@ int main(int argc, char ** argv){
             HIP_CALL(hipEventRecord(start, 0) );
 
             for(int i=0; i< repeat; i++){
-                launch_gpu_nhwc2nchw(transpose_kparam);
+                launch_gpu_nchwc2nchw(transpose_kparam);
             }
 
             HIP_CALL(hipEventRecord(stop, 0) );
@@ -386,7 +472,7 @@ int main(int argc, char ** argv){
 
             kernel_time = kernel_time / repeat;
 
-            launch_cpu_nhwc2nchw();
+            launch_cpu_nchwc2nchw();
 
             HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, N*C*H*W*size_byte, hipMemcpyDeviceToHost));
 
@@ -396,7 +482,7 @@ int main(int argc, char ** argv){
         double flop_cnt = 2 * N*C*H*W*size_byte;
         double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
 
-        printf("[nhwc2nchw fp%s] N:%llu, C:%llu, H:%llu, W:%llu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
+        printf("[nhwc2nchw fp%s] N:%lu, C:%lu, H:%lu, W:%lu, flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (%dx%d, %dx%d, %dx%d)\n",
             fp_str.c_str(), N, C, H, W, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
             transpose_kparam->tile_x, transpose_kparam->tile_y, transpose_kparam->pack_x, transpose_kparam->pack_y, transpose_kparam->ediv_x, transpose_kparam->ediv_y);
         fflush(stdout);
