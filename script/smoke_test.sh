@@ -111,12 +111,20 @@ for fy in "${filter_size[@]}"; do
 for fx in "${filter_size[@]}"; do
 for py in "${pad_size[@]}"; do
 for px in "${pad_size[@]}"; do
-for sy in "${stride_size[@]}"; do
-for sx in "${stride_size[@]}"; do
-for dy in "${dilation_size[@]}"; do
-for dx in "${dilation_size[@]}"; do
+#for sy in "${stride_size[@]}"; do
+#for sx in "${stride_size[@]}"; do
+#for dy in "${dilation_size[@]}"; do
+#for dx in "${dilation_size[@]}"; do
 for g  in "${group_size[@]}"; do
 
+isy=$(( $RANDOM % 3 ))
+isx=$(( $RANDOM % 3 ))
+idy=$(( $RANDOM % 3 ))
+idx=$(( $RANDOM % 3 ))
+sy=${stride_size[$isy]}
+sx=${stride_size[$isx]}
+dy=${stride_size[$idy]}
+dx=${stride_size[$idx]}
 
 #  (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
 ho=$(( ( $hi + 2 * $py - $dy * ( $fy - 1 ) - 1 ) / $sy + 1  ))
@@ -138,10 +146,10 @@ TILE_X=$tile_x TILE_Y=$tile_y $EXE $CONV -n $n -c $c -H $hi -W $wi -k $k -y $fy 
 sleep 0.1
 
 done
-done
-done
-done
-done
+#done
+#done
+#done
+#done
 done
 done
 done
