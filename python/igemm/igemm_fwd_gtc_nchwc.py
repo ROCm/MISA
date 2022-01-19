@@ -1447,7 +1447,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v.v_in_flag_n()}], v[{v.v_tmp(3)}], {i}, v[{v.v_in_flag_n()}]")
                 self._emit(f"v_and_b32 v[{v.v_tmp(3)}], v[{v.v_tmp(4)}], v[{v.v_tmp(3)}]")
                 if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING:
-                    self._emit(m_set_flag_nhw(v.v_in_flag(i), v.v_tmp(3), v.v_in_i_hw_list(), s.s_sps_hi(), s.s_sps_wi()))
+                    self._emit(m_set_flag_nhw(v.v_in_flag(i), v.v_tmp(3), v.v_in_i_hw_list(i), s.s_sps_hi(), s.s_sps_wi()))
                 else:
                     self._emit(m_set_flag_nhw(v.v_in_flag(i), v.v_tmp(3), v_i_hi_psu(), v_i_wi_psu(), s.s_sps_hi(), s.s_sps_wi()))
 
