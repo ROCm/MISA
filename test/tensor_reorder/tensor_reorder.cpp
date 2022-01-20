@@ -234,6 +234,20 @@ void cpu_tensor_reorder(T * dst, T * src, uint64_t dim_0, uint64_t dim_1, uint64
     }
 }
 
+namespace detail {
+
+    template<class T, T... inds, class F>
+    constexpr void loop(std::integer_sequence<T, inds...>, F&& f) {
+        (f(std::integral_constant<T, inds>{}), ...);// C++17 fold expression
+    }
+
+}// detail
+
+template<class T, T count, class F>
+constexpr void loop(F&& f) {
+    detail::loop(std::make_integer_sequence<T, count>{}, std::forward<F>(f));
+}
+
 #define WARMUP 3
 #define REPEAT 7
 #define TENSOR_REORDER_HSACO    "out/batched_transpose.hsaco"
@@ -272,10 +286,32 @@ int main(int argc, char ** argv){
     //loop all sequence,completness test.
     bool batched = false;
 
+    void * src_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
+    void * dst_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
+    void * dst_gpu_valid = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
+
+    void * src_gpu;
+    void * dst_gpu;
+
+    HIP_CALL(hipMalloc(&src_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
+    HIP_CALL(hipMalloc(&dst_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
+
+    gen_rand_vector<int8_t>(reinterpret_cast<int8_t*>(src_cpu), dim_0*dim_1*dim_2*dim_3*size_byte, -116, 121);
+    HIP_CALL(hipMemcpy(src_gpu, src_cpu, dim_0*dim_1*dim_2*dim_3*size_byte, hipMemcpyHostToDevice));
+
+loop<int, 23>([&](auto i) {
+    constexpr int all_possible_sequence[23][4] = {
+    {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
+    {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
+    {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
+    {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
+    using dst_order = sequence<all_possible_sequence[i][0], all_possible_sequence[i][1], all_possible_sequence[i][2], all_possible_sequence[i][3]>;
+    std::cout <<" Tensor reorder to ("<< dst_order::at(0)<<","<< dst_order::at(1)<<","<< dst_order::at(2)<<","<< dst_order::at(3)<<")" << std::endl;
+
     //TODO: an API with more privacy
-    auto launch_gpu_init = [&](int const* this_run_sequence){
-        if((this_run_sequence[0]==0 && this_run_sequence[1]==2 && this_run_sequence[2]==3 && this_run_sequence[3]==1) || 
-           (this_run_sequence[0]==0 && this_run_sequence[1]==3 && this_run_sequence[2]==1 && this_run_sequence[3]==2)
+    auto launch_gpu_init = [&](){
+        if((dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1) || 
+           (dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2)
            ){
             printf("choose batched transpose kernel\n");
             batched = true;
@@ -288,19 +324,6 @@ int main(int argc, char ** argv){
         }
     };
 
-    void * src_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
-    void * dst_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
-    void * dst_gpu_valid = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
-
-    void * src_gpu;
-    void * dst_gpu;
-
-    HIP_CALL(hipMalloc(&src_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
-    HIP_CALL(hipMalloc(&dst_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
-
-    using dst_order = sequence<0, 2, 1, 3>;
-    gen_rand_vector<int8_t>(reinterpret_cast<int8_t*>(src_cpu), dim_0*dim_1*dim_2*dim_3*size_byte, -116, 121);
-    HIP_CALL(hipMemcpy(src_gpu, src_cpu, dim_0*dim_1*dim_2*dim_3*size_byte, hipMemcpyHostToDevice));
     auto launch_gpu_tensor_reorder = [&](const transpose_kernel_param_t * kparam){
         if(fp_str == "32")
             gpu_tensor_reorder<float,  dst_order>(reinterpret_cast<float*> (dst_gpu), reinterpret_cast<float*> (src_gpu), dim_0, dim_1, dim_2, dim_3, kparam);
@@ -388,43 +411,45 @@ int main(int argc, char ** argv){
             assert(false);
     };
 
-    constexpr int all_possible_sequence[23][4] = {
-    {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
-    {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
-    {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
-    {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
+    //constexpr int all_possible_sequence[23][4] = {
+    //{0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
+    //{1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
+    //{2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
+    //{3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
     
     //for(auto this_run_sequence : all_possible_sequence){
         //using dst_order = sequence<all_possible_sequence[0][0], all_possible_sequence[0][1], all_possible_sequence[0][2],all_possible_sequence[0][3]>;
-        batched = false;
-        launch_gpu_init(all_possible_sequence[0]);
-        float min_tensor_reorder_time = FLT_MAX;
-        transpose_kernel_param_t min_tensor_reorder_kparam;
-        if(batched){
-            for(auto kparam : get_transpose_all_kernel()){
-                float current_time = test_tensor_reorder(&kparam);
-                if(current_time < min_tensor_reorder_time){
-                    min_tensor_reorder_time = current_time;
-                    min_tensor_reorder_kparam = kparam;
-                }
-                //break;
+    batched = false;
+    launch_gpu_init();
+    float min_tensor_reorder_time = FLT_MAX;
+    transpose_kernel_param_t min_tensor_reorder_kparam;
+    if(batched){
+        for(auto kparam : get_transpose_all_kernel()){
+            float current_time = test_tensor_reorder(&kparam);
+            if(current_time < min_tensor_reorder_time){
+                min_tensor_reorder_time = current_time;
+                min_tensor_reorder_kparam = kparam;
             }
+            //break;
         }
-        else{
-            for(auto kparam : get_tensor_reorder_all_kernel()){
-                float current_time = test_tensor_reorder(&kparam);
-                if(current_time < min_tensor_reorder_time){
-                    min_tensor_reorder_time = current_time;
-                    min_tensor_reorder_kparam = kparam;
-                }
-                //break;
+    }
+    else{
+        for(auto kparam : get_tensor_reorder_all_kernel()){
+            float current_time = test_tensor_reorder(&kparam);
+            if(current_time < min_tensor_reorder_time){
+                min_tensor_reorder_time = current_time;
+                min_tensor_reorder_kparam = kparam;
             }
+            //break;
         }
-        printf("-> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_tensor_reorder_time,
-            min_tensor_reorder_kparam.tile_x, min_tensor_reorder_kparam.tile_y, min_tensor_reorder_kparam.pack_x, min_tensor_reorder_kparam.pack_y, min_tensor_reorder_kparam.ediv_x, min_tensor_reorder_kparam.ediv_y);
-        fflush(stdout);
-        printf("-------------------------\n");
+    }
+    printf("-> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_tensor_reorder_time,
+        min_tensor_reorder_kparam.tile_x, min_tensor_reorder_kparam.tile_y, min_tensor_reorder_kparam.pack_x, min_tensor_reorder_kparam.pack_y, min_tensor_reorder_kparam.ediv_x, min_tensor_reorder_kparam.ediv_y);
+    fflush(stdout);
+    printf("-------------------------\n");
     //}
+
+});
 
     free(src_cpu);
     free(dst_cpu);

@@ -11,4 +11,4 @@ mkdir out
 /opt/rocm/llvm/bin/llvm-objdump --disassemble --mcpu=$ARCH  out/batched_transpose.hsaco.o > out/batched_transpose.dump.s
 /opt/rocm/llvm/bin/llvm-readobj --notes --elf-output-style=LLVM  out/batched_transpose.hsaco.o > out/batched_transpose.dump.metadata
 
-./out/tensor_reorder.exe  5 25 1023 1024
+./out/tensor_reorder.exe  5 25 1023 1025

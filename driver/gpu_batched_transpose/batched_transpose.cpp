@@ -219,15 +219,15 @@ inline __device__ void general_4d_reorder_16p(T* dst,
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
-    const uint64_t InOrder[4]  = {dim_0, dim_1, dim_2, dim_3};
-    const uint64_t OutOrder[4] = {InOrder[dorder.at(0)], InOrder[dorder.at(1)], InOrder[dorder.at(2)], InOrder[dorder.at(3)]};
-    const uint64_t dim_src[4]  =  {InOrder[1] * InOrder[2] * InOrder[3], 
-                                   InOrder[2] * InOrder[3], 
-                                   InOrder[3],
+    const uint64_t src_dim[4]  = {dim_0, dim_1, dim_2, dim_3};
+    const uint64_t dst_dim[4] = {src_dim[dorder.at(0)], src_dim[dorder.at(1)], src_dim[dorder.at(2)], src_dim[dorder.at(3)]};
+    const uint64_t src_stride[4]  =  {src_dim[1] * src_dim[2] * src_dim[3], 
+                                   src_dim[2] * src_dim[3], 
+                                   src_dim[3],
                                    1 };
-    const uint64_t dim_dst[4]  =  {OutOrder[1] * OutOrder[2] * OutOrder[3], 
-                                   OutOrder[2] * OutOrder[3], 
-                                   OutOrder[3],
+    const uint64_t dst_stride[4]  =  {dst_dim[1] * dst_dim[2] * dst_dim[3], 
+                                   dst_dim[2] * dst_dim[3], 
+                                   dst_dim[3],
                                    1 };
 
      uint32_t i_src[4] = {0, 0, 0, 0};
@@ -241,20 +241,20 @@ inline __device__ void general_4d_reorder_16p(T* dst,
             src_index = k*dim_total*256 + dim_id * 256 + threadIdx.x;
             if(src_index < pixel_total){
                 i_src[0] = magic_div_u32(src_index,                                                   magic_stride0, shift_stride0);
-                i_src[1] = magic_div_u32(src_index -  i_src[0] * dim_src[0],                          magic_stride1, shift_stride1);
-                i_src[2] = magic_div_u32(src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1], magic_stride2, shift_stride2);
-                i_src[3] = src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2];
-                //i_src[0] = (src_index)/dim_src[0];
-                //i_src[1] = (src_index -  i_src[0] * dim_src[0])/dim_src[1];
-                //i_src[2] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1])/dim_src[2];
-                //i_src[3] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2])/dim_src[3];
+                i_src[1] = magic_div_u32(src_index -  i_src[0] * src_stride[0],                          magic_stride1, shift_stride1);
+                i_src[2] = magic_div_u32(src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1], magic_stride2, shift_stride2);
+                i_src[3] = src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1] -  i_src[2] * src_stride[2];
+                //i_src[0] = (src_index)/src_stride[0];
+                //i_src[1] = (src_index -  i_src[0] * src_stride[0])/src_stride[1];
+                //i_src[2] = (src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1])/src_stride[2];
+                //i_src[3] = (src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1] -  i_src[2] * src_stride[2])/src_stride[3];
     
                 i_dst[0] = i_src[dorder.at(0)];
                 i_dst[1] = i_src[dorder.at(1)];
                 i_dst[2] = i_src[dorder.at(2)];
                 i_dst[3] = i_src[dorder.at(3)];
     
-                dst_index = i_dst[0] * dim_dst[0] + i_dst[1] * dim_dst[1] + i_dst[2] * dim_dst[2] + i_dst[3] * dim_dst[3];
+                dst_index = i_dst[0] * dst_stride[0] + i_dst[1] * dst_stride[1] + i_dst[2] * dst_stride[2] + i_dst[3] * dst_stride[3];
                 dst[dst_index] = src[src_index];
             }
         }
@@ -283,15 +283,15 @@ inline __device__ void general_4d_reorder_32p(T* dst,
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
-    const uint64_t InOrder[4]  = {dim_0, dim_1, dim_2, dim_3};
-    const uint64_t OutOrder[4] = {InOrder[dorder.at(0)], InOrder[dorder.at(1)], InOrder[dorder.at(2)], InOrder[dorder.at(3)]};
-    const uint64_t dim_src[4]  =  {InOrder[1] * InOrder[2] * InOrder[3], 
-                                   InOrder[2] * InOrder[3], 
-                                   InOrder[3],
+    const uint64_t src_dim[4]  = {dim_0, dim_1, dim_2, dim_3};
+    const uint64_t dst_dim[4] = {src_dim[dorder.at(0)], src_dim[dorder.at(1)], src_dim[dorder.at(2)], src_dim[dorder.at(3)]};
+    const uint64_t src_stride[4]  =  {src_dim[1] * src_dim[2] * src_dim[3], 
+                                   src_dim[2] * src_dim[3], 
+                                   src_dim[3],
                                    1 };
-    const uint64_t dim_dst[4]  =  {OutOrder[1] * OutOrder[2] * OutOrder[3], 
-                                   OutOrder[2] * OutOrder[3], 
-                                   OutOrder[3],
+    const uint64_t dst_stride[4]  =  {dst_dim[1] * dst_dim[2] * dst_dim[3], 
+                                   dst_dim[2] * dst_dim[3], 
+                                   dst_dim[3],
                                    1 };
 
      uint32_t i_src[4] = {0, 0, 0, 0};
@@ -305,20 +305,20 @@ inline __device__ void general_4d_reorder_32p(T* dst,
             src_index = k*dim_total*256 + dim_id * 256 + threadIdx.x;
             if(src_index < pixel_total){
                 i_src[0] = magic_div_u32(src_index,                                                   magic_stride0, shift_stride0);
-                i_src[1] = magic_div_u32(src_index -  i_src[0] * dim_src[0],                          magic_stride1, shift_stride1);
-                i_src[2] = magic_div_u32(src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1], magic_stride2, shift_stride2);
-                i_src[3] = src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2];
-                //i_src[0] = (src_index)/dim_src[0];
-                //i_src[1] = (src_index -  i_src[0] * dim_src[0])/dim_src[1];
-                //i_src[2] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1])/dim_src[2];
-                //i_src[3] = (src_index -  i_src[0] * dim_src[0] -  i_src[1] * dim_src[1] -  i_src[2] * dim_src[2])/dim_src[3];
+                i_src[1] = magic_div_u32(src_index -  i_src[0] * src_stride[0],                          magic_stride1, shift_stride1);
+                i_src[2] = magic_div_u32(src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1], magic_stride2, shift_stride2);
+                i_src[3] = src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1] -  i_src[2] * src_stride[2];
+                //i_src[0] = (src_index)/src_stride[0];
+                //i_src[1] = (src_index -  i_src[0] * src_stride[0])/src_stride[1];
+                //i_src[2] = (src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1])/src_stride[2];
+                //i_src[3] = (src_index -  i_src[0] * src_stride[0] -  i_src[1] * src_stride[1] -  i_src[2] * src_stride[2])/src_stride[3];
     
                 i_dst[0] = i_src[dorder.at(0)];
                 i_dst[1] = i_src[dorder.at(1)];
                 i_dst[2] = i_src[dorder.at(2)];
                 i_dst[3] = i_src[dorder.at(3)];
     
-                dst_index = i_dst[0] * dim_dst[0] + i_dst[1] * dim_dst[1] + i_dst[2] * dim_dst[2] + i_dst[3] * dim_dst[3];
+                dst_index = i_dst[0] * dst_stride[0] + i_dst[1] * dst_stride[1] + i_dst[2] * dst_stride[2] + i_dst[3] * dst_stride[3];
                 dst[dst_index] = src[src_index];
             }
         }
