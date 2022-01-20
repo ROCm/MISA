@@ -250,7 +250,8 @@ constexpr void loop(F&& f) {
 
 #define WARMUP 3
 #define REPEAT 7
-#define TENSOR_REORDER_HSACO    "out/batched_transpose.hsaco"
+#define BATCHED_TRANSPOSE_HSACO "out/batched_transpose.hsaco"
+#define TENSOR_REORDER_HSACO    "out/tensor_reorder.hsaco"
 
 int main(int argc, char ** argv){
     if(argc < 5){
@@ -282,17 +283,15 @@ int main(int argc, char ** argv){
         return -1;
     }
 
-    const char* hsaco = env_get_str("TENSOR_REORDER_HSACO", TENSOR_REORDER_HSACO);
-    //loop all sequence,completness test.
     bool batched = false;
-
+    const char* hsaco;
     void * src_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
     void * dst_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
     void * dst_gpu_valid = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
 
     void * src_gpu;
     void * dst_gpu;
-
+    
     HIP_CALL(hipMalloc(&src_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
     HIP_CALL(hipMalloc(&dst_gpu, dim_0*dim_1*dim_2*dim_3*size_byte));
 
@@ -307,7 +306,7 @@ loop<int, 23>([&](auto i) {
     {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
     using dst_order = sequence<all_possible_sequence[i][0], all_possible_sequence[i][1], all_possible_sequence[i][2], all_possible_sequence[i][3]>;
     std::cout <<" Tensor reorder to ("<< dst_order::at(0)<<","<< dst_order::at(1)<<","<< dst_order::at(2)<<","<< dst_order::at(3)<<")" << std::endl;
-
+    
     //TODO: an API with more privacy
     auto launch_gpu_init = [&](){
         if((dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1) || 
@@ -316,10 +315,12 @@ loop<int, 23>([&](auto i) {
             printf("choose batched transpose kernel\n");
             batched = true;
             //batched transpose. NCHW <----> NHWC, (NC)cHW <----> (NC)HWc
+            hsaco = env_get_str("BATCHED_TRANSPOSE", BATCHED_TRANSPOSE_HSACO);
             gpu_nhwc_nchw_transpose_init(hsaco);
         }
         else {
             printf("choose general tensor reorder kernel\n");
+            hsaco = env_get_str("TENSOR_REORDER_HSACO", TENSOR_REORDER_HSACO);
             gpu_tensor_reorder_init(hsaco);
         }
     };
@@ -411,14 +412,6 @@ loop<int, 23>([&](auto i) {
             assert(false);
     };
 
-    //constexpr int all_possible_sequence[23][4] = {
-    //{0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
-    //{1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
-    //{2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
-    //{3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
-    
-    //for(auto this_run_sequence : all_possible_sequence){
-        //using dst_order = sequence<all_possible_sequence[0][0], all_possible_sequence[0][1], all_possible_sequence[0][2],all_possible_sequence[0][3]>;
     batched = false;
     launch_gpu_init();
     float min_tensor_reorder_time = FLT_MAX;
@@ -430,7 +423,6 @@ loop<int, 23>([&](auto i) {
                 min_tensor_reorder_time = current_time;
                 min_tensor_reorder_kparam = kparam;
             }
-            //break;
         }
     }
     else{
@@ -440,15 +432,12 @@ loop<int, 23>([&](auto i) {
                 min_tensor_reorder_time = current_time;
                 min_tensor_reorder_kparam = kparam;
             }
-            //break;
         }
     }
     printf("-> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_tensor_reorder_time,
         min_tensor_reorder_kparam.tile_x, min_tensor_reorder_kparam.tile_y, min_tensor_reorder_kparam.pack_x, min_tensor_reorder_kparam.pack_y, min_tensor_reorder_kparam.ediv_x, min_tensor_reorder_kparam.ediv_y);
     fflush(stdout);
     printf("-------------------------\n");
-    //}
-
 });
 
     free(src_cpu);
