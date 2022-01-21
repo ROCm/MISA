@@ -355,10 +355,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING:
                 self._emit(m_set_flag_nhw(self.v_in_flag(), self.v_in_flag_n(), self.v_in_i_hw_list(), self.s_sps_hi(), self.s_sps_wi(), self.v_tmp6(2), self.v_tmp6()))
             else:
-                self._emit(f"v_and_b32 v[{self.v_in_flag(i)}], v[{self.v_tmp6(2)}], v[{self.v_tmp6(0)}]")
-                if i != nb_per_thread - 1:
-                    self._emit(f"v_bfe_u32 v[{self.v_tmp6(0)}], v[{self.v_in_flag_n()}], {i+1}, 1   ; extract flag_n ({i+1})")
-                self._emit(m_set_flag_nhw(self.v_in_flag(i), self.v_in_flag(i), self.v_in_ihi_list(i), self.v_in_iwi_list(i), self.s_sps_hi(), self.s_sps_wi()))
+                for i in range(nb_per_thread):
+                    self._emit(f"v_and_b32 v[{self.v_in_flag(i)}], v[{self.v_tmp6(2)}], v[{self.v_tmp6(0)}]")
+                    if i != nb_per_thread - 1:
+                        self._emit(f"v_bfe_u32 v[{self.v_tmp6(0)}], v[{self.v_in_flag_n()}], {i+1}, 1   ; extract flag_n ({i+1})")
+                    self._emit(m_set_flag_nhw(self.v_in_flag(i), self.v_in_flag(i), self.v_in_ihi_list(i), self.v_in_iwi_list(i), self.s_sps_hi(), self.s_sps_wi()))
 
     class global_load_in_t(mc_base_t):
         def __init__(self, mc, outer):
@@ -1186,6 +1187,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         self._emit(f"s_mov_b32 s[{s.s_0xffff()}], {0xffff}")
         self._emit(f"s_mov_b32 s[{s.s_tmp(1)}], {0xff}")
+        if self.tunable.precision == 'int8':
+            self._emit(f"s_mov_b32 s[{s.s_0xff()}], {0xff}")
         if self.tunable.nxe != 0:
             self._emit(f"s_mov_b32 s[{s.s_sps_py()}], 0")
             self._emit(f"s_mov_b32 s[{s.s_sps_px()}], 0")
@@ -1687,7 +1690,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"v_add_nc_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(4)}]")
 
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_out_in()}], s[{s.s_out_stride_n()}]")
-        self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 1, v[{v.v_tmp()}]")
+        self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp(4)}], {utility_log2(data_byte * self.tunable.vector_c)}, v[{v.v_tmp()}]")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_out_stride_k()}], v[{v.v_co_sub_m_index()}]")
         self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")

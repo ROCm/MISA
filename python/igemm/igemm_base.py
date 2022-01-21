@@ -244,7 +244,7 @@ class igemm_gtc_tunable_parameter_t(object):
         elif self.tensor_layout == "nhwc":
             assert self.nxb == 0, 'nhwc now no need have different nxb value'
         elif self.tensor_layout == "nchwc":
-            assert self.vector_c in (4, 8), 'do not support arbitary vector_c'
+            assert self.vector_c in (4, 8, 16, 32), 'do not support arbitary vector_c'
         else:
             assert False
         assert self.nxe in (0,1)

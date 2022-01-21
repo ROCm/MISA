@@ -674,8 +674,9 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     elif ctrl.precision == 'int8':
                         # CAUSION: must have a symbol s_0xff and pre inited with 0xff
                         if not smem_trans:
-                            for i in range(sst // 4):
+                            for i in range(vgpr_last_dim_num // 4):
                                 vi = vgpr_index + 4 * i
+                                vo = vgpr_index + i
                                 self._emit(f"v_and_b32 v[{v_c(vi + 0)}], s[s_0xff], v[{v_c(vi + 0)}]")
                                 self._emit(f"v_and_b32 v[{v_c(vi + 1)}], s[s_0xff], v[{v_c(vi + 1)}]")
                                 self._emit(f"v_and_b32 v[{v_c(vi + 2)}], s[s_0xff], v[{v_c(vi + 2)}]")
@@ -684,7 +685,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vi + 1)}],  8, v[{v_c(vi + 1)}]")
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vi + 2)}], 16, v[{v_c(vi + 2)}]")
                                 self._emit(f"v_or_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 3)}]")
-                                self._emit(f"v_or3_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 1)}], v[{v_c(vi + 2)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 0)}], v[{v_c(vi + 1)}], v[{v_c(vi + 2)}]")
                                 for j in range(4):
                                     accvgpr_consume_list.append(vi + j)
                         else:
