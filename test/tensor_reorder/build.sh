@@ -18,23 +18,22 @@ mkdir out
 
 #Completeness & Correctness test
 export FP=32
-#./out/tensor_reorder.exe  4 32 1024 1024
-#./out/tensor_reorder.exe  4 32 127 129
-#./out/tensor_reorder.exe  32 129 224 224
+./out/tensor_reorder.exe  4 32 1024 1024
+./out/tensor_reorder.exe  4 32 127 129
+./out/tensor_reorder.exe  32 129 224 224
 ./out/tensor_reorder.exe  1024 1024 3 3
-#./out/tensor_reorder.exe  256 257 16 32
-#
-#export FP=16
-#./out/tensor_reorder.exe  4 32 1024 1024
-#./out/tensor_reorder.exe  4 32 127 129
-#./out/tensor_reorder.exe  32 129 224 224
-#./out/tensor_reorder.exe  1024 1024 3 3
-#./out/tensor_reorder.exe  256 257 16 32
-#
-#export FP=8
-#./out/tensor_reorder.exe  4 32 1024 1024
-#./out/tensor_reorder.exe  4 32 127 129
-#./out/tensor_reorder.exe  32 129 224 224
-#./out/tensor_reorder.exe  1024 1024 3 3
-#./out/tensor_reorder.exe  256 257 16 32
+./out/tensor_reorder.exe  256 257 16 32
 
+export FP=16
+./out/tensor_reorder.exe  4 32 1024 1024
+./out/tensor_reorder.exe  4 32 127 129
+./out/tensor_reorder.exe  32 129 224 224
+./out/tensor_reorder.exe  1024 1024 3 3
+./out/tensor_reorder.exe  256 257 16 32
+
+export FP=8
+./out/tensor_reorder.exe  4 32 1024 1024
+./out/tensor_reorder.exe  4 32 127 129
+./out/tensor_reorder.exe  32 129 224 224
+./out/tensor_reorder.exe  1024 1024 3 3
+./out/tensor_reorder.exe  256 257 16 32

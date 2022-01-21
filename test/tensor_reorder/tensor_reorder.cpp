@@ -19,7 +19,8 @@
 #include "sequence.hpp"
 
 
-//#define HIP_CALL(call)                                                         \
+#ifndef HIP_CALL
+#define HIP_CALL(call)                                                         \
     do {                                                                       \
         hipError_t err = call;                                                 \
         if (err != hipSuccess) {                                               \
@@ -28,6 +29,7 @@
             exit(1);                                                           \
         }                                                                      \
     } while (0)
+#endif
 
 static inline int env_get_int(const char *var_name, int default_int) {
     char *v = getenv(var_name);
