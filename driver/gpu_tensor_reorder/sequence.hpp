@@ -23,34 +23,24 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#ifndef __GPU_TENSOR_REORDER_H
-#define __GPU_TENSOR_REORDER_H
+#ifndef SEQUENCE_HPP
+#define SEQUENCE_HPP
 
-#include "gpu_batched_transpose.h"
-#include "gpu_general_tensor_reorder.h"
-
-template<typename T, typename dst_order>
-void gpu_tensor_reorder(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
+template <int... Is>
+struct sequence
 {
-    if(dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1){
-        gpu_batched_transpose(dst, src, n, c, h * w, kparam);
-    }
-    else if(dst_order::at(0)==0 && dst_order::at(1)==1 && dst_order::at(2)==3 && dst_order::at(3)==2){
-        gpu_batched_transpose(dst, src, n * c, h, w, kparam);
-    }
-    else if(dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2){
-        gpu_batched_transpose(dst, src, n, c * h , w, kparam);
-    }
-    else if(dst_order::at(0)==3 && dst_order::at(1)==0 && dst_order::at(2)==1 && dst_order::at(3)==2){
-        gpu_batched_transpose(dst, src, 1, n * c * h , w, kparam);
-    }
-    else if(dst_order::at(0)==2 && dst_order::at(1)==3 && dst_order::at(2)==0 && dst_order::at(3)==1){
-        gpu_batched_transpose(dst, src, 1, n * c, h * w, kparam);
-    }
-    else{
-        //printf("GPU choose general kernel\n");
-        gpu_general_tensor_reorder<T, dst_order>(dst, src, n, c, h, w, kparam);
-    }
-}
+    static constexpr int m_size = sizeof...(Is);
 
+    __host__ __device__ static constexpr auto size() { return m_size; }
+
+    __host__ __device__ static constexpr auto get_size() { return size(); }
+
+    __host__ __device__ static constexpr int at(int I)
+    {
+        // the last dummy element is to prevent compiler complain about empty array, when mSize = 0
+        const int m_data[m_size + 1] = {Is..., 0};
+        return m_data[I];
+    }
+
+};
 #endif

@@ -41,7 +41,7 @@
     do {                                                                       \
         hipError_t err = call;                                                 \
         if (err != hipSuccess) {                                               \
-            printf("[hiperror](%d) fail to call %s,(%s)\n", (int)err, #call,     \
+            printf("[hiperror](%d) fail to call %s,(%s)", (int)err, #call,     \
                    hipGetErrorString(err));                                    \
             exit(1);                                                           \
         }                                                                      \
@@ -50,7 +50,6 @@
 
 static struct {
     hipModule_t     module;
-
     hipFunction_t   kernel_batched_transpose_16x16_dword;
     hipFunction_t   kernel_batched_transpose_16x16_half;
     hipFunction_t   kernel_batched_transpose_16x16_byte;
@@ -615,7 +614,7 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
 
     // TODO: need find better way to decide transpose tile size
     uint32_t dim_h = (height + kparam->tile_y - 1) / kparam->tile_y;
-    uint32_t dim_w = (width  + kparam->tile_x - 1) / kparam->tile_x;
+    uint32_t dim_w = (width + kparam->tile_x - 1) / kparam->tile_x;
     uint32_t dim_total = batch * dim_h * dim_w;
 
     size_t block_size = 256;
@@ -650,8 +649,8 @@ void gpu_batched_transpose(T * dst, T * src, uint32_t batch, uint32_t height, ui
     void *config[] = {HIP_LAUNCH_PARAM_BUFFER_POINTER, &karg,
                         HIP_LAUNCH_PARAM_BUFFER_SIZE, &karg_size,
                         HIP_LAUNCH_PARAM_END};
-    //Hcc version using grid_size*block_size(total thread number) while None-Hcc version using grid_size(workgroup number)
-    HIP_CALL(hipExtModuleLaunchKernel(kernel, grid_size * block_size, 1, 1,
+
+    HIP_CALL(hipHccModuleLaunchKernel(kernel, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
                                             (void **)&config, NULL, NULL));
 }
