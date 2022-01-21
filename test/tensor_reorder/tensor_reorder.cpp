@@ -299,7 +299,7 @@ int main(int argc, char ** argv){
     HIP_CALL(hipMemcpy(src_gpu, src_cpu, dim_0*dim_1*dim_2*dim_3*size_byte, hipMemcpyHostToDevice));
 
 loop<int, 23>([&](auto i) {
-    constexpr int all_possible_sequence[23][4] = {
+    constexpr int all_possible_sequence[25][4] = {
     {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
     {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
     {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},

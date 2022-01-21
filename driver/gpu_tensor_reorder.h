@@ -28,6 +28,8 @@
 #define __GPU_NAIVE_CONV_H
 
 #include "gpu_batched_transpose.h"
+#include "gpu_general_tensor_reorder.h"
+
 
 static inline bool gpu_nchw2nhwc_is_kernel_valid(uint32_t n, uint32_t c, uint32_t h, uint32_t w, const transpose_kernel_param_t * kparam)
 {
