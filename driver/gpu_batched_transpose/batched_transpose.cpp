@@ -961,7 +961,7 @@ inline __device__ void batched_transpose_64x32_pack_4x2_ediv_4x2<ushort>(ushort*
             v_b = p_src[src_index + width_4];
             v_pack_b32_f16_2x2(v_pack.x, v_pack.y, v_a.x, v_b.x);
             v_pack_b32_f16_2x2(v_pack.z, v_pack.w, v_a.y, v_b.y);
-            
+
             smem[i_src_w * smem_stride + i_src_h] = v_pack;
 #endif
         }
