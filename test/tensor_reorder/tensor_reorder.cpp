@@ -234,6 +234,7 @@ void cpu_tensor_reorder(T * dst, T * src, uint64_t dim_0, uint64_t dim_1, uint64
     }
 }
 
+//compile time for_loop
 namespace detail {
 
     template<class T, T... inds, class F>
@@ -241,7 +242,7 @@ namespace detail {
         (f(std::integral_constant<T, inds>{}), ...);// C++17 fold expression
     }
 
-}// detail
+}
 
 template<class T, T count, class F>
 constexpr void loop(F&& f) {
@@ -251,7 +252,7 @@ constexpr void loop(F&& f) {
 #define WARMUP 3
 #define REPEAT 7
 #define BATCHED_TRANSPOSE_HSACO "out/batched_transpose.hsaco"
-#define TENSOR_REORDER_HSACO    "out/tensor_reorder.hsaco"
+#define GENERAL_TENSOR_REORDER_HSACO    "out/general_tensor_reorder.hsaco"
 
 int main(int argc, char ** argv){
     if(argc < 5){
@@ -284,6 +285,7 @@ int main(int argc, char ** argv){
     }
 
     bool batched = false;
+    bool is_kernel_valid = false;
     const char* hsaco;
     void * src_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
     void * dst_cpu = malloc(dim_0*dim_1*dim_2*dim_3*size_byte);
@@ -299,18 +301,22 @@ int main(int argc, char ** argv){
     HIP_CALL(hipMemcpy(src_gpu, src_cpu, dim_0*dim_1*dim_2*dim_3*size_byte, hipMemcpyHostToDevice));
 
 loop<int, 23>([&](auto i) {
-    constexpr int all_possible_sequence[25][4] = {
-    {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 1, 2}, {0, 3, 2, 1},
+    constexpr int all_possible_sequence[23][4] = {
+    {0, 1, 3, 2}, {2, 3, 0, 1}, {3, 0, 1, 2}, {0, 2, 3, 1}, {0, 3, 1, 2}, //BATCHED TRANSPOSE
+    {0, 2, 1, 3}, {0, 3, 2, 1},
     {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
-    {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
-    {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
+    {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 1, 0},
+    {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0} };
     using dst_order = sequence<all_possible_sequence[i][0], all_possible_sequence[i][1], all_possible_sequence[i][2], all_possible_sequence[i][3]>;
     std::cout <<" Tensor reorder to ("<< dst_order::at(0)<<","<< dst_order::at(1)<<","<< dst_order::at(2)<<","<< dst_order::at(3)<<")" << std::endl;
     
     //TODO: an API with more privacy
     auto launch_gpu_init = [&](){
-        if((dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1) || 
-           (dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2)
+        if((dst_order::at(0)==0 && dst_order::at(1)==1 && dst_order::at(2)==3 && dst_order::at(3)==2) || 
+           (dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1) || 
+           (dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2) ||
+           (dst_order::at(0)==3 && dst_order::at(1)==0 && dst_order::at(2)==1 && dst_order::at(3)==2) ||
+           (dst_order::at(0)==2 && dst_order::at(1)==3 && dst_order::at(2)==0 && dst_order::at(3)==1)
            ){
             printf("choose batched transpose kernel\n");
             batched = true;
@@ -320,7 +326,7 @@ loop<int, 23>([&](auto i) {
         }
         else {
             printf("choose general tensor reorder kernel\n");
-            hsaco = env_get_str("TENSOR_REORDER_HSACO", TENSOR_REORDER_HSACO);
+            hsaco = env_get_str("GENERAL_TENSOR_REORDER_HSACO", GENERAL_TENSOR_REORDER_HSACO);
             gpu_tensor_reorder_init(hsaco);
         }
     };
@@ -343,12 +349,27 @@ loop<int, 23>([&](auto i) {
             cpu_tensor_reorder<int8_t, dst_order>(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(src_cpu), dim_0, dim_1, dim_2, dim_3);
     };
 
-    auto test_tensor_reorder = [&](const transpose_kernel_param_t *transpose_kparam){
-        // tensor_reorder
+    auto test_batched_transpose = [&](const transpose_kernel_param_t *transpose_kparam){
         float kernel_time = 0;
         bool valid = false;
+        bool is_kernel_valid = false;
 
-        bool is_kernel_valid = gpu_tensor_reorder_is_kernel_valid(dim_0, dim_1, dim_2, dim_3, transpose_kparam);
+        if(dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1){
+            is_kernel_valid = transpose_kernel_is_valid(dim_0, dim_1, dim_2 * dim_3, transpose_kparam);
+        }
+        else if(dst_order::at(0)==0 && dst_order::at(1)==1 && dst_order::at(2)==3 && dst_order::at(3)==2){
+            is_kernel_valid = transpose_kernel_is_valid(dim_0 * dim_1, dim_2, dim_3, transpose_kparam);
+        }
+        else if(dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2){
+            is_kernel_valid = transpose_kernel_is_valid(dim_0, dim_1 * dim_2, dim_3, transpose_kparam);
+        }
+        else if(dst_order::at(0)==3 && dst_order::at(1)==0 && dst_order::at(2)==1 && dst_order::at(3)==2){
+            is_kernel_valid = transpose_kernel_is_valid(1, dim_0 * dim_1 * dim_2, dim_3, transpose_kparam);
+        }
+        //dst_order::at(0)==2 && dst_order::at(1)==3 && dst_order::at(2)==0 && dst_order::at(3)==1
+        else{
+            is_kernel_valid = transpose_kernel_is_valid(1, dim_0 * dim_1, dim_2 * dim_3, transpose_kparam);
+        }
         if(is_kernel_valid){
             hipEvent_t start, stop;
             HIP_CALL(hipMemset(dst_gpu, 0, dim_0*dim_1*dim_2*dim_3*size_byte));
@@ -390,6 +411,52 @@ loop<int, 23>([&](auto i) {
         return valid && is_kernel_valid ? kernel_time : FLT_MAX;
     };
 
+    auto test_general_tensor_reorder = [&](const transpose_kernel_param_t *transpose_kparam){
+        float kernel_time = 0;
+        bool valid = false;
+
+        bool is_kernel_valid = true;
+        if(is_kernel_valid){
+            hipEvent_t start, stop;
+            HIP_CALL(hipMemset(dst_gpu, 0, dim_0*dim_1*dim_2*dim_3*size_byte));
+
+            for(int i=0; i< warmup; i++){
+                launch_gpu_tensor_reorder(transpose_kparam);
+            }
+
+            HIP_CALL(hipEventCreate(&start));
+            HIP_CALL(hipEventCreate(&stop));
+            HIP_CALL(hipDeviceSynchronize());
+            HIP_CALL(hipEventRecord(start, 0) );
+
+            for(int i=0; i< repeat; i++){
+                launch_gpu_tensor_reorder(transpose_kparam);
+            }
+            HIP_CALL(hipEventRecord(stop, 0) );
+            HIP_CALL(hipEventSynchronize(stop) );
+            HIP_CALL(hipEventElapsedTime(&kernel_time, start, stop) );
+            HIP_CALL(hipEventDestroy(start) );
+            HIP_CALL(hipEventDestroy(stop) );
+            kernel_time = kernel_time / repeat;
+
+            launch_cpu_tensor_reorder();
+
+            HIP_CALL(hipMemcpy(dst_gpu_valid, dst_gpu, dim_0*dim_1*dim_2*dim_3*size_byte, hipMemcpyDeviceToHost));
+
+            valid = valid_vector_binary(reinterpret_cast<int8_t*>(dst_cpu), reinterpret_cast<int8_t*>(dst_gpu_valid), dim_0*dim_1*dim_2*dim_3*size_byte);
+        }
+
+        double flop_cnt = 2 * dim_0*dim_1*dim_2*dim_3*size_byte;
+        double bw = is_kernel_valid ? flop_cnt / kernel_time / 1e6 : 0;
+
+        printf("[tensor_reorder fp%s] tensor_size:(%lu, %lu, %lu, %lu), flop:%.0f, time:%fms, bw:%.4fGB/s, valid:%s (256x%d)\n",
+            fp_str.c_str(), dim_0, dim_1, dim_2, dim_3, flop_cnt, kernel_time, bw, is_kernel_valid ? (valid ? "y" : "n") : "x",
+            transpose_kparam->tile_x);
+        fflush(stdout);
+
+        return valid && is_kernel_valid ? kernel_time : FLT_MAX;
+    };
+
     auto get_transpose_all_kernel = [&](){
         if(fp_str == "32")
             return transpose_kernel_get_all_param_t<4>::get();
@@ -418,26 +485,29 @@ loop<int, 23>([&](auto i) {
     transpose_kernel_param_t min_tensor_reorder_kparam;
     if(batched){
         for(auto kparam : get_transpose_all_kernel()){
-            float current_time = test_tensor_reorder(&kparam);
+            float current_time = test_batched_transpose(&kparam);
             if(current_time < min_tensor_reorder_time){
                 min_tensor_reorder_time = current_time;
                 min_tensor_reorder_kparam = kparam;
             }
         }
+        printf("-> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_tensor_reorder_time,
+        min_tensor_reorder_kparam.tile_x, min_tensor_reorder_kparam.tile_y, min_tensor_reorder_kparam.pack_x, min_tensor_reorder_kparam.pack_y, min_tensor_reorder_kparam.ediv_x, min_tensor_reorder_kparam.ediv_y);
+        fflush(stdout);
+        printf("-------------------------\n");
     }
     else{
         for(auto kparam : get_tensor_reorder_all_kernel()){
-            float current_time = test_tensor_reorder(&kparam);
+            float current_time = test_general_tensor_reorder(&kparam);
             if(current_time < min_tensor_reorder_time){
                 min_tensor_reorder_time = current_time;
                 min_tensor_reorder_kparam = kparam;
             }
         }
+        printf("-> min time:%fms, kparam: 256x%d\n", min_tensor_reorder_time, min_tensor_reorder_kparam.tile_x);
+        fflush(stdout);
+        printf("-------------------------\n");
     }
-    printf("-> min time:%fms, kparam: %dx%d, %dx%d, %dx%d\n", min_tensor_reorder_time,
-        min_tensor_reorder_kparam.tile_x, min_tensor_reorder_kparam.tile_y, min_tensor_reorder_kparam.pack_x, min_tensor_reorder_kparam.pack_y, min_tensor_reorder_kparam.ediv_x, min_tensor_reorder_kparam.ediv_y);
-    fflush(stdout);
-    printf("-------------------------\n");
 });
 
     free(src_cpu);

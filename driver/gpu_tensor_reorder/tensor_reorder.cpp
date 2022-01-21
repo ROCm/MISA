@@ -211,10 +211,6 @@ inline __device__ void general_4d_reorder_1p(T* dst,
                                                uint32_t magic_stride2,
                                                uint32_t shift_stride2)
 {
-    /*
-     * assume input is 0, 1, 2, 3, 
-     */
-    //DIM_3%vectorc==0
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
@@ -272,10 +268,6 @@ inline __device__ void general_4d_reorder_2p(T* dst,
                                                uint32_t magic_stride2,
                                                uint32_t shift_stride2)
 {
-    /*
-     * assume input is 0, 1, 2, 3, 
-     */
-    //DIM_3%vectorc==0
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
@@ -333,10 +325,6 @@ inline __device__ void general_4d_reorder_4p(T* dst,
                                                uint32_t magic_stride2,
                                                uint32_t shift_stride2)
 {
-    /*
-     * assume input is 0, 1, 2, 3, 
-     */
-    //DIM_3%vectorc==0
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
@@ -394,10 +382,6 @@ inline __device__ void general_4d_reorder_8p(T* dst,
                                                uint32_t magic_stride2,
                                                uint32_t shift_stride2)
 {
-    /*
-     * assume input is 0, 1, 2, 3, 
-     */
-    //DIM_3%vectorc==0
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
@@ -455,10 +439,6 @@ inline __device__ void general_4d_reorder_16p(T* dst,
                                                uint32_t magic_stride2,
                                                uint32_t shift_stride2)
 {
-    /*
-     * assume input is 0, 1, 2, 3, 
-     */
-    //DIM_3%vectorc==0
     constexpr auto dorder = dst_order{};
     uint32_t pixel_total = dim_0 * dim_1 * dim_2 * dim_3; 
     uint32_t src_index =0, dst_index=0;
@@ -535,8 +515,8 @@ inline __device__ void general_4d_reorder_16p(T* dst,
     }
 //default order is 0 1 2 3
 using nchw2ncwh   = sequence<0, 1, 3, 2>;
-using nchw2nhcw   = sequence<0, 2, 1, 3>;
-using nchw2nhwc   = sequence<0, 2, 3, 1>;
+using nchw2nhcw   = sequence<0, 2, 1, 3>;//nhwc2nchwc
+using nchw2nhwc   = sequence<0, 2, 3, 1>;//nchw2nchwc
 using nchw2nwch   = sequence<0, 3, 1, 2>;//nhwc2nchw
 using nchw2nwhc   = sequence<0, 3, 2, 1>;
 using nchw2cnhw   = sequence<1, 0, 2, 3>;

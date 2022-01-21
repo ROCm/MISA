@@ -655,6 +655,126 @@ static inline void gpu_tensor_reorder_init(const char * hsaco){
         HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_half_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_half_nchw2whnc"));
         HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_half_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_half_nchw2whcn"));
 
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2ncwh, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2ncwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2nhcw, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2nhcw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2nhwc,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2nhwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2nwch,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2nwch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2nwhc, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2nwhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2cnhw, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2cnhw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2cnwh,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2cnwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2chnw,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2chnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2chwn, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2chwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2cwnh, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2cwnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2cwhn,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2cwhn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hncw,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2hncw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hnwc, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2hnwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hcnw, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2hcnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hcwn,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2hcwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hwnc,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2hwnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2hwcn, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2hwcn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2wnch, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2wnch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2wnhc,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2wnhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2wcnh,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2wcnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2wchn, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2wchn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_1p_byte_nchw2whnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_1p_byte_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_1p_byte_nchw2whcn"));
+
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2ncwh, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2ncwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2nhcw, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2nhcw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2nhwc,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2nhwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2nwch,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2nwch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2nwhc, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2nwhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2cnhw, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2cnhw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2cnwh,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2cnwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2chnw,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2chnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2chwn, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2chwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2cwnh, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2cwnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2cwhn,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2cwhn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hncw,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2hncw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hnwc, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2hnwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hcnw, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2hcnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hcwn,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2hcwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hwnc,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2hwnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2hwcn, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2hwcn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2wnch, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2wnch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2wnhc,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2wnhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2wcnh,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2wcnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2wchn, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2wchn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_2p_byte_nchw2whnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_2p_byte_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_2p_byte_nchw2whcn"));
+
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2ncwh, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2ncwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2nhcw, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2nhcw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2nhwc,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2nhwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2nwch,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2nwch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2nwhc, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2nwhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2cnhw, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2cnhw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2cnwh,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2cnwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2chnw,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2chnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2chwn, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2chwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2cwnh, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2cwnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2cwhn,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2cwhn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hncw,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2hncw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hnwc, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2hnwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hcnw, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2hcnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hcwn,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2hcwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hwnc,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2hwnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2hwcn, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2hwcn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2wnch, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2wnch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2wnhc,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2wnhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2wcnh,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2wcnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2wchn, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2wchn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_4p_byte_nchw2whnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_4p_byte_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_4p_byte_nchw2whcn"));
+        
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2ncwh, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2ncwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2nhcw, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2nhcw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2nhwc,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2nhwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2nwch,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2nwch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2nwhc, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2nwhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2cnhw, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2cnhw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2cnwh,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2cnwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2chnw,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2chnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2chwn, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2chwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2cwnh, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2cwnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2cwhn,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2cwhn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hncw,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2hncw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hnwc, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2hnwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hcnw, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2hcnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hcwn,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2hcwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hwnc,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2hwnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2hwcn, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2hwcn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2wnch, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2wnch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2wnhc,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2wnhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2wcnh,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2wcnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2wchn, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2wchn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_8p_byte_nchw2whnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_8p_byte_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_8p_byte_nchw2whcn"));
+
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2ncwh, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2ncwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2nhcw, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2nhcw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2nhwc,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2nhwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2nwch,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2nwch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2nwhc, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2nwhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2cnhw, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2cnhw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2cnwh,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2cnwh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2chnw,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2chnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2chwn, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2chwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2cwnh, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2cwnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2cwhn,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2cwhn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hncw,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2hncw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hnwc, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2hnwc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hcnw, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2hcnw"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hcwn,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2hcwn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hwnc,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2hwnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2hwcn, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2hwcn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2wnch, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2wnch"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2wnhc,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2wnhc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2wcnh,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2wcnh"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2wchn, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2wchn"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2whnc, the_reorder_gpu_handle.module,  "general_4d_reorder_16p_byte_nchw2whnc"));
+        HIP_CALL(hipModuleGetFunction(&the_reorder_gpu_handle.kernel_general_4d_reorder_16p_byte_nchw2whcn,  the_reorder_gpu_handle.module, "general_4d_reorder_16p_byte_nchw2whcn"));
+
         inited = 1;
     }
 }
@@ -689,15 +809,6 @@ struct tensor_reorder_kernel_get_all_param_t<4>{
             {4, 1, 1, 1, 1, 1},
             {8, 1, 1, 1, 1, 1},
             {16, 1, 1, 1, 1, 1},
-            //{16, 32, 1, 1, 1, 1},
-            //{32, 32, 1, 1, 1, 1},
-
-            //{4,  64, 1, 1, 1, 1},
-            //{ 64, 4, 1, 1, 1, 1},
-            //{4, 128, 1, 1, 1, 1},
-            //{128, 4, 1, 1, 1, 1},
-            //{4, 256, 1, 1, 1, 1},
-            //{256, 4, 1, 1, 1, 1},
         };
         return the_list;
     }
@@ -712,15 +823,6 @@ struct tensor_reorder_kernel_get_all_param_t<2>{
             {4, 1, 1, 1, 1, 1},
             {8, 1, 1, 1, 1, 1},
             {16, 1, 1, 1, 1, 1},
-            //{16, 32, 1, 1, 1, 1},
-            //{32, 32, 1, 1, 1, 1},
-
-            //{4,  64, 1, 1, 1, 1},
-            //{ 64, 4, 1, 1, 1, 1},
-            //{4, 128, 1, 1, 1, 1},
-            //{128, 4, 1, 1, 1, 1},
-            //{4, 256, 1, 1, 1, 1},
-            //{256, 4, 1, 1, 1, 1},
         };
         return the_list;
     }
@@ -734,15 +836,6 @@ struct tensor_reorder_kernel_get_all_param_t<1>{
             {4, 1, 1, 1, 1, 1},
             {8, 1, 1, 1, 1, 1},
             {16, 1, 1, 1, 1, 1},
-            //{16, 32, 1, 1, 1, 1},
-            //{32, 32, 1, 1, 1, 1},
-
-            //{4,  64, 1, 1, 1, 1},
-            //{ 64, 4, 1, 1, 1, 1},
-            //{4, 128, 1, 1, 1, 1},
-            //{128, 4, 1, 1, 1, 1},
-            //{4, 256, 1, 1, 1, 1},
-            //{256, 4, 1, 1, 1, 1},
         };
         return the_list;
     }

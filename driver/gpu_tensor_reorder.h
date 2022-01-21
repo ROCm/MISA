@@ -24,8 +24,8 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#ifndef __GPU_NAIVE_CONV_H
-#define __GPU_NAIVE_CONV_H
+#ifndef __GPU_TENSOR_REORDER_H
+#define __GPU_TENSOR_REORDER_H
 
 #include "gpu_batched_transpose.h"
 #include "gpu_general_tensor_reorder.h"
@@ -65,8 +65,17 @@ void gpu_tensor_reorder(T * dst, T * src, uint32_t n, uint32_t c, uint32_t h, ui
     if(dst_order::at(0)==0 && dst_order::at(1)==2 && dst_order::at(2)==3 && dst_order::at(3)==1){
         gpu_batched_transpose(dst, src, n, c, h * w, kparam);
     }
+    else if(dst_order::at(0)==0 && dst_order::at(1)==1 && dst_order::at(2)==3 && dst_order::at(3)==2){
+        gpu_batched_transpose(dst, src, n * c, h, w, kparam);
+    }
     else if(dst_order::at(0)==0 && dst_order::at(1)==3 && dst_order::at(2)==1 && dst_order::at(3)==2){
-        gpu_batched_transpose(dst, src, n, c*h , w, kparam);
+        gpu_batched_transpose(dst, src, n, c * h , w, kparam);
+    }
+    else if(dst_order::at(0)==3 && dst_order::at(1)==0 && dst_order::at(2)==1 && dst_order::at(3)==2){
+        gpu_batched_transpose(dst, src, 1, n * c * h , w, kparam);
+    }
+    else if(dst_order::at(0)==2 && dst_order::at(1)==3 && dst_order::at(2)==0 && dst_order::at(3)==1){
+        gpu_batched_transpose(dst, src, 1, n * c, h * w, kparam);
     }
     else{
         //printf("GPU choose general kernel\n");
