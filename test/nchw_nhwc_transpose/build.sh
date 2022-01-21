@@ -1,6 +1,6 @@
 #!/bin/sh
 # to launch from top of generator
-ARCH=gfx1030
+ARCH=gfx908
 rm -rf out
 mkdir out
 
