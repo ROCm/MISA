@@ -50,8 +50,8 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
-#ifndef VECTOR_C_FP16
-#define VECTOR_C_FP16 8
+#ifndef VECTOR_C
+#define VECTOR_C 8
 #endif
 
 #ifdef USE_GPU_NAIVE_CONV
@@ -817,7 +817,7 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
-    int vector_c = env_get_int("VECTOR_C_FP16", VECTOR_C_FP16);
+    int vector_c = env_get_int("VECTOR_C", VECTOR_C);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
