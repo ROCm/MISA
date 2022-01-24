@@ -265,6 +265,8 @@ ctrl_dotx_mapping_fp16 = [
         #ctrl_dotx_mapping_t( 32,  64,   8,   8,   2,   2,   4,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
         #ctrl_dotx_mapping_t( 32,  64,   8,   8,   2,   4,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
         
+        ctrl_dotx_mapping_t( 16,  64,   8,   8,   2,   4,   1,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        
         ctrl_dotx_mapping_t( 32,  32,   8,   8,   2,   2,   1,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
     ]
 
