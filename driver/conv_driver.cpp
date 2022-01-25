@@ -50,8 +50,8 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
-#ifndef VECTOR_C_FP16
-#define VECTOR_C_FP16 8
+#ifndef VECTOR_C
+#define VECTOR_C 8
 #endif
 
 #ifdef USE_GPU_NAIVE_CONV
@@ -392,7 +392,16 @@ bool valid_vector<int8_t>(const float *ref, const int8_t *pred, size_t n,
     // int8 valid, we prefer a per pixel match
     int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
     int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
+    int dump_pred_dword = env_get_int("DUMP_PRED", 0);
     size_t pp_err = 0;
+
+    if(dump_pred_dword){
+        // dump as dword, weather the type of pred
+        size_t total_safe_size = n / ( sizeof(float) / sizeof(int8_t) );
+        for(size_t i=0; i<total_safe_size;i++ ){
+            printf("[%zu] ref:%lf, pred:0x%08x\n", i, ref[i], ((uint32_t*)pred)[i]);
+        }
+    }
 
     for (size_t i = 0; i < n; ++i) {
         if(!(valid_float<float>(ref[i]) ) ){
@@ -808,7 +817,7 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
-    int vector_c = env_get_int("VECTOR_C_FP16", VECTOR_C_FP16);
+    int vector_c = env_get_int("VECTOR_C", VECTOR_C);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");

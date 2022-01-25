@@ -91,8 +91,16 @@ class codegen_driver_t(mc_base_t):
         macro_v_fma_mxn_t(self.mc, 2, 2, 4).emit()
 
     def _emit_dotx_macro(self):
-        macro_dotx_mxn_t(self.mc, 1, 1, 1, 'fp16').emit()
-        macro_dotx_mxnxk_t(self.mc, 1, 1, 8, 1, 'fp16').emit()
+        dotx = macro_dotx_mxn_t(self.mc, 8, 8, 1, self.tunable_dicts[0]['precision'])
+        dotx.emit()
+        max_lanegroup_tile_k = 4 * 4 // amdgpu_precision_data_byte(self.tunable_dicts[0]['precision'])
+        k_multiplier = 2
+        while True:
+            current_k = dotx.lanegroup_tile_k * k_multiplier
+            if current_k > max_lanegroup_tile_k:
+                break
+            macro_dotx_mxnxk_t(self.mc, 8, 8, current_k, 1, self.tunable_dicts[0]['precision']).emit()
+            k_multiplier *= 2
 
     def emit_global_macro(self):
         # emit global macro, independent of tunable

@@ -28,6 +28,8 @@
 from ..codegen import *
 from .utility import *
 
+LANEGROUP_SIZE   = 8
+
 class inst_dotx_vop2_t(inst_base_t):
     def __init__(self, name, k, data_type):
         inst_base_t.__init__(self, INST_ENCODING_VOP2)
@@ -65,29 +67,46 @@ v_dot8_u32_u4   = inst_dotx_vop3p_t('v_dot8_u32_u4' ,  8, AMDGPU_PRECISION_UINT4
 
 class macro_dotx_mxn_t(macro_base_t):
     '''
+    the size is always in unit of lanegroup
     '''
     def name(self):
-        return f".v_dotx_{self.precision}_{self.m}x{self.n}" + \
+        return f".v_lanegroup_dotx_{self.precision}_{self.lanegroup_tile_m}x{self.lanegroup_tile_n}x{self.lanegroup_tile_k}" + \
                 ("" if self.stride == 1 else f"_s{self.stride}")
 
-    def __init__(self, mc, m, n, stride, precision):
+    def __init__(self, mc, lanegroup_tile_m, lanegroup_tile_n, stride, precision):
         macro_base_t.__init__(self, mc)
-        self.m = m
-        self.n = n
+        assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        self.lanegroup_tile_m = lanegroup_tile_m
+        self.lanegroup_tile_n = lanegroup_tile_n
         self.stride = stride
         self.precision = precision
-        assert stride >= n and stride % n == 0
+        #assert stride >= lanegroup_tile_n and stride % lanegroup_tile_n == 0
+        self.lanegroup_tile_k = self.get_dotx_instruction().k
     def __call__(self, c, a, b):
         return '{} {},{},{}'.format(self.name(), c, a, b)
+    
+    def get_dotx_instruction(self):
+        if self.precision == 'fp16':
+            return v_dot2c_f32_f16
+        elif self.precision == 'int8':
+            return v_dot4c_i32_i8
+        else:
+            assert False
+
     def emit(self):
         reg_a = msym_t(sym_t('a'))
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
-            for idx_m in range(self.m):
-                for idx_n in range(self.n):
-                    for idx_dpp in range(8):
-                        self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+            for idx_m in range(self.lanegroup_tile_m // LANEGROUP_SIZE):
+                for idx_n in range(self.lanegroup_tile_n // LANEGROUP_SIZE):
+                    for idx_dpp in range(LANEGROUP_SIZE):
+                        if self.precision == 'fp16':
+                            self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+                        elif self.precision == 'int8':
+                            self._emit(v_dot4c_i32_i8(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+                        else:
+                            assert False
 
 class macro_dotx_mxnxk_t(macro_base_t):
     '''
@@ -95,25 +114,24 @@ class macro_dotx_mxnxk_t(macro_base_t):
     TODO: implement any index-ed fma (for rdna)
     '''
     def name(self):
-        return f".v_dotx_{self.precision}_{self.m}x{self.n}x{self.k}" + \
+        return f".v_lanegroup_dotx_{self.precision}_{self.lanegroup_tile_m}x{self.lanegroup_tile_n}x{self.lanegroup_tile_k}" + \
                 ("" if self.stride == 1 else f"_s{self.stride}")
 
-    def __init__(self, mc, m, n, k, stride, precision):
+    def __init__(self, mc, lanegroup_tile_m, lanegroup_tile_n, lanegroup_tile_k, stride, precision):
         macro_base_t.__init__(self, mc)
-        self.m = m
-        self.n = n
-        self.k = k
+        self.lanegroup_tile_m = lanegroup_tile_m
+        self.lanegroup_tile_n = lanegroup_tile_n
+        self.lanegroup_tile_k = lanegroup_tile_k
         self.stride = stride
         self.precision = precision
-        assert stride >= n and stride % n == 0
+        #assert stride >= lanegroup_tile_n and stride % lanegroup_tile_n == 0
     def __call__(self, c, a, b):
         return '{} {},{},{}'.format(self.name(), c, a, b)
     def emit(self):
         reg_a = msym_t(sym_t('a'))
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))
-        v_dotx_mxn = macro_dotx_mxn_t(self.mc, self.m, self.n, self.stride, self.precision)
+        v_dotx_mxn = macro_dotx_mxn_t(self.mc, self.lanegroup_tile_m, self.lanegroup_tile_n, self.stride, self.precision)
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
-            for idx_k in range(self.k // v_dot2c_f32_f16.k):
+            for idx_k in range(self.lanegroup_tile_k // v_dotx_mxn.lanegroup_tile_k):
                 self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k), reg_b(idx_k)))
-                
