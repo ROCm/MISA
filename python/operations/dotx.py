@@ -90,6 +90,8 @@ class macro_dotx_mxn_t(macro_base_t):
             return v_dot2c_f32_f16
         elif self.precision == 'int8':
             return v_dot4c_i32_i8
+        elif self.precision == 'int4':
+            return v_dot8_i32_i4
         else:
             assert False
 
@@ -105,6 +107,8 @@ class macro_dotx_mxn_t(macro_base_t):
                             self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
                         elif self.precision == 'int8':
                             self._emit(v_dot4c_i32_i8(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+                        elif self.precision == 'int4':
+                            self._emit(v_dot8_i32_i4(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m + idx_dpp), reg_b(idx_n)))
                         else:
                             assert False
 
@@ -134,4 +138,8 @@ class macro_dotx_mxnxk_t(macro_base_t):
         v_dotx_mxn = macro_dotx_mxn_t(self.mc, self.lanegroup_tile_m, self.lanegroup_tile_n, self.stride, self.precision)
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
             for idx_k in range(self.lanegroup_tile_k // v_dotx_mxn.lanegroup_tile_k):
-                self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k), reg_b(idx_k)))
+                if isinstance(v_dotx_mxn.get_dotx_instruction(), inst_dotx_vop2_t):
+                    dpp_index = self.lanegroup_tile_m // LANEGROUP_SIZE
+                else:
+                    dpp_index = LANEGROUP_SIZE
+                self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k * dpp_index), reg_b(idx_k)))
