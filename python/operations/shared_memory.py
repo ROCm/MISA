@@ -751,7 +751,7 @@ class inst_ds_write_t(object):
         assert False
 
     def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
-        assert offset.is_integer()
+        # assert offset.is_integer()
         offset = int(offset)
         if self.bytes == 1:
             return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
