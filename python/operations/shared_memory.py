@@ -721,7 +721,7 @@ class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
     def get_offset(self, offset):
-        return '' if offset == 0 else 'offset:{}'.format(offset)
+        return f'offset:{offset}'
     def __call__(self, vdst, vaddr, offset):
         if self.bytes == 1:
             return 'ds_read_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
@@ -735,6 +735,10 @@ class inst_ds_read_t(object):
             return 'ds_read_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+        if self.bytes == 32:
+            return f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}' + \
+                    '\n' + \
+                   f'ds_read_b128 v[{vdst}+4:{vdst}+4+3], v[{vaddr}] {self.get_offset(offset)}+16'
         assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1

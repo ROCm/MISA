@@ -438,9 +438,9 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         
         v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
-        if isinstance(dotx_m.inst_dotx, inst_dotx_vop3p_t):
-            # need to repeat v_a because dpp8 is not supported.
-            print("not dpp8")
+        
+        # need to repeat v_a because dpp8 is not supported.
+        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
         
         sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
         sld_a.expr_set_args(v_a(), v_sld_a_os(), lds_base_m)
