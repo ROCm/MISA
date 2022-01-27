@@ -49,10 +49,6 @@ static inline int env_get_int_fwd(const char *var_name, int default_int) {
 //#define GEMM_K_GLOBAL_SPLIT 3
 #define MAX_GEMM_K_SPLITS 8
 
-#ifndef VECTOR_C_FP16
-#define VECTOR_C_FP16 8
-#endif
-
 #define LANEGROUP_SIZE 8
 
 typedef struct {
@@ -502,8 +498,9 @@ public:
                 }
             }
         }else if(tunable->tensor_layout == "nchwc"){
-            int vector_c = VECTOR_C_FP16;
-            if((c / group) % vector_c != 0 || (k / group) % vector_c != 0){
+            if(this->vector_c != tunable->vector_c)
+                return false;
+            if((c / group) %  tunable->vector_c != 0 || (k / group) %  tunable->vector_c != 0){
                 return false;
             }
 
@@ -690,7 +687,6 @@ public:
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
         } else if(tunable->tensor_layout == "nchwc") {
             igemm_fwd_gtc_nchwc_karg_t karg;
-            int vector_c       = VECTOR_C_FP16;
             igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
             uint32_t ntile_h   = (ho + tiling.tile_h - 1) / tiling.tile_h;
             uint32_t ntile_w   = (wo + tiling.tile_w - 1) / tiling.tile_w;
@@ -703,7 +699,7 @@ public:
             karg.wi            = wi;
             karg.n             = n;
             karg.k             = k / group;
-            karg.c             = c / group / vector_c;
+            karg.c             = c / group / tunable->vector_c;
             karg.group         = group;
             karg.ks            = 1;
 
@@ -714,9 +710,9 @@ public:
             karg.pad_hw        = (pad_h << 16 ) | pad_w;
             karg.wei_hw        = (y << 16) | x;
             
-            uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
-            uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
-            uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
+            uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / tunable->vector_c / x) % y;
+            uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / tunable->vector_c % x;
+            uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / tunable->vector_c / (x * y)) % (c / group);
             karg.move_slice_k  = (s_move_slice_k_y << 16) | (s_move_slice_k_x << 8) | s_move_slice_k_c;
 
 #if USE_MAGIC_DIV

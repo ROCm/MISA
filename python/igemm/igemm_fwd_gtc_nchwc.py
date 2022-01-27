@@ -86,7 +86,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store.precision = self.tunable.precision
 
-            ctrl_coalescing_store.vector_store_m = self.tunable.vector_c                      # TODO: some cases this can be set to other value
+            l_mr, l_mt = ctrl_coalescing_store.get_m_split_lengths()
+
+            ctrl_coalescing_store.vector_store_m = utility_gcd(self.tunable.vector_c, l_mt)                # TODO: some cases this can be set to other value
             ctrl_coalescing_store.vector_fold_m = self.tunable.vector_c
             ctrl_coalescing_store.block_size = self.tunable.block_size
             
@@ -644,7 +646,6 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.outer = outer
             ta_k_vec_c, tb_nb0, tb_nb_vec_c = outer.get_thread_lengths()
             ca_k, ca_ce, cb_ce, cb_nb1 = outer.get_cluster_lengths()
-            vector_c = self.outer.tunable.vector_c
 
             nb_per_thread = tb_nb0
             nk_per_thread = ta_k_vec_c
@@ -787,6 +788,10 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 if k.startswith('a_'):
                     self._emit(v.declare())
 
+    # def get_vector_store_c_per_thread(self):
+    #     l_mr, l_mt = self.coalescing_store.ctrl.get_m_split_lengths()
+    #     return utility_gcd(self.tunable.vector_c, l_mt)
+
     def get_num_vgpr_global_load_a(self):
         ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
         pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k_vec_c != 1 else 1
@@ -856,7 +861,6 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
     def get_macro_global_load(self):
         inline = True if self.tunable.fma_interleave else False
-        vector_c = self.tunable.vector_c
         ta_k_vec_c, tb_nb0, tb_nb_vec_c                 = self.get_thread_lengths()
         ca_k, ca_ce, cb_ce, cb_nb1                      = self.get_cluster_lengths()
         na_k_vec_c, na_ce,  nb_ce, nb_nb0, nb_nb1_vec_c = self.get_dims_lengths()
@@ -870,8 +874,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         ctrl_wei_gld.precision = self.tunable.precision
         ctrl_in_gld.precision  = self.tunable.precision
-        ctrl_wei_gld.vector_d1 = utility_gcd(vector_c, 4 * (4 // data_byte))
-        ctrl_in_gld.vector_d1  = utility_gcd(vector_c, 4 * (4 // data_byte))
+        ctrl_wei_gld.vector_d1 = utility_gcd(self.tunable.vector_c, 4 * (4 // data_byte))
+        ctrl_in_gld.vector_d1  = utility_gcd(self.tunable.vector_c, 4 * (4 // data_byte))
 
         ctrl_in_gld.use_flag = 1
         ctrl_wei_gld.use_flag = 0
@@ -1644,7 +1648,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
         self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))
-        self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), '0', v.v_tmp()))
+        self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), v.v_out_os(), '0', v.v_tmp()))
         self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
         self._emit_empty_line()
 
@@ -1690,6 +1694,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"v_add_nc_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(4)}]")
 
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_out_in()}], s[{s.s_out_stride_n()}]")
+        if self.coalescing_store.ctrl.vector_fold_m > self.coalescing_store.ctrl.vector_store_m:
+            self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], {self.coalescing_store.ctrl.vector_store_m}, v[{v.v_out_os()}], v[{v.v_tmp()}]")            
+
         self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
         self._emit(f"v_lshl_add_u32 v[{v.v_out_os()}], v[{v.v_tmp(4)}], {utility_log2(data_byte * self.tunable.vector_c)}, v[{v.v_tmp()}]")
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], s[{s.s_out_stride_k()}], v[{v.v_co_sub_m_index()}]")

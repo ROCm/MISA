@@ -169,7 +169,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             # assert ctrl.get_lanegroup_granularity_m() % ctrl.vector_store_m == 0
             vector_size = min(l_mt * data_byte // 4, 1)
             # assert vector_size % ctrl.vector_store_m == 0
-            assert ctrl.vector_store_m % ctrl.vector_fold_m == 0
+            # assert ctrl.vector_store_m % ctrl.vector_fold_m == 0
             sst_vec, sld_vec, smem_trans = ctrl.vector_store_m, ctrl.vector_store_m, False
         elif ctrl.vector_store_m == 1 and ctrl.vector_store_n != 1:
             assert ctrl.vector_fold_m == 1
@@ -452,7 +452,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
         return self._get_deferred()
 
-    def init_co_sub_m_index(self, v_co_sub_m_index, v_tid, v_tmp4):
+    def init_co_sub_m_index(self, v_co_sub_m_index, v_co_sub_m_store_inside_fold_index, v_tid, v_tmp4):
         ctrl = self.ctrl
 
         l_mr, l_mt = ctrl.get_subgroup_length()
@@ -539,6 +539,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
             self._emit(emit_co_m())
             if ctrl.vector_fold_m != 1:
+                if ctrl.vector_fold_m > ctrl.vector_store_m:
+                    assert ctrl.vector_fold_m % ctrl.vector_store_m == 0
+                    self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_store_inside_fold_index}], {utility_log2(ctrl.vector_store_m)}, v[{v_co_sub_m_index}] ; store inside fold sub_m by {ctrl.vector_store_m}")
+                    self._emit(f"v_and_b32 v[{v_co_sub_m_store_inside_fold_index}], {(ctrl.vector_fold_m // ctrl.vector_store_m) - 1}, v[{v_co_sub_m_store_inside_fold_index}]")
                 self._emit(f"v_lshrrev_b32 v[{v_co_sub_m_index}], {utility_log2(ctrl.vector_fold_m)}, v[{v_co_sub_m_index}] ; fold sub_m by {ctrl.vector_fold_m}")
         return self._get_deferred()
 
