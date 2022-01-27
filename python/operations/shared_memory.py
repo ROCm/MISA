@@ -751,6 +751,8 @@ class inst_ds_write_t(object):
         assert False
 
     def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
+        assert offset.is_integer()
+        offset = int(offset)
         if self.bytes == 1:
             return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 2:
@@ -969,7 +971,7 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         # assert ctrl.precision == 'fp32', "TO BE supported"
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
-        pixel_per_vgpr = 4 // data_byte
+        pixel_per_vgpr = int(4 // data_byte)
         vgpr_per_vector = (ctrl.vector_dp + pixel_per_vgpr - 1) // pixel_per_vgpr
         assert ctrl.length_dp % ctrl.vector_dp == 0
         num_dp = ctrl.length_dp // ctrl.vector_dp

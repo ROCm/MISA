@@ -178,7 +178,7 @@ class macro_igemm_2d_global_load_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_tmp2'.format(self.name())):
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -355,11 +355,11 @@ class macro_igemm_2d_global_load_precache_soffset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
         #with self._emit_macro_indented('.macro {} v_dst, s_ptr, v_os, s_stride_d0, s_stride_d1, s_offset'.format(self.name())):
         # self._emit(f".v_clear_nc \\v_dst, {ctrl.length_d0 * ctrl.length_d1}")
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
-        pixel_per_vgpr = 4 // data_byte
+        pixel_per_vgpr = int(4 // data_byte)
         vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
             i_dst = 0
@@ -453,8 +453,8 @@ class macro_igemm_2d_global_load_precache_voffset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
-        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
+        pixel_per_vgpr = int(4 // amdgpu_precision_data_byte(ctrl.precision))
         vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
         i_cnt = 0
         for i_d0 in range(ctrl.length_d0):
@@ -519,8 +519,8 @@ class macro_igemm_2d_global_load_precache_vs_offset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
-        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
+        pixel_per_vgpr = int(4 // amdgpu_precision_data_byte(ctrl.precision))
         vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
@@ -587,8 +587,8 @@ class macro_igemm_2d_global_load_precache_sv_offset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
-        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
+        pixel_per_vgpr = int(4 // amdgpu_precision_data_byte(ctrl.precision))
         vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
 
         if ctrl.src_order == 0 and ctrl.dst_order == 0:
@@ -725,8 +725,8 @@ class macro_igemm_2d_global_load_precache_offset_t(macro_base_t):
         assert ctrl.length_d1 % ctrl.vector_d1 == 0
         n_d1 = ctrl.length_d1 // ctrl.vector_d1
         # assert ctrl.precision == 'fp32', "TO BE supported"
-        buffer_load_dword = inst_buffer_load_t(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision))
-        pixel_per_vgpr = 4 // amdgpu_precision_data_byte(ctrl.precision)
+        buffer_load_dword = inst_buffer_load_t(int(ctrl.vector_d1 * amdgpu_precision_data_byte(ctrl.precision)))
+        pixel_per_vgpr = int(4 // amdgpu_precision_data_byte(ctrl.precision))
         vgpr_per_vector = (ctrl.vector_d1 + pixel_per_vgpr - 1) // pixel_per_vgpr
 
         def gen_soffset_sequence():

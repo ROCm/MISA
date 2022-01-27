@@ -482,7 +482,7 @@ def utility_is_pow2(v):
     return v and (not(v & (v - 1)))
 
 def utility_log2(v):
-    assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
+    assert math.log2(v).is_integer(), f'v:{v} must be power of 2'
     return int(math.log2(v))
 
 def utility_get_epack_length(precision):

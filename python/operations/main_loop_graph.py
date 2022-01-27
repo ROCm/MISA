@@ -417,10 +417,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         
         data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(ctrl.precision))
 
-        lds_width_m_per_read = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * ctrl.lds_k_pack
-        lds_width_n_per_read = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * ctrl.lds_k_pack
-        lds_width_m = data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack
-        lds_width_n = data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack
+        lds_width_m_per_read = int(data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * ctrl.lds_k_pack)
+        lds_width_n_per_read = int(data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * ctrl.lds_k_pack)
+        lds_width_m = int(data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack)
+        lds_width_n = int(data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack)
         local_prefetch_num = ctrl.local_prefetch_num
         local_prefetch_num_m = ctrl.local_prefetch_num_m
         

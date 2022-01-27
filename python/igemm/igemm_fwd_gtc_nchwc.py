@@ -659,7 +659,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
             num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
 
-            share_load_packed_vgpr      = share_load_packed // (4 // data_byte)
+            share_load_packed_vgpr      = share_load_packed // int(4 // data_byte)
 
             num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
             num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
@@ -788,13 +788,13 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                     self._emit(v.declare())
 
     def get_num_vgpr_global_load_a(self):
-        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k_vec_c != 1 else 1
+        ta_k_vec_c, _, _ = self.get_thread_lengths()
+        pack_factor = int(4 // amdgpu_precision_data_byte(self.tunable.precision)) if ta_k_vec_c != 1 else 1
         return self.tunable.num_global_load_a // pack_factor
     
     def get_num_vgpr_global_load_b(self):
-        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
-        pack_factor = (4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_nb_vec_c != 1 else 1
+        _, _, tb_nb_vec_c = self.get_thread_lengths()
+        pack_factor = int(4 // amdgpu_precision_data_byte(self.tunable.precision)) if tb_nb_vec_c != 1 else 1
         return self.tunable.num_global_load_b // pack_factor
 
     def get_thread_lengths(self):
@@ -870,8 +870,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         ctrl_wei_gld.precision = self.tunable.precision
         ctrl_in_gld.precision  = self.tunable.precision
-        ctrl_wei_gld.vector_d1 = utility_gcd(vector_c, 4 * (4 // data_byte))
-        ctrl_in_gld.vector_d1  = utility_gcd(vector_c, 4 * (4 // data_byte))
+        ctrl_wei_gld.vector_d1 = utility_gcd(vector_c, 4 * int(4 // data_byte))
+        ctrl_in_gld.vector_d1  = utility_gcd(vector_c, 4 * int(4 // data_byte))
 
         ctrl_in_gld.use_flag = 1
         ctrl_wei_gld.use_flag = 0

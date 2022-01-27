@@ -691,6 +691,37 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         else:
                             # CAUSION: ds_write_b8 already clamp the value for us. if need other clamp methor, need further consideration
                             pass
+                    
+                    elif ctrl.precision == 'int4':
+                        if not smem_trans:
+                            for i in range(vgpr_last_dim_num // 8):
+                                vi = vgpr_index + 8 * i
+                                vo = vgpr_index + i
+                                self._emit(f"v_and_b32 v[{v_c(vi + 0)}], 0xf, v[{v_c(vi + 0)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 1)}], 0xf, v[{v_c(vi + 1)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 2)}], 0xf, v[{v_c(vi + 2)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 3)}], 0xf, v[{v_c(vi + 3)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 4)}], 0xf, v[{v_c(vi + 4)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 5)}], 0xf, v[{v_c(vi + 5)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 6)}], 0xf, v[{v_c(vi + 6)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 7)}], v[{v_c(vi + 7)}], 28, v[{v_c(vi + 0)}]")
+
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 1)}], v[{v_c(vi + 1)}], 4, v[{v_c(vi + 2)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 3)}], v[{v_c(vi + 3)}], 4, v[{v_c(vi + 4)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 5)}], v[{v_c(vi + 5)}], 4, v[{v_c(vi + 6)}]")
+                                
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 1)}], v[{v_c(vi + 1)}], 4, v[{v_c(vi + 7)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 3)}], 12, v[{v_c(vi + 3)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 20, v[{v_c(vi + 5)}]")
+                                
+                                #self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], 16, v[{v_c(vi + 4)}]")
+                                
+                                #self._emit(f"v_or_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 3)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 1)}], v[{v_c(vi + 3)}], v[{v_c(vi + 4)}]")
+                                for j in range(8):
+                                    accvgpr_consume_list.append(vi + j)
+                        else:
+                            pass
 
                     if not smem_trans:
                         self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset))
@@ -760,8 +791,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
                     for i_d in range(num_sld_issues_per_ssgroup):
                         vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                        vgpr_index = int(vgpr_index)
                         sld_coord = [i_ssgroup, i_d, 0, 0, 0]
                         sld_offset = sld_co_desc.calculate_offset(sld_coord)
+                        sld_offset = int(sld_offset)
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_sld_issues_per_ssgroup : (i_ssgroup+1) * num_sld_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
@@ -785,7 +818,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
-                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec//(4 // data_byte)
+                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec // int(4 // data_byte)
                         lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and gst_vec == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
                         if not ctrl.feat_co_m_flag_check and (s_k is not None):
