@@ -285,6 +285,9 @@ ctrl_dotx_mapping_int8 = [
         ctrl_dotx_mapping_t(128, 128,   8,   8,   2,   4,   4,   2,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
         ctrl_dotx_mapping_t(128, 128,   8,   8,   4,   2,   4,   2,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
 
+        ctrl_dotx_mapping_t(128,  96,   8,   8,   2,   2,   4,   4,   3, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 96, 128,   8,   8,   2,   2,   4,   3,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+
         ctrl_dotx_mapping_t(128,  96,   8,   8,   4,   2,   4,   2,   3, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
         ctrl_dotx_mapping_t( 96, 128,   8,   8,   4,   2,   4,   3,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
 
@@ -299,6 +302,9 @@ ctrl_dotx_mapping_int8 = [
 
         ctrl_dotx_mapping_t( 64,  32,   8,   8,   4,   2,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
         ctrl_dotx_mapping_t( 32,  64,   8,   8,   2,   4,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+
+        ctrl_dotx_mapping_t( 64,  32,   8,   8,   2,   2,   2,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 32,  64,   8,   8,   2,   2,   2,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
 
         ctrl_dotx_mapping_t( 32,  32,   8,   8,   2,   2,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
     ]

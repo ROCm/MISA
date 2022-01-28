@@ -563,6 +563,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.s_wei_stride_x             = sym_t('s_wei_stride_x'            , sseq(1))
 
             self.s_out_stride_k             = sym_t('s_out_stride_k'            , sseq(1))
+            if outer.coalescing_store.need_vector_m_inside_fold_m():
+                self.s_out_stride_vector_k  = sym_t('s_out_stride_vector_k'     , self.s_in_stride_c.value)
             self.s_out_stride_ho            = sym_t('s_out_stride_ho'           , sseq(1))
             self.s_out_stride_n             = sym_t('s_out_stride_n'            , sseq(1))
 
@@ -571,7 +573,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self.s_block_gtc_inb            = sym_t("s_block_gtc_inb"           , sseq(1))
 
             self.s_move_slice_k_stride_gemm_k   = sym_t("s_move_slice_k_stride_gemm_k"  , sseq(1))
-            
+
             self.s_move_slice_k_stride_c    = sym_t("s_move_slice_k_stride_c"  , sseq(1))
 
             self.s_knum                     = sym_t("s_knum"                    , 3)
@@ -1694,7 +1696,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"v_add_nc_u32 v[{v.v_tmp(4)}], v[{v.v_tmp()}], v[{v.v_tmp(4)}]")
 
         self._emit(f"v_mul_lo_u32 v[{v.v_tmp()}], v[{v.v_out_in()}], s[{s.s_out_stride_n()}]")
-        if self.coalescing_store.ctrl.vector_fold_m > self.coalescing_store.ctrl.vector_store_m:
+        if self.coalescing_store.need_vector_m_inside_fold_m():
             self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], {self.coalescing_store.ctrl.vector_store_m}, v[{v.v_out_os()}], v[{v.v_tmp()}]")            
 
         self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
@@ -1772,6 +1774,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_add_nc_u32 v[{v.v_gtc_iy()}], s[{s.s_y_dilation_h()}], v[{v.v_gtc_iy()}]")
 
         self._emit_empty_line()
+
+        if self.coalescing_store.need_vector_m_inside_fold_m():
+            self._emit(f"s_mov_b32 s[{s.s_out_stride_vector_k()}], {self.coalescing_store.ctrl.vector_store_m * data_byte}")
 
         self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x31014000")
@@ -2011,7 +2016,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
-                None, s.s_out_stride_k(), s.s_tmp(), v.v_out_flag(), s.s_k(), v.v_out_ik(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                s.s_out_stride_vector_k() if self.coalescing_store.need_vector_m_inside_fold_m() else None,
+                s.s_out_stride_k(), s.s_tmp(), v.v_out_flag(), s.s_k(), v.v_out_ik(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
 
         else:
             a = self.agpr
