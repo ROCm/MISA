@@ -33,6 +33,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "common.h"
 
 typedef struct {
     std::string long_name;
@@ -165,6 +166,9 @@ static inline std::string create_base_args(int argc, char *argv[]) {
     }
 
     std::string arg = argv[1];
+
+    if(find_vector_c_from_base_arg(arg) > 1)   // TODO: not safe
+        return arg;
 
     if(arg != "conv" && arg != "convfp16" && arg != "convint8" && arg != "convbfp16" && arg != "--version")
     {
