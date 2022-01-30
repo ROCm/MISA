@@ -272,6 +272,9 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
 
         v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
+        # need to repeat v_a because dpp8 is not supported.
+        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
+        
         gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
         gld_a_b = dotx_core_loop_node("global load a/b", gld_a, gld_b)

@@ -56,6 +56,8 @@ class ctrl_coalescing_store_dotx_t(object):
         self.co_m_flag_check_reset_functor = None
         self.div_v_const_func = None
         self.div_rem_v_const_func = None
+        self.mul_vi_func = None
+        self.mul_si_func = None
         
     def get_gemmn_ratio(self):
         return self.cdm.block_size() / ((self.cdm.block_size() // self.cdm.macro_tile_n) * self.cdm.macro_tile_n)
@@ -448,7 +450,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
 
             self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * sld_vec)}, v[{v_tid}]   ; sld vec:{sld_vec} * byte:{data_byte}")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
+            #self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
+            self._emit(ctrl.mul_vi_func(v_co_sst, v_co_sst, data_byte))
 
         return self._get_deferred()
 
@@ -640,7 +643,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; coalescing store, mapping:{ctrl.cdm.serialize()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, block_size:{ctrl.cdm.block_size()}")
             self._emit(f'; gemm_co_prev_desc:{gemm_co_prev_desc.get_lengths()}, gemm_co_split_lengths:{gemm_co_split_lengths}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
-            self._emit(f"s_mul_i32 s[{s_gemm_m1_stride}], {data_byte}, s[{s_gemm_m1_stride}] ; data_byte:{data_byte}")
+            #self._emit(f"s_mul_i32 s[{s_gemm_m1_stride}], {data_byte}, s[{s_gemm_m1_stride}] ; data_byte:{data_byte}")
+            self._emit(ctrl.mul_si_func(s_gemm_m1_stride, s_gemm_m1_stride, data_byte))
             self._emit(f"s_barrier")
 
             gemm_m_co_start_coord = [0, 0, 0, 0, 0]
@@ -706,18 +710,18 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"v_and_b32 v[{v_c(vi + 6)}], 0xf, v[{v_c(vi + 6)}]")
                                 self._emit(f"v_lshl_or_b32 v[{v_c(vi + 7)}], v[{v_c(vi + 7)}], 28, v[{v_c(vi + 0)}]")
 
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 1)}], v[{v_c(vi + 1)}], 4, v[{v_c(vi + 2)}]")
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 3)}], v[{v_c(vi + 3)}], 4, v[{v_c(vi + 4)}]")
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 5)}], v[{v_c(vi + 5)}], 4, v[{v_c(vi + 6)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 1)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], v[{v_c(vi + 4)}], 4, v[{v_c(vi + 3)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 6)}], v[{v_c(vi + 6)}], 4, v[{v_c(vi + 5)}]")
                                 
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 1)}], v[{v_c(vi + 1)}], 4, v[{v_c(vi + 7)}]")
-                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 3)}], 12, v[{v_c(vi + 3)}]")
-                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 20, v[{v_c(vi + 5)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 7)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 12, v[{v_c(vi + 4)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 6)}], 20, v[{v_c(vi + 6)}]")
                                 
                                 #self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], 16, v[{v_c(vi + 4)}]")
                                 
                                 #self._emit(f"v_or_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 3)}]")
-                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 1)}], v[{v_c(vi + 3)}], v[{v_c(vi + 4)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 2)}], v[{v_c(vi + 4)}], v[{v_c(vi + 6)}]")
                                 for j in range(8):
                                     accvgpr_consume_list.append(vi + j)
                         else:

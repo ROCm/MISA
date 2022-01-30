@@ -60,6 +60,7 @@ typedef enum {
     driverInt8  = 3,
     driverBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)
                            (Partially supported) */
+    driverInt4  = 7,
 } driverDataType_t;
 
 typedef struct {
@@ -78,6 +79,8 @@ static inline size_t get_data_byte(driverDataType_t dtype)
         return 1;
     if(dtype == driverBFloat16)
         return 2;
+    if(dtype == driverInt4)
+        return 1;
     assert(0);
     return 0;
 }

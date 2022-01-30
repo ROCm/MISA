@@ -166,7 +166,7 @@ static inline std::string create_base_args(int argc, char *argv[]) {
 
     std::string arg = argv[1];
 
-    if(arg != "conv" && arg != "convfp16" && arg != "convint8" && arg != "convbfp16" && arg != "--version")
+    if(arg != "conv" && arg != "convfp16" && arg != "convint8" && arg != "convint4" && arg != "convbfp16" && arg != "--version")
     {
         printf("Invalid Base Input Argument\n");
         exit(0);
