@@ -449,8 +449,6 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         v_a_wait_index = (local_buffer_m + 3) // 4
         v_b_wait_index = (local_buffer_n + 3) // 4
         
-        print(f"v_a_wait_index={v_a_wait_index}, v_b_wait_index={v_b_wait_index}")
-        
         sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
         sld_a.expr_set_args(v_a(), v_sld_a_os(), lds_base_m)
         sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
@@ -485,14 +483,9 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         for expr_local_prefetch in local_prefetch:
             self.append_new_node(expr_local_prefetch, stack_prefetch, f"local prefetch")
             if expr_local_prefetch.args[0].startswith('v_a'):
-                print('fff')
                 ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0], v_a_wait_index)
             else:
-                print('fff1')
                 ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0], v_b_wait_index)
-                
-        print(f"v_a:{ds_waitcnt.vpgr_num_dict['v_a']}")
-        print(f"v_b:{ds_waitcnt.vpgr_num_dict['v_b']}")
             
         self.finish_stack(stack_prefetch)
             

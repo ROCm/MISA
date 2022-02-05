@@ -1924,8 +1924,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.global_load_b_functor       = self.global_load_in
                 fctrl.shared_store_a_functor      = self.shared_store_wei
                 fctrl.shared_store_b_functor      = self.shared_store_in
-                fctrl.shared_load_a_functor       = inst_ds_read_t(data_byte * self.tunable.vector_c * dpp_index)
-                fctrl.shared_load_b_functor       = inst_ds_read_t(data_byte * self.tunable.vector_c)
+                fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * dpp_index)
+                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c)
                 fctrl.move_slice_window_a_functor = move_slice_window_a
                 fctrl.move_slice_window_b_functor = move_slice_window_b
 

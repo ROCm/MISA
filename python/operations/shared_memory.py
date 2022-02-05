@@ -715,7 +715,35 @@ class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):
     def name(self):
         return ''
 
-
+class inst_ds_read_mc_t(mc_base_t):
+    def __init__(self, mc, bytes):
+        mc_base_t.__init__(self, mc)
+        self.bytes = bytes
+    def get_offset(self, offset):
+        return f'offset:{offset}'
+    def __call__(self, vdst, vaddr, offset):
+        with self._deferred_context():
+            if self.bytes == 1:
+                self._emit(f'ds_read_u8 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 2:
+                self._emit(f'ds_read_u16 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 4:
+                self._emit(f'ds_read_b32 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 8:
+                self._emit(f'ds_read_b64 v[{vdst}:{vdst}+1], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 12:
+                self._emit(f'ds_read_b96 v[{vdst}:{vdst}+2], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 16:
+                self._emit(f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}')
+            elif self.bytes == 32:
+                self._emit(f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}')
+                self._emit(f'ds_read_b128 v[{vdst}+4:{vdst}+4+3], v[{vaddr}] {self.get_offset(offset)}+16')
+            else:
+                assert False, f'bytes:{self.bytes}'
+        return self._get_deferred()
+        
+    def get_issues(self, sld_offset = 0):
+        return 1
 
 class inst_ds_read_t(object):
     def __init__(self, bytes):
