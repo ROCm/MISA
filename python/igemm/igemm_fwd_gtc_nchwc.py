@@ -673,7 +673,6 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
             # print(f"share_load_packed_vgpr:{share_load_packed_vgpr}, tunable.num_vgpr_accumulate_b:{outer.tunable.num_vgpr_accumulate_b}, num_vgpr_acc_b:{num_vgpr_acc_b}")
             if is_vgpr_acc_c:
-                print(outer.tunable.num_vgpr_accumulate_c)
                 self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c+2))
                 v_c_num                 = vseq()
             else:
