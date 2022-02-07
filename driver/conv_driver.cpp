@@ -588,7 +588,7 @@ int main(int argc, char **argv) {
     else if(base_type == "convint8") {
         driver_data_type = driverInt8;
     }
-    else if(base_arg == "convint4") {
+    else if(base_type == "convint4") {
         driver_data_type = driverInt4;
     }
     else{
