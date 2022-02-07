@@ -333,7 +333,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         # actually, we want to sub divide ds_read by its vector size.
         # note, number of gst issue maybe larger than sld issue, but sld issue never be larger than gst issue.
         # that is, we never want do to multiple ds_read to construct a data, then single global_store_dwordx...
-        max_sld_issues_per_ssgroup = 4 if sld_vec in (2, 4) else 8
+        max_sld_issues_per_ssgroup = 8 if sld_vec in (2, 4) else 8
 
         if sst_vec != 1 and sld_vec != 1:
             # last dim of 3d_prev_desc is gemm_m
@@ -355,7 +355,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             # split due to max lgkmcnt
             num_sld_issues_per_ssgroup = utility_gcd(gemm_co_post_sld_desc.get_length(0), max_sld_issues_per_ssgroup)
             split_sld_groups = gemm_co_post_sld_desc.get_length(0) // num_sld_issues_per_ssgroup
-            assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, "TODO: need adjust ssgroup value based on dword per group"
+            assert (ctrl.get_num_dword_per_group() // gst_vec) % split_sld_groups == 0, \
+                f"TODO: need adjust ssgroup value based on dword per group, gemm_co[0]:{ gemm_co_post_sld_desc.get_length(0)}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}, " + \
+                    f"split_sld_groups:{split_sld_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, gst_vec:{gst_vec}, coalescing_groups:{ctrl.coalescing_groups}" + \
+                    f", cdm:{ctrl.cdm.macro_tile_m}x{ctrl.cdm.macro_tile_n}"
             num_gst_per_ssgroup = ctrl.get_num_dword_per_group() // gst_vec // split_sld_groups
             
             # recompute num sst when ctrl.cdm.block_size() % gemm_n_size != 0
