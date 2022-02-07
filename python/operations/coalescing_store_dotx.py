@@ -734,10 +734,6 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                 self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 7)}]")
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 12, v[{v_c(vi + 4)}]")
                                 self._emit(f"v_lshlrev_b32 v[{v_c(vi + 6)}], 20, v[{v_c(vi + 6)}]")
-                                
-                                #self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], 16, v[{v_c(vi + 4)}]")
-                                
-                                #self._emit(f"v_or_b32 v[{v_c(vi + 0)}], v[{v_c(vi + 0)}], v[{v_c(vi + 3)}]")
                                 self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 2)}], v[{v_c(vi + 4)}], v[{v_c(vi + 6)}]")
                                 for j in range(8):
                                     accvgpr_consume_list.append(vi + j)

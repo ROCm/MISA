@@ -723,21 +723,22 @@ class inst_ds_read_mc_t(mc_base_t):
         return f'offset:{offset}'
     def __call__(self, vdst, vaddr, offset):
         with self._deferred_context():
-            if self.bytes == 1:
+            read_bytes = int(self.bytes)
+            if read_bytes == 1:
                 self._emit(f'ds_read_u8 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 2:
+            elif read_bytes == 2:
                 self._emit(f'ds_read_u16 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 4:
+            elif read_bytes == 4:
                 self._emit(f'ds_read_b32 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 8:
+            elif read_bytes == 8:
                 self._emit(f'ds_read_b64 v[{vdst}:{vdst}+1], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 12:
+            elif read_bytes == 12:
                 self._emit(f'ds_read_b96 v[{vdst}:{vdst}+2], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 16:
+            elif read_bytes == 16:
                 self._emit(f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}')
-            elif self.bytes == 32:
-                self._emit(f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}')
-                self._emit(f'ds_read_b128 v[{vdst}+4:{vdst}+4+3], v[{vaddr}] {self.get_offset(offset)}+16')
+            elif read_bytes % 16 == 0:
+                for i in range(read_bytes // 16):
+                    self._emit(f'ds_read_b128 v[{vdst}+{4*i}:{vdst}+{4*i}+3], v[{vaddr}] {self.get_offset(offset)}+{16 * i}')
             else:
                 assert False, f'bytes:{self.bytes}'
         return self._get_deferred()

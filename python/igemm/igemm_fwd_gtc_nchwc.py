@@ -30,7 +30,7 @@ from .igemm_base import *
 
 
 IGEMM_FWD_GTC_NCHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
-IGEMM_FWD_GTC_NCHWC_DEBUG = 0
+IGEMM_FWD_GTC_NCHWC_DEBUG = 1
 IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING = True
 
 def _find_non_1_index_in_list(list_object):
@@ -676,7 +676,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
             # print(f"share_load_packed_vgpr:{share_load_packed_vgpr}, tunable.num_vgpr_accumulate_b:{outer.tunable.num_vgpr_accumulate_b}, num_vgpr_acc_b:{num_vgpr_acc_b}")
             if is_vgpr_acc_c:
-                self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c+2))
+                self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c+1))
                 v_c_num                 = vseq()
             else:
                 v_c_resuable_num        = num_vgpr_acc_a + num_vgpr_acc_b + \
@@ -690,7 +690,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self.v_c                = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
             if not outer.tunable.tensor_a_pass_through:
-                self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a))
+                self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a+1))
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
             self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
@@ -1811,7 +1811,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit_empty_line()
 
         if self.coalescing_store.need_vector_m_inside_fold_m():
-            self._emit(f"s_mov_b32 s[{s.s_out_stride_vector_k()}], {self.coalescing_store.ctrl.vector_store_m * data_byte}")
+            self._emit(f"s_mov_b32 s[{s.s_out_stride_vector_k()}], {int(self.coalescing_store.ctrl.vector_store_m * data_byte)}")
 
         self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
         self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x31014000")

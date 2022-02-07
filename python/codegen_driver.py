@@ -101,6 +101,18 @@ class codegen_driver_t(mc_base_t):
                 break
             macro_dotx_mxnxk_t(self.mc, 8, 8, current_k, 1, self.tunable_dicts[0]['precision']).emit()
             k_multiplier *= 2
+            
+    def _emit_dotx_non_dpp_macro(self):
+        dotx_non_dpp = macro_dotx_mxnxk_non_dpp_t(self.mc, 8, 8, 8, 1, self.tunable_dicts[0]['precision'])
+        dotx_non_dpp.emit()
+        max_lanegroup_tile_k = 4 * 4 // amdgpu_precision_data_byte(self.tunable_dicts[0]['precision'])
+        k_multiplier = 2
+        while True:
+            current_k = dotx_non_dpp.get_dotx_instruction().k * k_multiplier
+            if current_k > max_lanegroup_tile_k:
+                break
+            macro_dotx_mxnxk_non_dpp_t(self.mc, 8, 8, current_k, 1, self.tunable_dicts[0]['precision']).emit()
+            k_multiplier *= 2
 
     def emit_global_macro(self):
         # emit global macro, independent of tunable
@@ -125,7 +137,10 @@ class codegen_driver_t(mc_base_t):
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
-            self._emit_dotx_macro()
+            if self.tunable_dicts[0]['precision'] in ('fp16', 'int8'):
+                self._emit_dotx_macro()
+            else:
+                self._emit_dotx_non_dpp_macro()
         else:
             self._emit_fma_macro()
         if hasattr(self.kernel_list[0], 'use_bf16_1k_in_fp16'):
@@ -158,7 +173,10 @@ class codegen_driver_t(mc_base_t):
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
-            self._emit_dotx_macro()
+            if self.tunable_dicts[0]['precision'] in ('fp16', 'int8'):
+                self._emit_dotx_macro()
+            else:
+                self._emit_dotx_non_dpp_macro()
         else:
             self._emit_fma_macro()
 

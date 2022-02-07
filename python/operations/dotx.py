@@ -146,3 +146,57 @@ class macro_dotx_mxnxk_t(macro_base_t):
                     # non-dpp inst
                     dpp_index = LANEGROUP_SIZE
                 self._emit(v_dotx_mxn(reg_c(), reg_a(idx_k * dpp_index), reg_b(idx_k)))
+                
+class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
+    '''
+    the size is always in unit of lanegroup
+    '''
+    def name(self):
+        return f".v_lanegroup_dotx_{self.precision}_{self.lanegroup_tile_m}x{self.lanegroup_tile_n}x{self.lanegroup_tile_k}" + \
+                ("" if self.stride == 1 else f"_s{self.stride}")
+
+    def __init__(self, mc, lanegroup_tile_m, lanegroup_tile_n, lanegroup_tile_k, stride, precision):
+        macro_base_t.__init__(self, mc)
+        assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        self.lanegroup_tile_m = lanegroup_tile_m
+        self.lanegroup_tile_n = lanegroup_tile_n
+        self.stride = stride
+        self.precision = precision
+        #assert stride >= lanegroup_tile_n and stride % lanegroup_tile_n == 0
+        self.lanegroup_tile_k = lanegroup_tile_k 
+        self.loop_k = lanegroup_tile_k // self.get_dotx_instruction().k
+    def __call__(self, c, a, b):
+        return '{} {},{},{}'.format(self.name(), c, a, b)
+    
+    def get_dotx_instruction(self):
+        if self.precision == 'int4':
+            return v_dot8_i32_i4
+        else:
+            assert False
+
+    def emit(self):
+        reg_a = msym_t(sym_t('a'))
+        reg_b = msym_t(sym_t('b'))
+        reg_c = msym_t(sym_t('c'))
+        with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
+            '''
+            for idx_m in range(self.lanegroup_tile_m // LANEGROUP_SIZE):
+                for idx_n in range(self.lanegroup_tile_n // LANEGROUP_SIZE):
+                    for idx_dpp in range(LANEGROUP_SIZE):
+                        for idx_loop_k in range(self.loop_k):
+                            if self.precision == 'int4':
+                                # non-dpp inst
+                                self._emit(v_dot8_i32_i4(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a((idx_m + idx_dpp) * self.loop_k + idx_loop_k), reg_b(idx_n * self.loop_k + idx_loop_k), reg_c(idx_m * self.stride + idx_n + idx_dpp)))
+                            else:
+                                assert False
+            '''
+
+            for idx_loop_k in range(self.loop_k):              
+                for idx_m in range(self.lanegroup_tile_m // LANEGROUP_SIZE):
+                    for idx_n in range(self.lanegroup_tile_n // LANEGROUP_SIZE):
+                        for idx_dpp in range(LANEGROUP_SIZE):
+                            if self.precision == 'int4':
+                                # non-dpp inst
+                                self._emit(v_dot8_i32_i4(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a((idx_m + idx_dpp) * self.loop_k + idx_loop_k), reg_b(idx_n * self.loop_k + idx_loop_k), reg_c(idx_m * self.stride + idx_n + idx_dpp)))
+                            else:
+                                assert False

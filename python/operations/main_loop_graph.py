@@ -272,7 +272,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         #thread_sub_n = local_buffer_n
         #thread_sub_m = local_buffer_m
 
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        if ctrl.precision in ('fp16', 'int8'):
+            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        else:
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
@@ -442,7 +445,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        if ctrl.precision in ('fp16', 'int8'):
+            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        else:
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
