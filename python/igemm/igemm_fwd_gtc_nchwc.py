@@ -1610,8 +1610,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.dotx_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp(),
                                     k_pack=k_pack_src_mat, v_pack=v_pack))
-            #self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
-            #self._emit(self.dotx_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
+            if self.tunable.vector_c < 8:
+                '''
+                an optimization for vector >= 8 case, there src gemm m/n will be the same as dst gemm m/n, due to dotx mapping
+                '''
+                self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+                self._emit(self.dotx_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
         else:
             v_pack = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else 1
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
@@ -1667,6 +1671,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
+        if self.tunable.vector_c < 8:
+            self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
+            self._emit(f"v_mov_b32 v[{v.v_gemm_im()}], v[{v.v_co_sld()}]")
         self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))
         self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), v.v_out_os(), '0', v.v_tmp()))
         self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
