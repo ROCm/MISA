@@ -515,7 +515,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             self.append_new_node(sld_a_b, stack, f"next dotx node {i_k}")
             
         for i_rn in range(repeat_n):
-            if i_rn > 0 and dotx_m.lanegroup_repeat_n > local_prefetch_num:
+            if i_rn > 0 and dotx_m.lanegroup_repeat_n > local_prefetch_num and i_rn < dotx_m.lanegroup_repeat_n - 1:
                 sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
                 sld_b.expr_set_args(v_b((((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num * local_buffer_n)), v_sld_b_os(), f'{lds_base_n}+{unroll_k - 1}*{lds_width_n}+{(i_rn+1)*lds_width_n_per_read}')
                 ds_waitcnt.push_new_vgpr(v_b((((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num * local_buffer_n)))
