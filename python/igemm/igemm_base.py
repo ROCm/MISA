@@ -231,8 +231,8 @@ class igemm_gtc_tunable_parameter_t(object):
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
-        if self.tensor_layout == "nchwc":
-            self.vector_c                       = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+        # if self.tensor_layout == "nchwc":
+        self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -458,7 +458,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 assert length_in_m % self.coalescing_store_groups == 0
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
             c_vgpr_sst = self.lanegroup_repeat_m * self.lanegroup_tile_m // self.coalescing_store_groups
-            dotx_length_in_m = self.vector_c
+            dotx_length_in_m = utility_gcd(self.vector_c, 8) # TODO: lanegroup size may differ
             assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
             if c_vgpr_sst % dotx_length_in_m != 0:
                 self.coalescing_store_groups = self.lanegroup_repeat_m * self.lanegroup_tile_m // dotx_length_in_m
@@ -553,7 +553,7 @@ class igemm_gtc_tunable_parameter_t(object):
             precision = to_miopen_prec(self.precision)
             out_str = (f"        {'{'}{direction}, {tensor_layout}, {precision}, {self.nxb:2},{self.nxe:2},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
             out_str += (f"{self.wave_tile_m:3},{self.wave_tile_n:3},{self.wave_tile_k:3},{self.wave_step_m:2},{self.wave_step_n:2},{self.wave_repeat_m:2},{self.wave_repeat_n:2},")
-            out_str += (f"{self.multihead:2},{self.vector_store:2},{self.gemm_k_global_split:2},{self.merge_e:2},{self.tensor_a_pass_through:2},")
+            out_str += (f"{self.multihead:2},{self.vector_store:2},{self.gemm_k_global_split:2},{self.merge_e:2},{self.vector_c:2},{self.tensor_a_pass_through:2},")
             out_str += (f" {brace_left}{self.tensor_a_thread_lengths[0]:2},{self.tensor_a_thread_lengths[1]:2},{self.tensor_a_thread_lengths[2]:2},{self.tensor_a_thread_lengths[3]:2}{brace_right},")
             out_str += (f" {brace_left}{self.tensor_a_cluster_lengths[0]:3},{self.tensor_a_cluster_lengths[1]:3},{self.tensor_a_cluster_lengths[2]:3},{self.tensor_a_cluster_lengths[3]:3}{brace_right},")
             out_str += (f" {brace_left}{self.tensor_b_thread_lengths[0]:2},{self.tensor_b_thread_lengths[1]:2},{self.tensor_b_thread_lengths[2]:2},{self.tensor_b_thread_lengths[3]:2}{brace_right},")
@@ -607,6 +607,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['source_access_order']             = self.source_access_order
         tunable_dict['gemm_k_global_split']             = self.gemm_k_global_split
         tunable_dict['merge_e']                         = self.merge_e
+        tunable_dict['vector_c']                        = self.vector_c
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
@@ -691,6 +692,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.merge_e:
             sstr += \
                 line_start + 'merge_e                    {} {}'.format(equal, self.merge_e) + new_line
+        if self.vector_c:
+            sstr += \
+                line_start + 'vector_c                   {} {}'.format(equal, self.vector_c) + new_line
         if self.vector_store:
             sstr += \
                 line_start + 'vector_store               {} {}'.format(equal, self.vector_store) + new_line
@@ -736,8 +740,12 @@ def igemm_gtc_encode_kernel_base_name(tunable, arch):
             kernel_name += 'gtcx2_'
         else:
             assert False
+    
+    vector_c_str = ""
+    if tunable.vector_c > 1:
+        vector_c_str = f"x{tunable.vector_c}"
 
-    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}"
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}{vector_c_str}"
 
     return kernel_name
 

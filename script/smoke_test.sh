@@ -1,37 +1,37 @@
 #!/bin/bash
 # need use posix cmopatible bash
 
-if [ $# -ge 1 ] ; then
+if [[ $# -ge 1 ]] ; then
     DIR=$1
 else
     DIR=bwd
 fi
 
-if [ $# -ge 2 ] ; then
+if [[ $# -ge 2 ]] ; then
     LAYOUT=$2
 else
     LAYOUT="nchw"
 fi
 
-if [ $# -ge 3 ] ; then
+if [[ $# -ge 3 ]] ; then
     PREC=$3
 else
     PREC="fp32"
 fi
 
-if [ $# -ge 4 ] ; then
+if [[  $# -ge 4 ]] ; then
     ARCH=$4
 else
     ARCH="gfx908"
 fi
 
-if [ "${LAYOUT}" = "nchw" ] ; then
+if [[  "${LAYOUT}" = "nchw" ]] ; then
     LAYOUT_HSACO=""
     LAYOUT_ARG=""
-elif [ "${LAYOUT}" = "nhwc" ] ; then
+elif [[  "${LAYOUT}" = "nhwc" ]] ; then
     LAYOUT_HSACO="_nhwc"
     LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
-elif [ "${LAYOUT}" = "nchwc" ] ; then
+elif [[  "${LAYOUT}" = "nchwc" ]] ; then
     LAYOUT_HSACO="_nchwc"
     LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
@@ -39,21 +39,21 @@ else
     exit 1
 fi
 
-if [ "${PREC}" = "fp32" ] ; then
+if [[ "${PREC}" = "fp32" ]] ; then
     PREC_HSACO=""
     CONV="conv"
-elif [ "${PREC}" = "fp16" ] ; then
-    PREC_HSACO="_fp16"
-    CONV="convfp16"
-elif [ "${PREC}" = "int8" ] ; then
-    PREC_HSACO="_int8"
-    CONV="convint8"
-elif [ "${PREC}" = "int4" ] ; then
-    PREC_HSACO="_int4"
-    CONV="convint4"
-elif [ "${PREC}" = "bf16" ] ; then
-    PREC_HSACO="_bf16"
-    CONV="convbfp16"
+elif [[ "${PREC}" = "int4"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "fp16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "int8"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[ "${PREC}" = "bf16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="convbfp16${PREC:4}"
 else
     echo "wrong precision: ${PREC}"
     exit 1

@@ -50,10 +50,6 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
-#ifndef VECTOR_C
-#define VECTOR_C 8
-#endif
-
 #ifdef USE_GPU_NAIVE_CONV
 #   include "gpu_naive_conv.h"
 #   ifndef IGEMM_GPU_NAIVE_CONV_HSACO
@@ -575,24 +571,30 @@ int main(int argc, char **argv) {
     args_t conv_args = create_conv_args(argc, argv);
     // dump_arg(&conv_args);
     driverDataType_t driver_data_type;
+    auto vec_found = base_arg.find("x");
+    std::string base_type = base_arg.substr(0, vec_found);
+    int vector_c = find_vector_c_from_base_arg(base_arg);
+    vector_c = env_get_int("VECTOR_C", vector_c);
 
-    if(base_arg == "conv"){
+    if(base_type == "conv"){
         driver_data_type = driverFloat;
     }
-    else if(base_arg == "convfp16"){
+    else if(base_type == "convfp16"){
         driver_data_type = driverHalf;
     }
-    else if(base_arg == "convbfp16") {
+    else if(base_type == "convbfp16") {
         driver_data_type = driverBFloat16;
     }
-    else if(base_arg == "convint8") {
+    else if(base_type == "convint8") {
         driver_data_type = driverInt8;
     }
     else if(base_arg == "convint4") {
         driver_data_type = driverInt4;
     }
-    else
+    else{
+        printf("invalid base type:%s\n", base_type.c_str());
         exit(0);
+    }
 
     size_t data_byte = get_data_byte(driver_data_type);
 
@@ -601,7 +603,6 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
-    int vector_c = env_get_int("VECTOR_C", VECTOR_C);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
@@ -843,6 +844,7 @@ int main(int argc, char **argv) {
         }
 
         igemm_fwd_gtc_t conv_fwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_fwd_driver.set_vector_c(vector_c);
 
         auto fwd_pre = [&](){
             if (need_verify)
@@ -978,6 +980,7 @@ int main(int argc, char **argv) {
         }
 
         igemm_bwd_gtc_t conv_bwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_bwd_driver.set_vector_c(vector_c);
 
         auto bwd_pre = [&](){
             if (need_verify)
@@ -1127,6 +1130,7 @@ int main(int argc, char **argv) {
 
 
         igemm_wrw_gtc_t conv_wrw_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_wrw_driver.set_vector_c(vector_c);
         
         auto wrw_pre = [&](){
             if (need_verify)
