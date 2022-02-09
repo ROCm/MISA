@@ -693,10 +693,6 @@ int main(int argc, char **argv) {
                 gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -2, 2);
             }
 
-            for(int iii= 0; iii < 8; iii++){
-                std::cout << iii << ":" << host_input[iii] << std::endl;
-            }
-
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
             //gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);

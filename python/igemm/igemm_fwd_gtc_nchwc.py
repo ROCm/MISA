@@ -30,7 +30,7 @@ from .igemm_base import *
 
 
 IGEMM_FWD_GTC_NCHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
-IGEMM_FWD_GTC_NCHWC_DEBUG = 1
+IGEMM_FWD_GTC_NCHWC_DEBUG = 0
 IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING = True
 
 def _find_non_1_index_in_list(list_object):
@@ -1745,7 +1745,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         if self.tunable.nxe != 0:
             pass
         else:
-            self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_in_stride_c()}], {data_byte * na_ce}")
+            self._emit(f"s_mul_i32 s[{s.s_move_slice_k_stride_c()}], s[{s.s_in_stride_c()}], {int(data_byte * na_ce)}")
             self._emit(f"s_mov_b32 s[{s.s_move_slice_k_acc_c()}], {self.tunable.gemm_k_per_block // self.tunable.vector_c}")
             
         self._emit(f"s_lshl_b32 s[{s.s_move_slice_k_stride_gemm_k()}], s[{s.s_k()}], {utility_log2(self.tunable.gemm_k_per_block * data_byte)}")
