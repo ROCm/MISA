@@ -83,11 +83,13 @@ class ds_waitcnt_t(object):
         super().__init__()
         self.max_num = 0
         self.vpgr_num_dict = dict()
+        self.vpgr_index_dict = dict()
         self.waited_vgprs = set()
 
-    def push_new_vgpr(self, vgpr):
+    def push_new_vgpr(self, vgpr, index = 1):
+        self.max_num = self.max_num + index
         self.vpgr_num_dict[vgpr] = self.max_num
-        self.max_num = self.max_num + 1
+        self.vpgr_index_dict[vgpr] = index
         
         self.waited_vgprs.discard(vgpr)
 
@@ -102,10 +104,10 @@ class ds_waitcnt_t(object):
         if do_not_need_swait:
             return -1
         self.waited_vgprs.update(vgpr_list)
-        max_index = 0
+        max_num = 0
         for vgpr in vgpr_list:
-            max_index = max(max_index, self.vpgr_num_dict[vgpr])
-        return self.get_max_num() - max_index
+            max_num = max(max_num, self.vpgr_num_dict[vgpr])
+        return self.get_max_num() - max_num
 
 class dotx_core_loop_expr(mc_base_t):
     def __init__(self, mc, name, func=None) -> None:
@@ -270,7 +272,13 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         #thread_sub_n = local_buffer_n
         #thread_sub_m = local_buffer_m
 
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        if ctrl.precision in ('fp16', 'int8'):
+            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        else:
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        
+        # need to repeat v_a because dpp8 is not supported.
+        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
         
         gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
@@ -417,10 +425,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         
         data_byte = amdgpu_precision_data_byte(amdgpu_string_to_precision(ctrl.precision))
 
-        lds_width_m_per_read = data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * ctrl.lds_k_pack
-        lds_width_n_per_read = data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * ctrl.lds_k_pack
-        lds_width_m = data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack
-        lds_width_n = data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack
+        lds_width_m_per_read = int(data_byte * (dotx_m.macro_tile_m // dotx_m.lanegroup_repeat_m) * ctrl.lds_k_pack)
+        lds_width_n_per_read = int(data_byte * (dotx_m.macro_tile_n // dotx_m.lanegroup_repeat_n) * ctrl.lds_k_pack)
+        lds_width_m = int(data_byte * dotx_m.macro_tile_m * ctrl.lds_k_pack)
+        lds_width_n = int(data_byte * dotx_m.macro_tile_n * ctrl.lds_k_pack)
         local_prefetch_num = ctrl.local_prefetch_num
         local_prefetch_num_m = ctrl.local_prefetch_num_m
         
@@ -437,7 +445,15 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         
-        v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        if ctrl.precision in ('fp16', 'int8'):
+            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        else:
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        
+        # need to repeat v_a because dpp8 is not supported.
+        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
+        v_a_wait_index = (local_buffer_m + 3) // 4
+        v_b_wait_index = (local_buffer_n + 3) // 4
         
         sld_a = dotx_core_loop_expr(self.mc, "sld_a", f_sld_a)
         sld_a.expr_set_args(v_a(), v_sld_a_os(), lds_base_m)
@@ -472,7 +488,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         stack_prefetch = [node_local_prefecth]
         for expr_local_prefetch in local_prefetch:
             self.append_new_node(expr_local_prefetch, stack_prefetch, f"local prefetch")
-            ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0])
+            if expr_local_prefetch.args[0].startswith('v_a'):
+                ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0], v_a_wait_index)
+            else:
+                ds_waitcnt.push_new_vgpr(expr_local_prefetch.args[0], v_b_wait_index)
             
         self.finish_stack(stack_prefetch)
             
@@ -483,7 +502,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                 if i_rn > 0:
                     sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
                     sld_b.expr_set_args(v_b(((i_k * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num)* local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k}*{lds_width_n}+{(i_rn+1)*lds_width_n_per_read}')
-                    ds_waitcnt.push_new_vgpr(v_b(((i_k * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num)* local_buffer_n))
+                    ds_waitcnt.push_new_vgpr(v_b(((i_k * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num)* local_buffer_n), v_b_wait_index)
                     self.append_new_node(sld_b, stack, "after prefetch b")
                 for i_rm in range(dotx_m.lanegroup_repeat_m):
                     # compute index for three matrice
@@ -498,7 +517,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     if i_rn == dotx_m.lanegroup_repeat_n - 1 and i_rm > 0:
                         sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
                         sld_a.expr_set_args(v_a((i_rm - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k+1}*{lds_width_m}+{(i_rm-1)*lds_width_m_per_read}')
-                        ds_waitcnt.push_new_vgpr(v_a((i_rm - 1) * local_buffer_m))
+                        ds_waitcnt.push_new_vgpr(v_a((i_rm - 1) * local_buffer_m), v_a_wait_index)
                         self.append_new_node(sld_a, stack, "after prefetch a")
                         
                     dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
@@ -507,10 +526,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     
             sld_a = dotx_core_loop_expr(self.mc, "sld a", f_sld_a)
             sld_a.expr_set_args(v_a((local_prefetch_num_m - 1) * local_buffer_m), v_sld_a_os(), f'{lds_base_m}+{i_k + 1}*{lds_width_m}+{(local_prefetch_num_m - 1)*lds_width_m_per_read}')
-            ds_waitcnt.push_new_vgpr(v_a((local_prefetch_num_m - 1) * local_buffer_m))
+            ds_waitcnt.push_new_vgpr(v_a((local_prefetch_num_m - 1) * local_buffer_m),v_a_wait_index)
             sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
             sld_b.expr_set_args(v_b((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num * local_buffer_n), v_sld_b_os(), f'{lds_base_n}+{i_k + 1}*{lds_width_n}+{(local_prefetch_num - 1)*lds_width_n_per_read}')
-            ds_waitcnt.push_new_vgpr(v_b((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num * local_buffer_n))
+            ds_waitcnt.push_new_vgpr(v_b((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num * local_buffer_n), v_b_wait_index)
             sld_a_b = dotx_core_loop_node("last sld a/b", sld_a, sld_b)
             self.append_new_node(sld_a_b, stack, f"next dotx node {i_k}")
             
@@ -518,7 +537,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             if i_rn > 0 and dotx_m.lanegroup_repeat_n > local_prefetch_num and i_rn < dotx_m.lanegroup_repeat_n - 1:
                 sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
                 sld_b.expr_set_args(v_b((((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num * local_buffer_n)), v_sld_b_os(), f'{lds_base_n}+{unroll_k - 1}*{lds_width_n}+{(i_rn+1)*lds_width_n_per_read}')
-                ds_waitcnt.push_new_vgpr(v_b((((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num * local_buffer_n)))
+                ds_waitcnt.push_new_vgpr(v_b((((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn - 1) % local_prefetch_num * local_buffer_n)), v_b_wait_index)
                 
                 self.append_new_node(sld_b, stack, "after prefetch b")
             

@@ -56,6 +56,8 @@ class ctrl_coalescing_store_dotx_t(object):
         self.co_m_flag_check_reset_functor = None
         self.div_v_const_func = None
         self.div_rem_v_const_func = None
+        self.mul_vi_func = None
+        self.mul_si_func = None
         
     def get_gemmn_ratio(self):
         return self.cdm.block_size() / ((self.cdm.block_size() // self.cdm.macro_tile_n) * self.cdm.macro_tile_n)
@@ -451,7 +453,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
 
             self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * sld_vec)}, v[{v_tid}]   ; sld vec:{sld_vec} * byte:{data_byte}")
-            self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
+            #self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
+            self._emit(ctrl.mul_vi_func(v_co_sst, v_co_sst, data_byte))
 
         return self._get_deferred()
 
@@ -658,8 +661,9 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; coalescing store, mapping:{ctrl.cdm.serialize()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, block_size:{ctrl.cdm.block_size()}")
             self._emit(f'; gemm_co_prev_desc:{gemm_co_prev_desc.get_lengths()}, gemm_co_split_lengths:{gemm_co_split_lengths}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
-            self._emit(f"s_mul_i32 s[{s_gemm_m_stride}], {data_byte}, s[{s_gemm_m_stride}] ; data_byte:{data_byte}")
-
+            self._emit(ctrl.mul_si_func(s_gemm_m_stride, s_gemm_m_stride, data_byte))
+            self._emit(f"s_barrier")
+            
             gemm_m_co_start_coord = [0, 0, 0, 0, 0]
             vgpr_co_start_coord = [0, 0, 0, 0]
 
@@ -708,6 +712,33 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                     accvgpr_consume_list.append(vi + j)
                         else:
                             # CAUSION: ds_write_b8 already clamp the value for us. if need other clamp methor, need further consideration
+                            pass
+                    
+                    elif ctrl.precision == 'int4':
+                        if not smem_trans:
+                            for i in range(vgpr_last_dim_num // 8):
+                                vi = vgpr_index + 8 * i
+                                vo = vgpr_index + i
+                                self._emit(f"v_and_b32 v[{v_c(vi + 0)}], 0xf, v[{v_c(vi + 0)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 1)}], 0xf, v[{v_c(vi + 1)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 2)}], 0xf, v[{v_c(vi + 2)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 3)}], 0xf, v[{v_c(vi + 3)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 4)}], 0xf, v[{v_c(vi + 4)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 5)}], 0xf, v[{v_c(vi + 5)}]")
+                                self._emit(f"v_and_b32 v[{v_c(vi + 6)}], 0xf, v[{v_c(vi + 6)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 7)}], v[{v_c(vi + 7)}], 28, v[{v_c(vi + 0)}]")
+
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 1)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], v[{v_c(vi + 4)}], 4, v[{v_c(vi + 3)}]")
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 6)}], v[{v_c(vi + 6)}], 4, v[{v_c(vi + 5)}]")
+                                
+                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 7)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 12, v[{v_c(vi + 4)}]")
+                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 6)}], 20, v[{v_c(vi + 6)}]")
+                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 2)}], v[{v_c(vi + 4)}], v[{v_c(vi + 6)}]")
+                                for j in range(8):
+                                    accvgpr_consume_list.append(vi + j)
+                        else:
                             pass
 
                     if not smem_trans:
@@ -787,8 +818,10 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     for i_d in range(num_sld_issues_per_ssgroup):
                         vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
                         vgpr_index = vgpr_index % l_mt + (vgpr_index // l_mt) * t_mt    # when l_mt smaller than t_mt, we have to avoid the vgpr that has not been stored to LDS
+                        vgpr_index = int(vgpr_index)
                         sld_coord = [i_ssgroup, i_d, 0, 0, 0]
                         sld_offset = sld_co_desc.calculate_offset(sld_coord)
+                        sld_offset = int(sld_offset)
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_sld_issues_per_ssgroup : (i_ssgroup+1) * num_sld_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
@@ -812,7 +845,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
-                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec//(4 // data_byte)
+                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec // int(4 // data_byte)
                         cur_vgpr_gst = cur_vgpr_gst % l_mt + (cur_vgpr_gst // l_mt) * t_mt
                         lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and gst_vec == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))

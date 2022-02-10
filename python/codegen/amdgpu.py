@@ -157,7 +157,7 @@ def amdgpu_precision_data_byte(precision):
     if p in (AMDGPU_PRECISION_INT8, AMDGPU_PRECISION_UINT8):
         return 1
     if p in (AMDGPU_PRECISION_INT4, AMDGPU_PRECISION_UINT4):  # TODO: int4 is half byte
-        return 1
+        return 0.5
     if p in (AMDGPU_PRECISION_INT16, AMDGPU_PRECISION_UINT16):
         return 2
     assert False

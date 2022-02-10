@@ -238,7 +238,7 @@ class igemm_gtc_tunable_parameter_t(object):
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
-        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8')
+        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8', 'int4')
         if self.tensor_layout == "nchw":
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
@@ -343,8 +343,10 @@ class igemm_gtc_tunable_parameter_t(object):
                             ((self.tensor_b_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
                     self.num_vgpr_accumulate_c  = dotx_mapping.total_acc_c()
                     
+                    dpp_index = dotx_mapping.get_dpp_index()
+                    
                     # TODO: try use prefetch
-                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m() 
+                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m() * dpp_index
                     self.num_vgpr_accumulate_b  = self.local_prefetch_num * dotx_mapping.thread_n()
             else:
                 self.gemm_m_repeat              = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
@@ -387,6 +389,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_pad_m, self.lds_pad_n = self.get_lds_pad() # LDS pad
         self.lds_a                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
         self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
+        self.lds_a                     = int(self.lds_a)
+        self.lds_b                     = int(self.lds_b)
         self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2                 = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
         lds_a_pad                      = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)

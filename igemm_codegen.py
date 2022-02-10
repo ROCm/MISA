@@ -84,6 +84,13 @@ def igemm_check_bf16_configs(config_content):
             return True
     return False
 
+def igemm_check_int4_configs(config_content):
+    tunable_dicts = [sec.to_dict() for sec in config_content if sec.get_name().startswith('igemm_')]
+    for td in tunable_dicts:
+        if "int4" in td['precision']:
+            return True
+    return False
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", help="config file as input")
@@ -105,6 +112,7 @@ if __name__ == '__main__':
     has_fp16_config = igemm_check_fp16_configs(config_content)
     has_int8_config = igemm_check_int8_configs(config_content)
     has_bf16_config = igemm_check_bf16_configs(config_content)
+    has_int4_config = igemm_check_int4_configs(config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('flat', 'flatten'):
         if os.path.exists(args.dir):
@@ -113,7 +121,7 @@ if __name__ == '__main__':
         cxxflags = []
         if args.split_kernel:
             cxxflags += ["-DIGEMM_SPLIT_KERNEL"]
-        host_driver(cxxflags=cxxflags, arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config, has_bf16_config=has_bf16_config)
+        host_driver(cxxflags=cxxflags, arch=arch, config_file=args.config_file, out_dir=args.dir, has_fp16_config=has_fp16_config, has_int8_config=has_int8_config, has_bf16_config=has_bf16_config, has_int4_config=has_int4_config)
         igemm_flatten(args, config_content)
 
     if config_content.get_section('codegen')[0]['mode'] in ('seq', 'sequencer'):

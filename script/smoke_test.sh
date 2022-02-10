@@ -42,6 +42,9 @@ fi
 if [[ "${PREC}" = "fp32" ]] ; then
     PREC_HSACO=""
     CONV="conv"
+elif [[ "${PREC}" = "int4"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
 elif [[  "${PREC}" = "fp16"* ]] ; then
     PREC_HSACO="_${PREC}"
     CONV="conv${PREC}"

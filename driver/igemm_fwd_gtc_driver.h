@@ -864,7 +864,7 @@ public:
             float* gemmc_host_check = (float* )malloc(k * n * ho * wo * sizeof(float));
             printf("gemmc_host_check size=%d\n",  k * n * ho * wo * sizeof(float));
             printf("copy output\n");
-            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo * sizeof(float16), hipMemcpyDeviceToHost);
+            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo, hipMemcpyDeviceToHost);
 
             for (int i_check = 0; i_check < (0+block_size); i_check++)
             {
@@ -873,9 +873,9 @@ public:
                 float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
                 float check_num0_fp32 = (float)check_num0;
                 float check_num1_fp32 = (float)check_num1;
-                printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+                printf("[%d]th var to monitor:[%f, %d:(0x%x), fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
             }
-            printf("s_p_out=%x\n", p_out);
+            printf("s_p_out=%p\n", p_out);
             printf("workspace debug end \r\n");
             free(gemmc_host_check);
         }

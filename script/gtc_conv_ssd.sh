@@ -38,15 +38,21 @@ else
     exit 1
 fi
 
-if [ "${PREC}" = "fp32" ] ; then
+if [[ "${PREC}" = "fp32" ]] ; then
     PREC_HSACO=""
     CONV="conv"
-elif [ "${PREC}" = "fp16" ] ; then
-    PREC_HSACO="_fp16"
-    CONV="convfp16"
-elif [ "${PREC}" = "int8" ] ; then
-    PREC_HSACO="_int8"
-    CONV="convint8"
+elif [[ "${PREC}" = "int4"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "fp16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "int8"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[ "${PREC}" = "bf16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="convbfp16${PREC:4}"
 else
     echo "wrong precision: ${PREC}"
     exit 1
