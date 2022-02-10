@@ -518,14 +518,14 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         # this is to compute in gemm_m, by 3 d, [l_mr, cluster_m_len, l_mt], so we want to calculate from right to left
 
                         # 1. dim l_mt
-                        if gemm_m_cluster_length > l_mt:
-                            gemm_m_cluster_length = gemm_m_cluster_length // l_mt
+                        if gemm_m_cluster_length > (l_mt // sst_vec):
+                            gemm_m_cluster_length = gemm_m_cluster_length // (l_mt // sst_vec)
                             if t_mt != l_mt:
                                 self._emit(f"v_and_b32 v[{v_tmp4} + 1], {l_mt - 1},  v[{v_co_sub_m_index}]  ; length distributed within l_mt:{l_mt}")
                                 self._emit(f"v_lshrrev_b32 v[{v_tmp4} + 2], {utility_log2(l_mt)}, v[{v_co_sub_m_index}]")
                                 self._emit(f"v_lshl_or_b32 v[{v_co_sub_m_index}], v[{v_tmp4} + 2], {utility_log2(t_mt)}, v[{v_tmp4} + 1]")
                         else:
-                            gemm_m_cluster_length = gemm_m_cluster_length // l_mt
+                            gemm_m_cluster_length = gemm_m_cluster_length // (l_mt // sst_vec)
                             break
 
                         # 2. dim cluster_m_len
@@ -661,15 +661,16 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; coalescing store, mapping:{ctrl.cdm.serialize()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, block_size:{ctrl.cdm.block_size()}")
             self._emit(f'; gemm_co_prev_desc:{gemm_co_prev_desc.get_lengths()}, gemm_co_split_lengths:{gemm_co_split_lengths}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
-            self._emit(ctrl.mul_si_func(s_gemm_m_stride, s_gemm_m_stride, data_byte))
+            self._emit(f"s_mul_i32 s[{s_gemm_m_stride}], {data_byte}, s[{s_gemm_m_stride}] ; data_byte:{data_byte}")
             self._emit(f"s_barrier")
-
+            
             gemm_m_co_start_coord = [0, 0, 0, 0, 0]
             vgpr_co_start_coord = [0, 0, 0, 0]
 
             accvgpr_consume_list = list()   # record the list for vgpr used to store C matrix, for debug
 
             for i_group in range(ctrl.coalescing_groups):
+                self._emit(f"s_barrier")
                 m_index_start_per_group = gemm_co_prev_desc.calculate_offset([0, 0, 0, 0, 0, 0]) // ctrl.cdm.macro_tile_n
 
                 for vgpr_coord in itertools.product(*[range(d) for d in vgpr_co_desc.get_lengths()]):
@@ -816,7 +817,11 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
                     for i_d in range(num_sld_issues_per_ssgroup):
                         vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+<<<<<<< HEAD
                         vgpr_index = int(vgpr_index)
+=======
+                        vgpr_index = vgpr_index % l_mt + (vgpr_index // l_mt) * t_mt    # when l_mt smaller than t_mt, we have to avoid the vgpr that has not been stored to LDS
+>>>>>>> develop
                         sld_coord = [i_ssgroup, i_d, 0, 0, 0]
                         sld_offset = sld_co_desc.calculate_offset(sld_coord)
                         sld_offset = int(sld_offset)
@@ -843,7 +848,12 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
+<<<<<<< HEAD
                         cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec // int(4 // data_byte)
+=======
+                        cur_vgpr_gst = (i_gst_flat if not ctrl.feat_vgpr_collapse else i_gst) * gst_vec//(4 // data_byte)
+                        cur_vgpr_gst = cur_vgpr_gst % l_mt + (cur_vgpr_gst // l_mt) * t_mt
+>>>>>>> develop
                         lo_hi = i_gst_flat % 2 if ctrl.precision == 'fp16' and gst_vec == 1 else 0
                         self._emit(inst_gst(v_c(cur_vgpr_gst), v_out_offset, s_p_out, s_out_offset_itr(), 0, lo_hi))
                         if not ctrl.feat_co_m_flag_check and (s_gemm_m_num is not None):
