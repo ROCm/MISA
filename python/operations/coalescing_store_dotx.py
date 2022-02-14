@@ -165,11 +165,11 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         sst_vec, sld_vec, smem_trans = 1, 1, False
         if ctrl.vector_store_m == 1 and ctrl.vector_store_n == 1:
             assert ctrl.vector_fold_m == 1
-            vector_size = min(l_mt * data_byte // 4, 1)
+            vector_size = min(int(l_mt * data_byte // 4), 1)
             sst_vec, sld_vec, smem_trans = vector_size, vector_size, False
         elif ctrl.vector_store_m != 1 and ctrl.vector_store_n == 1:
             # assert ctrl.get_lanegroup_granularity_m() % ctrl.vector_store_m == 0
-            vector_size = min(l_mt * data_byte // 4, 1)
+            vector_size = min(int(l_mt * data_byte // 4), 1)
             # assert vector_size % ctrl.vector_store_m == 0
             # assert ctrl.vector_store_m % ctrl.vector_fold_m == 0
             sst_vec, sld_vec, smem_trans = ctrl.vector_store_m, ctrl.vector_store_m, False
@@ -247,7 +247,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                             t_nr,                   # n, within thread
                             n_nv * n_nl * n_nc,     # n, among different thread
                             t_nt,                   # n, within thread
-                            sst_vec * data_byte]    #    store vector  size
+                            int(sst_vec * data_byte)]    #    store vector  size
 
         sst_co_desc = make_naive_tensor_descriptor_packed(sst_co_lengths)
 
@@ -388,8 +388,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                     make_tuple(0, 1, 2, 3, 4))
 
             # 4 lds read desc TODO: better specify
-            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length * sld_vec,
-                                gemm_n_post_cluster_length, gemm_n_post_thread_length * data_byte]
+            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, int(gemm_m_post_cluster_length * sld_vec * data_byte),
+                                gemm_n_post_cluster_length, gemm_n_post_thread_length]
             sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
 
         else:
@@ -421,8 +421,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                                         make_tuple([0, 1, 2], [3, 4]))
 
             # 4 lds read desc
-            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length,
-                                gemm_n_post_cluster_length, gemm_n_post_thread_length * data_byte]
+            sld_co_lengths = [split_sld_groups, num_sld_issues_per_ssgroup, int(gemm_m_post_cluster_length * data_byte),
+                                gemm_n_post_cluster_length, gemm_n_post_thread_length]
             sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
 
         return vgpr_last_dim_num, split_sld_groups, num_sld_issues_per_ssgroup, num_gst_per_ssgroup, \
@@ -452,7 +452,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(t_mt // l_mt)}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
 
-            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(data_byte * sld_vec)}, v[{v_tid}]   ; sld vec:{sld_vec} * byte:{data_byte}")
+            self._emit(f"v_lshlrev_b32 v[{v_co_sld}], {utility_log2(int(data_byte * sld_vec))}, v[{v_tid}]   ; sld vec:{sld_vec} * byte:{data_byte}")
             #self._emit(f"v_lshlrev_b32 v[{v_co_sst}], {utility_log2(data_byte)}, v[{v_co_sst}] ; byte:{data_byte}")
             self._emit(ctrl.mul_vi_func(v_co_sst, v_co_sst, data_byte))
 
@@ -633,13 +633,13 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
 
         gst_vec = self.get_gst_vector_size()
 
-        inst_sst = inst_ds_write_t(sst_vec * data_byte)
-        inst_sld = inst_ds_read_t(sld_vec * data_byte)
+        inst_sst = inst_ds_write_t(int(sst_vec * data_byte))
+        inst_sld = inst_ds_read_t(int(sld_vec * data_byte))
         if ctrl.gemm_k_global_split:
             v_pack = 2 if gst_vec == 2 and data_byte == 2 else 1
             inst_gst = inst_buffer_atomic_add_dword_t(gst_vec * data_byte, v_pack) 
         else:
-            inst_gst = inst_buffer_store_t(gst_vec * data_byte)
+            inst_gst = inst_buffer_store_t(int(gst_vec * data_byte))
 
         s_out_offset_itr = sym_t(s_tmp6(0))
 
@@ -716,28 +716,44 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     
                     elif ctrl.precision == 'int4':
                         if not smem_trans:
-                            for i in range(vgpr_last_dim_num // 8):
-                                vi = vgpr_index + 8 * i
-                                vo = vgpr_index + i
-                                self._emit(f"v_and_b32 v[{v_c(vi + 0)}], 0xf, v[{v_c(vi + 0)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 1)}], 0xf, v[{v_c(vi + 1)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 2)}], 0xf, v[{v_c(vi + 2)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 3)}], 0xf, v[{v_c(vi + 3)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 4)}], 0xf, v[{v_c(vi + 4)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 5)}], 0xf, v[{v_c(vi + 5)}]")
-                                self._emit(f"v_and_b32 v[{v_c(vi + 6)}], 0xf, v[{v_c(vi + 6)}]")
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 7)}], v[{v_c(vi + 7)}], 28, v[{v_c(vi + 0)}]")
+                            if vgpr_last_dim_num % 8 == 0:
+                                for i in range(vgpr_last_dim_num // 8):
+                                    vi = vgpr_index + 8 * i
+                                    vo = vgpr_index + i
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 0)}], 0xf, v[{v_c(vi + 0)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 1)}], 0xf, v[{v_c(vi + 1)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 2)}], 0xf, v[{v_c(vi + 2)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 3)}], 0xf, v[{v_c(vi + 3)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 4)}], 0xf, v[{v_c(vi + 4)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 5)}], 0xf, v[{v_c(vi + 5)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 6)}], 0xf, v[{v_c(vi + 6)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 7)}], v[{v_c(vi + 7)}], 28, v[{v_c(vi + 0)}]")
 
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 1)}]")
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], v[{v_c(vi + 4)}], 4, v[{v_c(vi + 3)}]")
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 6)}], v[{v_c(vi + 6)}], 4, v[{v_c(vi + 5)}]")
-                                
-                                self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 7)}]")
-                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 12, v[{v_c(vi + 4)}]")
-                                self._emit(f"v_lshlrev_b32 v[{v_c(vi + 6)}], 20, v[{v_c(vi + 6)}]")
-                                self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 2)}], v[{v_c(vi + 4)}], v[{v_c(vi + 6)}]")
-                                for j in range(8):
-                                    accvgpr_consume_list.append(vi + j)
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 1)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 4)}], v[{v_c(vi + 4)}], 4, v[{v_c(vi + 3)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 6)}], v[{v_c(vi + 6)}], 4, v[{v_c(vi + 5)}]")
+                                    
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 2)}], v[{v_c(vi + 2)}], 4, v[{v_c(vi + 7)}]")
+                                    self._emit(f"v_lshlrev_b32 v[{v_c(vi + 4)}], 12, v[{v_c(vi + 4)}]")
+                                    self._emit(f"v_lshlrev_b32 v[{v_c(vi + 6)}], 20, v[{v_c(vi + 6)}]")
+                                    self._emit(f"v_or3_b32 v[{v_c(vo)}], v[{v_c(vi + 2)}], v[{v_c(vi + 4)}], v[{v_c(vi + 6)}]")
+                                    for j in range(8):
+                                        accvgpr_consume_list.append(vi + j)
+                            elif vgpr_last_dim_num % 4 == 0:
+                                for i in range(vgpr_last_dim_num // 4):
+                                    vi = vgpr_index + 4 * i
+                                    vo = vgpr_index + i
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 0)}], 0xf, v[{v_c(vi + 0)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 1)}], 0xf, v[{v_c(vi + 1)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 2)}], 0xf, v[{v_c(vi + 2)}]")
+                                    self._emit(f"v_and_b32 v[{v_c(vi + 3)}], 0xf, v[{v_c(vi + 3)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 1)}], v[{v_c(vi + 1)}], 4, v[{v_c(vi + 0)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vi + 3)}], v[{v_c(vi + 3)}], 4, v[{v_c(vi + 2)}]")
+                                    self._emit(f"v_lshl_or_b32 v[{v_c(vo)}], v[{v_c(vi + 3)}], 8, v[{v_c(vi + 1)}]")
+                                    for j in range(4):
+                                        accvgpr_consume_list.append(vi + j)
+                            else:
+                                assert False
                         else:
                             pass
 
@@ -745,7 +761,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         self._emit(inst_sst(v_co_sst(), v_c(vgpr_index), sst_offset))
                     else:
                         for i in range(vgpr_last_dim_num):
-                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * ctrl.cdm.macro_tile_n * data_byte))
+                            self._emit(inst_sst(v_co_sst(), v_c(vgpr_index + i), sst_offset + i * int(ctrl.cdm.macro_tile_n * data_byte)))
 
                 def emit_calculate_out_offset_itr_m(i_m, i_m0, i_m1):
                     comments = f"   ; i_m:{i_m}(i_m0:{i_m0},i_m1:{i_m1}, fold_m:{ctrl.vector_fold_m})"
@@ -816,7 +832,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f";   load from lds, i_ssgroup:{i_ssgroup}, num_sld_issues_per_ssgroup:{num_sld_issues_per_ssgroup}")
                     self._emit(f"v_cmpx_gt_u32 {valid_threads}, v[v_coalescing_store_index]")
                     for i_d in range(num_sld_issues_per_ssgroup):
-                        vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * sld_vec * data_byte // 4 # when data byte is 2, only cost 2 vgpr per time
+                        vgpr_index = (i_d + (i_ssgroup if not ctrl.feat_vgpr_collapse else 0) * num_sld_issues_per_ssgroup) * int(sld_vec * data_byte) // 4 # when data byte is 2, only cost 2 vgpr per time
                         vgpr_index = vgpr_index % l_mt + (vgpr_index // l_mt) * t_mt    # when l_mt smaller than t_mt, we have to avoid the vgpr that has not been stored to LDS
                         vgpr_index = int(vgpr_index)
                         sld_coord = [i_ssgroup, i_d, 0, 0, 0]

@@ -275,7 +275,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         if ctrl.precision in ('fp16', 'int8'):
             v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
         else:
-            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
@@ -448,7 +448,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         if ctrl.precision in ('fp16', 'int8'):
             v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
         else:
-            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
@@ -587,8 +587,8 @@ class dotx_core_loop_graph():
         # used as offset:x number. may some 
         unroll_k = self.ctrl.unroll_k // self.ctrl.lds_k_pack
 
-        thread_m = dotx_m.lanegroup_repeat_m
-        thread_n = dotx_m.lanegroup_repeat_n * 8
+        # thread_m = dotx_m.lanegroup_repeat_m
+        # thread_n = dotx_m.lanegroup_repeat_n * 8
         
         f_gld_a = self.ctrl.global_load_a_functor
         f_gld_b = self.ctrl.global_load_b_functor
@@ -620,7 +620,7 @@ class dotx_core_loop_graph():
                                       dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b))
         
         base_node = dotx_core_loop_node("core_loop")
-        node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {thread_m * thread_n}")
+        node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {dotx_m.total_acc_c()}")
         
         base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop", s_kitr, s_knum, unroll_k, 0, "gt", label_fma_body, label_fma_finishing, label_fma_end)
         
@@ -670,7 +670,7 @@ class dotx_core_loop_graph():
         # last unroll k
         # dotx_core_loop_node("loop body with label", dotx_core_loop_expr(self.mc, "loop end label", label_fma_end+':'), loop_body)
         
-        base_node = self.add_node_comment(base_node, f"; start FMA loop, {thread_m}x{thread_n}")
+        base_node = self.add_node_comment(base_node, f"; start FMA loop")
         
         self.base_node = base_node
          
