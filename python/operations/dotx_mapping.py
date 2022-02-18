@@ -439,8 +439,6 @@ class igemm_dotx_mapping_t(mc_base_t):
                 return some_dict[key]
             return default_value
         ctrl = self.ctrl
-        
-        dpp_index = ctrl.get_dpp_index()
 
         # assert ctrl.lanegroup_size_n() == ctrl.lanegroup_size_m()
         k_pack = get_dict_with_default(options, "k_pack", 1)
@@ -455,7 +453,7 @@ class igemm_dotx_mapping_t(mc_base_t):
         with self._deferred_context():
             self._emit(f"; dotx mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread}")
             self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.lanegroup_size_n() - 1}, v[{v_thread_id}]           ; lanegroup_n index ")
-            self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() // dpp_index - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
+            self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
 
             self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_thread_id}]")
             if ctrl.lanegroup_n_per_wave() != 1:

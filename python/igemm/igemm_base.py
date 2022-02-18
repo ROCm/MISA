@@ -457,12 +457,14 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-            c_vgpr_sst = self.lanegroup_repeat_m * self.lanegroup_tile_m // self.coalescing_store_groups
-            dotx_length_in_m = utility_gcd(self.vector_c, 8) # TODO: lanegroup size may differ
+            dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block,
+                                        self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
+                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision)
+            c_vgpr_sst = dotx_mapping.lanegroup_repeat_m * dotx_mapping.lanegroup_m_per_thread() // self.coalescing_store_groups
+            dotx_length_in_m = utility_gcd(self.vector_c, dotx_mapping.lanegroup_m_per_thread()) # TODO: lanegroup size may differ
             assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
             if c_vgpr_sst % dotx_length_in_m != 0:
-                self.coalescing_store_groups = self.lanegroup_repeat_m * self.lanegroup_tile_m // dotx_length_in_m
-
+                self.coalescing_store_groups = dotx_mapping.lanegroup_repeat_m * dotx_mapping.lanegroup_m_per_thread() // dotx_length_in_m
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.lds_total >= lds_a_pad + lds_b_pad:
                 pass
