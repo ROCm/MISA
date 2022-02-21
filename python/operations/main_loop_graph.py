@@ -265,8 +265,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         pad_n = ctrl.lds_pad_n
 
         assert ctrl.lds_k_pack % dotx_m.inst_dotx.k == 0
-        #thread_m = dotx_m.lanegroup_repeat_m
-        thread_n = dotx_m.lanegroup_repeat_n * 8
+        c_per_inst = dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
+        c_thread_n = dotx_m.lanegroup_repeat_n * dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
         local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         #thread_sub_n = local_buffer_n
@@ -278,7 +278,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
-        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
+        local_buffer_m = local_buffer_m * dotx_m.thread_m()
+        local_buffer_n = local_buffer_n * dotx_m.thread_n()
         
         gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
@@ -345,7 +346,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         for i_rm in range(dotx_m.lanegroup_repeat_m - 1):
             # compute index for three matrice
             i_rn = dotx_m.lanegroup_repeat_n - 1
-            c_index = i_rm * thread_n + i_rn * 8
+            c_index = i_rm * c_thread_n + i_rn * c_per_inst
             a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
             b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
@@ -366,7 +367,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         # last n repeat
         i_rn = dotx_m.lanegroup_repeat_n - 1
         i_rm = dotx_m.lanegroup_repeat_m - 1
-        c_index = i_rm * thread_n + i_rn * 8
+        c_index = i_rm * c_thread_n + i_rn * c_per_inst
         a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
         b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
         dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
@@ -385,7 +386,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         for i_rm in range(dotx_m.lanegroup_repeat_m):
             # compute index for three matrice
             i_rn = dotx_m.lanegroup_repeat_n - 1
-            c_index = i_rm * thread_n + i_rn * 8
+            c_index = i_rm * c_thread_n + i_rn * c_per_inst
             a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
             b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
@@ -440,8 +441,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         lds_base_n = 0
         unroll_k = ctrl.unroll_k // ctrl.lds_k_pack
 
-        thread_m = dotx_m.lanegroup_repeat_m
-        thread_n = dotx_m.lanegroup_repeat_n * 8
+        c_per_inst = dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
+        c_thread_n = dotx_m.lanegroup_repeat_n * dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
         local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         
@@ -451,7 +452,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
         
         # need to repeat v_a because dpp8 is not supported.
-        local_buffer_m = local_buffer_m * dotx_m.get_dpp_index()
+        local_buffer_m = local_buffer_m * dotx_m.thread_m()
+        local_buffer_n = local_buffer_n * dotx_m.thread_n()
         v_a_wait_index = (local_buffer_m + 3) // 4
         v_b_wait_index = (local_buffer_n + 3) // 4
         
@@ -506,7 +508,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                     self.append_new_node(sld_b, stack, "after prefetch b")
                 for i_rm in range(dotx_m.lanegroup_repeat_m):
                     # compute index for three matrice
-                    c_index = i_rm * thread_n + i_rn * 8
+                    c_index = i_rm * c_thread_n + i_rn * c_per_inst
                     a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
                     b_index = ((i_k * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
                     lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])
@@ -543,7 +545,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             
             for i_rm in range(repeat_m):
                 # compute index for three matrice
-                c_index = i_rm * thread_n + i_rn * 8
+                c_index = i_rm * c_thread_n + i_rn * c_per_inst
                 a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
                 b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
                 lgkmcnt = ds_waitcnt.compute_waitcnt([v_a(a_index), v_b(b_index)])

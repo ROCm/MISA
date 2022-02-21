@@ -113,7 +113,7 @@ class ctrl_dotx_mapping_t(object):
     def get_dpp_index(self):
         dpp_index = 1
         if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
-            dpp_index = 8
+            dpp_index = 1
             
         return dpp_index
 
@@ -429,6 +429,9 @@ class igemm_dotx_mapping_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_dotx_mapping_t
         self.ctrl = ctrl
+        self.dpp8_enable = not(isinstance(self.ctrl.inst_dotx, inst_dotx_vop3p_t))
+        
+
     def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4, **options):
         '''
         notice! this is to calculate LDS offset for A/B matrix input, it is not the same as C matrix output layout, due to dotx
@@ -452,10 +455,17 @@ class igemm_dotx_mapping_t(mc_base_t):
             k_pack_per_thread = 1
         with self._deferred_context():
             self._emit(f"; dotx mapping, get source matrix gemm index, k_pack:{k_pack}, v_pack:{v_pack}, k_pack_per_thread:{k_pack_per_thread}")
-            self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.lanegroup_size_n() - 1}, v[{v_thread_id}]           ; lanegroup_n index ")
-            self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
-
-            self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_thread_id}]")
+            if self.dpp8_enable:
+                self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.lanegroup_size_n() - 1}, v[{v_thread_id}]           ; lanegroup_n index ")
+                self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_thread_id}]")
+            else:
+                self._emit(f"v_and_b32 v[{v_gemm_in}], {ctrl.lanegroup_size_n() - 1}, v[{v_thread_id}]           ; lanegroup_n index ")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_thread_id}]")
+                self._emit(f"v_and_b32 v[{v_gemm_im}], {ctrl.lanegroup_size_m() - 1}, v[{v_thread_id}]           ; lanegroup_m index ")
+                self._emit(f"v_lshrrev_b32 v[{v_thread_id}], {utility_log2(ctrl.lanegroup_size_m())}, v[{v_thread_id}]")
+            
+            
             if ctrl.lanegroup_n_per_wave() != 1:
                 self._emit(f"v_and_b32 v[{v_tmp4} + 0], {ctrl.lanegroup_n_per_wave() - 1}, v[{v_thread_id}]          ; lanegroup_n_per_wave index")
                 self._emit(f"v_lshl_or_b32 v[{v_gemm_in}], v[{v_tmp4} + 0], {utility_log2(ctrl.lanegroup_size_n())}, v[{v_gemm_in}]")

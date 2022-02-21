@@ -1643,7 +1643,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             #self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
             self._emit(m_mul_u32_vi(v.v_sst_a_os(), v.v_tmp(), data_byte))
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {utility_log2(data_byte * self.tunable.vector_c)}, v[{v.v_gemm_im()}] ; LDS load in")
+            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {utility_log2(data_byte * self.tunable.vector_c * self.dotx_mapping.ctrl.thread_m())}, v[{v.v_gemm_im()}] ; LDS load wei")
 
         if not self.tunable.tensor_b_pass_through:
             self._emit(f"; LDS store, input: 1,ce,nb_vec_c: {1}x{1}x{tb_nb0}x{tb_nb_vec_c}, {1}x{cb_ce}x{1}x{cb_nb1}, k_pack:{k_pack_src_mat}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
@@ -1667,7 +1667,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * self.tunable.vector_c)}, v[{v.v_gemm_in()}] ; LDS load wei")
+            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * self.tunable.vector_c * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load input")
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
@@ -1945,8 +1945,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.global_load_b_functor       = self.global_load_in
                 fctrl.shared_store_a_functor      = self.shared_store_wei
                 fctrl.shared_store_b_functor      = self.shared_store_in
-                fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * dpp_index)
-                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c)
+                fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * ctrl_dotx_mapping.thread_m())
+                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * ctrl_dotx_mapping.thread_n())
                 fctrl.move_slice_window_a_functor = move_slice_window_a
                 fctrl.move_slice_window_b_functor = move_slice_window_b
 

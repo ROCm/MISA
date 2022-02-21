@@ -171,7 +171,7 @@ class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
                 for idx_n in range(self.thread_tile_n):
                     for idx_m in range(self.thread_tile_m):
                         idx_c = idx_m * self.stride + idx_n * self.thread_tile_m
-                        idx_a = idx_loop_k * self.thread_tile_m + idx_m
-                        idx_b = idx_loop_k * self.thread_tile_n + idx_n
+                        idx_a = idx_m * self.loop_k + idx_loop_k
+                        idx_b = idx_n * self.loop_k + idx_loop_k
                         self._emit(v_dot(reg_c(idx_c), reg_a(idx_a), reg_b(idx_b), reg_c(idx_c)))
 
