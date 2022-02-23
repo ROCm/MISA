@@ -109,13 +109,6 @@ class ctrl_dotx_mapping_t(object):
 
     def wave_size(self):
         return self.lanegroup_wave_m * self.lanegroup_wave_n * LANEGROUP_SIZE
-    
-    def get_dpp_index(self):
-        dpp_index = 1
-        if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
-            dpp_index = 1
-            
-        return dpp_index
 
     def acc_c_lengths(self):
         '''
