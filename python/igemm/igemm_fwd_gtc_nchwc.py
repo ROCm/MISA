@@ -866,7 +866,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
     def get_k_pack(self):
         _, _, tb_nb_vec_c = self.get_thread_lengths()
-        return tb_nb_vec_c
+        if self.tunable.precision == 'int4':
+            lds_k_pack = igemm_gcd(tb_nb_vec_c, 8)
+        else:
+            lds_k_pack = tb_nb_vec_c
+        return lds_k_pack
 
     def get_macro_global_load(self):
         inline = True if self.tunable.fma_interleave else False
@@ -940,23 +944,23 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             # input is gemm_k * gemm_m * k_pack
             wei_sst_ctrl = ctrl_3d_shared_store_t()
             wei_sst_ctrl.precision = self.tunable.precision
-            wei_sst_ctrl.length_d0 = 1
-            wei_sst_ctrl.length_d1 = ta_k_vec_c // k_pack_gld_a
-            wei_sst_ctrl.length_dp = k_pack_gld_a
-            wei_sst_ctrl.vector_dp = k_pack_gld_a
-            wei_sst_ctrl.stride_d0 = 1
-            wei_sst_ctrl.stride_d1 = (ca_k * self.tunable.vector_c) * data_byte
+            wei_sst_ctrl.length_d0 = ta_k_vec_c // k_pack_gld_a
+            wei_sst_ctrl.length_d1 = k_pack_gld_a // k_pack
+            wei_sst_ctrl.length_dp = k_pack
+            wei_sst_ctrl.vector_dp = k_pack
+            wei_sst_ctrl.stride_d0 = ca_k * k_pack * data_byte#na_k_vec_c // self.tunable.vector_c * k_pack * data_byte
+            wei_sst_ctrl.stride_d1 = na_k_vec_c // self.tunable.vector_c * k_pack * data_byte#(ca_k * k_pack) * data_byte
 
         if not self.tunable.tensor_b_pass_through:
             # wei is gemm_k * gemm_n * k_pack
             in_sst_ctrl = ctrl_3d_shared_store_t()
             in_sst_ctrl.precision = self.tunable.precision
-            in_sst_ctrl.length_d0 = tb_nb0
-            in_sst_ctrl.length_d1 = tb_nb_vec_c // k_pack_gld_b
-            in_sst_ctrl.length_dp = k_pack_gld_b
-            in_sst_ctrl.vector_dp = k_pack_gld_b
-            in_sst_ctrl.stride_d0 = nb_nb1_vec_c * data_byte
-            in_sst_ctrl.stride_d1 = k_pack_gld_b * data_byte
+            in_sst_ctrl.length_d0 = tb_nb0 * tb_nb_vec_c // k_pack_gld_b
+            in_sst_ctrl.length_d1 = k_pack_gld_b // k_pack
+            in_sst_ctrl.length_dp = k_pack
+            in_sst_ctrl.vector_dp = k_pack
+            in_sst_ctrl.stride_d0 = cb_nb1 * k_pack * data_byte
+            in_sst_ctrl.stride_d1 = nb_nb0 * nb_nb1_vec_c // self.tunable.vector_c * k_pack * data_byte
 
         inline = True if self.tunable.fma_interleave else False 
         return macro_igemm_3d_shared_store_t(self.mc, in_sst_ctrl, inline) if not self.tunable.tensor_a_pass_through else None, \
@@ -1632,42 +1636,27 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"; LDS store, wei: 1,ce,1,k: {1}x{1}x{1}x{ta_k_vec_c}, {1}x{ca_ce}x{1}x{ca_k}, k_pack:{k_pack}, k_pack_gld_a:{k_pack_gld_a}, {self.tunable.precision}")
             if k_pack_src_mat != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {utility_log2(k_pack_src_mat)}, v[{v.v_wei_ik()}]")
-                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v_igemm_k()}], {utility_log2(na_k_vec_c)}, v[{v.v_tmp(2)}]")
-                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v_igemm_k()}], {na_k_vec_c}, v[{v.v_tmp(2)}]")
-                if k_pack_src_mat != k_pack_gld_a:
-                    assert k_pack_src_mat % k_pack_gld_a == 0
-                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v_igemm_k()}]")   # gld_a k_pack_src_mat smaller than k_pack_src_mat
-                    self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                na_k = na_k_vec_c // self.tunable.vector_c
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v_igemm_k()}], {na_k * self.tunable.vector_c}, v[{v.v_tmp(2)}]")
             else:
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v_igemm_k()}], {utility_log2(na_k0*na_k1 * k_pack_src_mat)}, v[{v.v_in_inb()}]")
-            #self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
+                assert False, "need k pack larger than 1"
             self._emit(m_mul_u32_vi(v.v_sst_a_os(), v.v_tmp(), data_byte))
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {utility_log2(data_byte * self.tunable.vector_c * self.dotx_mapping.ctrl.thread_m())}, v[{v.v_gemm_im()}] ; LDS load wei")
+            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_m())}, v[{v.v_gemm_im()}] ; LDS load wei")
 
         if not self.tunable.tensor_b_pass_through:
             self._emit(f"; LDS store, input: 1,ce,nb_vec_c: {1}x{1}x{tb_nb0}x{tb_nb_vec_c}, {1}x{cb_ce}x{1}x{cb_nb1}, k_pack:{k_pack_src_mat}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
             if k_pack_src_mat != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {utility_log2(k_pack_src_mat)},  v[{v.v_in_inb()}]")
-                if igemm_is_pow2(nb_nb0*nb_nb1_vec_c):
-                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v_igemm_k()}], {utility_log2(nb_nb0*nb_nb1_vec_c)}, v[{v.v_tmp(2)}]")
-                else:
-                    self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v_igemm_k()}], {nb_nb0*nb_nb1_vec_c}, v[{v.v_tmp(2)}]")
-                if k_pack_src_mat != k_pack_gld_b:
-                    assert k_pack_src_mat % k_pack_gld_b == 0
-                    self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v_igemm_k()}]")   # gld_b k_pack_src_mat smaller than k_pack_src_mat
-                    self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                nb_nb1 = nb_nb1_vec_c // self.tunable.vector_c
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v_igemm_k()}], {nb_nb0*nb_nb1*self.tunable.vector_c}, v[{v.v_tmp(2)}]")
             else:
-                if igemm_is_pow2(nb_nb0*nb_nb1_vec_c):
-                    self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v_igemm_k()}], {utility_log2(nb_nb0*nb_nb1_vec_c)}, v[{v.v_in_inb()}]")
-                else:
-                    self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v_igemm_k()}], {nb_nb0*nb_nb1_vec_c}, v[{v.v_in_inb()}]")
-            #self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {utility_log2(data_byte)}, v[{v.v_tmp()}]")
+                assert False, "need k pack larger than 1"
             self._emit(m_mul_u32_vi(v.v_sst_b_os(), v.v_tmp(), data_byte))
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sst_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sst_b_os()}]")
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * self.tunable.vector_c * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load input")
+            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load input")
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
@@ -1928,7 +1917,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                                                                         self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
                                                                         self.tunable.precision)
                 fctrl.dotx_m                      = ctrl_dotx_mapping
-                fctrl.unroll_k                    = self.tunable.gemm_k_per_block
+                fctrl.unroll_k                    = self.tunable.gemm_k_per_block // k_pack_src_mat
                 fctrl.label_prefix                = self.name()
                 fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
                 fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
@@ -1936,17 +1925,17 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.local_prefetch_num          = self.tunable.local_prefetch_num
                 fctrl.local_prefetch_num_m        = self.tunable.local_prefetch_num_m
 
-                fctrl.lds_k_pack                  = self.tunable.vector_c
+                fctrl.lds_k_pack                  = k_pack_src_mat
+                fctrl.k_per_step                  = self.tunable.gemm_k_per_block // self.tunable.vector_c
 
                 # functor
                 # compute dpp index
-                dpp_index = ctrl_dotx_mapping.get_dpp_index()
                 fctrl.global_load_a_functor       = self.global_load_wei
                 fctrl.global_load_b_functor       = self.global_load_in
                 fctrl.shared_store_a_functor      = self.shared_store_wei
                 fctrl.shared_store_b_functor      = self.shared_store_in
-                fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * ctrl_dotx_mapping.thread_m())
-                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * self.tunable.vector_c * ctrl_dotx_mapping.thread_n())
+                fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_m())
+                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n())
                 fctrl.move_slice_window_a_functor = move_slice_window_a
                 fctrl.move_slice_window_b_functor = move_slice_window_b
 

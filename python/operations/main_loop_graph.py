@@ -72,6 +72,7 @@ class ctrl_dotx_main_loop_t(object):
 
         # below is in unit of pixel, not considered data bytes
         self.lds_k_pack                  = 1
+        self.k_per_step                  = 1
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
 
@@ -258,7 +259,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         # used as offset:x number. may some 
         lds_base_m = 0
         lds_base_n = 0
-        unroll_k = ctrl.unroll_k // ctrl.lds_k_pack
+        unroll_k = ctrl.unroll_k
         k_per_inst = dotx_m.lanegroup_k_per_thread()
 
         pad_m = ctrl.lds_pad_m
@@ -439,7 +440,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         # used as offset:x number. may some 
         lds_base_m = 0
         lds_base_n = 0
-        unroll_k = ctrl.unroll_k // ctrl.lds_k_pack
+        unroll_k = ctrl.unroll_k
 
         c_per_inst = dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
         c_thread_n = dotx_m.lanegroup_repeat_n * dotx_m.lanegroup_thrd_n * dotx_m.lanegroup_thrd_m
@@ -587,7 +588,7 @@ class dotx_core_loop_graph():
         dotx_m = self.ctrl.dotx_m
         
         # used as offset:x number. may some 
-        unroll_k = self.ctrl.unroll_k // self.ctrl.lds_k_pack
+        k_per_step = self.ctrl.k_per_step
 
         # thread_m = dotx_m.lanegroup_repeat_m
         # thread_n = dotx_m.lanegroup_repeat_n * 8
@@ -624,7 +625,7 @@ class dotx_core_loop_graph():
         base_node = dotx_core_loop_node("core_loop")
         node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {dotx_m.total_acc_c()}")
         
-        base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop", s_kitr, s_knum, unroll_k, 0, "gt", label_fma_body, label_fma_finishing, label_fma_end)
+        base_for_loop = dotx_core_loop_for_loop(self.mc, "core_loop", s_kitr, s_knum, k_per_step, 0, "gt", label_fma_body, label_fma_finishing, label_fma_end)
         
         loop_begin_check = dotx_core_loop_expr(self.mc, "loop_begin_check")
         loop_body = dotx_core_loop_node("loop_body")
