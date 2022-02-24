@@ -867,7 +867,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
     def get_k_pack(self):
         _, _, tb_nb_vec_c = self.get_thread_lengths()
         if self.tunable.precision == 'int4':
-            lds_k_pack = igemm_gcd(tb_nb_vec_c, 8)
+            lds_k_pack = igemm_gcd(tb_nb_vec_c, 16)
         else:
             lds_k_pack = tb_nb_vec_c
         return lds_k_pack
