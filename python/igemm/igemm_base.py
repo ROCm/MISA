@@ -233,6 +233,8 @@ class igemm_gtc_tunable_parameter_t(object):
 
         # if self.tensor_layout == "nchwc":
         self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+        self.wavefront_size                     = utility_dict_with_default_t(tunable_dict)('wavefront_size', 64)
+        self.cumode                             = utility_dict_with_default_t(tunable_dict)('cumode', 0)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -621,6 +623,8 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
         tunable_dict['gemm_k_unmerge_cluster']          = self.gemm_k_unmerge_cluster
         tunable_dict['vector_store']                    = self.vector_store
+        tunable_dict['wavefront_size']                  = self.wavefront_size
+        tunable_dict['cumode']                          = self.cumode
 
         return tunable_dict
 
