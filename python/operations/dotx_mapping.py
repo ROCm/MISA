@@ -382,7 +382,8 @@ ctrl_dotx_mapping_int4 = [
         #ctrl_dotx_mapping_t( 64,  32,   8,  16,   4,   4,   2,   2,   2,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
         #ctrl_dotx_mapping_t( 32,  64,   8,  16,   4,   4,   2,   2,   2,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
 
-        ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   2,   1,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
+        #ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   2,   1,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   1,   2,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
     ]
 
 def get_ctrl_dotx_mapping_from_wave_tile(macro_tile_m, macro_tile_n, lanegroup_tile_m, lanegroup_tile_n, lanegroup_wave_m, lanegroup_wave_n, waves, lanegroup_repeat_m, lanegroup_repeat_n, precision):
