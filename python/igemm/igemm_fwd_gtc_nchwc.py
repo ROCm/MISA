@@ -1775,7 +1775,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"s_mov_b32 s[{s.s_move_slice_k_acc_c()}], {self.tunable.gemm_k_per_block // self.tunable.vector_c}")
 
         if self.tunable.tensor_layout == 'nchwc_kcyxc':
-            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_gemm_k()}], {self.tunable.gemm_k_per_block * data_byte}")
+            self._emit(f"s_mov_b32 s[{s.s_move_slice_k_stride_gemm_k()}], {int(self.tunable.gemm_k_per_block * data_byte)}")
         else:
             self._emit(f"s_lshl_b32 s[{s.s_move_slice_k_stride_gemm_k()}], s[{s.s_k()}], {utility_log2(self.tunable.gemm_k_per_block * data_byte)}")
 
