@@ -377,18 +377,40 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int max_npb = env_get_int("IGEMM_MAX_NPB", -1);
     int max_kpb = env_get_int("IGEMM_MAX_KPB", -1);
     int max_gks = env_get_int("IGEMM_MAX_GKS", -1);
-
+    int silent_not_applicable_level0 = env_get_int("IGEMM_SILENT_NA_L0", 1);  // ignore kernel that has different direction & layout
+    std::string in_layout = conv_args->get_str("in_layout");
+    std::string fil_layout = conv_args->get_str("fil_layout");
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
 
     auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
-            if(run_only_kernel != driver->get_kernel_name(tunable)){
-                return result_t{};
+            if(run_only_kernel != driver->get_kernel_name(tunable))
+                {result_t result; result.return_code = -2; return result;}
+        }
+        if(silent_not_applicable_level0){
+            // direction
+            if(direction != tunable->direction)
+                {result_t result; result.return_code = -2; return result;}
+
+            // layout
+            if(in_layout == "NCHW"){
+                if(tunable->tensor_layout != "nchw")
+                    {result_t result; result.return_code = -2; return result;}
+            }else if(in_layout == "NHWC"){
+                if(tunable->tensor_layout != "nhwc")
+                    {result_t result; result.return_code = -2; return result;}
+            }else if(in_layout == "NCHWC"){
+                if(tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
+                    {result_t result; result.return_code = -2; return result;}
+                auto wei_layout_config = tunable->tensor_layout.substr(6);
+                if((fil_layout == "NCHWC" && wei_layout_config != "kcyxc") || 
+                    (fil_layout == "CHWNC" && wei_layout_config != "cyxkc"))
+                    {result_t result; result.return_code = -2; return result;}
             }
         }
-        
+
         printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
         fflush(stdout);
 
@@ -452,6 +474,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
                     for(int gks : gks_list){
                         result_t result = launch(&tunables[i], unique_index, gks);
+                        if(result.return_code == -2) continue;
                         unique_tunables.push_back(tunables[i]);
                         unique_tunables.back().gemm_k_global_split = gks;
                         if(result.duration_ms < fastest_result.duration_ms){
@@ -462,6 +485,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     }
                 }else{
                     result_t result = launch(&tunables[i], unique_index, 0);
+                    if(result.return_code == -2) continue;
                     unique_tunables.push_back(tunables[i]);
                     unique_tunables.back().gemm_k_global_split = 0;
                     if(result.duration_ms < fastest_result.duration_ms){
@@ -473,6 +497,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
             else{
                 result_t result = launch(&tunables[i], unique_index, -1);
+                if(result.return_code == -2) continue;
                 unique_tunables.push_back(tunables[i]);
                 unique_tunables.back().gemm_k_global_split = result.gks;
                 if(result.duration_ms < fastest_result.duration_ms){
@@ -542,7 +567,8 @@ int main(int argc, char **argv) {
     int igemm_bench_csv = env_get_int("IGEMM_BENCH_CSV", 0);
     driver_mode_t driver_mode = static_cast<driver_mode_t>(env_get_int("IGEMM_MODE", 0));
     config_parser_t config_parser(config_file);
-    auto content = config_parser.parse();
+    auto unexpanded_content = config_parser.parse();
+    auto content = igemm_try_expand_tunable_content(unexpanded_content);
     //content.dump();
     FILE * p_bcsv = nullptr;
     if(igemm_bench_csv){
@@ -629,7 +655,7 @@ int main(int argc, char **argv) {
     assert(in_layout == "NCHW" || in_layout == "NHWC" || in_layout == "NCHWC"); // currently only support these layout
     assert((in_layout == "NCHW" && tunables[0].tensor_layout == "nchw") || 
            (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc") ||
-           (in_layout == "NCHWC" && tunables[0].tensor_layout == "nchwc"));  // check pairs
+           (in_layout == "NCHWC" && tunables[0].tensor_layout.compare(0, 5, "nchwc") == 0));  // check pairs
 
     // init host side
     float *host_input = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
@@ -731,7 +757,7 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
-            else if(in_layout == "NCHWC" && fil_layout == "CHWNC"){
+            else if(in_layout == "NCHWC"){
                 if(((c / ngroups) % vector_c != 0) || ((k / ngroups) % vector_c != 0)){
                     dump_arg(&conv_args);
                     printf("can't support c:%d k:%d with vec_c:%d\n", c, k, vector_c);
@@ -744,7 +770,10 @@ int main(int argc, char **argv) {
                 tensor_transpose_nchwc_2_nchw<float*>(aux_in, host_input, n, c, hi, wi, vector_c);
                 for(int i_groups = 0; i_groups < ngroups; i_groups++){
                     int group_offset = i_groups * (k / ngroups) * (c / ngroups) * y * x;
-                    tensor_transpose_chwnc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
+                    if(fil_layout == "CHWNC")
+                        tensor_transpose_chwnc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
+                    else if(fil_layout == "NCHWC")
+                        tensor_transpose_nchwc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
                 }
 
                 if(env_get_int("IGEMM_CHECK_TRNASPOSE", 0)){
@@ -752,7 +781,10 @@ int main(int argc, char **argv) {
                     float* aux_in_check = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
 
                     tensor_transpose_nchw_2_nchwc<float*>(aux_in_check, aux_in, n, c, hi, wi, vector_c);
-                    tensor_transpose_nchw_2_chwnc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
+                    if(fil_layout == "CHWNC")
+                        tensor_transpose_nchw_2_chwnc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
+                    else if(fil_layout == "NCHWC")
+                        tensor_transpose_nchw_2_nchwc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
 
                     double transpose_nrms = get_nrms("fwd", driver_data_type);
                     valid_vector<float>(host_input, aux_in_check, static_cast<size_t>(n) * c * hi * wi, transpose_nrms);

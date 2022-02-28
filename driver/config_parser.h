@@ -414,6 +414,9 @@ class config_section_value_t {
         this->value_buffer = other.value_buffer;
         return *this;
     }
+    config_section_value_type_enum get_type() const {
+        return this->value_type;
+    }
 
     static bool is_value_int(std::string v) {
         try {

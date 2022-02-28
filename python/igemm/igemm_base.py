@@ -245,7 +245,7 @@ class igemm_gtc_tunable_parameter_t(object):
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
             assert self.nxb == 0, 'nhwc now no need have different nxb value'
-        elif self.tensor_layout == "nchwc":
+        elif self.tensor_layout[0:5] == "nchwc":
             assert self.vector_c in (4, 8, 16, 32), 'do not support arbitary vector_c'
         else:
             assert False
@@ -292,7 +292,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
-            elif self.tensor_layout == "nchwc":
+            elif self.tensor_layout[0:5] == "nchwc":
                 pass
             else:
                 assert False
