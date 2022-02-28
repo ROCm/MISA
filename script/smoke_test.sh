@@ -31,7 +31,10 @@ if [[  "${LAYOUT}" = "nchw" ]] ; then
 elif [[  "${LAYOUT}" = "nhwc" ]] ; then
     LAYOUT_HSACO="_nhwc"
     LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
-elif [[  "${LAYOUT}" = "nchwc" ]] ; then
+elif [[  "${LAYOUT}" = "nchwc_kcyxc" ]] ; then
+    LAYOUT_HSACO="_nchwc"
+    LAYOUT_ARG="--in_layout NCHWC --fil_layout NCHWC --out_layout NCHWC"
+elif [[  "${LAYOUT}" = "nchwc_cyxkc" ]] ; then
     LAYOUT_HSACO="_nchwc"
     LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
