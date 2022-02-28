@@ -33,6 +33,9 @@
 #include <cstdint>
 #include <stdlib.h>
 
+// return_code : -1, not applicable
+//             : -2, need skip, unique_index not accumulate
+//             :  0, success
 typedef struct {
     int return_code     {-1};
     int gks             {0};  // this is to store the gks value after benchmarked.

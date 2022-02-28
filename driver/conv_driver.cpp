@@ -386,29 +386,28 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 
     auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
-            if(run_only_kernel != driver->get_kernel_name(tunable)){
-                return result_t{};
-            }
+            if(run_only_kernel != driver->get_kernel_name(tunable))
+                {result_t result; result.return_code = -2; return result;}
         }
         if(silent_not_applicable_level0){
             // direction
             if(direction != tunable->direction)
-                return result_t{};
+                {result_t result; result.return_code = -2; return result;}
 
             // layout
             if(in_layout == "NCHW"){
                 if(tunable->tensor_layout != "nchw")
-                    return result_t{};
+                    {result_t result; result.return_code = -2; return result;}
             }else if(in_layout == "NHWC"){
                 if(tunable->tensor_layout != "nhwc")
-                    return result_t{};
+                    {result_t result; result.return_code = -2; return result;}
             }else if(in_layout == "NCHWC"){
                 if(tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
-                    return result_t{};
+                    {result_t result; result.return_code = -2; return result;}
                 auto wei_layout_config = tunable->tensor_layout.substr(6);
                 if((fil_layout == "NCHWC" && wei_layout_config != "kcyxc") || 
                     (fil_layout == "CHWNC" && wei_layout_config != "cyxkc"))
-                    return result_t{};
+                    {result_t result; result.return_code = -2; return result;}
             }
         }
 
@@ -475,6 +474,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
                     for(int gks : gks_list){
                         result_t result = launch(&tunables[i], unique_index, gks);
+                        if(result.return_code == -2) continue;
                         unique_tunables.push_back(tunables[i]);
                         unique_tunables.back().gemm_k_global_split = gks;
                         if(result.duration_ms < fastest_result.duration_ms){
@@ -485,6 +485,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     }
                 }else{
                     result_t result = launch(&tunables[i], unique_index, 0);
+                    if(result.return_code == -2) continue;
                     unique_tunables.push_back(tunables[i]);
                     unique_tunables.back().gemm_k_global_split = 0;
                     if(result.duration_ms < fastest_result.duration_ms){
@@ -496,6 +497,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
             else{
                 result_t result = launch(&tunables[i], unique_index, -1);
+                if(result.return_code == -2) continue;
                 unique_tunables.push_back(tunables[i]);
                 unique_tunables.back().gemm_k_global_split = result.gks;
                 if(result.duration_ms < fastest_result.duration_ms){
