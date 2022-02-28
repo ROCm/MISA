@@ -33,6 +33,8 @@ IGEMM_FWD_GTC_NCHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 IGEMM_FWD_GTC_NCHWC_DEBUG = 0
 IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING = True
 
+IGEMM_FWD_GTC_NCHWC_INT4_K_PACK = 16 # can be 8/16/32
+
 def _find_non_1_index_in_list(list_object):
     result_list = list()
     for idx, item in enumerate(list_object):
@@ -867,7 +869,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
     def get_k_pack(self):
         _, _, tb_nb_vec_c = self.get_thread_lengths()
         if self.tunable.precision == 'int4':
-            lds_k_pack = igemm_gcd(tb_nb_vec_c, 16)
+            lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT4_K_PACK)
         else:
             lds_k_pack = tb_nb_vec_c
         return lds_k_pack
