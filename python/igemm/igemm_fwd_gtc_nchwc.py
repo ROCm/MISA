@@ -1047,6 +1047,9 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
             assert self.vgpr.get_accum_start() % 4 == 0
             kernel_code_dict['accum_offset']        =   self.vgpr.get_accum_start()
+        if self.mc.arch_config.arch >= 1000:
+            kernel_code_dict['wavefront_size']      =   self.tunable.wavefront_size
+            kernel_code_dict['cumode']              =   self.tunable.cumode
         kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
