@@ -103,15 +103,16 @@ class codegen_driver_t(mc_base_t):
             k_multiplier *= 2
             
     def _emit_dotx_non_dpp_macro(self):
-        dotx_non_dpp = macro_dotx_mxnxk_non_dpp_t(self.mc, 8, 8, 8, 1, self.tunable_dicts[0]['precision'])
+        dotx_non_dpp = macro_dotx_mxnxk_non_dpp_t(self.mc, 4, 4, 8, 1, self.tunable_dicts[0]['precision'])
         dotx_non_dpp.emit()
         max_lanegroup_tile_k = 4 * 4 // amdgpu_precision_data_byte(self.tunable_dicts[0]['precision'])
+        max_lanegroup_tile_k = int(max_lanegroup_tile_k)
         k_multiplier = 2
         while True:
             current_k = dotx_non_dpp.get_dotx_instruction().k * k_multiplier
             if current_k > max_lanegroup_tile_k:
                 break
-            macro_dotx_mxnxk_non_dpp_t(self.mc, 8, 8, current_k, 1, self.tunable_dicts[0]['precision']).emit()
+            macro_dotx_mxnxk_non_dpp_t(self.mc, 4, 4, current_k, 1, self.tunable_dicts[0]['precision']).emit()
             k_multiplier *= 2
 
     def emit_global_macro(self):
