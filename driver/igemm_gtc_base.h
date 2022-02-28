@@ -708,4 +708,28 @@ public:
     int                 vector_c;
 };
 
+static inline config_content_t
+igemm_try_expand_tunable_content(const config_content_t & content)
+{
+    config_content_t expanded_content;
+    std::vector<std::string> tunable_field_support_expand = {"tensor_layout"};
+    for(const auto & sec : content){
+        for(const auto f : tunable_field_support_expand){
+            if(sec.get_name().compare(0, 6, "igemm_") == 0 &&
+                    sec.at(f).get_type() == config_section_value_type_enum::config_section_value_type_list_string){
+                for(auto & field_item : sec.at(f).get_list_string()){
+                    auto new_sec = sec;
+                    std::string field_item_str = std::string("\'") + field_item + std::string("\'");
+                    new_sec.at(f) = config_section_value_t::parse_value(field_item_str);
+                    expanded_content.add_section(new_sec);
+                }
+            }
+            else{
+                expanded_content.add_section(sec);
+            }
+        }
+    }
+    return expanded_content;
+}
+
 #endif

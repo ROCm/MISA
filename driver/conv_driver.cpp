@@ -377,7 +377,9 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int max_npb = env_get_int("IGEMM_MAX_NPB", -1);
     int max_kpb = env_get_int("IGEMM_MAX_KPB", -1);
     int max_gks = env_get_int("IGEMM_MAX_GKS", -1);
-
+    int silent_not_applicable_level0 = env_get_int("IGEMM_SILENT_NA_L0", 1);  // ignore kernel that has different direction & layout
+    std::string in_layout = conv_args->get_str("in_layout");
+    std::string fil_layout = conv_args->get_str("fil_layout");
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
@@ -388,7 +390,28 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                 return result_t{};
             }
         }
-        
+        if(silent_not_applicable_level0){
+            // direction
+            if(direction != tunable->direction)
+                return result_t{};
+
+            // layout
+            if(in_layout == "NCHW"){
+                if(tunable->tensor_layout != "nchw")
+                    return result_t{};
+            }else if(in_layout == "NHWC"){
+                if(tunable->tensor_layout != "nhwc")
+                    return result_t{};
+            }else if(in_layout == "NCHWC"){
+                if(tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
+                    return result_t{};
+                auto wei_layout_config = tunable->tensor_layout.substr(6);
+                if((fil_layout == "NCHWC" && wei_layout_config != "kcyxc") || 
+                    (fil_layout == "CHWNC" && wei_layout_config != "cyxkc"))
+                    return result_t{};
+            }
+        }
+
         printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
         fflush(stdout);
 
@@ -542,7 +565,8 @@ int main(int argc, char **argv) {
     int igemm_bench_csv = env_get_int("IGEMM_BENCH_CSV", 0);
     driver_mode_t driver_mode = static_cast<driver_mode_t>(env_get_int("IGEMM_MODE", 0));
     config_parser_t config_parser(config_file);
-    auto content = config_parser.parse();
+    auto unexpanded_content = config_parser.parse();
+    auto content = igemm_try_expand_tunable_content(unexpanded_content);
     //content.dump();
     FILE * p_bcsv = nullptr;
     if(igemm_bench_csv){
@@ -629,7 +653,7 @@ int main(int argc, char **argv) {
     assert(in_layout == "NCHW" || in_layout == "NHWC" || in_layout == "NCHWC"); // currently only support these layout
     assert((in_layout == "NCHW" && tunables[0].tensor_layout == "nchw") || 
            (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc") ||
-           (in_layout == "NCHWC" && tunables[0].tensor_layout == "nchwc"));  // check pairs
+           (in_layout == "NCHWC" && tunables[0].tensor_layout.compare(0, 5, "nchwc") == 0));  // check pairs
 
     // init host side
     float *host_input = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));

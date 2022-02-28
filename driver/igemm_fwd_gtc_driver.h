@@ -328,7 +328,7 @@ public:
             gemm_m = n * b;
             // gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
             gemm_n = k / group;
-        }else if (tunable->tensor_layout == "nchwc"){
+        }else if (tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
             igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
             b = tiling.tile_h * tiling.tile_w;
             gemm_m = k / group;
@@ -366,6 +366,7 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
         int forw = arg->get_int("forw");
+        std::string fil_layout = arg->get_str("fil_layout");
 
         int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
         if(need_fwd == 0)
@@ -497,7 +498,11 @@ public:
                     }
                 }
             }
-        }else if(tunable->tensor_layout == "nchwc"){
+        }else if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
+            auto tunable_wei_layout = tunable->tensor_layout.substr(6);
+            if((fil_layout == "NCHWC" && tunable_wei_layout != "kcyxc") || 
+                (fil_layout == "CHWNC" && tunable_wei_layout != "cyxkc"))
+                return false;
             if(this->vector_c != tunable->vector_c)
                 return false;
             if((c / group) %  tunable->vector_c != 0 || (k / group) %  tunable->vector_c != 0){
@@ -685,7 +690,7 @@ public:
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
-        } else if(tunable->tensor_layout == "nchwc") {
+        } else if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0) {
             igemm_fwd_gtc_nchwc_karg_t karg;
             igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
             uint32_t ntile_h   = (ho + tiling.tile_h - 1) / tiling.tile_h;
@@ -815,7 +820,7 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
-                if(tunable->tensor_layout == "nchwc"){
+                if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
                     splits = 1;
                 }
                 //printf("block:%d, grid:%d\n", block_size, grid_size);
