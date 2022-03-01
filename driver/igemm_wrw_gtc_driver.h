@@ -620,7 +620,10 @@ public:
             // std::cout << "not valid tunable config." << std::endl;
             return result;
         }
-        
+
+        if(this->driver_mode == driver_mode_heuristic)
+            current_gks = tunable->gemm_k_global_split ? current_gks : 0;
+
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");

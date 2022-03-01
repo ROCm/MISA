@@ -956,7 +956,38 @@ public:
             result.duration_ms = min_duration;
             result.gks         = selected_gks;
         }else if(this->driver_mode == driver_mode_heuristic){
-            assert(0);
+            int gks   = tunable->gemm_k_global_split ? current_gks : 0;  // sync with is_tunable_predicted
+            size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
+            if(tunable->multihead){
+                if(tunable->tensor_layout == "nhwc"){
+                    int gemm_m = n * h_tilda_slice * w_tilda_slice;
+                    int gemm_n = c / group;
+                    // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now.
+                    igemm_bwd_gtc_nhwc_karg_t *karg = (igemm_bwd_gtc_nhwc_karg_t *)(karg_buffer);
+                    magic_div_u32_t mdiv_x_tilda = magic_div_u32_gen(x_tilda);
+                    magic_div_u32_t mdiv_y_tilda = magic_div_u32_gen(y_tilda);
+                    magic_div_u32_t mdiv_group_mn = magic_div_u32_gen(group * utility_integer_divide_ceil(gemm_n, gemm_n_per_block) * utility_integer_divide_ceil(gemm_m, gemm_m_per_block));
+                    karg->dtile_iy = num_of_gemm > 1 ? mdiv_x_tilda.magic : 0;
+                    karg->dtile_ix = num_of_gemm > 1 ? mdiv_x_tilda.shift : 0;
+                    karg->dslice_y = num_of_gemm > 1 ? mdiv_y_tilda.magic : y;
+                    karg->dslice_x = num_of_gemm > 1 ? mdiv_y_tilda.shift : x;
+                    karg->dtile_h  = num_of_gemm > 1 ? mdiv_group_mn.magic : h_tilda;
+                    karg->dtile_w  = num_of_gemm > 1 ? mdiv_group_mn.shift : w_tilda;
+                    karg->ks       = gks;
+                }else{
+                    assert(0);
+                }
+
+                float duration = igemm_launch_kernels({
+                        {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
+                    }, bwd_prolog, bwd_postlog, this->warmup, this->repeat);
+
+                result.return_code = 0;
+                result.duration_ms = duration;
+                result.gks         = gks;
+            }else{
+                assert(0);  // to be supported
+            }
         }
 
 #ifdef IGEMM_SPLIT_KERNEL
