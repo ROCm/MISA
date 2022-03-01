@@ -317,8 +317,8 @@ std::string log_cmd(const args_t *arg, driverDataType_t driver_data_type, std::s
         << " -q " << pad_w
         << " -u " << stride_h
         << " -v " << stride_w
-        << " -l " << stride_h
-        << " -j " << stride_w;
+        << " -l " << dilation_h
+        << " -j " << dilation_w;
 
     if(in_layout != "NCHW")
         ss << " --in_layout " << in_layout;
@@ -761,6 +761,11 @@ int main(int argc, char **argv) {
                 if(((c / ngroups) % vector_c != 0) || ((k / ngroups) % vector_c != 0)){
                     dump_arg(&conv_args);
                     printf("can't support c:%d k:%d with vec_c:%d\n", c, k, vector_c);
+                    if(p_bcsv)
+                    {
+                        fprintf(p_bcsv, "\n");
+                        fflush(p_bcsv);
+                    }
                     exit(-1);
                 }
                 float* aux_in = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
