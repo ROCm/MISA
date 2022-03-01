@@ -24,13 +24,16 @@ else
     ARCH="gfx908"
 fi
 
-if [ "${LAYOUT}" = "nchw" ] ; then
+if [[  "${LAYOUT}" = "nchw" ]] ; then
     LAYOUT_HSACO=""
     LAYOUT_ARG=""
-elif [ "${LAYOUT}" = "nhwc" ] ; then
+elif [[  "${LAYOUT}" = "nhwc" ]] ; then
     LAYOUT_HSACO="_nhwc"
     LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
-elif [ "${LAYOUT}" = "nchwc" ] ; then
+elif [[  "${LAYOUT}" = "nchwc_kcyxc" ]] ; then
+    LAYOUT_HSACO="_nchwc"
+    LAYOUT_ARG="--in_layout NCHWC --fil_layout NCHWC --out_layout NCHWC"
+elif [[  "${LAYOUT}" = "nchwc_cyxkc" ]] ; then
     LAYOUT_HSACO="_nchwc"
     LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
@@ -79,6 +82,8 @@ export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
 export IGEMM_RAND_INT=0
 export PRINT_NRMS=0
+
+rm bench_model.csv
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
