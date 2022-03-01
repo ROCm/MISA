@@ -81,6 +81,8 @@ export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
 
+rm bench_model.csv
+
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then
     FORW=1
