@@ -384,42 +384,51 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
 
-    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
+    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks, bool is_tunable_predicted = false) -> result_t {
+        igemm_gtc_tunable_t predicted_tunable;
+        const igemm_gtc_tunable_t * current_tunable = tunable;
+        if(is_tunable_predicted){
+            predicted_tunable = *tunable;
+            // in prediction, the gks will be 0, 1, 2... if tunable support gks, other wise it is -1.
+            // here we restore the gemm_k_global_split inside the tunable
+            predicted_tunable.gemm_k_global_split = current_gks >= 0 ? 1 : 0;
+            current_tunable = &predicted_tunable;
+        }
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
-            if(run_only_kernel != driver->get_kernel_name(tunable))
+            if(run_only_kernel != driver->get_kernel_name(current_tunable))
                 {result_t result; result.return_code = -2; return result;}
         }
         if(silent_not_applicable_level0){
             // direction
-            if(direction != tunable->direction)
+            if(direction != current_tunable->direction)
                 {result_t result; result.return_code = -2; return result;}
 
             // layout
             if(in_layout == "NCHW"){
-                if(tunable->tensor_layout != "nchw")
+                if(current_tunable->tensor_layout != "nchw")
                     {result_t result; result.return_code = -2; return result;}
             }else if(in_layout == "NHWC"){
-                if(tunable->tensor_layout != "nhwc")
+                if(current_tunable->tensor_layout != "nhwc")
                     {result_t result; result.return_code = -2; return result;}
             }else if(in_layout == "NCHWC"){
-                if(tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
+                if(current_tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
                     {result_t result; result.return_code = -2; return result;}
-                auto wei_layout_config = tunable->tensor_layout.substr(6);
+                auto wei_layout_config = current_tunable->tensor_layout.substr(6);
                 if((fil_layout == "NCHWC" && wei_layout_config != "kcyxc") || 
                     (fil_layout == "CHWNC" && wei_layout_config != "cyxkc"))
                     {result_t result; result.return_code = -2; return result;}
             }
         }
 
-        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
+        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(current_tunable).c_str());
         fflush(stdout);
 
         pre_func();
 
-        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, current_gks);
+        result_t result = driver->run(conv_args, current_tunable, device_input, device_weight, device_output, current_gks);
 
         std::string gks_string = "";
-        if(tunable->gemm_k_global_split){
+        if(current_tunable->gemm_k_global_split){
             gks_string = "[" + std::to_string(result.gks) + "]";
         }
         printf("%s", gks_string.c_str());
@@ -445,7 +454,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
 
         if(dump_gmap)
-            gmap_dump(conv_args, tunable, result.gks);
+            gmap_dump(conv_args, current_tunable, result.gks);
         return result;
     };
 

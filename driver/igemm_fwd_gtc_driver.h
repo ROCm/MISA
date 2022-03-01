@@ -820,9 +820,7 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
-                if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
-                    splits = 1;
-                }
+
                 //printf("block:%d, grid:%d\n", block_size, grid_size);
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
@@ -850,8 +848,13 @@ public:
             result.duration_ms = min_duration;
             result.gks         = selected_gks;
         }else if(this->driver_mode == driver_mode_heuristic){
-            int gks   = heuristic_select_gks(arg, tunable);
+            int gks   = tunable->gemm_k_global_split ? current_gks : 0;  // sync with is_tunable_predicted
             size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
+            if(tunable->tensor_layout == "nhwc"){
+                // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now.
+                igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
+                karg_revalue->ks = gks;
+            }
 
             float duration = igemm_launch_kernels({
                     {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
