@@ -24,13 +24,16 @@ else
     ARCH="gfx908"
 fi
 
-if [ "${LAYOUT}" = "nchw" ] ; then
+if [[  "${LAYOUT}" = "nchw" ]] ; then
     LAYOUT_HSACO=""
     LAYOUT_ARG=""
-elif [ "${LAYOUT}" = "nhwc" ] ; then
+elif [[  "${LAYOUT}" = "nhwc" ]] ; then
     LAYOUT_HSACO="_nhwc"
-    LAYOUT_ARG="${LAYOUT_ARG}"
-elif [ "${LAYOUT}" = "nchwc" ] ; then
+    LAYOUT_ARG="--in_layout NHWC --fil_layout NHWC --out_layout NHWC"
+elif [[  "${LAYOUT}" = "nchwc_kcyxc" ]] ; then
+    LAYOUT_HSACO="_nchwc"
+    LAYOUT_ARG="--in_layout NCHWC --fil_layout NCHWC --out_layout NCHWC"
+elif [[  "${LAYOUT}" = "nchwc_cyxkc" ]] ; then
     LAYOUT_HSACO="_nchwc"
     LAYOUT_ARG="--in_layout NCHWC --fil_layout CHWNC --out_layout NCHWC"
 else
@@ -38,15 +41,21 @@ else
     exit 1
 fi
 
-if [ "${PREC}" = "fp32" ] ; then
+if [[ "${PREC}" = "fp32" ]] ; then
     PREC_HSACO=""
     CONV="conv"
-elif [ "${PREC}" = "fp16" ] ; then
-    PREC_HSACO="_fp16"
-    CONV="convfp16"
-elif [ "${PREC}" = "int8" ] ; then
-    PREC_HSACO="_int8"
-    CONV="convint8"
+elif [[ "${PREC}" = "int4"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "fp16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[  "${PREC}" = "int8"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="conv${PREC}"
+elif [[ "${PREC}" = "bf16"* ]] ; then
+    PREC_HSACO="_${PREC}"
+    CONV="convbfp16${PREC:4}"
 else
     echo "wrong precision: ${PREC}"
     exit 1
@@ -71,6 +80,8 @@ fi
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export IGEMM_BENCH_CSV=1
+
+rm bench_model.csv
 
 # Flag enables fwd, bwd, wrw convolutions
 if [ "${DIR}" = "fwd" ] ; then

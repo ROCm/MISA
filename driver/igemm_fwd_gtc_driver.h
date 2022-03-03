@@ -49,10 +49,6 @@ static inline int env_get_int_fwd(const char *var_name, int default_int) {
 //#define GEMM_K_GLOBAL_SPLIT 3
 #define MAX_GEMM_K_SPLITS 8
 
-#ifndef VECTOR_C_FP16
-#define VECTOR_C_FP16 8
-#endif
-
 #define LANEGROUP_SIZE 8
 
 typedef struct {
@@ -332,7 +328,7 @@ public:
             gemm_m = n * b;
             // gemm_n = ((k/group + gemm_n_per_block -1)/gemm_n_per_block) * gemm_n_per_block;
             gemm_n = k / group;
-        }else if (tunable->tensor_layout == "nchwc"){
+        }else if (tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
             igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
             b = tiling.tile_h * tiling.tile_w;
             gemm_m = k / group;
@@ -370,6 +366,7 @@ public:
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
         int forw = arg->get_int("forw");
+        std::string fil_layout = arg->get_str("fil_layout");
 
         int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
         if(need_fwd == 0)
@@ -501,9 +498,14 @@ public:
                     }
                 }
             }
-        }else if(tunable->tensor_layout == "nchwc"){
-            int vector_c = VECTOR_C_FP16;
-            if((c / group) % vector_c != 0 || (k / group) % vector_c != 0){
+        }else if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0){
+            auto tunable_wei_layout = tunable->tensor_layout.substr(6);
+            if((fil_layout == "NCHWC" && tunable_wei_layout != "kcyxc") || 
+                (fil_layout == "CHWNC" && tunable_wei_layout != "cyxkc"))
+                return false;
+            if(this->vector_c != tunable->vector_c)
+                return false;
+            if((c / group) %  tunable->vector_c != 0 || (k / group) %  tunable->vector_c != 0){
                 return false;
             }
 
@@ -688,9 +690,8 @@ public:
 #endif
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
-        } else if(tunable->tensor_layout == "nchwc") {
+        } else if(tunable->tensor_layout.compare(0, 5, "nchwc") == 0) {
             igemm_fwd_gtc_nchwc_karg_t karg;
-            int vector_c       = VECTOR_C_FP16;
             igemm_spatial_tiling_t tiling = get_spatial_tiling(arg);
             uint32_t ntile_h   = (ho + tiling.tile_h - 1) / tiling.tile_h;
             uint32_t ntile_w   = (wo + tiling.tile_w - 1) / tiling.tile_w;
@@ -703,7 +704,7 @@ public:
             karg.wi            = wi;
             karg.n             = n;
             karg.k             = k / group;
-            karg.c             = c / group / vector_c;
+            karg.c             = c / group / tunable->vector_c;
             karg.group         = group;
             karg.ks            = 1;
 
@@ -714,9 +715,9 @@ public:
             karg.pad_hw        = (pad_h << 16 ) | pad_w;
             karg.wei_hw        = (y << 16) | x;
             
-            uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / vector_c / x) % y;
-            uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / vector_c % x;
-            uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / vector_c / (x * y)) % (c / group);
+            uint32_t s_move_slice_k_y = (tunable->gemm_k_per_block / tunable->vector_c / x) % y;
+            uint32_t s_move_slice_k_x = tunable->gemm_k_per_block / tunable->vector_c % x;
+            uint32_t s_move_slice_k_c = (tunable->gemm_k_per_block / tunable->vector_c / (x * y)) % (c / group);
             karg.move_slice_k  = (s_move_slice_k_y << 16) | (s_move_slice_k_x << 8) | s_move_slice_k_c;
 
 #if USE_MAGIC_DIV
@@ -819,9 +820,7 @@ public:
                     // printf("block:%d, grid:%d\n", block_size, grid_size);
                     // fflush(stdout);
                 }
-                if(tunable->tensor_layout == "nchwc"){
-                    splits = 1;
-                }
+
                 //printf("block:%d, grid:%d\n", block_size, grid_size);
                 std::vector<igemm_launch_kernel_t> kernel_launchers;
                 kernel_launchers.push_back({kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}});
@@ -849,8 +848,13 @@ public:
             result.duration_ms = min_duration;
             result.gks         = selected_gks;
         }else if(this->driver_mode == driver_mode_heuristic){
-            int gks   = heuristic_select_gks(arg, tunable);
+            int gks   = tunable->gemm_k_global_split ? current_gks : 0;  // sync with is_tunable_predicted
             size_t grid_size = get_grid_size(arg, tunable) * (1 << gks);
+            if(tunable->tensor_layout == "nhwc"){
+                // This is hacky, but in MIOpen we prefer a heuristic way to set gks, so ok now.
+                igemm_fwd_gtc_nhwc_karg_t *karg_revalue = (igemm_fwd_gtc_nhwc_karg_t *)(karg_buffer);
+                karg_revalue->ks = gks;
+            }
 
             float duration = igemm_launch_kernels({
                     {kernel_func, karg_buffer, karg_size, {grid_size * block_size, splits, 1}, {block_size, 1, 1}}
@@ -868,7 +872,7 @@ public:
             float* gemmc_host_check = (float* )malloc(k * n * ho * wo * sizeof(float));
             printf("gemmc_host_check size=%d\n",  k * n * ho * wo * sizeof(float));
             printf("copy output\n");
-            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo * sizeof(float16), hipMemcpyDeviceToHost);
+            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo, hipMemcpyDeviceToHost);
 
             for (int i_check = 0; i_check < (0+block_size); i_check++)
             {
@@ -877,9 +881,9 @@ public:
                 float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
                 float check_num0_fp32 = (float)check_num0;
                 float check_num1_fp32 = (float)check_num1;
-                printf("[%d]th var to monitor:[%f, %d-0x%x, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+                printf("[%d]th var to monitor:[%f, %d:(0x%x), fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
             }
-            printf("s_p_out=%x\n", p_out);
+            printf("s_p_out=%p\n", p_out);
             printf("workspace debug end \r\n");
             free(gemmc_host_check);
         }

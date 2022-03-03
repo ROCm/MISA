@@ -261,13 +261,45 @@ class mul_u32_si_t(mc_base_t):
     def __init__(self, mc):
         mc_base_t.__init__(self, mc)
     def __call__(self, s_o, s_i, multiplier):
-        assert isinstance(multiplier, int)
+        assert isinstance(multiplier, int) or math.log2(multiplier).is_integer()
         with self._deferred_context():
-            if utility_is_pow2(multiplier):
-                self._emit(f"s_lshl_b32 s[{s_o}], s[{s_i}], {utility_log2(multiplier)}")
+            if math.log2(multiplier).is_integer():
+                if math.log2(multiplier) > 0:
+                    self._emit(f"s_lshl_b32 s[{s_o}], s[{s_i}], {utility_log2(multiplier)}")
+                else:
+                    self._emit(f"s_lshr_b32 s[{s_o}], s[{s_i}], {-utility_log2(multiplier)}")
             else:
                 self._emit(f"s_mul_i32 s[{s_o}], s[{s_i}], {multiplier}")
         return self._get_deferred()
+    
+class mul_u32_vi_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def __call__(self, v_o, v_i, multiplier):
+        assert isinstance(multiplier, int) or math.log2(multiplier).is_integer()
+        with self._deferred_context():
+            if math.log2(multiplier).is_integer():
+                if math.log2(multiplier) > 0:
+                    self._emit(f"v_lshlrev_b32 v[{v_o}], {utility_log2(multiplier)}, v[{v_i}]")
+                else:
+                    self._emit(f"v_lshrrev_b32 v[{v_o}], {-utility_log2(multiplier)}, v[{v_i}]")
+            else:
+                self._emit(f"v_mul_lo_u32 v[{v_o}], v[{v_i}], {multiplier}")
+        return self._get_deferred()
+    
+class add_lshl_u32_vi_t(mc_base_t):
+    def __init__(self, mc):
+        mc_base_t.__init__(self, mc)
+    def __call__(self, v_o, v_i_0, v_i_1, shift):
+        assert isinstance(shift, int)
+        with self._deferred_context():
+            if shift > 0:
+                self._emit(f"v_add_lshl_u32 v[{v_o}], v[{v_i_0}], v[{v_i_1}], {shift}")
+            else:
+                self._emit(f"v_add_nc_u32 v[{v_o}], v[{v_i_0}], v[{v_i_1}]")
+                self._emit(f"v_ashrrev_i32 v[{v_o}], {-shift}, v[{v_o}]")
+        return self._get_deferred()
+
 
 class macro_mdiv_u32_rem_vi_t(macro_base_t):
     def name(self):
@@ -482,7 +514,7 @@ def utility_is_pow2(v):
     return v and (not(v & (v - 1)))
 
 def utility_log2(v):
-    assert (v and (not(v & (v - 1)))), 'v:{} must be power of 2'.format(v)
+    assert math.log2(v).is_integer(), f'v:{v} must be power of 2'
     return int(math.log2(v))
 
 def utility_get_epack_length(precision):

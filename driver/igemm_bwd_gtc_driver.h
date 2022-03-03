@@ -534,6 +534,9 @@ public:
             return result;
         }
 
+        if(this->driver_mode == driver_mode_heuristic)
+            current_gks = tunable->gemm_k_global_split ? current_gks : 0;
+
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -840,7 +843,7 @@ public:
         result_t result;
         result.kernel_name = kernel_name;
 
-        if(this->driver_mode == driver_mode_normal){
+        if(true){
             float min_duration = FLT_MAX;
             float duration = .0;
             int selected_gks = 0;
@@ -955,8 +958,6 @@ public:
             result.return_code = 0;
             result.duration_ms = min_duration;
             result.gks         = selected_gks;
-        }else if(this->driver_mode == driver_mode_heuristic){
-            assert(0);
         }
 
 #ifdef IGEMM_SPLIT_KERNEL

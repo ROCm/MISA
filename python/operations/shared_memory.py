@@ -715,13 +715,42 @@ class inst_ds_write2_likely_accumulate_offset_t(mc_base_t):
     def name(self):
         return ''
 
-
+class inst_ds_read_mc_t(mc_base_t):
+    def __init__(self, mc, bytes):
+        mc_base_t.__init__(self, mc)
+        self.bytes = bytes
+    def get_offset(self, offset):
+        return f'offset:{offset}'
+    def __call__(self, vdst, vaddr, offset):
+        with self._deferred_context():
+            read_bytes = int(self.bytes)
+            if read_bytes == 1:
+                self._emit(f'ds_read_u8 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes == 2:
+                self._emit(f'ds_read_u16 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes == 4:
+                self._emit(f'ds_read_b32 v[{vdst}], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes == 8:
+                self._emit(f'ds_read_b64 v[{vdst}:{vdst}+1], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes == 12:
+                self._emit(f'ds_read_b96 v[{vdst}:{vdst}+2], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes == 16:
+                self._emit(f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}')
+            elif read_bytes % 16 == 0:
+                for i in range(read_bytes // 16):
+                    self._emit(f'ds_read_b128 v[{vdst}+{4*i}:{vdst}+{4*i}+3], v[{vaddr}] {self.get_offset(offset)}+{16 * i}')
+            else:
+                assert False, f'bytes:{self.bytes}'
+        return self._get_deferred()
+        
+    def get_issues(self, sld_offset = 0):
+        return 1
 
 class inst_ds_read_t(object):
     def __init__(self, bytes):
         self.bytes = bytes
     def get_offset(self, offset):
-        return '' if offset == 0 else 'offset:{}'.format(offset)
+        return f'offset:{offset}'
     def __call__(self, vdst, vaddr, offset):
         if self.bytes == 1:
             return 'ds_read_u8 v[{}], v[{}] {}'.format(vdst, vaddr, self.get_offset(offset))
@@ -735,6 +764,10 @@ class inst_ds_read_t(object):
             return 'ds_read_b96 v[{}:{}+2], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
         if self.bytes == 16:
             return 'ds_read_b128 v[{}:{}+3], v[{}] {}'.format(vdst, vdst, vaddr, self.get_offset(offset))
+        if self.bytes == 32:
+            return f'ds_read_b128 v[{vdst}:{vdst}+3], v[{vaddr}] {self.get_offset(offset)}' + \
+                    '\n' + \
+                   f'ds_read_b128 v[{vdst}+4:{vdst}+4+3], v[{vaddr}] {self.get_offset(offset)}+16'
         assert False, f'bytes:{self.bytes}'
     def get_issues(self, sld_offset = 0):
         return 1
@@ -751,6 +784,8 @@ class inst_ds_write_t(object):
         assert False
 
     def __call__(self, vaddr, vdata, offset = 0, lo_hi = 0):
+        # assert offset.is_integer()
+        offset = int(offset)
         if self.bytes == 1:
             return 'ds_write_b8 v[{}], v[{}] {}'.format(vaddr, vdata, self.get_offset(offset))
         if self.bytes == 2:
@@ -969,7 +1004,7 @@ class macro_igemm_3d_shared_store_t(macro_base_t):
         # assert ctrl.precision == 'fp32', "TO BE supported"
         data_byte = amdgpu_precision_data_byte(ctrl.precision)
         issue_cnt = 0
-        pixel_per_vgpr = 4 // data_byte
+        pixel_per_vgpr = int(4 // data_byte)
         vgpr_per_vector = (ctrl.vector_dp + pixel_per_vgpr - 1) // pixel_per_vgpr
         assert ctrl.length_dp % ctrl.vector_dp == 0
         num_dp = ctrl.length_dp // ctrl.vector_dp

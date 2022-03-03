@@ -231,20 +231,22 @@ class igemm_gtc_tunable_parameter_t(object):
         #  x -(unmerge)-> x0*x1, if set to 1, means cluster first iterate all x1
         # hence stride of x0 should not be x1, but be total number of x divide by x0
 
-        if self.tensor_layout == "nchwc":
-            self.vector_c                       = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+        # if self.tensor_layout == "nchwc":
+        self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
+        self.wavefront_size                     = utility_dict_with_default_t(tunable_dict)('wavefront_size', 64)
+        self.cumode                             = utility_dict_with_default_t(tunable_dict)('cumode', 0)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
         # assert type(self.opt_1x1) is bool
         assert self.direction in ('fwd', 'bwd', 'wrw')
-        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8')
+        assert self.precision in ('fp32', 'fp16', 'bf16', 'int8', 'int4')
         if self.tensor_layout == "nchw":
             assert self.nxb in (1,4,8,16,32,64,128,256)
         elif self.tensor_layout == "nhwc":
             assert self.nxb == 0, 'nhwc now no need have different nxb value'
-        elif self.tensor_layout == "nchwc":
-            assert self.vector_c in (4, 8), 'do not support arbitary vector_c'
+        elif self.tensor_layout[0:5] == "nchwc":
+            assert self.vector_c in (4, 8, 16, 32), 'do not support arbitary vector_c'
         else:
             assert False
         assert self.nxe in (0,1)
@@ -270,7 +272,7 @@ class igemm_gtc_tunable_parameter_t(object):
             waves_per_n = self.gemm_n_per_block // (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n)
             self.block_size                     = waves_per_m * waves_per_n * self.wave_size
 
-        assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths), f"block_size:{self.block_size}, a_cluster_lengths:{self.tensor_a_cluster_lengths}, {self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, {self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}"
+        assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths), f"block_size:{self.block_size}, a_cluster_lengths:{self.tensor_a_cluster_lengths}"
         assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths), f"block_size:{self.block_size}, b_cluster_lengths:{self.tensor_b_cluster_lengths}"
 
         def _unmerge_x1_from_e(unroll_k, nxe):
@@ -290,7 +292,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
-            elif self.tensor_layout == "nchwc":
+            elif self.tensor_layout[0:5] == "nchwc":
                 pass
             else:
                 assert False
@@ -344,7 +346,7 @@ class igemm_gtc_tunable_parameter_t(object):
                     self.num_vgpr_accumulate_c  = dotx_mapping.total_acc_c()
                     
                     # TODO: try use prefetch
-                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m() 
+                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m()
                     self.num_vgpr_accumulate_b  = self.local_prefetch_num * dotx_mapping.thread_n()
             else:
                 self.gemm_m_repeat              = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
@@ -387,6 +389,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.lds_pad_m, self.lds_pad_n = self.get_lds_pad() # LDS pad
         self.lds_a                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_m_per_block if not self.tensor_a_pass_through else 0
         self.lds_b                     = amdgpu_precision_data_byte(self.precision) * self.gemm_k_per_block * self.gemm_n_per_block if not self.tensor_b_pass_through else 0
+        self.lds_a                     = int(self.lds_a)
+        self.lds_b                     = int(self.lds_b)
         self.lds_a_np2                 = igemm_next_pow2( self.lds_a) if self.lds_a != 0 else 0
         self.lds_b_np2                 = igemm_next_pow2( self.lds_b) if self.lds_b != 0 else 0
         lds_a_pad                      = self.lds_a_np2 // 32 * (32 + self.lds_pad_m)
@@ -453,12 +457,14 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-            c_vgpr_sst = self.lanegroup_repeat_m * self.lanegroup_tile_m // self.coalescing_store_groups
-            dotx_length_in_m = self.vector_c
+            dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block,
+                                        self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
+                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision)
+            c_vgpr_sst = dotx_mapping.lanegroup_repeat_m * dotx_mapping.lanegroup_m_per_thread() // self.coalescing_store_groups
+            dotx_length_in_m = utility_gcd(self.vector_c, dotx_mapping.lanegroup_m_per_thread()) # TODO: lanegroup size may differ
             assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
             if c_vgpr_sst % dotx_length_in_m != 0:
-                self.coalescing_store_groups = self.lanegroup_repeat_m * self.lanegroup_tile_m // dotx_length_in_m
-
+                self.coalescing_store_groups = dotx_mapping.lanegroup_repeat_m * dotx_mapping.lanegroup_m_per_thread() // dotx_length_in_m
         if self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             if self.lds_total >= lds_a_pad + lds_b_pad:
                 pass
@@ -549,7 +555,7 @@ class igemm_gtc_tunable_parameter_t(object):
             precision = to_miopen_prec(self.precision)
             out_str = (f"        {'{'}{direction}, {tensor_layout}, {precision}, {self.nxb:2},{self.nxe:2},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
             out_str += (f"{self.wave_tile_m:3},{self.wave_tile_n:3},{self.wave_tile_k:3},{self.wave_step_m:2},{self.wave_step_n:2},{self.wave_repeat_m:2},{self.wave_repeat_n:2},")
-            out_str += (f"{self.multihead:2},{self.vector_store:2},{self.gemm_k_global_split:2},{self.merge_e:2},{self.tensor_a_pass_through:2},")
+            out_str += (f"{self.multihead:2},{self.vector_store:2},{self.gemm_k_global_split:2},{self.merge_e:2},{self.vector_c:2},{self.tensor_a_pass_through:2},")
             out_str += (f" {brace_left}{self.tensor_a_thread_lengths[0]:2},{self.tensor_a_thread_lengths[1]:2},{self.tensor_a_thread_lengths[2]:2},{self.tensor_a_thread_lengths[3]:2}{brace_right},")
             out_str += (f" {brace_left}{self.tensor_a_cluster_lengths[0]:3},{self.tensor_a_cluster_lengths[1]:3},{self.tensor_a_cluster_lengths[2]:3},{self.tensor_a_cluster_lengths[3]:3}{brace_right},")
             out_str += (f" {brace_left}{self.tensor_b_thread_lengths[0]:2},{self.tensor_b_thread_lengths[1]:2},{self.tensor_b_thread_lengths[2]:2},{self.tensor_b_thread_lengths[3]:2}{brace_right},")
@@ -603,6 +609,7 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['source_access_order']             = self.source_access_order
         tunable_dict['gemm_k_global_split']             = self.gemm_k_global_split
         tunable_dict['merge_e']                         = self.merge_e
+        tunable_dict['vector_c']                        = self.vector_c
         tunable_dict['multihead']                       = self.multihead
         tunable_dict['allow_lds_reorder']               = self.allow_lds_reorder
         tunable_dict['precache_soffset']                = self.precache_soffset
@@ -616,6 +623,8 @@ class igemm_gtc_tunable_parameter_t(object):
         tunable_dict['gemm_n_unmerge_cluster']          = self.gemm_n_unmerge_cluster
         tunable_dict['gemm_k_unmerge_cluster']          = self.gemm_k_unmerge_cluster
         tunable_dict['vector_store']                    = self.vector_store
+        tunable_dict['wavefront_size']                  = self.wavefront_size
+        tunable_dict['cumode']                          = self.cumode
 
         return tunable_dict
 
@@ -687,6 +696,9 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.merge_e:
             sstr += \
                 line_start + 'merge_e                    {} {}'.format(equal, self.merge_e) + new_line
+        if self.vector_c:
+            sstr += \
+                line_start + 'vector_c                   {} {}'.format(equal, self.vector_c) + new_line
         if self.vector_store:
             sstr += \
                 line_start + 'vector_store               {} {}'.format(equal, self.vector_store) + new_line
@@ -732,8 +744,12 @@ def igemm_gtc_encode_kernel_base_name(tunable, arch):
             kernel_name += 'gtcx2_'
         else:
             assert False
+    
+    vector_c_str = ""
+    if tunable.vector_c > 1:
+        vector_c_str = f"x{tunable.vector_c}"
 
-    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}"
+    kernel_name += f"{tunable.tensor_layout}_{tunable.precision}{vector_c_str}"
 
     return kernel_name
 

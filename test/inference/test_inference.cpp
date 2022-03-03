@@ -42,10 +42,6 @@ std::string parse_base_arg(int argc, char* argv[])
         return arg;
 }
 
-static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
-                                   size_t ksize, size_t stride) {
-    return (in_size + 2 * pad - dilation * (ksize - 1) - 1) / stride + 1;
-}
 typedef struct {
     uint32_t magic;
     uint8_t shift;
@@ -74,13 +70,6 @@ static inline uint32_t magic_div_u32_pack_shift(uint8_t s0, uint8_t s1, uint8_t 
     uint32_t shift_3 = static_cast<uint32_t>(s3);
     return (shift_3 << 24) | (shift_2 << 16) | (shift_1 << 8) | shift_0;
 }
-typedef struct {
-    int return_code;
-    float duration_ms;
-    float gflops;
-    float efficiency;
-    std::string kernel_name;
-} result_t;
 
 
 typedef enum {
@@ -103,14 +92,6 @@ static inline size_t get_data_byte(driverDataType_t dtype)
         return 2;
     assert(0);
     return 0;
-}
-
-static inline int env_get_int(const char *var_name, int default_int) {
-    char *v = getenv(var_name);
-    int r = default_int;
-    if (v)
-        r = atoi(v);
-    return r;
 }
 
 #define NAIVE_CONV_THREADED
@@ -138,14 +119,6 @@ static int gen_rand_integer()
         inited = 1;
     }
     return std::rand();
-}
-
-
-static inline char *env_get_str(const char *var_name, char *default_str) {
-    char *v = getenv(var_name);
-    if (v)
-        return v;
-    return default_str;
 }
 
 template <typename Dst_T, typename Src_T>

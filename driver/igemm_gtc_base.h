@@ -60,6 +60,7 @@ typedef enum {
     driverInt8  = 3,
     driverBFloat16 = 5, /*!< 16-bit binary floating point (8-bit exponent, 7-bit fraction)
                            (Partially supported) */
+    driverInt4  = 7,
 } driverDataType_t;
 
 typedef struct {
@@ -78,6 +79,8 @@ static inline size_t get_data_byte(driverDataType_t dtype)
         return 1;
     if(dtype == driverBFloat16)
         return 2;
+    if(dtype == driverInt4)
+        return 1;
     assert(0);
     return 0;
 }
@@ -140,6 +143,7 @@ typedef struct {
     int vector_store;
     int gemm_k_global_split;
     int merge_e;
+    int vector_c;
 } igemm_gtc_tunable_t;
 
 static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const config_section_t &sec){
@@ -218,6 +222,7 @@ igemm_gtc_tunable_from_config(const config_content_t &content) {
             tunable.vector_store             = sec.count("vector_store") > 0 ? sec.at("vector_store").get_int() : 0;
             tunable.gemm_k_global_split      = sec.count("gemm_k_global_split") > 0 ? sec.at("gemm_k_global_split").get_int() : 0;
             tunable.merge_e                  = sec.count("merge_e") > 0 ? sec.at("merge_e").get_int() : 0;
+            tunable.vector_c                 = sec.count("vector_c") > 0 ? sec.at("vector_c").get_int() : 1;
             tunables.push_back(tunable);
         }
     }
@@ -279,8 +284,11 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
         else if(gcn_arch == 910)
             kernel_name += "gtcx2_";
     }
+    std::string vector_c_str = "";
+    if(tunable->vector_c > 1)
+        vector_c_str += std::string("x") + std::to_string(tunable->vector_c);
 
-    kernel_name += tensor_layout + std::string("_") + precision +
+    kernel_name += tensor_layout + std::string("_") + precision + vector_c_str +
         std::string("_bx") + std::to_string(nxb) + 
         std::string("_ex") + std::to_string(nxe) +
 #if USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME
@@ -599,6 +607,7 @@ public:
         max_npb = -1;
         max_kpb = -1;
         max_gks = -1;
+        vector_c = 1;
     }
     std::string get_kernel_name(const igemm_gtc_tunable_t *tunable) {
         return igemm_gtc_encode_kernel_name(tunable);
@@ -667,6 +676,10 @@ public:
         this->max_gks = max_gks_;
     }
 
+    void set_vector_c(int vector_c_){
+        this->vector_c = vector_c_;
+    }
+
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
@@ -692,6 +705,31 @@ public:
     int                 max_npb;
     int                 max_kpb;
     int                 max_gks;
+    int                 vector_c;
 };
+
+static inline config_content_t
+igemm_try_expand_tunable_content(const config_content_t & content)
+{
+    config_content_t expanded_content;
+    std::vector<std::string> tunable_field_support_expand = {"tensor_layout"};
+    for(const auto & sec : content){
+        for(const auto f : tunable_field_support_expand){
+            if(sec.get_name().compare(0, 6, "igemm_") == 0 &&
+                    sec.at(f).get_type() == config_section_value_type_enum::config_section_value_type_list_string){
+                for(auto & field_item : sec.at(f).get_list_string()){
+                    auto new_sec = sec;
+                    std::string field_item_str = std::string("\'") + field_item + std::string("\'");
+                    new_sec.at(f) = config_section_value_t::parse_value(field_item_str);
+                    expanded_content.add_section(new_sec);
+                }
+            }
+            else{
+                expanded_content.add_section(sec);
+            }
+        }
+    }
+    return expanded_content;
+}
 
 #endif

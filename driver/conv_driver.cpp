@@ -50,10 +50,6 @@
 #define USE_SOURCE_ACCESS_ENCODING_KERNEL_NAME 0
 #endif
 
-#ifndef VECTOR_C_FP16
-#define VECTOR_C_FP16 8
-#endif
-
 #ifdef USE_GPU_NAIVE_CONV
 #   include "gpu_naive_conv.h"
 #   ifndef IGEMM_GPU_NAIVE_CONV_HSACO
@@ -73,6 +69,8 @@
 #include "config_parser.h"
 #include "perf.h"
 #include "tensor_transpose.h"
+#include "tensor_copy_cpu.h"
+#include "tensor_validation_cpu.h"
 #include "igemm_gtc_base.h"
 #include "igemm_fwd_gtc_driver.h"
 #include "igemm_bwd_gtc_driver.h"
@@ -158,6 +156,10 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
         else
             fp_factor = 4;  // dlops
     }
+    if(data_type == driverInt4){
+        if(gcn_arch >= 1000)
+            fp_factor = 8;  // xdlops
+    }
     // else if(data_type == driverInt8){
     //     if(gcn_arch == 908)
     //     fp_factor = 4;
@@ -169,10 +171,6 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 
     return theoritical_gflops(((double)sclk_mhz) / 1000.0, num_cu, num_simd * fp_factor);
 }
-
-#ifndef ABS
-#define ABS(x) ((x) > 0 ? (x) : -1 * (x))
-#endif
 
 #ifndef IGEMM_HSACO
 #define IGEMM_HSACO "igemm_gtc.hsaco"
@@ -191,16 +189,6 @@ static inline double get_theoritical_gpu_gflops(int sclk_mhz, driverDataType_t d
 #define WARMUP 3
 #define REPEAT 8
 #define SCLK_MHZ 1283
-
-template <typename T> T gen_rand(T fmin, T fmax) {
-    static int init = 0;
-    if (!init) {
-        srand(time(NULL));
-        init = 1;
-    }
-    double d = static_cast<double>(rand() / (static_cast<double>(RAND_MAX)));
-    return (static_cast<T>(d) * (fmax - fmin)) + fmin;
-}
 
 template <typename T>
 struct distribution_t{
@@ -248,208 +236,6 @@ void gen_rand_vector(Dst_T *vec, size_t vec_size, Src_T fmin, Src_T fmax, Src_T 
     for (auto &th : threads)
         th.join();
 }
-
-template <typename Dst_T, typename Src_T>
-void block_wise_tensor_copy(Dst_T *p_dst, Src_T *p_src, int tid, size_t block_size, size_t total_size)
-{
-    for (int i = tid; i < total_size; i += block_size) {
-        p_dst[i] = static_cast<Dst_T>(p_src[i]);
-    }
-}
-
-template <typename Dst_T, typename Src_T>
-void tensor_copy(Dst_T *p_dst, Src_T *p_src, size_t tensor_size) {
-    int num_threads = std::thread::hardware_concurrency();
-    if (num_threads < 4)
-        num_threads = 4;
-
-    std::vector<std::thread> threads;
-    for (int t = 0; t < num_threads; t++) {
-        threads.push_back(std::thread(block_wise_tensor_copy<Dst_T, Src_T>,
-            p_dst, p_src, t, num_threads, tensor_size));
-    }
-    for (auto &th : threads)
-        th.join();
-}
-
-template<typename T>
-bool valid_float(T p)
-{
-    return !(std::isnan(p) || std::isinf(p));
-}
-
-template<>
-bool valid_float<int8_t>(int8_t p)
-{
-    // there is no meaning to valid integer number
-    return true;
-}
-
-template<typename T>
-static inline bool valid_vector(const float *ref, const T *pred, size_t n,
-                                double nrms = 1.5e-6) {
-    double s0 = 0.0;
-    double s1 = 0.0;
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
-    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
-    int print_every_pixel = env_get_int("PRINT_EVERY_PIXEL", 0);
-    int print_nrms = env_get_int("PRINT_NRMS", 0);
-    int igemm_valid_float = env_get_int("VALID_FLOAT", 1);
-    int dump_pred_dword = env_get_int("DUMP_PRED", 0);
-    size_t pp_err = 0;
-
-    if(dump_pred_dword){
-        // dump as dword, weather the type of pred
-        size_t total_safe_size = n / ( sizeof(float) / sizeof(T) );
-        for(size_t i=0; i<total_safe_size;i++ ){
-            printf("[%zu] ref:%lf, pred:0x%08x\n", i, ref[i], ((uint32_t*)pred)[i]);
-        }
-    }
-#if USE_MIOPEN_NRMS
-    double square_difference = .0;
-    double mag1 = .0;
-    double mag2 = .0;
-    for (size_t i = 0; i < n; ++i) {
-        if(igemm_valid_float)
-            if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
-                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-                return false;
-            }
-        
-
-        double ri = (double)ref[i];
-        double pi = (double)pred[i];
-        double d = ri - pi;
-
-        if(igemm_per_pixel_check){
-            double delta = ABS(ABS(ri - pi) / ri);      // TODO: this is just a reference compare
-            if(print_every_pixel)
-                printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
-            if (delta > 3e-5) {
-                if(igemm_per_pixel_check_print){
-                    if (pp_err < 100)
-                        printf("diff at %zu, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
-                            pi, *(uint32_t*)(&pred[i]), delta);
-                }
-                pp_err++;
-            }
-        }
-
-        square_difference += d * d;
-        if(ABS(mag1) < ABS(ri)) mag1 = ri;
-        if(ABS(mag2) < ABS(pi)) mag2 = pi;
-    }
-    double mag = std::max({std::fabs(mag1), std::fabs(mag2), std::numeric_limits<double>::min()});
-    double computed_nrms = std::sqrt(square_difference) / (std::sqrt(n) * mag);
-    if(print_nrms)
-        printf("\nnrms:%lf, mag1:%lf, mag2:%lf, expected_nrms is %1f\n",computed_nrms,mag1,mag2,nrms);
-    return (computed_nrms < nrms)
-#ifdef PER_PIXEL_CHECK
-           && (pp_err == 0)
-#endif
-        ;
-#else
-    for (size_t i = 0; i < n; ++i) {
-        if(igemm_valid_float)
-            if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
-                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
-                return false;
-            }
-        double ri = (double)ref[i];
-        double pi = (double)pred[i];
-        double d = ri - pi;
-        double dd = d * d;
-        double rr = 2.0 * ri * ri;
-        s0 += dd;
-        s1 += rr;
-        if(igemm_per_pixel_check){
-            double delta = ABS(ABS(ri - pi) / ri);
-            printf("[%zu] ref:%lf, pred:%lf(0x%08x) [%s]\n", i, ri, pi, *(uint32_t*)(&pred[i]), delta > 3e-5? "N":"Y");
-            if (delta > 3e-5) {
-                if(igemm_per_pixel_check_print){
-                    if (pp_err < 100)
-                        printf("diff at %zu, ref:%lf, pred:%lf(0x%08x), d:%lf\n", i, ri,
-                            pi, *(uint32_t*)(&pred[i]), delta);
-                }
-                pp_err++;
-            }
-
-        }
-    }
-    if(print_nrms)
-        printf("\nnrms:%lf, s0:%lf, s1:%lf, expected_nrms is %1f\n",sqrt(s0/s1),s0,s1,nrms);
-    return (sqrt(s0 / s1) < nrms)
-#ifdef PER_PIXEL_CHECK
-           && (pp_err == 0)
-#endif
-        ;
-#endif
-}
-
-template<>
-bool valid_vector<int8_t>(const float *ref, const int8_t *pred, size_t n,
-                                double nrms) {
-    // int8 valid, we prefer a per pixel match
-    int igemm_per_pixel_check = env_get_int("PER_PIXEL_CHECK", 0);
-    int igemm_per_pixel_check_print = env_get_int("PER_PIXEL_CHECK_PRINT", 1);
-    size_t pp_err = 0;
-
-    for (size_t i = 0; i < n; ++i) {
-        if(!(valid_float<float>(ref[i]) ) ){
-            printf(" invalid float at %4zu, ref:%f\n", i, ref[i]);
-            return false;
-        }
-        int8_t pi = pred[i];
-        int32_t ri = static_cast<int32_t>(ref[i]);
-        int8_t ri_clamp;
-        memcpy(&ri_clamp, &ri, 1);
-
-        if(igemm_per_pixel_check){
-            printf("[%zu] ref:%d(%d), pred:%d(0x%08x) [%s]\n", i, ri, ri_clamp, pi,
-                        *(uint32_t*)(&pred[i]), pi != ri_clamp ? "N":"Y");
-        }
-
-        if(pi != ri_clamp){
-            pp_err++;
-        }
-    }
-    return pp_err == 0;
-}
-
-static inline double get_nrms(std::string direction, driverDataType_t driver_data_type){
-    auto basic_tolerance = [=]() -> double{
-        if (driver_data_type == driverFloat){
-#ifdef USE_XDNN
-            return 5e-5;
-#else
-            return 1.5e-6;
-#endif
-        }
-        else if (driver_data_type == driverHalf){
-#ifdef USE_XDNN
-            return 5*8.2e-3;
-#else
-            return 8.2e-3;
-#endif
-        }
-    };
-    double nrms = basic_tolerance();
-    if (direction == "bwd"){
-        // nrms *= 10;
-    }
-    // wrw has a high tolerance
-    if (direction == "wrw"){
-        nrms *= 2;
-        if(driver_data_type == driverFloat){
-            nrms = 0.01;
-        }
-        else if(driver_data_type == driverHalf){
-            nrms *= 5;
-        }
-    }
-    return nrms;
-}
-
 
 void dump_arg(const args_t *arg) {
     int hi = arg->get_int("in_h");
@@ -531,8 +317,8 @@ std::string log_cmd(const args_t *arg, driverDataType_t driver_data_type, std::s
         << " -q " << pad_w
         << " -u " << stride_h
         << " -v " << stride_w
-        << " -l " << stride_h
-        << " -j " << stride_w;
+        << " -l " << dilation_h
+        << " -j " << dilation_w;
 
     if(in_layout != "NCHW")
         ss << " --in_layout " << in_layout;
@@ -591,27 +377,58 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
     int max_npb = env_get_int("IGEMM_MAX_NPB", -1);
     int max_kpb = env_get_int("IGEMM_MAX_KPB", -1);
     int max_gks = env_get_int("IGEMM_MAX_GKS", -1);
-
+    int silent_not_applicable_level0 = env_get_int("IGEMM_SILENT_NA_L0", 1);  // ignore kernel that has different direction & layout
+    std::string in_layout = conv_args->get_str("in_layout");
+    std::string fil_layout = conv_args->get_str("fil_layout");
 
     double theo_conv_flop  = get_theoritical_conv_flop(conv_args);
     double theo_gpu_gflops = get_theoritical_gpu_gflops(sclk_mhz, driver->data_type);
 
-    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks) -> result_t {
+    auto launch = [&](const igemm_gtc_tunable_t * tunable, int index, int current_gks, bool is_tunable_predicted = false) -> result_t {
+        igemm_gtc_tunable_t predicted_tunable;
+        const igemm_gtc_tunable_t * current_tunable = tunable;
+        if(is_tunable_predicted){
+            predicted_tunable = *tunable;
+            // in prediction, the gks will be 0, 1, 2... if tunable support gks, other wise it is -1.
+            // here we restore the gemm_k_global_split inside the tunable
+            predicted_tunable.gemm_k_global_split = current_gks >= 0 ? 1 : 0;
+            current_tunable = &predicted_tunable;
+        }
         if(run_only_kernel != IGEMM_RUN_ONLY_KERNEL_DEFAULT){
-            if(run_only_kernel != driver->get_kernel_name(tunable)){
-                return result_t{};
+            if(run_only_kernel != driver->get_kernel_name(current_tunable))
+                {result_t result; result.return_code = -2; return result;}
+        }
+        if(silent_not_applicable_level0){
+            // direction
+            if(direction != current_tunable->direction)
+                {result_t result; result.return_code = -2; return result;}
+
+            // layout
+            if(in_layout == "NCHW"){
+                if(current_tunable->tensor_layout != "nchw")
+                    {result_t result; result.return_code = -2; return result;}
+            }else if(in_layout == "NHWC"){
+                if(current_tunable->tensor_layout != "nhwc")
+                    {result_t result; result.return_code = -2; return result;}
+            }else if(in_layout == "NCHWC"){
+                if(current_tunable->tensor_layout.compare(0, 5, "nchwc") != 0)
+                    {result_t result; result.return_code = -2; return result;}
+                auto wei_layout_config = current_tunable->tensor_layout.substr(6);
+                if((fil_layout == "NCHWC" && wei_layout_config != "kcyxc") || 
+                    (fil_layout == "CHWNC" && wei_layout_config != "cyxkc"))
+                    {result_t result; result.return_code = -2; return result;}
             }
         }
-        
-        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(tunable).c_str());
+
+        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(current_tunable).c_str());
         fflush(stdout);
 
         pre_func();
 
-        result_t result = driver->run(conv_args, tunable, device_input, device_weight, device_output, current_gks);
+        result_t result = driver->run(conv_args, current_tunable, device_input, device_weight, device_output, current_gks);
 
         std::string gks_string = "";
-        if(tunable->gemm_k_global_split){
+        if(current_tunable->gemm_k_global_split){
             gks_string = "[" + std::to_string(result.gks) + "]";
         }
         printf("%s", gks_string.c_str());
@@ -637,7 +454,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
         result.efficiency = (gflops / theo_gpu_gflops) * 100;
 
         if(dump_gmap)
-            gmap_dump(conv_args, tunable, result.gks);
+            gmap_dump(conv_args, current_tunable, result.gks);
         return result;
     };
 
@@ -666,6 +483,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     std::vector<int> gks_list = driver->get_gks_list(conv_args, &tunables[i]);
                     for(int gks : gks_list){
                         result_t result = launch(&tunables[i], unique_index, gks);
+                        if(result.return_code == -2) continue;
                         unique_tunables.push_back(tunables[i]);
                         unique_tunables.back().gemm_k_global_split = gks;
                         if(result.duration_ms < fastest_result.duration_ms){
@@ -676,6 +494,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
                     }
                 }else{
                     result_t result = launch(&tunables[i], unique_index, 0);
+                    if(result.return_code == -2) continue;
                     unique_tunables.push_back(tunables[i]);
                     unique_tunables.back().gemm_k_global_split = 0;
                     if(result.duration_ms < fastest_result.duration_ms){
@@ -687,6 +506,7 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
             else{
                 result_t result = launch(&tunables[i], unique_index, -1);
+                if(result.return_code == -2) continue;
                 unique_tunables.push_back(tunables[i]);
                 unique_tunables.back().gemm_k_global_split = result.gks;
                 if(result.duration_ms < fastest_result.duration_ms){
@@ -756,7 +576,8 @@ int main(int argc, char **argv) {
     int igemm_bench_csv = env_get_int("IGEMM_BENCH_CSV", 0);
     driver_mode_t driver_mode = static_cast<driver_mode_t>(env_get_int("IGEMM_MODE", 0));
     config_parser_t config_parser(config_file);
-    auto content = config_parser.parse();
+    auto unexpanded_content = config_parser.parse();
+    auto content = igemm_try_expand_tunable_content(unexpanded_content);
     //content.dump();
     FILE * p_bcsv = nullptr;
     if(igemm_bench_csv){
@@ -785,21 +606,30 @@ int main(int argc, char **argv) {
     args_t conv_args = create_conv_args(argc, argv);
     // dump_arg(&conv_args);
     driverDataType_t driver_data_type;
+    auto vec_found = base_arg.find("x");
+    std::string base_type = base_arg.substr(0, vec_found);
+    int vector_c = find_vector_c_from_base_arg(base_arg);
+    vector_c = env_get_int("VECTOR_C", vector_c);
 
-    if(base_arg == "conv"){
+    if(base_type == "conv"){
         driver_data_type = driverFloat;
     }
-    else if(base_arg == "convfp16"){
+    else if(base_type == "convfp16"){
         driver_data_type = driverHalf;
     }
-    else if(base_arg == "convbfp16") {
+    else if(base_type == "convbfp16") {
         driver_data_type = driverBFloat16;
     }
-    else if(base_arg == "convint8") {
+    else if(base_type == "convint8") {
         driver_data_type = driverInt8;
     }
-    else
+    else if(base_type == "convint4") {
+        driver_data_type = driverInt4;
+    }
+    else{
+        printf("invalid base type:%s\n", base_type.c_str());
         exit(0);
+    }
 
     size_t data_byte = get_data_byte(driver_data_type);
 
@@ -808,7 +638,6 @@ int main(int argc, char **argv) {
     int n = conv_args.get_int("batchsize");
     int k = conv_args.get_int("out_channels");
     int c = conv_args.get_int("in_channels");
-    int vector_c = env_get_int("VECTOR_C_FP16", VECTOR_C_FP16);
 
     int stride_h = conv_args.get_int("conv_stride_h");
     int stride_w = conv_args.get_int("conv_stride_w");
@@ -835,7 +664,7 @@ int main(int argc, char **argv) {
     assert(in_layout == "NCHW" || in_layout == "NHWC" || in_layout == "NCHWC"); // currently only support these layout
     assert((in_layout == "NCHW" && tunables[0].tensor_layout == "nchw") || 
            (in_layout == "NHWC" && tunables[0].tensor_layout == "nhwc") ||
-           (in_layout == "NCHWC" && tunables[0].tensor_layout == "nchwc"));  // check pairs
+           (in_layout == "NCHWC" && tunables[0].tensor_layout.compare(0, 5, "nchwc") == 0));  // check pairs
 
     // init host side
     float *host_input = (float *)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
@@ -857,7 +686,7 @@ int main(int argc, char **argv) {
     void *device_input_dtype;
     void *device_weight_dtype;
     void *device_output_dtype;
-#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16)
+#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16) || defined(USE_INT4)
     host_input_dtype  = malloc(n * c * hi * wi * data_byte);
     host_weight_dtype = malloc(k * c * y * x * data_byte);
     host_output_dtype = malloc(n * k * ho * wo * data_byte);
@@ -878,7 +707,7 @@ int main(int argc, char **argv) {
         fflush(p_bcsv);
     }
 
-    if(driver_data_type == driverInt8)
+    if(driver_data_type == driverInt8 || driver_data_type == driverInt4)
         igemm_rand_int = 1;
 
     // launch tensor cast module
@@ -915,6 +744,11 @@ int main(int argc, char **argv) {
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
                 tensor_copy<int8_t, float>(static_cast<int8_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
             }
+            else if(driver_data_type == driverInt4)
+            {
+                tensor_copy<int4x2_t, float>(static_cast<int4x2_t*>(host_input_dtype), host_input, static_cast<size_t>(n) * c * hi * wi);
+                tensor_copy<int4x2_t, float>(static_cast<int4x2_t*>(host_weight_dtype), host_weight, static_cast<size_t>(k) * c * y * x);
+            }
 
 #ifdef USE_GPU_NAIVE_CONV
             HIP_CALL(hipMemcpy(device_input, host_input,
@@ -932,10 +766,15 @@ int main(int argc, char **argv) {
                                 n, wi, hi, c,
                                 k, x, y, pad_w, pad_h, stride_w, stride_h,
                                 dilation_w, dilation_h, ngroups);
-            else if(in_layout == "NCHWC" && fil_layout == "CHWNC"){
+            else if(in_layout == "NCHWC"){
                 if(((c / ngroups) % vector_c != 0) || ((k / ngroups) % vector_c != 0)){
                     dump_arg(&conv_args);
                     printf("can't support c:%d k:%d with vec_c:%d\n", c, k, vector_c);
+                    if(p_bcsv)
+                    {
+                        fprintf(p_bcsv, "\n");
+                        fflush(p_bcsv);
+                    }
                     exit(-1);
                 }
                 float* aux_in = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
@@ -945,7 +784,10 @@ int main(int argc, char **argv) {
                 tensor_transpose_nchwc_2_nchw<float*>(aux_in, host_input, n, c, hi, wi, vector_c);
                 for(int i_groups = 0; i_groups < ngroups; i_groups++){
                     int group_offset = i_groups * (k / ngroups) * (c / ngroups) * y * x;
-                    tensor_transpose_chwnc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
+                    if(fil_layout == "CHWNC")
+                        tensor_transpose_chwnc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
+                    else if(fil_layout == "NCHWC")
+                        tensor_transpose_nchwc_2_nchw<float*>(aux_wei + group_offset, host_weight + group_offset, k / ngroups, c / ngroups, y, x, vector_c);
                 }
 
                 if(env_get_int("IGEMM_CHECK_TRNASPOSE", 0)){
@@ -953,7 +795,10 @@ int main(int argc, char **argv) {
                     float* aux_in_check = (float*)malloc(static_cast<size_t>(n) * c * hi * wi * sizeof(float));
 
                     tensor_transpose_nchw_2_nchwc<float*>(aux_in_check, aux_in, n, c, hi, wi, vector_c);
-                    tensor_transpose_nchw_2_chwnc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
+                    if(fil_layout == "CHWNC")
+                        tensor_transpose_nchw_2_chwnc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
+                    else if(fil_layout == "NCHWC")
+                        tensor_transpose_nchw_2_nchwc<float*>(aux_wei_check, aux_wei, k, c, y, x, vector_c);
 
                     double transpose_nrms = get_nrms("fwd", driver_data_type);
                     valid_vector<float>(host_input, aux_in_check, static_cast<size_t>(n) * c * hi * wi, transpose_nrms);
@@ -1018,12 +863,22 @@ int main(int argc, char **argv) {
             }
         }
 
-        if(driver_data_type == driverFloat){
+        if(driver_data_type == driverFloat)
+        {
             HIP_CALL(hipMemcpy(device_input, host_input,
                         static_cast<size_t>(n) * c * hi * wi * data_byte, hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight, host_weight,
                         static_cast<size_t>(k) * c * y * x * data_byte, hipMemcpyHostToDevice));
-        }else{
+        }
+        else if(driver_data_type == driverInt4)
+        {
+            HIP_CALL(hipMemcpy(device_input_dtype, host_input_dtype,
+                        static_cast<size_t>(n) * c * hi * wi / 2, hipMemcpyHostToDevice));
+            HIP_CALL(hipMemcpy(device_weight_dtype, host_weight_dtype,
+                        static_cast<size_t>(k) * c * y * x / 2, hipMemcpyHostToDevice));
+        }
+        else
+        {
             HIP_CALL(hipMemcpy(device_input_dtype, host_input_dtype,
                         static_cast<size_t>(n) * c * hi * wi * data_byte, hipMemcpyHostToDevice));
             HIP_CALL(hipMemcpy(device_weight_dtype, host_weight_dtype,
@@ -1031,6 +886,7 @@ int main(int argc, char **argv) {
         }
 
         igemm_fwd_gtc_t conv_fwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_fwd_driver.set_vector_c(vector_c);
 
         auto fwd_pre = [&](){
             if (need_verify)
@@ -1060,6 +916,9 @@ int main(int argc, char **argv) {
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                     else if (driver_data_type == driverInt8)
                         is_valid = valid_vector<int8_t>(host_output, static_cast<int8_t*>(device_output_to_host),
+                                            static_cast<size_t>(n) * k * ho * wo, nrms);
+                    else if (driver_data_type == driverInt4)
+                        is_valid = valid_vector<int4x2_t>(host_output, static_cast<int4x2_t*>(device_output_to_host),
                                             static_cast<size_t>(n) * k * ho * wo, nrms);
                 }
                 printf(", valid:%s", is_valid ? "y" : "n");
@@ -1163,6 +1022,7 @@ int main(int argc, char **argv) {
         }
 
         igemm_bwd_gtc_t conv_bwd_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_bwd_driver.set_vector_c(vector_c);
 
         auto bwd_pre = [&](){
             if (need_verify)
@@ -1312,6 +1172,7 @@ int main(int argc, char **argv) {
 
 
         igemm_wrw_gtc_t conv_wrw_driver(module_tensor_cast, module, driver_mode, driver_data_type, warmup, repeat, verbose);
+        conv_wrw_driver.set_vector_c(vector_c);
         
         auto wrw_pre = [&](){
             if (need_verify)
@@ -1365,7 +1226,7 @@ int main(int argc, char **argv) {
     hipFree(device_weight);
     hipFree(device_output);
 
-#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16)
+#if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16) || defined(USE_INT4)
     free(host_input_dtype);
     free(host_weight_dtype);
     free(host_output_dtype);

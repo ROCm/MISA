@@ -157,7 +157,7 @@ def amdgpu_precision_data_byte(precision):
     if p in (AMDGPU_PRECISION_INT8, AMDGPU_PRECISION_UINT8):
         return 1
     if p in (AMDGPU_PRECISION_INT4, AMDGPU_PRECISION_UINT4):  # TODO: int4 is half byte
-        return 1
+        return 0.5
     if p in (AMDGPU_PRECISION_INT16, AMDGPU_PRECISION_UINT16):
         return 2
     assert False
@@ -395,7 +395,7 @@ class amdgpu_kernel_code_t(object):
         self.tg_split                               = kc('tg_split', 0)
         self.accum_offset                           = kc('accum_offset', 0)
         self.wavefront_size                         = kc('wavefront_size', 64)
-        self.cumode                                 = kc('cumode', 0)   # 0-cu mode, 1-wgp mode. for gfx>10
+        self.cumode                                 = kc('cumode', 1)   # 0-cu mode, 1-wgp mode. for gfx>10
 
     def cal_user_sgpr_count(self):
         count = 0
@@ -518,8 +518,8 @@ class amd_kernel_code_t(mc_base_t):
                     self._emit('.amdhsa_tg_split {}'.format(                        self.ki.kernel_code.tg_split))
                     self._emit('.amdhsa_accum_offset {}'.format(                    self.ki.kernel_code.accum_offset))
                 if self.mc.arch_config.arch >= 1000:
-                    self._emit('.amdhsa_wavefront_size32 {}'.format(                1 if self.ki.kernel_code.wavefront_size == 32 else 1))
-                    self._emit('.amdhsa_workgroup_processor_mode {}'.format(        1 if not self.ki.kernel_code.cumode else 1))
+                    self._emit('.amdhsa_wavefront_size32 {}'.format(                1 if self.ki.kernel_code.wavefront_size == 32 else 0))
+                    self._emit('.amdhsa_workgroup_processor_mode {}'.format(        1 if not self.ki.kernel_code.cumode else 0))
             self._emit('.end_amdhsa_kernel')
         else:
             assert False

@@ -33,6 +33,9 @@
 #include <cstdint>
 #include <stdlib.h>
 
+// return_code : -1, not applicable
+//             : -2, need skip, unique_index not accumulate
+//             :  0, success
 typedef struct {
     int return_code     {-1};
     int gks             {0};  // this is to store the gks value after benchmarked.
@@ -195,6 +198,23 @@ static inline char *env_get_str(const char *var_name, char *default_str) {
     if (v)
         return v;
     return default_str;
+}
+
+// return 1 for case like "conv", "convfp16"
+// return vec_c for case ike "convfp16x8", "convint8x16"...
+static inline int find_vector_c_from_base_arg(const std::string& base_arg)
+{
+    if(base_arg.compare(0, 4, "conv") == 0){
+        auto found_vec = base_arg.find("x");       // we are looking for the "x" character
+        if(found_vec != std::string::npos){
+            std::string vec_str = base_arg.substr(found_vec + 1);
+            int vector_c = std::stoi( vec_str );    // TODO: try...catch...
+            return vector_c;
+        }else{
+            return 1;
+        }
+    }
+    return 0;
 }
 
 #endif
