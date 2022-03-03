@@ -877,7 +877,7 @@ public:
                 float16 check_num1 = gemmc_host_check_fp16[i_check*2+1];
                 float check_num0_fp32 = (float)check_num0;
                 float check_num1_fp32 = (float)check_num1;
-                printf("[%d]th var to monitor:[%f, %d, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
+                printf("[%d]th var to monitor:[%f, %d-0x%x, fp16(%f, %f)]\r\n", i_check, gemmc_host_check[i_check], ((int *)gemmc_host_check)[i_check], ((int *)gemmc_host_check)[i_check], check_num0_fp32, check_num1_fp32);
             }
             printf("s_p_out=%x\n", p_out);
             printf("workspace debug end \r\n");
