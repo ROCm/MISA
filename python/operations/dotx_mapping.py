@@ -32,6 +32,7 @@ import copy
 
 # assuming dpp8. dpp16 is less efficient so ignore that
 LANEGROUP_SIZE   = 8
+DOTX_USE_VOP3P   = False
 
 class ctrl_dotx_mapping_t(object):
     '''
@@ -386,10 +387,15 @@ def get_dotx_fma_instruction(arch, precision):
 
     if arch_str == 'gfx1030':
         if precision[0:4] == 'fp16':
-            #return v_dot2c_f32_f16
-            return v_dot2_f32_f16
+            if DOTX_USE_VOP3P:
+                return v_dot2_f32_f16
+            else:
+                return v_dot2c_f32_f16
         elif precision[0:4] == 'int8':
-            return v_dot4c_i32_i8
+            if DOTX_USE_VOP3P:
+                return v_dot4_i32_i8
+            else:
+                return v_dot4c_i32_i8
         elif precision[0:4] == 'int4':
             return v_dot8_i32_i4
         else:
