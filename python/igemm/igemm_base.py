@@ -235,6 +235,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.vector_c                           = utility_dict_with_default_t(tunable_dict)('vector_c', 1)
         self.wavefront_size                     = utility_dict_with_default_t(tunable_dict)('wavefront_size', 64)
         self.cumode                             = utility_dict_with_default_t(tunable_dict)('cumode', 0)
+        
+        self.mini_weights                       = utility_dict_with_default_t(tunable_dict)('mini_weights', 0)
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -383,7 +385,8 @@ class igemm_gtc_tunable_parameter_t(object):
             gemm_msg = f"gemm_m_per_block:{self.gemm_m_per_block} - {self.wave_tile_m}x{self.wave_step_m}x{self.wave_repeat_m}, gemm_n_per_block:{self.gemm_n_per_block} - {self.wave_tile_n}x{self.wave_step_n}x{self.wave_repeat_n}, gemm_k_per_block:{self.gemm_k_per_block}"
 
         assert self.num_global_load_a * self.block_size == self.gemm_m_per_block * self.gemm_k_per_block, gemm_msg
-        assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, gemm_msg
+        if self.mini_weights != 1:
+            assert self.num_global_load_b * self.block_size == self.gemm_n_per_block * self.gemm_k_per_block, gemm_msg
 
         # LDS size
         self.lds_pad_m, self.lds_pad_n = self.get_lds_pad() # LDS pad
@@ -409,6 +412,11 @@ class igemm_gtc_tunable_parameter_t(object):
             self.lds_total                      = self.lds_buffer_num * self.lds_single
         # print(f"lds_a:{self.lds_a}, lds_b:{self.lds_b}, lds_a_np2:{self.lds_a_np2}, lds_b_np2:{self.lds_b_np2}, lds_single:{self.lds_single}, lds_total:{self.lds_total}")
         # TODO: LDS size check
+        
+        if self.mini_weights == 1:
+            self.lds_single            = 16 * 1024
+            self.lds_total             = 16 * 1024
+            self.lds_buffer_num        = 1
 
         # some parameter not in modular_conv
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
