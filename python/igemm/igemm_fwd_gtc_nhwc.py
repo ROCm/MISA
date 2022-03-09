@@ -99,9 +99,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self.coalescing_store = igemm_coalescing_store_t(mc, ctrl_coalescing_store)
 
         elif self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS and igemm_use_lanegroup_thread_mapping(self.tunable):
-            ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
+            ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_lanegroup_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                     self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n, self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
-                                    self.tunable.block_size // self.tunable.wave_size, self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n, self.tunable.precision)
+                                    self.tunable.block_size // self.tunable.wave_size, self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n, self.tunable.precision,
+                                    get_dotx_fma_instruction(self.mc.arch_config.arch, self.tunable.precision))
 
         else:
             def flatten(x):

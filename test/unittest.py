@@ -270,7 +270,7 @@ def unittest_thread_mapping():
     print(mc.emitter.get_buffer())
 
 def unittest_dotx_mapping():
-    for ctrl in ctrl_dotx_mapping_fp16:
+    for ctrl in ctrl_dotx_mapping_fp16_vop2:
         print(ctrl.serialize())
 
 def unittest_dotx_coalescing_store():

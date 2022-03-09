@@ -28,7 +28,7 @@
 from ..codegen import *
 from .utility import *
 from .dotx import *
-
+import copy
 
 # assuming dpp8. dpp16 is less efficient so ignore that
 LANEGROUP_SIZE   = 8
@@ -224,7 +224,6 @@ class ctrl_dotx_mapping_t(object):
         s += f"a_m:{self.thread_m()}x{self.lanegroup_size_m()}, a_n:{self.thread_n()}x{self.lanegroup_size_n()}, a_k:{self.lanegroup_k_per_thread()}x1"
         return s
 
-
     # def extra_k_pack_list(self, max_bytes = 4 * 4):
     #     '''
     #     return a list contains all the possible values that can be used as k_pack, based on max_bytes
@@ -232,170 +231,133 @@ class ctrl_dotx_mapping_t(object):
     #     data_byte = amdgpu_precision_data_byte(self.inst_dotx.data_type)
     #     packed_pixel_byte = self.inst_dotx.k * data_byte
     #     extra_k_pack = 1
-
                         #  mt_m,mt_n,lt_m,lt_n,ld_m,ld_n,lw_m,lw_n,  ws,lr_m,lr_n, inst_mfma
-ctrl_dotx_mapping_fp16 = [
-        ctrl_dotx_mapping_t(256, 128,   8,   8,   8,   1,   4,   2,   4,   2,   8, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 256,   8,   8,   8,   1,   2,   4,   4,   2,   8, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        ctrl_dotx_mapping_t(128, 224,   8,   8,   8,   1,   4,   2,   4,   2,   7, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(224, 128,   8,   8,   8,   1,   2,   4,   4,   7,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        ctrl_dotx_mapping_t(128, 192,   8,   8,   8,   1,   2,   4,   4,   2,   6, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192, 128,   8,   8,   8,   1,   2,   4,   4,   3,   4, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+ctrl_dotx_mapping_vop2 = [
+        ctrl_dotx_mapping_t(256, 128,   8,   8,   8,   1,   4,   2,   4,   2,   8, None),   # 256
+        ctrl_dotx_mapping_t(128, 256,   8,   8,   8,   1,   2,   4,   4,   2,   8, None),   # 256
 
-        ctrl_dotx_mapping_t( 64, 192,   8,   8,   8,   1,   2,   4,   4,   1,   6, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192,  64,   8,   8,   8,   1,   2,   4,   4,   3,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        #ctrl_dotx_mapping_t(128, 144,   8,   8,   8,   1,   2,   2,   4,   2,   9, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t(144, 128,   8,   8,   8,   1,   2,   2,   4,   9,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        ctrl_dotx_mapping_t(160, 128,   8,   8,   8,   1,   2,   4,   4,   5,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4      
-        ctrl_dotx_mapping_t(128, 160,   8,   8,   8,   1,   4,   2,   4,   2,   5, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128, 224,   8,   8,   8,   1,   4,   2,   4,   2,   7, None),   # 256
+        ctrl_dotx_mapping_t(224, 128,   8,   8,   8,   1,   2,   4,   4,   7,   2, None),   # 256
 
-        ctrl_dotx_mapping_t(160,  64,   8,   8,   8,   1,   2,   4,   4,   5,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64, 160,   8,   8,   8,   1,   4,   2,   4,   1,   5, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   2,   4,   4,   2,   4, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4      
-        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   4,   2,   4,   2,   4, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        # ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   2,   4,   4,   4,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4 # wrong case
-        # ctrl_dotx_mapping_t(128, 128,  16,  16,   8,   1,   2,   4,   4,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2
-        # ctrl_dotx_mapping_t(128, 128,  16,  16,   8,   1,   4,   2,   4,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2
+        ctrl_dotx_mapping_t(128, 192,   8,   8,   8,   1,   2,   4,   4,   2,   6, None),   # 256
+        ctrl_dotx_mapping_t(192, 128,   8,   8,   8,   1,   2,   4,   4,   3,   4, None),   # 256
 
-        ctrl_dotx_mapping_t(128,  96,   8,   8,   8,   1,   4,   2,   4,   2,   3, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 96, 128,   8,   8,   8,   1,   4,   2,   4,   3,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 64, 192,   8,   8,   8,   1,   2,   4,   4,   1,   6, None),   # 256
+        ctrl_dotx_mapping_t(192,  64,   8,   8,   8,   1,   2,   4,   4,   3,   2, None),   # 256
 
-        ctrl_dotx_mapping_t(128,  64,   8,   8,   8,   1,   4,   2,   4,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t(128,  64,  16,  16,   8,   1,   4,   2,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2
-        ctrl_dotx_mapping_t( 64, 128,   8,   8,   8,   1,   2,   4,   4,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 64, 128,  16,  16,   8,   1,   2,   4,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2
+        ctrl_dotx_mapping_t(160, 128,   8,   8,   8,   1,   2,   4,   4,   5,   2, None),   # 256
+        ctrl_dotx_mapping_t(128, 160,   8,   8,   8,   1,   4,   2,   4,   2,   5, None),   # 256
 
-        ctrl_dotx_mapping_t(128,  32,   8,   8,   8,   1,   4,   1,   4,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32, 128,   8,   8,   8,   1,   1,   4,   4,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t(128,  32,   8,   8,   8,   1,   4,   2,   4,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 32, 128,   8,   8,   8,   1,   2,   4,   4,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(160,  64,   8,   8,   8,   1,   2,   4,   4,   5,   1, None),   # 256
+        ctrl_dotx_mapping_t( 64, 160,   8,   8,   8,   1,   4,   2,   4,   1,   5, None),   # 256
 
-        ctrl_dotx_mapping_t( 96,  96,   8,   8,   8,   1,   2,   2,   4,   3,   3, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   2,   4,   4,   2,   4, None),   # 256
+        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   4,   2,   4,   2,   4, None),   # 256
 
-        ctrl_dotx_mapping_t( 64,  64,   8,   8,   8,   1,   2,   2,   4,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 64,  64,   8,   8,   8,   1,   4,   2,   4,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 64,  64,   8,   8,   8,   1,   2,   4,   4,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  96,   8,   8,   8,   1,   2,   2,   4,   4,   3, None),   # 256
+        ctrl_dotx_mapping_t( 96, 128,   8,   8,   8,   1,   2,   2,   4,   3,   4, None),   # 256
 
-        ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   4,   2,   1,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   2,   2,   4,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   4,   2,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   4,   1,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   2,   4,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   4,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        
-        ctrl_dotx_mapping_t( 32,  32,   8,   8,   8,   1,   2,   2,   1,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  96,   8,   8,   8,   1,   4,   2,   4,   2,   3, None),   # 256
+        ctrl_dotx_mapping_t( 96, 128,   8,   8,   8,   1,   4,   2,   4,   3,   2, None),   # 256
+
+        ctrl_dotx_mapping_t(128,  64,   8,   8,   8,   1,   4,   2,   4,   2,   2, None),   # 256
+        ctrl_dotx_mapping_t( 64, 128,   8,   8,   8,   1,   2,   4,   4,   2,   2, None),   # 256
+
+        ctrl_dotx_mapping_t(128,  32,   8,   8,   8,   1,   4,   1,   4,   2,   2, None),   # 128
+        ctrl_dotx_mapping_t( 32, 128,   8,   8,   8,   1,   1,   4,   4,   2,   2, None),   # 128
+
+        ctrl_dotx_mapping_t( 96,  96,   8,   8,   8,   1,   2,   2,   4,   3,   3, None),   # 128
+        ctrl_dotx_mapping_t( 64,  64,   8,   8,   8,   1,   2,   2,   4,   2,   2, None),   # 128
+
+        ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   4,   2,   1,   2,   2, None),   # 64
+        ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   4,   1,   2,   2, None),   # 64
+
+        ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   2,   2,   2,   2,   2, None),   # 64
+        ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   2,   2,   2,   2, None),   # 64
+
+        ctrl_dotx_mapping_t( 32,  32,   8,   8,   8,   1,   2,   2,   1,   2,   2, None),   # 32
     ]
 
                         #  mt_m,mt_n,lt_m,lt_n,ld_m,ld_n,lw_m,lw_n,  ws,lr_m,lr_n, inst_mfma
-ctrl_dotx_mapping_int8 = [
-        ctrl_dotx_mapping_t(256, 128,   8,   8,   8,   1,   4,   2,   4,   2,   8, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 256,   8,   8,   8,   1,   2,   4,   4,   2,   8, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+ctrl_dotx_mapping_vop3p = [
+        ctrl_dotx_mapping_t(256, 128,   8,  16,   4,   4,   4,   2,   4,   2,   4, None),   # 256
+        ctrl_dotx_mapping_t(128, 256,   8,  16,   4,   4,   2,   4,   4,   2,   4, None),   # 256
 
-        ctrl_dotx_mapping_t(128, 224,   8,   8,   8,   1,   4,   2,   4,   2,   7, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(224, 128,   8,   8,   8,   1,   2,   4,   4,   7,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128, 224,   8,  16,   4,   4,   4,   2,   4,   1,   7, None),   # 256
+        ctrl_dotx_mapping_t(224, 128,   8,  16,   4,   4,   4,   2,   4,   7,   1, None),   # 256
 
-        ctrl_dotx_mapping_t(128, 192,   8,   8,   8,   1,   2,   4,   4,   2,   6, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192, 128,   8,   8,   8,   1,   2,   4,   4,   3,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128, 192,   8,  16,   4,   4,   4,   2,   4,   2,   3, None),   # 256
+        ctrl_dotx_mapping_t(192, 128,   8,  16,   4,   4,   4,   2,   4,   3,   2, None),   # 256
 
-        ctrl_dotx_mapping_t( 64, 192,   8,   8,   8,   1,   2,   4,   4,   1,   6, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192,  64,   8,   8,   8,   1,   2,   4,   4,   3,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 64, 192,   8,  16,   4,   4,   2,   4,   4,   1,   3, None),   # 256
+        ctrl_dotx_mapping_t(192,  64,   8,  16,   4,   4,   4,   2,   4,   3,   1, None),   # 256
 
-        ctrl_dotx_mapping_t(160, 128,   8,   8,   8,   1,   2,   4,   4,   5,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 160,   8,   8,   8,   1,   4,   2,   4,   2,   5, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(160, 128,   8,  16,   4,   4,   4,   2,   4,   5,   1, None),   # 256
+        ctrl_dotx_mapping_t(128, 160,   8,  16,   4,   4,   4,   2,   4,   1,   5, None),   # 256
 
-        ctrl_dotx_mapping_t(160,  64,   8,   8,   8,   1,   2,   4,   4,   5,   1, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64, 160,   8,   8,   8,   1,   4,   2,   4,   1,   5, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(160,  64,   8,  16,   4,   4,   4,   1,   4,   5,   1, None),   # 128
+        ctrl_dotx_mapping_t( 64, 160,   8,  16,   4,   4,   2,   2,   4,   1,   5, None),   # 128
 
-        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   2,   4,   4,   2,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 128,   8,   8,   8,   1,   4,   2,   4,   2,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128, 128,   8,  16,   4,   4,   4,   2,   4,   2,   2, None),   # 256
 
-        ctrl_dotx_mapping_t(128,  96,   8,   8,   8,   1,   2,   2,   4,   4,   3, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 96, 128,   8,   8,   8,   1,   2,   2,   4,   3,   4, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  96,   8,  16,   4,   4,   2,   2,   4,   2,   3, None),   # 128
+        ctrl_dotx_mapping_t( 96, 128,   8,  16,   4,   4,   2,   2,   4,   3,   2, None),   # 128
 
-        ctrl_dotx_mapping_t(128,  96,   8,   8,   8,   1,   4,   2,   4,   2,   3, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 96, 128,   8,   8,   8,   1,   4,   2,   4,   3,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  96,   8,  16,   4,   4,   4,   2,   4,   1,   3, None),   # 256
+        ctrl_dotx_mapping_t( 96, 128,   8,  16,   4,   4,   4,   2,   4,   3,   1, None),   # 256
 
-        ctrl_dotx_mapping_t(128,  64,   8,   8,   8,   1,   4,   2,   4,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64, 128,   8,   8,   8,   1,   2,   4,   4,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  64,   8,  16,   4,   4,   4,   1,   4,   2,   2, None),   # 128
+        ctrl_dotx_mapping_t( 64, 128,   8,  16,   4,   4,   2,   2,   4,   2,   2, None),   # 128
 
-        ctrl_dotx_mapping_t(128,  32,   8,   8,   8,   1,   4,   1,   4,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32, 128,   8,   8,   8,   1,   1,   4,   4,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  64,   8,  16,   4,   4,   4,   2,   4,   2,   1, None),   # 256
+        ctrl_dotx_mapping_t( 64, 128,   8,  16,   4,   4,   2,   4,   4,   2,   1, None),   # 256
 
-        ctrl_dotx_mapping_t( 96,  96,   8,   8,   8,   1,   2,   2,   4,   3,   3, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64,  64,   8,   8,   8,   1,   2,   2,   4,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t(128,  32,   8,  16,   4,   4,   4,   1,   4,   2,   1, None),   # 128
+        ctrl_dotx_mapping_t( 32, 128,   8,  16,   4,   4,   2,   2,   4,   1,   2, None),   # 128
 
-        ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   4,   2,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   4,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 96,  96,   8,  16,   4,   4,   2,   2,   2,   3,   3, None),   # 64
+        ctrl_dotx_mapping_t( 64,  64,   8,  16,   4,   4,   2,   2,   2,   2,   2, None),   # 64
+        ctrl_dotx_mapping_t( 64,  64,   8,  16,   4,   4,   2,   2,   4,   2,   1, None),   # 128
 
-        ctrl_dotx_mapping_t( 64,  32,   8,   8,   8,   1,   2,   2,   2,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   2,   2,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 64,  32,   8,  16,   4,   4,   2,   2,   2,   2,   1, None),   # 64
+        ctrl_dotx_mapping_t( 32,  64,   8,  16,   4,   4,   2,   2,   2,   1,   2, None),   # 64
 
-        ctrl_dotx_mapping_t( 32,  32,   8,   8,   8,   1,   2,   2,   1,   2,   2, v_dot4c_i32_i8),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   1,   2,   1, None),   # 32
     ]
 
-                        #  mt_m,mt_n,lt_m,lt_n,ld_m,ld_n,lw_m,lw_n,  ws,lr_m,lr_n, inst_mfma
-ctrl_dotx_mapping_int4 = [
-        ctrl_dotx_mapping_t(256, 128,   8,  16,   4,   4,   4,   2,   4,   2,   4, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 256,   8,  16,   4,   4,   2,   4,   4,   2,   4, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
+def get_ctrl_dotx_mapping_from_lanegroup_tile(macro_tile_m, macro_tile_n, lanegroup_tile_m, lanegroup_tile_n, lanegroup_wave_m, lanegroup_wave_n, waves, lanegroup_repeat_m, lanegroup_repeat_n, precision, target_instruction = None):
+    def copy_mapping_list(original_mapping_list, target_inst):
+        new_mapping_list = copy.deepcopy(original_mapping_list)
+        for mapping in new_mapping_list:
+            mapping.inst_dotx = target_inst
+        return new_mapping_list
 
-        ctrl_dotx_mapping_t(128, 224,   8,  16,   4,   4,   4,   2,   4,   1,   7, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(224, 128,   8,  16,   4,   4,   4,   2,   4,   7,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(128, 192,   8,  16,   4,   4,   4,   2,   4,   2,   3, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192, 128,   8,  16,   4,   4,   4,   2,   4,   3,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t( 64, 192,   8,  16,   4,   4,   2,   4,   4,   1,   3, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(192,  64,   8,  16,   4,   4,   4,   2,   4,   3,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(160, 128,   8,  16,   4,   4,   4,   2,   4,   5,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 160,   8,  16,   4,   4,   4,   2,   4,   1,   5, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(160,  64,   8,  16,   4,   4,   4,   1,   4,   5,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64, 160,   8,  16,   4,   4,   2,   2,   4,   1,   5, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        # ctrl_dotx_mapping_t(128, 128,   8,  16,   4,   4,   2,   4,   4,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t(128, 128,   8,  16,   4,   4,   4,   2,   4,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(128,  96,   8,  16,   4,   4,   2,   2,   4,   2,   3, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 96, 128,   8,  16,   4,   4,   2,   2,   4,   3,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(128,  96,   8,  16,   4,   4,   4,   2,   4,   1,   3, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 96, 128,   8,  16,   4,   4,   4,   2,   4,   3,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(128,  64,   8,  16,   4,   4,   4,   1,   4,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64, 128,   8,  16,   4,   4,   2,   2,   4,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t(128,  32,   8,  16,   4,   4,   4,   1,   4,   2,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32, 128,   8,  16,   4,   4,   2,   2,   4,   1,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t( 96,  96,   8,  16,   4,   4,   2,   2,   2,   3,   3, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 64,  64,   8,  16,   4,   4,   2,   2,   2,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        ctrl_dotx_mapping_t( 64,  32,   8,  16,   4,   4,   2,   2,   2,   2,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32,  64,   8,  16,   4,   4,   2,   2,   2,   1,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        #ctrl_dotx_mapping_t( 64,  32,   8,  16,   4,   4,   2,   2,   2,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        #ctrl_dotx_mapping_t( 32,  64,   8,  16,   4,   4,   2,   2,   2,   2,   2, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-
-        #ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   2,   1,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 32,  32,   8,  16,   4,   4,   2,   2,   1,   2,   1, v_dot8_i32_i4),  # extra k pack can be 1, 2, 4
-    ]
-
-def get_ctrl_dotx_mapping_from_wave_tile(macro_tile_m, macro_tile_n, lanegroup_tile_m, lanegroup_tile_n, lanegroup_wave_m, lanegroup_wave_n, waves, lanegroup_repeat_m, lanegroup_repeat_n, precision):
     if type(precision) is str:
         precision = amdgpu_string_to_precision(precision)
-    
+
     if precision == AMDGPU_PRECISION_FP16:
-        ctrl_dotx_mapping = ctrl_dotx_mapping_fp16
+        if target_instruction.name == 'v_dot2c_f32_f16':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop2, v_dot2c_f32_f16)
+        elif target_instruction.name == 'v_dot2_f32_f16':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_dot2_f32_f16)
+        else:
+            assert False
     elif precision == AMDGPU_PRECISION_INT8:
-        ctrl_dotx_mapping = ctrl_dotx_mapping_int8
+        if target_instruction.name == 'v_dot4c_i32_i8':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop2, v_dot4c_i32_i8)
+        elif target_instruction.name == 'v_dot4_i32_i8':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_dot4_i32_i8)
+        elif target_instruction.name == 'v_dot4_u32_u8':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_dot4_u32_u8)
+        else:
+            assert False
     elif precision == AMDGPU_PRECISION_INT4:
-        ctrl_dotx_mapping = ctrl_dotx_mapping_int4
+        if target_instruction.name == 'v_dot8_i32_i4':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_dot8_i32_i4)
+        elif target_instruction.name == 'v_dot8_u32_u4':
+            ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_dot8_u32_u4)
+        else:
+            assert False
     else:
         assert False, f"wrong data type"
 
@@ -415,6 +377,25 @@ def get_ctrl_dotx_mapping_from_wave_tile(macro_tile_m, macro_tile_n, lanegroup_t
     assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, lanegroup_tile_m:{lanegroup_tile_m}, lanegroup_tile_n:{lanegroup_tile_n}, lanegroup_repeat_m:{lanegroup_repeat_m}, lanegroup_repeat_n:{lanegroup_repeat_n}, "
     # TODO: we may have multiple match, aka multipl wave mapping/dotx for single 
     return target_mfma_tiling[0]
+
+def get_dotx_fma_instruction(arch, precision):
+    if type(arch) is not str:
+        arch_str = amdgpu_arch_to_string(arch)
+    else:
+        arch_str = arch
+
+    if arch_str == 'gfx1030':
+        if precision[0:4] == 'fp16':
+            #return v_dot2c_f32_f16
+            return v_dot2_f32_f16
+        elif precision[0:4] == 'int8':
+            return v_dot4c_i32_i8
+        elif precision[0:4] == 'int4':
+            return v_dot8_i32_i4
+        else:
+            assert False
+    else:
+        assert False
 
 class igemm_dotx_mapping_t(mc_base_t):
     def name(self):

@@ -33,7 +33,9 @@ IGEMM_FWD_GTC_NCHWC_ACCVGPR_UNIFIED = True   # used in gfx90a
 IGEMM_FWD_GTC_NCHWC_DEBUG = 0
 IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING = True
 
-IGEMM_FWD_GTC_NCHWC_INT4_K_PACK = 16 # can be 8/16/32
+IGEMM_FWD_GTC_NCHWC_INT4_VOP3P_K_PACK   = 16 # can be 8/16/32
+IGEMM_FWD_GTC_NCHWC_INT8_VOP3P_K_PACK   = 4
+IGEMM_FWD_GTC_NCHWC_FP16_VOP3P_K_PACK   = 2
 
 def _find_non_1_index_in_list(list_object):
     result_list = list()
@@ -77,12 +79,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             assert (self.tunable.lanegroup_tile_m * self.tunable.lanegroup_repeat_m) % self.coalescing_store_groups == 0, \
                 f"coalescing store groups should be divided by thread m {self.tunable.lanegroup_tile_m}x{self.tunable.lanegroup_repeat_m}"
 
-            ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
+            ctrl_dotx_mapping = get_ctrl_dotx_mapping_from_lanegroup_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                      self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n,
                                                                      self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
                                                                      self.tunable.block_size // (self.tunable.lanegroup_wave_m * self.tunable.lanegroup_wave_n * LANEGROUP_SIZE),
                                                                      self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
-                                                                     self.tunable.precision)
+                                                                     self.tunable.precision, get_dotx_fma_instruction(self.mc.arch_config.arch, self.tunable.precision))
             self.dotx_mapping = igemm_dotx_mapping_t(self.mc, ctrl_dotx_mapping)
 
             ctrl_coalescing_store = ctrl_coalescing_store_dotx_t()
@@ -872,9 +874,14 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
     def get_k_pack(self):
         _, _, tb_nb_vec_c = self.get_thread_lengths()
-        if self.tunable.precision == 'int4':
-            lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT4_K_PACK)
-        else:
+        if type(self.dotx_mapping.ctrl.inst_dotx) == inst_dotx_vop3p_t:
+            if self.tunable.precision == 'int4':
+                lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT4_VOP3P_K_PACK)
+            elif self.tunable.precision == 'int8':
+                lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT8_VOP3P_K_PACK)
+            elif self.tunable.precision == 'fp16':
+                lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_FP16_VOP3P_K_PACK)
+        elif type(self.dotx_mapping.ctrl.inst_dotx) == inst_dotx_vop2_t:
             lds_k_pack = tb_nb_vec_c
         return lds_k_pack
 
@@ -1950,12 +1957,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fma_main_loop.emit()
             else:
                 fctrl                             = ctrl_dotx_main_loop_t()
-                ctrl_dotx_mapping                 = get_ctrl_dotx_mapping_from_wave_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
+                ctrl_dotx_mapping                 = get_ctrl_dotx_mapping_from_lanegroup_tile(self.tunable.gemm_m_per_block, self.tunable.gemm_n_per_block,
                                                                         self.tunable.lanegroup_tile_m, self.tunable.lanegroup_tile_n,
                                                                         self.tunable.lanegroup_wave_m, self.tunable.lanegroup_wave_n,
                                                                         self.tunable.block_size // (self.tunable.lanegroup_wave_m * self.tunable.lanegroup_wave_n * LANEGROUP_SIZE),
                                                                         self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
-                                                                        self.tunable.precision)
+                                                                        self.tunable.precision, get_dotx_fma_instruction(self.mc.arch_config.arch, self.tunable.precision))
                 fctrl.dotx_m                      = ctrl_dotx_mapping
                 fctrl.unroll_k                    = self.tunable.gemm_k_per_block // k_pack_src_mat
                 fctrl.label_prefix                = self.name()

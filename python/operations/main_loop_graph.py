@@ -224,7 +224,17 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         expr_empty_line = dotx_core_loop_expr(self.mc, "empty line", "")
         tmp_node.first = expr_empty_line
         tmp_node.second = expr_empty_line
-        
+    
+    def get_v_dotx_k(self, ctrl):
+        dotx_m = ctrl.dotx_m
+        v_dot_inst = get_dotx_fma_instruction(mc_get_current().arch_config.arch, ctrl.precision)
+        if type(v_dot_inst) is inst_dotx_vop2_t:
+            return macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        elif type(v_dot_inst) is inst_dotx_vop3p_t:
+            return macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        else:
+            assert False
+
     def form_loop_body(self, ctrl):
         assert isinstance(ctrl, ctrl_dotx_main_loop_t), "wrong ctrl type"
         f_gld_a = ctrl.global_load_a_functor
@@ -273,11 +283,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         #thread_sub_n = local_buffer_n
         #thread_sub_m = local_buffer_m
 
-        if ctrl.precision in ('fp16', 'int8'):
-            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
-        else:
-            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
-        
+        v_dotx_k = self.get_v_dotx_k(ctrl)
+
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.thread_m()
         local_buffer_n = local_buffer_n * dotx_m.thread_n()
@@ -447,10 +454,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         local_buffer_m = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         local_buffer_n = ctrl.lds_k_pack // dotx_m.inst_dotx.k
         
-        if ctrl.precision in ('fp16', 'int8'):
-            v_dotx_k = macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
-        else:
-            v_dotx_k = macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
+        v_dotx_k = self.get_v_dotx_k(ctrl)
         
         # need to repeat v_a because dpp8 is not supported.
         local_buffer_m = local_buffer_m * dotx_m.thread_m()
