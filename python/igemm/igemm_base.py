@@ -272,8 +272,8 @@ class igemm_gtc_tunable_parameter_t(object):
             waves_per_n = self.gemm_n_per_block // (self.wave_tile_n * self.wave_step_n * self.wave_repeat_n)
             self.block_size                     = waves_per_m * waves_per_n * self.wave_size
 
-        assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths), f"block_size:{self.block_size}, a_cluster_lengths:{self.tensor_a_cluster_lengths}"
-        assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths), f"block_size:{self.block_size}, b_cluster_lengths:{self.tensor_b_cluster_lengths}"
+        assert self.block_size == igemm_flatten_list_product(self.tensor_a_cluster_lengths), f"block_size:{self.block_size}, a_cluster_lengths:{self.tensor_a_cluster_lengths}, {self.gemm_m_per_block}x{self.gemm_n_per_block}"
+        assert self.block_size == igemm_flatten_list_product(self.tensor_b_cluster_lengths), f"block_size:{self.block_size}, b_cluster_lengths:{self.tensor_b_cluster_lengths}, {self.gemm_m_per_block}x{self.gemm_n_per_block}"
 
         def _unmerge_x1_from_e(unroll_k, nxe):
             if nxe == 0:
@@ -331,9 +331,9 @@ class igemm_gtc_tunable_parameter_t(object):
                 # self.num_vgpr_accumulate_c      = (self.gemm_m_repeat * self.gemm_m_per_thread * self.gemm_n_repeat * self.gemm_n_per_thread)
                 # self.num_vgpr_accumulate_a      = (self.gemm_m_repeat * self.gemm_m_per_thread)
                 # self.num_vgpr_accumulate_b      = (self.gemm_n_repeat * self.gemm_n_per_thread)
-                dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block,
+                dotx_mapping = get_ctrl_dotx_mapping_from_lanegroup_tile(self.gemm_m_per_block, self.gemm_n_per_block,
                                         self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
-                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision)
+                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision, get_dotx_fma_instruction(mc_get_current().arch_config.arch, self.precision))
                 self.local_prefetch_num         = 2 if IGEMM_GTC_FEAT_LOCAL_PREFETCH else 1 # TODO: other local prefetch
                 #if dotx_mapping.lanegroup_repeat_n > self.local_prefetch_num:
                 self.local_prefetch_num_m = dotx_mapping.lanegroup_repeat_m
@@ -457,9 +457,9 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.coalescing_store_groups = self.coalescing_store_groups // shrink_in_co_group
                 assert length_in_m % self.coalescing_store_groups == 0
         elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
-            dotx_mapping = get_ctrl_dotx_mapping_from_wave_tile(self.gemm_m_per_block, self.gemm_n_per_block,
+            dotx_mapping = get_ctrl_dotx_mapping_from_lanegroup_tile(self.gemm_m_per_block, self.gemm_n_per_block,
                                         self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
-                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision)
+                                        self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision, get_dotx_fma_instruction(mc_get_current().arch_config.arch, self.precision))
             c_vgpr_sst = dotx_mapping.lanegroup_repeat_m * dotx_mapping.lanegroup_m_per_thread() // self.coalescing_store_groups
             dotx_length_in_m = utility_gcd(self.vector_c, dotx_mapping.lanegroup_m_per_thread()) # TODO: lanegroup size may differ
             assert c_vgpr_sst >= dotx_length_in_m, f"v sst is smaller than length in m"
