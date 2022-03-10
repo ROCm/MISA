@@ -159,7 +159,7 @@ class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
         if self.precision == 'int4':
             return v_dot8_i32_i4
         elif self.precision == 'int8':
-            return v_dot4c_i32_i8
+            return v_dot4_i32_i8
         elif self.precision == 'fp16':
             return v_dot2_f32_f16
         else:
