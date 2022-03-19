@@ -1996,7 +1996,10 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                                                                         self.tunable.lanegroup_repeat_m, self.tunable.lanegroup_repeat_n,
                                                                         self.tunable.precision)
                 fctrl.dotx_m                      = ctrl_dotx_mapping
-                fctrl.unroll_k                    = self.tunable.gemm_k_per_block // k_pack_src_mat
+                if self.tunable.mini_weights == 0:
+                    fctrl.unroll_k                = self.tunable.gemm_k_per_block // k_pack_src_mat
+                else:
+                    fctrl.unroll_k                = 1
                 fctrl.label_prefix                = self.name()
                 fctrl.lds_single_size             = self.tunable.lds_single            # in byte, should be power of 2
                 fctrl.lds_buffer_num              = self.tunable.lds_buffer_num
@@ -2009,12 +2012,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
                 # functor
                 # compute dpp index
-                fctrl.global_load_a_functor       = self.global_load_wei
+                fctrl.global_load_a_functor       = self.global_load_wei if self.tunable.mini_weights == 0 else ""
                 fctrl.global_load_b_functor       = self.global_load_in
-                fctrl.shared_store_a_functor      = self.shared_store_wei
+                fctrl.shared_store_a_functor      = self.shared_store_wei if self.tunable.mini_weights == 0 else ""
                 fctrl.shared_store_b_functor      = self.shared_store_in
                 fctrl.shared_load_a_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_m())
-                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n())
+                fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n()) if self.tunable.mini_weights == 0 else ""
                 fctrl.move_slice_window_a_functor = move_slice_window_a
                 fctrl.move_slice_window_b_functor = move_slice_window_b
 
@@ -2030,6 +2033,11 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.v_sst_b_os                  = v.v_sst_b_os if self.tunable.tensor_b_pass_through == 0 else None
                 fctrl.s_kitr                      = s.s_kitr
                 fctrl.s_knum                      = s.s_knum
+                
+                if self.tunable.mini_weights == 1:
+                    fctrl.mini_weights            = 1
+                    fctrl.tensor_b_bypass_lds     = 1
+                    fctrl.tensor_a_bypass_gld     = 1
 
                 fma_main_loop = dotx_main_loop_t(self.mc, fctrl)
                 fma_main_loop.emit()
