@@ -237,6 +237,8 @@ class igemm_gtc_tunable_parameter_t(object):
         self.cumode                             = utility_dict_with_default_t(tunable_dict)('cumode', 0)
         
         self.mini_weights                       = utility_dict_with_default_t(tunable_dict)('mini_weights', 0)
+        if self.mini_weights == 1:
+            self.tensor_b_pass_through = 1
 
         assert type(self.tensor_a_thread_lengths) is list and type(self.tensor_a_cluster_lengths) is list
         assert type(self.tensor_b_thread_lengths) is list and type(self.tensor_b_cluster_lengths) is list
@@ -414,8 +416,8 @@ class igemm_gtc_tunable_parameter_t(object):
         # TODO: LDS size check
         
         if self.mini_weights == 1:
-            self.lds_single            = 16 * 1024
-            self.lds_total             = 16 * 1024
+            self.lds_single            = 8 * 1024
+            self.lds_total             = 8 * 1024
             self.lds_buffer_num        = 1
 
         # some parameter not in modular_conv

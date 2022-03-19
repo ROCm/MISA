@@ -75,6 +75,13 @@ class ctrl_dotx_main_loop_t(object):
         self.k_per_step                  = 1
         self.lds_pad_m                   = 0        # pad how many pixels per m row
         self.lds_pad_n                   = 0        # pad how many pixels per n row
+        
+        # control bit for mini weights kernels
+        self.mini_weights                = 0
+        self.tensor_a_bypass_lds         = 0
+        self.tensor_b_bypass_lds         = 0
+        self.tensor_a_bypass_gld         = 0
+        self.tensor_b_bypass_gld         = 0
 
 class ds_waitcnt_t(object):
     '''
