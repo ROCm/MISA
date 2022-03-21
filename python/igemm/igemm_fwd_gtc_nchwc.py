@@ -382,6 +382,148 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                         self._emit(f"v_bfe_u32 v[{self.v_tmp6(0)}], v[{self.v_in_flag_n()}], {i+1}, 1   ; extract flag_n ({i+1})")
                     self._emit(m_set_flag_nhw(self.v_in_flag(i), self.v_in_flag(i), self.v_in_ihi_list(i), self.v_in_iwi_list(i), self.s_sps_hi(), self.s_sps_wi()))
 
+    class macro_move_slice_window_block_wise_acc_yx_t(macro_base_t):
+        '''
+        can not inline
+        prefer to put this before global load wait. And for simplicity, no auto schedule.
+        '''
+        def __init__(self, mc, tunable, inline, **options):
+            macro_base_t.__init__(self, mc, True)
+            self.tunable = tunable
+            self.declare_arg("s_ix")
+            self.declare_arg("s_iy")
+            self.declare_arg("s_x")
+            self.declare_arg("s_y")
+            self.declare_arg("v_in_os")
+            if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING:
+                self.declare_arg("v_in_i_hw_list")
+            else:
+                assert False, "not tested"
+                self.declare_arg("v_in_ihi_list")
+                self.declare_arg("v_in_iwi_list")
+            self.declare_arg("v_in_flag")
+            self.declare_arg("v_in_flag_n")
+            self.declare_arg("s_diff_in_iwi_acc_x")
+            self.declare_arg("s_diff_in_iwi_ovf_x")
+            self.declare_arg("s_dilation_w")
+            self.declare_arg("s_diff_in_ihi_acc_y")
+            self.declare_arg("s_diff_in_ihi_ovf_y")
+            self.declare_arg("s_dilation_h")
+            self.declare_arg("s_diff_in_os_acc_c_y_x")
+            self.declare_arg("s_diff_in_os_ovf_x_acc_y")
+            self.declare_arg("s_diff_in_os_ovf_y_acc_c")
+            self.declare_arg("s_sps_hi")
+            self.declare_arg("s_sps_wi")
+            
+            self.declare_arg("v_tmp")   # 2 needed
+            self.declare_arg("s_tmp")
+            self.options = options
+        def name(self):
+            return '.v_fwd_gtc_nhwc_move_slice_window_block_wise_acc_yx'
+
+        def expr(self):
+            assert "label_acc_yx" in self.options
+            label_acc_yx_x_end = self.options["label_acc_yx"] + '_x_end' + '_{}'.format(self.expr_cnt)
+
+            assert "nb_per_thread" in self.options
+            nb_per_thread = self.options["nb_per_thread"]
+
+            assert 'm_set_flag_nhw' in self.options
+            m_set_flag_nhw = self.options['m_set_flag_nhw']
+            
+            '''
+            ix accumulate, will only accumulate in width, and will never carry on to height
+            iy accumulate, will only accumulate in height, and will never carry on to batch
+            this makes life easier
+            '''
+            # s_ix = -s_x, s_iy = -s_y, s_ix++
+            self._emit(f"s_mov_b32 s[{self.s_diff_in_ihi_acc_y()}], 0")
+            self._emit(f"s_add_u32 s[{self.s_ix()}], 1, s[{self.s_ix()}]")
+            
+            # ihi = iho * s_stride_h + iy * s_dilation_h - s_pad_h
+            # iwi = iwo * s_stride_w + ix * s_dilation_w - s_pad_w
+
+            # update iwi
+            self._emit(f"s_cselect_b32 s[{self.s_diff_in_iwi_acc_x()}], s[{self.s_diff_in_iwi_ovf_x()}], s[{self.s_dilation_w()}]")
+            #for i in range(nb_per_thread):
+            #    self._emit(f"v_add_nc_u32 v[{self.v_in_iwi_list(i)}], s[{self.s_tmp()}], v[{self.v_in_iwi_list(i)}]")
+
+            # update in_os
+            for i in range(nb_per_thread):
+                self._emit(f"v_add_nc_u32 v[{self.v_in_os(i)}], s[{self.s_diff_in_os_acc_c_y_x()}], v[{self.v_in_os(i)}]")
+
+            # update ihi, accumulate
+            self._emit(f"s_cbranch_scc0 {label_acc_yx_x_end}")
+            self._emit(f"s_mul_i32 s[{self.s_ix()}], -1, s[{self.s_x()}]")
+            self._emit(f"s_add_u32 s[{self.s_iy()}], 1, s[{self.s_iy()}]")
+            self._emit(f"s_cselect_b32 s[{self.s_diff_in_ihi_acc_y()}], s[{self.s_diff_in_ihi_ovf_y()}], s[{self.s_dilation_h()}]")
+            
+            # update in_os
+            for i in range(nb_per_thread):
+                self._emit(f"v_add_nc_u32 v[{self.v_in_os(i)}], s[{self.s_diff_in_os_ovf_x_acc_y()}], v[{self.v_in_os(i)}]")
+                
+            self._emit(f"s_cbranch_scc0 {label_acc_yx_x_end}")
+            self._emit(f"s_mul_i32 s[{self.s_iy()}], -1, s[{self.s_y()}]")
+            for i in range(nb_per_thread):
+                self._emit(f"v_add_nc_u32 v[{self.v_in_os(i)}], s[{self.s_diff_in_os_ovf_y_acc_c()}], v[{self.v_in_os(i)}]")
+            
+            self._emit_front(f"{label_acc_yx_x_end}:")
+            
+            # now set flags
+            self._emit(f"s_pack_ll_b32_b16 s[{self.s_tmp()}], s[{self.s_diff_in_iwi_acc_x()}], s[{self.s_diff_in_ihi_acc_y()}]")
+            self._emit(f"v_mov_b32 v[{self.v_tmp()}], s[{self.s_tmp()}]")
+            
+            if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING:
+                self._emit(f"v_bfe_u32 v[{self.v_in_flag(0)}], v[{self.v_in_flag_n()}], {0}, 1   ; extract flag_n (0)")
+                if nb_per_thread >= 2:
+                    self._emit(f"v_bfe_u32 v[{self.v_in_flag(1)}], v[{self.v_in_flag_n()}], {0}, 1   ; extract flag_n (0)")
+                for i in range(nb_per_thread):
+                    self._emit(f"v_pk_add_u16 v[{self.v_in_i_hw_list(i)}], v[{self.v_tmp()}], v[{self.v_in_i_hw_list(i)}]")
+            else:
+                assert False, "not support"
+            self._emit_empty_line()
+            
+            if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING:
+                self._emit(m_set_flag_nhw(self.v_in_flag(), self.v_in_flag_n(), self.v_in_i_hw_list(), self.s_sps_hi(), self.s_sps_wi(), self.v_tmp(), self.v_tmp(1)))
+            else:
+                assert False, "un debuged code"
+            
+            
+            self._emit_empty_line()
+            
+    class macro_move_slice_window_block_wise_a_t(macro_base_t):
+        def __init__(self, mc, tunable):
+            macro_base_t.__init__(self, mc, True)
+            self.tunable = tunable
+            self.declare_arg("v_sld_a_os")
+            data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+            self.step = tunable.vector_c * tunable.gemm_m_per_block * data_byte
+
+        def name(self):
+            return '.macro_move_slice_window_block_wise_a_t{self.tunable.tensor_a_pass_through}_{self.tunable.tensor_b_pass_through}'
+
+        def expr(self):
+            self._emit(f"v_add_nc_u32 v[{self.v_sld_a_os()}], v[{self.v_sld_a_os()}], {self.step}")
+            self._emit_empty_line()
+            
+    class macro_move_gld_b_to_v_b_t(macro_base_t):
+        def __init__(self, mc, tunable):
+            macro_base_t.__init__(self, mc, True)
+            self.tunable = tunable
+            self.declare_arg("v_b")
+            self.declare_arg("v_gld_b")
+            data_byte = amdgpu_precision_data_byte(self.tunable.precision)
+            self.length = tunable.tensor_b_thread_lengths[2] * tunable.tensor_b_thread_lengths[3] // (4 // data_byte)
+
+        def name(self):
+            return '.macro_move_gld_b_to_v_b_t{self.tunable.tensor_a_pass_through}_{self.tunable.tensor_b_pass_through}'
+
+        def expr(self):
+            self._emit(f"s_waitcnt vmcnt(0)")
+            for i in range(self.length):
+                self._emit(f"v_mov_b32 v[{self.v_b(i)}], v[{self.v_gld_b(i)}]")
+            self._emit_empty_line()
+
     class global_load_in_t(mc_base_t):
         def __init__(self, mc, outer):
             mc_base_t.__init__(self, mc)
@@ -720,8 +862,12 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if not outer.tunable.tensor_a_pass_through:
                 self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a+1))
             #if not outer.tunable.tensor_b_pass_through:
-            self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
-            self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
+            if outer.tunable.mini_weights == 0:
+                self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
+                self.v_gld_a            = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
+            else:
+                self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b + num_vgpr_global_load_a))
+                self.v_gld_a            = sym_t("v_gld_a"           ,2)
             if outer.tunable.global_prefetch_a_num == 2:
                 self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(num_vgpr_global_load_a))
             self.v_gld_b                = sym_t("v_gld_b"           ,vseq(num_vgpr_global_load_b))
@@ -1015,6 +1161,35 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
         # return single functor !
         return move_slice_window
+    
+    def get_macro_move_slice_window_acc(self):
+        inline = True if self.tunable.fma_interleave else False
+        ta_k_vec_c, tb_nb0, tb_nb_vec_c = self.get_thread_lengths()
+        nb_per_thread = tb_nb0
+        nk_per_thread = ta_k_vec_c
+        unroll_k = self.tunable.gemm_k_per_block
+        m_set_flag_nhw = self.macro_set_flag_nhw_16_sched(self.mc, inline, nb_per_thread=nb_per_thread) if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING else \
+                                self.macro_set_flag_nhw(self.mc, inline)
+        if self.tunable.nxe != 0:
+            move_slice_window = self.macro_move_slice_window_block_wise_acc_yx_t(self.mc, self.tunable, inline, label_acc_yx = self.name() + "_acc_yx",
+                                        unroll_k=unroll_k, nb_per_thread=nb_per_thread, nk_per_thread=nk_per_thread, m_set_flag_nhw=m_set_flag_nhw)
+        else:
+            assert False, "not implemented ex0"
+            #move_slice_window = self.macro_move_slice_window_block_wise_1x1_t(self.mc, self.tunable, inline,
+            #                            unroll_k=unroll_k, nb_per_thread=nb_per_thread, nk_per_thread=nk_per_thread)
+
+        # return single functor !
+        return move_slice_window
+    
+    def get_macro_move_slice_window_a(self):
+        move_slice_window_a = self.macro_move_slice_window_block_wise_a_t(self.mc, self.tunable)
+        # return single functor !
+        return move_slice_window_a
+    
+    def get_macro_move_gld_b_to_v_b(self):
+        move_gld_b_to_v_b = self.macro_move_gld_b_to_v_b_t(self.mc, self.tunable)
+        # return single functor !
+        return move_gld_b_to_v_b
 
     def get_macro_set_flag_nhw(self):
         inline = True if self.tunable.fma_interleave else False
@@ -1695,6 +1870,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 self._emit(f"s_waitcnt vmcnt({num_gld_wei - 1 - i})")
                 self._emit(f"ds_write_b128 v[{v.v_sst_a_os()}], v[{v.v_gld_a(i * 4)}:{v.v_gld_a(i * 4 + 3)}] offset:{offset}")
             
+            self._emit_empty_line()
             self._emit(f"v_mov_b32 v[{v.v_gtc_ic()}], 0")
             
             
@@ -1940,47 +2116,77 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         k_pack_src_mat = k_pack #if k_pack != 1 else k_pack_lanegroup
 
         m_move_slice_window             = self.get_macro_move_slice_window()
+        m_move_slice_window_acc         = self.get_macro_move_slice_window_acc()
+        m_move_slice_window_a           = self.get_macro_move_slice_window_a()
+        m_move_gld_b_to_v_b             = self.get_macro_move_gld_b_to_v_b()
 
         def move_slice_window_b():
             '''
             in nchw we only need call one move slice window
             '''
-            if self.tunable.nxe != 0:
-                with self._deferred_context():
-                    self._emit(m_move_slice_window(
-                                v.v_gtc_iy(), v.v_gtc_ix(), v.v_gtc_ic(), v.v_in_os(),
-                                *(v.v_in_i_hw_list(),) if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING else (v.v_in_ihi_list(), v.v_in_iwi_list()),
-                                v.v_in_flag(), v.v_in_flag_n(),
-                                v.v_wei_os(),
-                                s.s_diff_in_iwi_acc_x(), s.s_diff_in_iwi_ovf_x(), s.s_x_dilation_w(),
-                                s.s_diff_in_ihi_acc_y(), s.s_diff_in_ihi_ovf_y(), s.s_y_dilation_h(),
-                                s.s_move_slice_k_y_dh(), s.s_move_slice_k_x_dw(), s.s_move_slice_k_c(),
-                                s.s_move_slice_k_stride_gemm_k(),
-                                s.s_diff_in_os_acc_c_y_x(), s.s_diff_in_os_ovf_y_acc_c(), s.s_diff_in_os_ovf_x_acc_y(),
-                                s.s_dilation_h(),
-                                s.s_c(), s.s_sps_hi(), s.s_sps_wi(),
-                                v.v_tmp()))
-                return self._get_deferred()
+            if self.tunable.mini_weights == 0:
+                if self.tunable.nxe != 0:
+                    with self._deferred_context():
+                        self._emit(m_move_slice_window(
+                                    v.v_gtc_iy(), v.v_gtc_ix(), v.v_gtc_ic(), v.v_in_os(),
+                                    *(v.v_in_i_hw_list(),) if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING else (v.v_in_ihi_list(), v.v_in_iwi_list()),
+                                    v.v_in_flag(), v.v_in_flag_n(),
+                                    v.v_wei_os(),
+                                    s.s_diff_in_iwi_acc_x(), s.s_diff_in_iwi_ovf_x(), s.s_x_dilation_w(),
+                                    s.s_diff_in_ihi_acc_y(), s.s_diff_in_ihi_ovf_y(), s.s_y_dilation_h(),
+                                    s.s_move_slice_k_y_dh(), s.s_move_slice_k_x_dw(), s.s_move_slice_k_c(),
+                                    s.s_move_slice_k_stride_gemm_k(),
+                                    s.s_diff_in_os_acc_c_y_x(), s.s_diff_in_os_ovf_y_acc_c(), s.s_diff_in_os_ovf_x_acc_y(),
+                                    s.s_dilation_h(),
+                                    s.s_c(), s.s_sps_hi(), s.s_sps_wi(),
+                                    v.v_tmp()))
+                    return self._get_deferred()
+                else:
+                    with self._deferred_context():
+                        self._emit(m_move_slice_window(
+                                    s.s_p_in() if self.tunable.tensor_a_pass_through else s.s_in_offset(),
+                                    v.v_wei_os(),
+                                    s.s_move_slice_k_stride_c(),
+                                    s.s_move_slice_k_stride_gemm_k(),
+                                    v.v_gtc_ic(),
+                                    s.s_move_slice_k_acc_c(),
+                                    s.s_c(),
+                                    v.v_in_flag(),
+                                    v.v_tmp()
+                                    ))
+                    return self._get_deferred()
             else:
-                with self._deferred_context():
-                    self._emit(m_move_slice_window(
-                                s.s_p_in() if self.tunable.tensor_a_pass_through else s.s_in_offset(),
-                                v.v_wei_os(),
-                                s.s_move_slice_k_stride_c(),
-                                s.s_move_slice_k_stride_gemm_k(),
-                                v.v_gtc_ic(),
-                                s.s_move_slice_k_acc_c(),
-                                s.s_c(),
-                                v.v_in_flag(),
-                                v.v_tmp()
-                                ))
-                return self._get_deferred()
+                if self.tunable.nxe != 0:
+                    with self._deferred_context():
+                        self._emit(m_move_slice_window_acc(
+                                    s.s_ix(), s.s_iy(), s.s_x(), s.s_y(), v.v_in_os(),
+                                    *(v.v_in_i_hw_list(),) if IGEMM_FWD_GTC_NCHWC_16BIT_SPATIAL_INDEXING else (v.v_in_ihi_list(), v.v_in_iwi_list()),
+                                    v.v_in_flag(), v.v_in_flag_n(),
+                                    s.s_diff_in_iwi_acc_x(), s.s_diff_in_iwi_ovf_x(), s.s_dilation_w(),
+                                    s.s_diff_in_ihi_acc_y(), s.s_diff_in_ihi_ovf_y(), s.s_dilation_h(),
+                                    s.s_diff_in_os_acc_c_y_x(), s.s_diff_in_os_ovf_x_acc_y(), s.s_diff_in_os_ovf_y_acc_c(), 
+                                    s.s_sps_hi(), s.s_sps_wi(),
+                                    v.v_tmp(),
+                                    s.s_tmp()))
+                    return self._get_deferred()
+                else:
+                    assert False, "not implemented"
 
         def move_slice_window_a():
-            return ''
+            if self.tunable.mini_weights == 0:
+                return ''
+            else:
+                with self._deferred_context():
+                     self._emit(m_move_slice_window_a(v.v_sld_a_os()))
+                return self._get_deferred()
 
-        def move_slice_window_acc():
-            return ''
+        def move_gld_b_to_v_b():
+            if self.tunable.mini_weights == 0:
+                return ''
+            else:
+                with self._deferred_context():
+                     self._emit(m_move_gld_b_to_v_b(v.v_b(), v.v_gld_b()))
+                return self._get_deferred()
 
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # TODO: reopen legacy fma instruction
@@ -2008,7 +2214,10 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.local_prefetch_num_m        = self.tunable.local_prefetch_num_m
 
                 fctrl.lds_k_pack                  = k_pack_src_mat
-                fctrl.k_per_step                  = self.tunable.gemm_k_per_block // self.tunable.vector_c
+                if self.tunable.mini_weights == 0:
+                    fctrl.k_per_step              = self.tunable.gemm_k_per_block // self.tunable.vector_c
+                else:
+                    fctrl.k_per_step              = 1
 
                 # functor
                 # compute dpp index
@@ -2020,6 +2229,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
                 fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n()) if self.tunable.mini_weights == 0 else ""
                 fctrl.move_slice_window_a_functor = move_slice_window_a
                 fctrl.move_slice_window_b_functor = move_slice_window_b
+                fctrl.move_gld_b_to_v_b_functor   = move_gld_b_to_v_b
 
                 # sympol type
                 fctrl.v_a                         = v.v_a

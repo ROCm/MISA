@@ -97,4 +97,4 @@ else
 fi
 
 ./out/conv_driver.exe $CONV -n 1 -c 8 -H 1080 -W 1920 -k 16 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -t 1 -F $FORW ${LAYOUT_ARG}
-#./out/conv_driver.exe $CONV -n 1 -c 16 -H 135 -W 240 -k 16 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 1 -c 16 -H 135 -W 240 -k 16 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -t 1 -F $FORW ${LAYOUT_ARG}

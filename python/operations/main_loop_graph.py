@@ -52,6 +52,7 @@ class ctrl_dotx_main_loop_t(object):
         self.shared_load_b_functor       = None
         self.move_slice_window_a_functor = None
         self.move_slice_window_b_functor = None
+        self.move_gld_b_to_v_b_functor   = None
 
         # sympol type
         self.v_a                         = None
@@ -245,6 +246,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
 
         f_move_slice_window_a = ctrl.move_slice_window_a_functor
         f_move_slice_window_b = ctrl.move_slice_window_b_functor
+        
+        f_move_gld_b_to_v_b = ctrl.move_gld_b_to_v_b_functor
 
         v_a = ctrl.v_a
         v_b = ctrl.v_b
@@ -298,9 +301,13 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         if ctrl.tensor_b_bypass_lds == 0:
             sld_b = dotx_core_loop_expr(self.mc, "sld_b", f_sld_b)
             sld_b.expr_set_args(v_b(), v_sld_b_os(), lds_base_n)
-        sst_a = dotx_core_loop_node("sst a node", 
-                                    dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
-                                    dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
+            
+        if ctrl.mini_weights == 0:
+            sst_a = dotx_core_loop_node("sst a node", 
+                                        dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
+                                        dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
+        else:
+            sst_a = expr_empty_line
         if ctrl.tensor_b_bypass_lds == 0:
             sst_b = dotx_core_loop_node("sst b node", 
                                         dotx_core_loop_expr(self.mc, "wait b global load", f"s_waitcnt vmcnt(0)"), 
@@ -310,13 +317,16 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         
         sst_a_b = dotx_core_loop_node("sst a/b before core loop", sst_a, sst_b)
         
-        msw_a_b = dotx_core_loop_node("msw a/b node", 
-                                      dotx_core_loop_expr(self.mc, "msw a", f_move_slice_window_a), 
-                                      dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b))
+        msw_a = dotx_core_loop_expr(self.mc, "msw a", f_move_slice_window_a)
+        msw_b = dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b)
         
+        move_gld_b_to_v_b = dotx_core_loop_expr(self.mc, "move gld to v", f_move_gld_b_to_v_b)
         wait_all_lgkm = dotx_core_loop_expr(self.mc, "wait all lds", f"s_waitcnt lgkmcnt(0)")
         barrier = dotx_core_loop_expr(self.mc, "barrier", f"s_barrier")
-        wait_sst_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
+        if ctrl.mini_weights == 0:
+            wait_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
+        else:
+            wait_node = move_gld_b_to_v_b
         
         
         # sst a/b double buffer switch
@@ -335,16 +345,21 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             
         stack = [loop_body]
         # form repeat k 
-        fma_main_loop_node = self.form_loop_fma_body(ctrl, dotx_m.lanegroup_repeat_m, dotx_m.lanegroup_repeat_n - 1)
-        self.append_new_node(fma_main_loop_node, stack, "after fma")
-        
-        if ctrl.lds_buffer_num == 2:
-            sld_buffer_switch_b = dotx_core_loop_expr(self.mc, "sst a buffer switch", f"v_xor_b32 v[{v_sld_b_os()}], {hex(lds_single_size)}, v[{v_sld_b_os()}] ; switch double buffer b load")
-            sld_buffer_switch_a = dotx_core_loop_expr(self.mc, "sst a buffer switch", f"v_xor_b32 v[{v_sld_a_os()}], {hex(lds_single_size)}, v[{v_sld_a_os()}] ; switch double buffer a load")
-            sld_buffer_switch_node = dotx_core_loop_node("sst buffer switch node", sld_buffer_switch_b, sld_buffer_switch_a)
-            self.append_new_node(sld_buffer_switch_node, stack, "after sld buffer switch")
+        if ctrl.unroll_k == 1 and dotx_m.lanegroup_repeat_n == 1:
+            fma_main_loop_node = self.form_loop_fma_body(ctrl, dotx_m.lanegroup_repeat_m, dotx_m.lanegroup_repeat_n)
         else:
-            self.append_new_node(wait_sst_node, stack, "after wait lds op")
+            fma_main_loop_node = self.form_loop_fma_body(ctrl, dotx_m.lanegroup_repeat_m, dotx_m.lanegroup_repeat_n - 1)
+        self.append_new_node(fma_main_loop_node, stack, "after fma")
+        self.append_new_node(msw_a, stack, "msw a")
+        
+        if ctrl.mini_weights == 0:
+            if ctrl.lds_buffer_num == 2:
+                sld_buffer_switch_b = dotx_core_loop_expr(self.mc, "sst a buffer switch", f"v_xor_b32 v[{v_sld_b_os()}], {hex(lds_single_size)}, v[{v_sld_b_os()}] ; switch double buffer b load")
+                sld_buffer_switch_a = dotx_core_loop_expr(self.mc, "sst a buffer switch", f"v_xor_b32 v[{v_sld_a_os()}], {hex(lds_single_size)}, v[{v_sld_a_os()}] ; switch double buffer a load")
+                sld_buffer_switch_node = dotx_core_loop_node("sst buffer switch node", sld_buffer_switch_b, sld_buffer_switch_a)
+                self.append_new_node(sld_buffer_switch_node, stack, "after sld buffer switch")
+            else:
+                self.append_new_node(wait_node, stack, "after wait lds op")
             
         # sst node
         self.append_new_node(sst_a_b, stack, "after sst")
@@ -353,43 +368,49 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         self.append_new_node(self.form_loop_jump_finish_check(), stack, "global load and last repeat n")
         
         # move slice window part
-        self.append_new_node(msw_a_b, stack, "after msw")
+        self.append_new_node(msw_b, stack, "after msw")
         
         # last k last n dotx
         if ctrl.mini_weights == 0:
             wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for all sld", f's_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_b.get_issues()})')
             self.append_new_node(wait_lgkmcnt, stack, "last n dotx")
         
-        for i_rm in range(dotx_m.lanegroup_repeat_m - 1):
-            # compute index for three matrice
-            i_rn = dotx_m.lanegroup_repeat_n - 1
-            c_index = i_rm * c_thread_n + i_rn * c_per_inst
-            a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
-            b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
+        if ctrl.unroll_k == 1 and dotx_m.lanegroup_repeat_n == 1:
+            pass
+        else:
+            for i_rm in range(dotx_m.lanegroup_repeat_m - 1):
+                # compute index for three matrice
+                i_rn = dotx_m.lanegroup_repeat_n - 1
+                c_index = i_rm * c_thread_n + i_rn * c_per_inst
+                a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
+                b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
-            dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
-            dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))   
-            self.append_new_node(dotx, stack, "last dotx")
+                dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+                dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))   
+                self.append_new_node(dotx, stack, "last dotx")
         
         # sst double buffer 
         if ctrl.lds_buffer_num == 2:
             self.append_new_node(sst_buffer_switch_node, stack, "after sst switch node")
         
         # wait for sst done
-        self.append_new_node(wait_sst_node, stack, "after waiting for sst")
+        self.append_new_node(wait_node, stack, "after waiting for sst")
         
         # global load node
         self.append_new_node(gld_a_b, stack, "after global load")
         
         # last n repeat
-        i_rn = dotx_m.lanegroup_repeat_n - 1
-        i_rm = dotx_m.lanegroup_repeat_m - 1
-        c_index = i_rm * c_thread_n + i_rn * c_per_inst
-        a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
-        b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
-        dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
-        dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
-        self.append_new_node(dotx, stack, "last dotx")
+        if ctrl.unroll_k == 1 and dotx_m.lanegroup_repeat_n == 1:
+            pass
+        else:
+            i_rn = dotx_m.lanegroup_repeat_n - 1
+            i_rm = dotx_m.lanegroup_repeat_m - 1
+            c_index = i_rm * c_thread_n + i_rn * c_per_inst
+            a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
+            b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
+            dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+            dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
+            self.append_new_node(dotx, stack, "last dotx")
         
         # jump to begin
         self.append_new_node(self.form_loop_jump_to_begin(), stack, "finishing branch")
@@ -402,26 +423,25 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
             wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for all sld", f's_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_b.get_issues()})')
             self.append_new_node(wait_lgkmcnt, stack, "last n dotx in finish branch")
 
-        for i_rm in range(dotx_m.lanegroup_repeat_m):
-            # compute index for three matrice
-            i_rn = dotx_m.lanegroup_repeat_n - 1
-            c_index = i_rm * c_thread_n + i_rn * c_per_inst
-            a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
-            b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
+        if ctrl.unroll_k == 1 and dotx_m.lanegroup_repeat_n == 1:
+            pass
+        else:
+            for i_rm in range(dotx_m.lanegroup_repeat_m):
+                # compute index for three matrice
+                i_rn = dotx_m.lanegroup_repeat_n - 1
+                c_index = i_rm * c_thread_n + i_rn * c_per_inst
+                a_index = (i_rm % local_prefetch_num_m) * local_buffer_m
+                b_index = (((unroll_k - 1) * dotx_m.lanegroup_repeat_n + i_rn) % local_prefetch_num) * local_buffer_n 
             
-            dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
-            dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
-            self.append_new_node(dotx, stack, "last dotx")
+                dotx = dotx_core_loop_expr(self.mc, "dotx", v_dotx_k)
+                dotx.expr_set_args(v_c(c_index), v_a(a_index), v_b(b_index))
+                self.append_new_node(dotx, stack, "last dotx")
             
         # loop end branch
         loop_end_label = dotx_core_loop_expr(self.mc, "loop end label", self.loop_label_end+':')
         self.append_new_node(loop_end_label, stack, "node end fma body")
         
-        wait_all_lgkm = dotx_core_loop_expr(self.mc, "wait all lds", f"s_waitcnt lgkmcnt(0)")
-        barrier = dotx_core_loop_expr(self.mc, "barrier", f"s_barrier")
-        wait_sst_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
-        
-        self.append_new_node(wait_sst_node, stack, "end loop dotx")
+        self.append_new_node(wait_node, stack, "end loop dotx")
         loop_end_node = self.form_loop_fma_body(ctrl, dotx_m.lanegroup_repeat_m, dotx_m.lanegroup_repeat_n)
         self.append_new_node(loop_end_node, stack, "finish")
         self.finish_stack(stack)
@@ -636,6 +656,8 @@ class dotx_core_loop_graph():
         f_move_slice_window_a = self.ctrl.move_slice_window_a_functor
         f_move_slice_window_b = self.ctrl.move_slice_window_b_functor
         
+        f_move_gld_b_to_v_b = self.ctrl.move_gld_b_to_v_b_functor
+        
         v_sst_a_os = self.ctrl.v_sst_a_os
         v_sst_b_os = self.ctrl.v_sst_b_os
         
@@ -644,9 +666,12 @@ class dotx_core_loop_graph():
         gld_a = dotx_core_loop_expr(self.mc, "gld_a", f_gld_a)
         gld_b = dotx_core_loop_expr(self.mc, "gld_b", f_gld_b)
         
-        sst_a = dotx_core_loop_node("sst a node", 
-                                    dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
-                                    dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
+        if self.ctrl.mini_weights == 0:
+            sst_a = dotx_core_loop_node("sst a node", 
+                                        dotx_core_loop_expr(self.mc, "wait a global load", f"s_waitcnt vmcnt({f_gld_b.get_issues()})"), 
+                                        dotx_core_loop_expr(self.mc, "sst_a", f_sst_a))
+        else:
+            sst_a = expr_empty_line
         if self.ctrl.tensor_b_bypass_lds == 0:
             sst_b = dotx_core_loop_node("sst b node", 
                                         dotx_core_loop_expr(self.mc, "wait b global load", f"s_waitcnt vmcnt(0)"), 
@@ -654,9 +679,7 @@ class dotx_core_loop_graph():
         else:
             sst_b = expr_empty_line
         
-        msw_a_b = dotx_core_loop_node("msw a/b node", 
-                                      dotx_core_loop_expr(self.mc, "msw a", f_move_slice_window_a), 
-                                      dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b))
+        msw_b = dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b)
         
         base_node = dotx_core_loop_node("core_loop")
         node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {dotx_m.total_acc_c()}")
@@ -678,7 +701,7 @@ class dotx_core_loop_graph():
         node_before_for_loop = dotx_core_loop_node("sst a/b before core loop0", first_sst, node_clear_c)
         check_loop_end_node = base_for_loop.form_loop_jump_end_check()
         end_check_before_msw = dotx_core_loop_node("end_check_before_msw", node_before_for_loop, check_loop_end_node)
-        base_node.first = dotx_core_loop_node("sst a/b before core loop1", end_check_before_msw, msw_a_b)
+        base_node.first = dotx_core_loop_node("sst a/b before core loop1", end_check_before_msw, msw_b)
         
         # sst a/b double buffer switch
         if self.ctrl.mini_weights == 0:
@@ -689,15 +712,19 @@ class dotx_core_loop_graph():
             sst_buffer_switch_node = expr_empty_line
         
         # first barrier and waitcnt
+        move_gld_b_to_v_b = dotx_core_loop_expr(self.mc, "move gld to v", f_move_gld_b_to_v_b)
         wait_all_lgkm = dotx_core_loop_expr(self.mc, "wait all lds", f"s_waitcnt lgkmcnt(0)")
         barrier = dotx_core_loop_expr(self.mc, "barrier", f"s_barrier")
         wait_sst_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
         
         # 
-        if self.ctrl.lds_buffer_num == 2:
-            wait_node = dotx_core_loop_node("wait node", sst_buffer_switch_node, wait_sst_node)
+        if self.ctrl.mini_weights == 0:
+            if self.ctrl.lds_buffer_num == 2:
+                wait_node = dotx_core_loop_node("wait node", sst_buffer_switch_node, wait_sst_node)
+            else:
+                wait_node = wait_sst_node
         else:
-            wait_node = wait_sst_node
+            wait_node = dotx_core_loop_node("wait node", wait_sst_node, move_gld_b_to_v_b)
             
         # global load before loop
         global_load_a_b = dotx_core_loop_node("global load a/b", gld_a, gld_b)
