@@ -289,8 +289,12 @@ ctrl_dotx_mapping_fp16 = [
         #ctrl_dotx_mapping_t( 32,  64,   8,   8,   8,   1,   2,   4,   4,   1,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
         
         ctrl_dotx_mapping_t( 16,  64,   8,   8,   8,   1,   2,   4,   1,   1,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
-        ctrl_dotx_mapping_t( 16,  64,   8,   8,   8,   1,   1,   8,   1,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
         ctrl_dotx_mapping_t( 32,  32,   8,   8,   8,   1,   2,   2,   1,   2,   2, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        
+        # for inference configs
+        ctrl_dotx_mapping_t( 16, 512,   8,   8,   8,   1,   1,   8,   8,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 16, 256,   8,   8,   8,   1,   1,   8,   4,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
+        ctrl_dotx_mapping_t( 16,  64,   8,   8,   8,   1,   1,   8,   1,   2,   1, v_dot2c_f32_f16),  # extra k pack can be 1, 2, 4
     ]
 
                         #  mt_m,mt_n,lt_m,lt_n,ld_m,ld_n,lw_m,lw_n,  ws,lr_m,lr_n, inst_mfma
