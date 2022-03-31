@@ -48,29 +48,35 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
     parser.add_argument("-output_tun", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
     args = parser.parse_args()
+else:
+    args = obj = lambda: None
+    setattr(args, 'dir', OUT_DIR)
+    setattr(args, 'config_file', 'config/direct.config')
+    setattr(args, 'out_file', None)
 
-    config_parser = config_parser_t(args.config_file)
-    #print(os.getcwd())
-    config_content = config_parser()
-    #config_content.dump()
-    #print(args.output)
+config_parser = config_parser_t(args.config_file)
+#print(os.getcwd())
+config_content = config_parser()
+#config_content.dump()
+#print(args.output)
 
-    config_navi = direct_navi_config(config_parser())
+#config_direct = direct_navi_config(config_parser())
+config_direct = direct_1x1u_config(config_parser())
 
-    if os.path.exists(args.dir):
-        shutil.rmtree(args.dir)
-    os.mkdir(args.dir)
+if os.path.exists(args.dir):
+    shutil.rmtree(args.dir)
+os.mkdir(args.dir)
 
-    #direct = direct_navi(config_content)
-    if(args.out_file):
-        asm_target = os.path.join(args.dir, args.out_file)
-    else:
-        asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
+#direct = direct_navi(config_content)
+if(args.out_file):
+    asm_target = os.path.join(args.dir, args.out_file)
+else:
+    asm_target = os.path.join(args.dir, os.path.splitext(os.path.basename(args.config_file))[0] + '.s')
 
-    emitter = mc_emit_to_file_t(asm_target)
-    arch = arch_cfg_from_main_cfg(config_content)
-    mc = mc_asm_printer_t(emitter, arch)
+emitter = mc_emit_to_file_t(asm_target)
+arch = arch_cfg_from_main_cfg(config_content)
+mc = mc_asm_printer_t(emitter, arch)
 
-    direct_driver_t(mc, config_navi)()
+direct_driver_t(mc, config_direct)()
 
     
