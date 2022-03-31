@@ -6,3 +6,4 @@ networkx==2.7.1
 numpy==1.22.3
 panel==0.12.7
 sortedcontainers==2.4.0
+scipy
