@@ -320,6 +320,38 @@ class instruction_graph():
                     queue.append(i)
                     G.nodes[i]['Y_pos'] = cur_Ypos + 1
 
+    def set_base_prio(self, G:nx.DiGraph, end_pgm_id, get_edge_latency):
+        # Mark all the vertices as not visited
+        nodes_cnt = len(G.nodes)
+        node_succs = G.succ
+        node_preds = G.pred
+
+        # Create a queue for next available node
+        rdy_node_queue = []
+        node_dep_cnt = list(map(lambda x: len(node_succs[x]), range(nodes_cnt)))
+        nodes_max_prio = list(map(lambda x: 0, range(nodes_cnt)))
+        # Mark the source node as
+        # visited and enqueue it
+        rdy_node_queue.append(end_pgm_id)
+        G.nodes[end_pgm_id]['prio'] = 0
+
+        while rdy_node_queue:
+            cur = rdy_node_queue.pop(0)
+            cur_node_preds_list = node_preds[cur]
+            
+            cur_prio = nodes_max_prio[cur]
+            G.nodes[cur]['prio'] = cur_prio
+
+            #for succ_node in cur_node_succs_list:
+            #    cur_prio = max(cur_prio, get_edge_latency(cur, succ_node) + G.nodes[succ_node]['prio'])
+
+            for predecessor in cur_node_preds_list:
+                node_dep_cnt[predecessor] -= 1
+                nodes_max_prio[predecessor] = max(nodes_max_prio[predecessor], get_edge_latency(predecessor, cur) + cur_prio)
+                if node_dep_cnt[predecessor] == 0:
+                    rdy_node_queue.append(predecessor)
+
+
     def get_graph(self):
         
         vert_list = self.vert_list
@@ -339,7 +371,14 @@ class instruction_graph():
             for after_vert in i.position_dep_after:
                 G.add_edge(id, after_vert.id, data_dep=False)
         
+        def get_edge_latency(first:int, second:int) -> int:
+            first = vert_list[first]
+            second = vert_list[second]
+            #dummy
+            return 1
+
         self.set_Ypos_BFS(G, 0)
+        self.set_base_prio(G, len(vert_list)-1, get_edge_latency)
         return G
 
     def bokeh_show(self, G:nx.DiGraph):
@@ -556,6 +595,6 @@ class instruction_graph():
         
         #graph_renderer.node_renderer.data_source.selected.js_on_change('index', )
 
-
+            
         plot.js_on_event(events.Tap, display_event(div,['index']))
         show(Row(plot,checkbox, div))
