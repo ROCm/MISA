@@ -501,7 +501,7 @@ class instruction_graph():
 
         plot.renderers.append(graph_renderer)
 
-        checkbox = CheckboxGroup(labels=["data dep", "Position dep"],
+        checkbox = CheckboxGroup(labels=["data dep", "Position dep", "exec"],
                                 active=[0, 1], width=100)
         
         update_edges_args = dict(
@@ -536,6 +536,26 @@ class instruction_graph():
         checkbox.js_on_change('active', update_edges2)
         #graph_renderer.visible=False
 
-        output_file("interactive_graphs.html")
+        #output_file("interactive_graphs2.html")
+        
+        div = Div(width=400, height=400, height_policy="fixed")
+#
+        def display_event(div, attributes=[], style = 'float:left;clear:left;font_size=13px'):
+            "Build a suitable CustomJS to display the current event in the div model."
+            return CustomJS(args=dict(div=div, ind=graph_renderer.node_renderer.data_source.selected), code="""
+                const attrs = %s;
+                const args = ind;
+                const line = "<span style=%r><b>" + cb_obj.event_name + "</b>(" + args + ")</span>\\n";
+                const text = div.text.concat(line);
+                const lines = text.split("\\n")
+                if (lines.length > 35)
+                    lines.shift();
+                div.text = lines.join("\\n");
+            """ % (attributes, style))
+#
+        
+        #graph_renderer.node_renderer.data_source.selected.js_on_change('index', )
 
-        show(Row(plot,checkbox))
+
+        plot.js_on_event(events.Tap, display_event(div,['index']))
+        show(Row(plot,checkbox, div))
