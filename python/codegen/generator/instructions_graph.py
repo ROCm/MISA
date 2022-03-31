@@ -1,8 +1,11 @@
+from ctypes import sizeof
 from typing import Dict, List, Type
+from bokeh import events
 from bokeh.models import CustomJS
 from bokeh.models import renderers
 from bokeh.models.layouts import Row
 from bokeh.models.widgets.groups import CheckboxGroup
+from bokeh.models.widgets.markups import Div
 import networkx as nx
 
 from bokeh.io import output_file, show
@@ -103,14 +106,19 @@ class instruction_graph():
                     return True
                 if(inst.label in ['s_waitcnt']):
                     return True
+                if(inst.inst_type is i_t.SOPK and inst.label in 
+                    ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
+                    return True
                 return False
             def is_program_flow(inst:inst_base):
                 if (inst.inst_type in [i_t.SOPP, i_t.FLOW_CONTROL]):
                     #if(not (inst.label in ['s_nop', 's_waitcnt'])):
+                    if(inst.label in ['s_waitcnt']):
+                        return False
                     return True
-                if(inst.inst_type is i_t.SOPK and inst.label in 
-                    ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
-                    return True
+                #if(inst.inst_type is i_t.SOPK and inst.label in 
+                #    ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
+                #    return True
                 return False
             def is_exec_dependent(inst:inst_base):
                 if( is_vector(inst) or (inst.label in [i_t.EXP, i_t.MTBUF, i_t.MUBUF, i_t.DS, i_t.FLAT]) ):
