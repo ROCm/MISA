@@ -25,8 +25,9 @@
 ################################################################################
 # pylint: disable=maybe-no-member
 
+from python.direct.direct_class_1x1 import *
 from .codegen import *
-from .direct.direct_class import *
+#from .direct.direct_class import *
 from .codegen.kernel_driver import *
 
 import os
@@ -39,5 +40,5 @@ class direct_driver_t(base_driver_t):
     def __init__(self, mc: mc_asm_printer_t, _config: base_config):
         super().__init__(mc, _config)
 
-        kernel = conv_direct_navi(mc)
+        kernel = conv_direct_1x1u(mc)
         self.kernel_list.append(kernel)

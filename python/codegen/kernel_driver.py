@@ -254,6 +254,7 @@ class base_driver_t(mc_base_t, ABC):
         self._emit(f";TODO global macro")
 
     def do_compile(self, **options):
+        return 1
         emit_kernel_per_s = options["split_kernel"]
         if emit_kernel_per_s:
             for kernel in self.kernel_list:
