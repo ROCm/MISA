@@ -547,6 +547,20 @@ class igemm_gtc_tunable_parameter_t(object):
             out_str += (f"{brace_left}{self.tensor_b_thread_lengths[0]},{self.tensor_b_thread_lengths[1]:4},{self.tensor_b_thread_lengths[2]:4},{self.tensor_b_thread_lengths[3]:4}{brace_right},")
             out_str += (f"{brace_left}{self.tensor_b_cluster_lengths[0]},{self.tensor_b_cluster_lengths[1]:4},{self.tensor_b_cluster_lengths[2]:4},{self.tensor_b_cluster_lengths[3]:4}{brace_right},")
             out_str += (f"{self.gemm_k_global_split:4}{brace_right},")
+        elif self.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS:
+            brace_left='{'
+            brace_right='}'
+            direction = "\"" + self.direction + "\""
+            tensor_layout = "\"" + self.tensor_layout + "\""
+            precision = to_miopen_prec(self.precision) + 'x' + str(self.vector_c)
+            out_str = (f"        {'{'}{direction}, {tensor_layout}, {precision}, {self.nxb:2},{self.nxe:2},{self.gemm_m_per_block:4},{self.gemm_n_per_block:4},{self.gemm_k_per_block:4},")
+            out_str += (f"{self.lanegroup_tile_m:3},{self.lanegroup_tile_n:3},{self.lanegroup_wave_m:2},{self.lanegroup_wave_n:2},{self.lanegroup_repeat_m:2},{self.lanegroup_repeat_n:2},")
+            out_str += (f"{self.vector_c:2},")
+            out_str += (f" {brace_left}{self.tensor_a_thread_lengths[0]:2},{self.tensor_a_thread_lengths[1]:2},{self.tensor_a_thread_lengths[2]:2},{self.tensor_a_thread_lengths[3]:2}{brace_right},")
+            out_str += (f" {brace_left}{self.tensor_a_cluster_lengths[0]:3},{self.tensor_a_cluster_lengths[1]:3},{self.tensor_a_cluster_lengths[2]:3},{self.tensor_a_cluster_lengths[3]:3}{brace_right},")
+            out_str += (f" {brace_left}{self.tensor_b_thread_lengths[0]:2},{self.tensor_b_thread_lengths[1]:2},{self.tensor_b_thread_lengths[2]:2},{self.tensor_b_thread_lengths[3]:2}{brace_right},")
+            out_str += (f" {brace_left}{self.tensor_b_cluster_lengths[0]:3},{self.tensor_b_cluster_lengths[1]:3},{self.tensor_b_cluster_lengths[2]:3},{self.tensor_b_cluster_lengths[3]:3}{brace_right}")
+            out_str += f"{brace_right},"
         else:
             brace_left='{'
             brace_right='}'
@@ -770,7 +784,7 @@ def igemm_gtc_encode_kernel_name(tunable, arch):
         if igemm_use_lanegroup_thread_mapping(tunable):
             kernel_name += f'lt{tunable.lanegroup_tile_m}x{tunable.lanegroup_tile_n}_' +\
                             f'lw{tunable.lanegroup_wave_m}x{tunable.lanegroup_wave_n}_' +\
-                            f'ws{tunable.lanegroup_repeat_m}x{tunable.lanegroup_repeat_n}_'
+                            f'lr{tunable.lanegroup_repeat_m}x{tunable.lanegroup_repeat_n}_'
         else:
             kernel_name +=   f"tt{tunable.thread_tile_m}x{tunable.thread_tile_n}_" +\
                          f"gm{tunable.gemm_m_repeat}x{tunable.gemm_m_level0_cluster}x{tunable.gemm_m_level1_cluster}_" +\
