@@ -330,7 +330,7 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
     }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
         kernel_name +=   std::string("lt") + std::to_string(tunable->lanegroup_tile_m) + "x" + std::to_string(tunable->lanegroup_tile_n) + "_" + 
                          "lw" + std::to_string(tunable->lanegroup_wave_m) + "x" + std::to_string(tunable->lanegroup_wave_n) + "_" +
-                         "ws" + std::to_string(tunable->lanegroup_repeat_m) + "x" + std::to_string(tunable->lanegroup_repeat_n) + "_";
+                         "lr" + std::to_string(tunable->lanegroup_repeat_m) + "x" + std::to_string(tunable->lanegroup_repeat_n) + "_";
     }else if (tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
         kernel_name +=   std::string("wt") + std::to_string(tunable->wave_tile_m) + "x" + std::to_string(tunable->wave_tile_n) + "x" + std::to_string(tunable->wave_tile_k) + "_" + 
                          "ws" + std::to_string(tunable->wave_step_m) + "x" + std::to_string(tunable->wave_step_n) + "_" +
