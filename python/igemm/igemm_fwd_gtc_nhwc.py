@@ -917,6 +917,8 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 v_c_needed              = (v_c_coalescing_num - v_c_resuable_num) if (v_c_coalescing_num - v_c_resuable_num) > 0 else 0
 
                 v_c_needed              = v_c_needed if v_c_needed > 0 else 0  # let at least 0
+                if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                    v_c_needed          = (v_c_needed + 3) // 4 * 4     # round to 4x
                 self.v_c                = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
             if not outer.tunable.tensor_a_pass_through:

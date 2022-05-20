@@ -1326,8 +1326,8 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
                                 # self._emit(f"v_or_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 3)}]")
                                 # self._emit(f"v_or3_b32 v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 0)}], v[{v_c(vgpr_index + 1)}], v[{v_c(vgpr_index + 2)}]")
 
-                        accvgpr_as_sst = ctrl.accvgpr_unified and ctrl.precision == 'fp32'
-                        if accvgpr_as_sst:
+                        accvgpr_as_sst = ctrl.accvgpr_unified and (ctrl.precision == 'fp32' or (ctrl.precision == 'int8' and ctrl.vector_write_out != 1))
+                        if accvgpr_as_sst and not (ctrl.precision == 'int8' and ctrl.vector_write_out == 1):
                             agpr_consume_list.append(agpr_index + 0)
                             agpr_consume_list.append(agpr_index + 1)
                             agpr_consume_list.append(agpr_index + 2)
