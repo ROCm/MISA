@@ -228,12 +228,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
     def get_v_dotx_k(self, ctrl):
         dotx_m = ctrl.dotx_m
         v_dot_inst = get_dotx_fma_instruction(mc_get_current().arch_config.arch, ctrl.precision)
-        if type(v_dot_inst) is inst_dotx_vop2_t:
+        if dotx_support_dpp8(v_dot_inst):
             return macro_dotx_mxnxk_t(self.mc, dotx_m.lanegroup_tile_m, dotx_m.lanegroup_tile_n, ctrl.lds_k_pack, 1, ctrl.precision)
-        elif type(v_dot_inst) is inst_dotx_vop3p_t:
-            return macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
         else:
-            assert False
+            return macro_dotx_mxnxk_non_dpp_t(self.mc, dotx_m.lanegroup_thrd_m, dotx_m.lanegroup_thrd_n, ctrl.lds_k_pack, 1, ctrl.precision)
 
     def form_loop_body(self, ctrl):
         assert isinstance(ctrl, ctrl_dotx_main_loop_t), "wrong ctrl type"

@@ -64,6 +64,19 @@ v_dot4_i32_i8   = inst_dotx_vop3p_t('v_dot4_i32_i8' ,  4, AMDGPU_PRECISION_INT8)
 v_dot4_u32_u8   = inst_dotx_vop3p_t('v_dot4_u32_u8' ,  4, AMDGPU_PRECISION_UINT8)
 v_dot8_i32_i4   = inst_dotx_vop3p_t('v_dot8_i32_i4' ,  8, AMDGPU_PRECISION_INT4)
 v_dot8_u32_u4   = inst_dotx_vop3p_t('v_dot8_u32_u4' ,  8, AMDGPU_PRECISION_UINT4)
+v_fmac_f32      = inst_dotx_vop2_t('v_fmac_f32' ,  1, AMDGPU_PRECISION_FP32)   # TODO: maybe not call it dotx?
+
+def dotx_support_dpp8(inst):
+    if isinstance(inst, inst_dotx_vop2_t):
+        if inst.k == 1:
+            return False
+        else:
+            return True
+    elif isinstance(inst, inst_dotx_vop3p_t):
+        return False
+    else:
+        # assert False
+        return False
 
 class macro_dotx_mxn_t(macro_base_t):
     '''

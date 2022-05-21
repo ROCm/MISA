@@ -140,12 +140,11 @@ class codegen_driver_t(mc_base_t):
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
             dotx_inst = get_dotx_fma_instruction(self.mc.arch_config.arch, self.tunable_dicts[0]['precision'])
-            if type(dotx_inst) is inst_dotx_vop2_t:
+            if dotx_support_dpp8(dotx_inst):
                 self._emit_dotx_vop2_macro()
-            elif type(dotx_inst) is inst_dotx_vop3p_t:
-                self._emit_dotx_vop3p_macro()
             else:
-                assert False
+                self._emit_dotx_vop3p_macro()
+
             #if self.tunable_dicts[0]['precision'] in ('fp16', 'int8'):
             #    self._emit_dotx_vop2_macro()
             #else:

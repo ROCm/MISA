@@ -874,14 +874,14 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
 
     def get_k_pack(self):
         _, _, tb_nb_vec_c = self.get_thread_lengths()
-        if type(self.dotx_mapping.ctrl.inst_dotx) == inst_dotx_vop3p_t:
+        if not dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx):
             if self.tunable.precision == 'int4':
                 lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT4_VOP3P_K_PACK)
             elif self.tunable.precision == 'int8':
                 lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_INT8_VOP3P_K_PACK)
             elif self.tunable.precision == 'fp16':
                 lds_k_pack = igemm_gcd(tb_nb_vec_c, IGEMM_FWD_GTC_NCHWC_FP16_VOP3P_K_PACK)
-        elif type(self.dotx_mapping.ctrl.inst_dotx) == inst_dotx_vop2_t:
+        else:
             lds_k_pack = tb_nb_vec_c
         return lds_k_pack
 
@@ -1658,7 +1658,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.dotx_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp(),
                                     k_pack=k_pack_src_mat, v_pack=v_pack))
-            if not (isinstance(self.dotx_mapping.ctrl.inst_dotx, inst_dotx_vop2_t) and self.tunable.vector_c >= 8):
+            if not (dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx) and self.tunable.vector_c >= 8):
                 '''
                 an optimization for vector >= 8 case, there src gemm m/n will be the same as dst gemm m/n, due to dotx mapping
                 '''
@@ -1704,7 +1704,7 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
             if not self.tunable.tensor_a_pass_through:
                 self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
 
-        if not (isinstance(self.dotx_mapping.ctrl.inst_dotx, inst_dotx_vop2_t) and self.tunable.vector_c >= 8):
+        if not (dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx) and self.tunable.vector_c >= 8):
             self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
             self._emit(f"v_mov_b32 v[{v.v_gemm_im()}], v[{v.v_co_sld()}]")
         self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))

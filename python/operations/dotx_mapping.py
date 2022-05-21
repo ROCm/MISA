@@ -178,25 +178,25 @@ class ctrl_dotx_mapping_t(object):
 
     def lanegroup_size_m(self):
         ''' '''
-        if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
+        if not dotx_support_dpp8(self.inst_dotx):
             return self.lanegroup_tile_m // self.lanegroup_thrd_m
         else:
             return LANEGROUP_SIZE
     
     def lanegroup_size_n(self):
-        if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
+        if not dotx_support_dpp8(self.inst_dotx):
             return self.lanegroup_tile_n // self.lanegroup_thrd_n
         else:
             return LANEGROUP_SIZE
 
     def thread_m(self):
-        if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
+        if not dotx_support_dpp8(self.inst_dotx):
             return self.lanegroup_thrd_m
         else:
             return self.lanegroup_tile_m // self.lanegroup_size_m()
 
     def thread_n(self):
-        if isinstance(self.inst_dotx, inst_dotx_vop3p_t):
+        if not dotx_support_dpp8(self.inst_dotx):
             return self.lanegroup_thrd_n
         else:
             return self.lanegroup_tile_n // self.lanegroup_size_n()
@@ -375,7 +375,8 @@ def get_ctrl_dotx_mapping_from_lanegroup_tile(macro_tile_m, macro_tile_n, lanegr
             t.lanegroup_repeat_n == lanegroup_repeat_n:
             target_mfma_tiling.append(t)
 
-    assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, lanegroup_tile_m:{lanegroup_tile_m}, lanegroup_tile_n:{lanegroup_tile_n}, lanegroup_repeat_m:{lanegroup_repeat_m}, lanegroup_repeat_n:{lanegroup_repeat_n}, "
+    assert len(target_mfma_tiling) != 0, f"unsupported macro_tile_m:{macro_tile_m}, macro_tile_n:{macro_tile_n}, lanegroup_tile_m:{lanegroup_tile_m}, lanegroup_tile_n:{lanegroup_tile_n}, " + \
+            f"lanegroup_wave_m:{lanegroup_wave_m}, lanegroup_wave_n:{lanegroup_wave_n}, waves:{waves}, lanegroup_repeat_m:{lanegroup_repeat_m}, lanegroup_repeat_n:{lanegroup_repeat_n}"
     # TODO: we may have multiple match, aka multipl wave mapping/dotx for single 
     return target_mfma_tiling[0]
 
@@ -410,8 +411,7 @@ class igemm_dotx_mapping_t(mc_base_t):
         mc_base_t.__init__(self, mc)
         assert type(ctrl) is ctrl_dotx_mapping_t
         self.ctrl = ctrl
-        self.dpp8_enable = not(isinstance(self.ctrl.inst_dotx, inst_dotx_vop3p_t))
-        
+        self.dpp8_enable = dotx_support_dpp8(self.ctrl.inst_dotx)
 
     def get_gemm_index_for_src_matrix(self, v_gemm_in, v_gemm_im, v_thread_id, v_tmp4, **options):
         '''
