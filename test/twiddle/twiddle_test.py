@@ -101,7 +101,7 @@ def test_fft():
         mc.emit(f"")
         mc.emit(f"s_cmp_eq_u32      0,   s[s_bx]")
         mc.emit(f"s_cbranch_scc0    {label_end}")
-        mc.emit(v_cmpx_eq_u32("vcc",    0,  "v_tid"))
+        mc.emit(v_cmpx_eq_u32(0,  "v_tid"))
         mc.emit(f"v_mov_b32         v[v_tmp],   0")
         for i in range(n * 2):
             # mc.emit(f"buffer_load_dword v[v_pt + {i}], v[v_tmp], s[s_in:s_in+3], 0, offen offset:0")

@@ -328,9 +328,6 @@ class igemm_gtc_tunable_parameter_t(object):
         if self.fma_type in (IGEMM_GTC_TUNABLE_FMA_TYPE_MAC, IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS):
             if igemm_use_lanegroup_thread_mapping(self):
                 # register for a,b,c buffer
-                # self.num_vgpr_accumulate_c      = (self.gemm_m_repeat * self.gemm_m_per_thread * self.gemm_n_repeat * self.gemm_n_per_thread)
-                # self.num_vgpr_accumulate_a      = (self.gemm_m_repeat * self.gemm_m_per_thread)
-                # self.num_vgpr_accumulate_b      = (self.gemm_n_repeat * self.gemm_n_per_thread)
                 dotx_mapping = get_ctrl_dotx_mapping_from_lanegroup_tile(self.gemm_m_per_block, self.gemm_n_per_block,
                                         self.lanegroup_tile_m, self.lanegroup_tile_n, self.lanegroup_wave_m, self.lanegroup_wave_n, self.block_size // self.wave_size,
                                         self.lanegroup_repeat_m, self.lanegroup_repeat_n, self.precision, get_dotx_fma_instruction(mc_get_current().arch_config.arch, self.precision))
@@ -339,15 +336,11 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.local_prefetch_num_m = dotx_mapping.lanegroup_repeat_m
                 if self.direction == 'fwd':
                     assert self.tensor_a_thread_lengths[1] == self.tensor_b_thread_lengths[1]
-                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * self.lanegroup_repeat_m * dotx_mapping.thread_m() * \
-                            ((self.tensor_a_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
-                    self.num_vgpr_accumulate_b  = self.local_prefetch_num * self.lanegroup_repeat_n * dotx_mapping.thread_n() * \
-                            ((self.tensor_b_thread_lengths[1] + dotx_mapping.lanegroup_k_per_thread() - 1) // dotx_mapping.lanegroup_k_per_thread())
-                    self.num_vgpr_accumulate_c  = dotx_mapping.total_acc_c()
-                    
-                    # TODO: try use prefetch
-                    self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m()
-                    self.num_vgpr_accumulate_b  = self.local_prefetch_num * dotx_mapping.thread_n()
+                self.num_vgpr_accumulate_c  = dotx_mapping.total_acc_c()
+
+                # TODO: try use prefetch
+                self.num_vgpr_accumulate_a  = self.local_prefetch_num_m * dotx_mapping.thread_m()
+                self.num_vgpr_accumulate_b  = self.local_prefetch_num * dotx_mapping.thread_n()
             else:
                 self.gemm_m_repeat              = self.gemm_m_per_block // (self.gemm_m_per_thread * self.gemm_m_level0_cluster * self.gemm_m_level1_cluster)
                 self.gemm_n_repeat              = self.gemm_n_per_block // (self.gemm_n_per_thread * self.gemm_n_level0_cluster * self.gemm_n_level1_cluster)
