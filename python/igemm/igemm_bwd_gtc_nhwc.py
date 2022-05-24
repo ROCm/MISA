@@ -2399,8 +2399,13 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit_empty_line()
 
         # do load
-        calculate_and_load_weight()
-        calculate_and_load_output()
+        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            calculate_and_load_weight()
+            calculate_and_load_output()
+        else:
+            # TODO: dotx main loop seems has assumtion that issue a, then b
+            calculate_and_load_output()
+            calculate_and_load_weight()
 
         if self.tunable.merge_e == 1:
             self._emit(f"s_mov_b32 s[0], {self.tunable.gemm_k_per_block}")
@@ -2967,58 +2972,63 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
             m_mdiv_u32_rem_vs = macro_mdiv_u32_rem_vs_t(self.mc)
 
+        def co_m_update_os(i_m, i_m0, i_m1):
+            '''
+            this is a callback function for update offset according current m iterator
+            TODO: must keep v_tmp(0) as current m index, will used later. this is ugly.
+            '''
+            with self._deferred_context():
+                self._emit(v_add_nc_u32(v.v_tmp(), i_m, v.v_in_inb()))
+                if IGEMM_GTC_FEAT_MAGIC_DIVISION:
+                    self._emit(m_mdiv_u32_rem_vs(v.v_tmp(2), v.v_in_in(), v.v_tmp(), s.s_magic_3(), s.s_shift_m3(), s.s_dim_br(), v.v_tmp(1)))
+                    self._emit(m_mdiv_u32_rem_vs(v.v_in_iwi(), v.v_in_ihi(), v.v_tmp(2), s.s_magic_2(), s.s_shift_m2(), s.s_dslice_w() if self.tunable.nxe != 0 else s.s_wi(), v.v_tmp(1)))
+                else:
+                    assert False, 'need magic div'
+
+                '''
+                input: in_dslice_ih -> ihi, in_dslice_iw -> iwo, 
+                ihi = (in_dslice_ih + dslice_h_left) * stride_h + dtile_iy * dilation_h - pad_h
+                    = in_dslice_ih * stride_h + in_hi_sshift
+                iwi = (in_dslice_iw + dslice_w_left) * stride_w + dtile_ix * dilation_w - pad_w
+                    = in_dslice_iw * stride_w + in_wi_sshift
+                
+                TODO: can use less instruction by combine h/w together
+                '''
+
+                self._emit(f"v_mad_u32_u24 v[{v.v_in_ihi()}], v[{v.v_in_ihi()}], s[{s.s_stride_h()}], v[{v.v_in_hi_sshift()}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_in_iwi()}], v[{v.v_in_iwi()}], s[{s.s_stride_w()}], v[{v.v_in_wi_sshift()}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp(1)}], v[{v.v_in_ihi()}], s[{s.s_wi()}], v[{v.v_in_iwi()}]")
+                # self._emit(f"v_mad_i32_i24 v[{v.v_in_os()}], v[{v.v_tmp(1)}], s[{s.s_in_stride_wi()}], v[{v.v_co_sub_n_index()}]")
+                self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_wi()}], v[{v.v_tmp(1)}]")
+                self._emit(v_add_nc_u32(v.v_in_os(), v.v_tmp(1), v.v_co_sub_n_index()))
+
+                self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_n()}], v[{v.v_in_in()}]")
+                self._emit(v_add_nc_u32(v.v_in_os(), v.v_tmp(1), v.v_in_os()))
+
+                self._emit(v_cmp_gt_u32(s.s_n(), v.v_in_in()))
+                self._emit(v_cndmask_b32(v.v_tmp(1), 0, v.v_in_flag_c()))
+                self._emit(m_set_flag_nhw(v.v_in_flag(), v.v_tmp(1), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
+
+            return self._get_deferred()
+        def co_m_flag_check_start():
+            with self._deferred_context():
+                self._emit(v_cmpx_le_u32(1, v.v_in_flag()))
+            return self._get_deferred()
+        def co_m_flag_check_reset():
+            with self._deferred_context():
+                self._emit(f"s_mov_b64 exec, -1")
+            return self._get_deferred()
+
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            if self.tunable.nxe:
+                self.coalescing_store.ctrl.co_m_update_os_functor = co_m_update_os
+                self.coalescing_store.ctrl.feat_co_m_flag_check = True
+                self.coalescing_store.ctrl.co_m_flag_check_start_functor = co_m_flag_check_start
+                self.coalescing_store.ctrl.co_m_flag_check_reset_functor = co_m_flag_check_reset
             self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_in(), v.v_in_os(), None,
                 None,
                 s.s_in_stride_wi(), s.s_tmp(), v.v_in_flag() if self.tunable.nxe != 0 else v.v_in_flag_c(), s.s_dim_mr(), v.v_in_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
         else:
-            def co_m_update_os(i_m, i_m0, i_m1):
-                '''
-                this is a callback function for update offset according current m iterator
-                TODO: must keep v_tmp(0) as current m index, will used later. this is ugly.
-                '''
-                with self._deferred_context():
-                    self._emit(v_add_nc_u32(v.v_tmp(), i_m, v.v_in_inb()))
-                    if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-                        self._emit(m_mdiv_u32_rem_vs(v.v_tmp(2), v.v_in_in(), v.v_tmp(), s.s_magic_3(), s.s_shift_m3(), s.s_dim_br(), v.v_tmp(1)))
-                        self._emit(m_mdiv_u32_rem_vs(v.v_in_iwi(), v.v_in_ihi(), v.v_tmp(2), s.s_magic_2(), s.s_shift_m2(), s.s_dslice_w() if self.tunable.nxe != 0 else s.s_wi(), v.v_tmp(1)))
-                    else:
-                        assert False, 'need magic div'
-
-                    '''
-                    input: in_dslice_ih -> ihi, in_dslice_iw -> iwo, 
-                    ihi = (in_dslice_ih + dslice_h_left) * stride_h + dtile_iy * dilation_h - pad_h
-                        = in_dslice_ih * stride_h + in_hi_sshift
-                    iwi = (in_dslice_iw + dslice_w_left) * stride_w + dtile_ix * dilation_w - pad_w
-                        = in_dslice_iw * stride_w + in_wi_sshift
-                    
-                    TODO: can use less instruction by combine h/w together
-                    '''
-
-                    self._emit(f"v_mad_u32_u24 v[{v.v_in_ihi()}], v[{v.v_in_ihi()}], s[{s.s_stride_h()}], v[{v.v_in_hi_sshift()}]")
-                    self._emit(f"v_mad_u32_u24 v[{v.v_in_iwi()}], v[{v.v_in_iwi()}], s[{s.s_stride_w()}], v[{v.v_in_wi_sshift()}]")
-                    self._emit(f"v_mad_u32_u24 v[{v.v_tmp(1)}], v[{v.v_in_ihi()}], s[{s.s_wi()}], v[{v.v_in_iwi()}]")
-                    # self._emit(f"v_mad_i32_i24 v[{v.v_in_os()}], v[{v.v_tmp(1)}], s[{s.s_in_stride_wi()}], v[{v.v_co_sub_n_index()}]")
-                    self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_wi()}], v[{v.v_tmp(1)}]")
-                    self._emit(v_add_nc_u32(v.v_in_os(), v.v_tmp(1), v.v_co_sub_n_index()))
-
-                    self._emit(f"v_mul_lo_u32 v[{v.v_tmp(1)}], s[{s.s_in_stride_n()}], v[{v.v_in_in()}]")
-                    self._emit(v_add_nc_u32(v.v_in_os(), v.v_tmp(1), v.v_in_os()))
-
-                    self._emit(v_cmp_gt_u32(s.s_n(), v.v_in_in()))
-                    self._emit(v_cndmask_b32(v.v_tmp(1), 0, v.v_in_flag_c()))
-                    self._emit(m_set_flag_nhw(v.v_in_flag(), v.v_tmp(1), v.v_in_ihi(), v.v_in_iwi(), s.s_hi(), s.s_wi()))
-
-                return self._get_deferred()
-            def co_m_flag_check_start():
-                with self._deferred_context():
-                    self._emit(v_cmpx_le_u32(1, v.v_in_flag()))
-                return self._get_deferred()
-            def co_m_flag_check_reset():
-                with self._deferred_context():
-                    self._emit(f"s_mov_b64 exec, -1")
-                return self._get_deferred()
-
             if self.tunable.nxe:
                 self.coalescing_store.ctrl.co_m_update_os_functor = co_m_update_os
                 self.coalescing_store.ctrl.feat_co_m_flag_check = True
