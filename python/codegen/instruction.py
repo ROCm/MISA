@@ -255,3 +255,23 @@ class inst_v_cmp_eq_i32_t(inst_base_t):
         else:
             return 'v_cmp_eq_i32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
 v_cmp_eq_i32 = inst_v_cmp_eq_i32_t()
+
+class inst_v_cmpx_le_u16_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
+    def __call__(self, src0, src1):
+        if mc_get_current().arch_config.arch < 1000:
+            return 'v_cmpx_le_u16 vcc, {}, {}'.format(mt_opr(src0), mt_opr(src1))
+        else:
+            return 'v_cmpx_le_u16 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_le_u16 = inst_v_cmpx_le_u16_t()
+
+class inst_v_cmp_gt_u16_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
+    def __call__(self, src0, src1):
+        if mc_get_current().arch_config.arch < 1000:
+            return 'v_cmp_gt_u16 vcc, {}, {}'.format(mt_opr(src0), mt_opr(src1))
+        else:
+            return 'v_cmp_gt_u16 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmp_gt_u16 = inst_v_cmp_gt_u16_t()
