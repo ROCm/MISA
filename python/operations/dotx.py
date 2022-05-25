@@ -154,7 +154,11 @@ class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
     the size is always in unit of thread
     '''
     def name(self):
-        return f".v_dotx_{self.precision}_{self.thread_tile_m}x{self.thread_tile_n}x{self.thread_tile_k}" + \
+        if self.precision == 'fp32':
+            return f".v_fma_{self.precision}_{self.thread_tile_m}x{self.thread_tile_n}x{self.thread_tile_k}" + \
+                ("" if self.stride == 1 else f"_s{self.stride}")
+        else:
+            return f".v_dotx_{self.precision}_{self.thread_tile_m}x{self.thread_tile_n}x{self.thread_tile_k}" + \
                 ("" if self.stride == 1 else f"_s{self.stride}")
 
     def __init__(self, mc, thread_tile_m, thread_tile_n, thread_tile_k, stride, precision):
@@ -175,6 +179,8 @@ class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
             return v_dot4_i32_i8
         elif self.precision == 'fp16':
             return v_dot2_f32_f16
+        elif self.precision == 'fp32':
+            return v_fmac_f32
         else:
             assert False
 
@@ -190,5 +196,8 @@ class macro_dotx_mxnxk_non_dpp_t(macro_base_t):
                         idx_c = idx_m * self.stride + idx_n * self.thread_tile_m
                         idx_a = idx_m * self.loop_k + idx_loop_k
                         idx_b = idx_n * self.loop_k + idx_loop_k
-                        self._emit(v_dot(reg_c(idx_c), reg_a(idx_a), reg_b(idx_b), reg_c(idx_c)))
+                        if self.precision == 'fp32':
+                            self._emit(v_dot(reg_c(idx_c), reg_a(idx_a), reg_b(idx_b)))
+                        else:
+                            self._emit(v_dot(reg_c(idx_c), reg_a(idx_a), reg_b(idx_b), reg_c(idx_c)))
 

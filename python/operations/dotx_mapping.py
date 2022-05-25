@@ -336,7 +336,9 @@ def get_ctrl_dotx_mapping_from_lanegroup_tile(macro_tile_m, macro_tile_n, lanegr
     if type(precision) is str:
         precision = amdgpu_string_to_precision(precision)
 
-    if precision == AMDGPU_PRECISION_FP16:
+    if precision == AMDGPU_PRECISION_FP32:
+        ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_fmac_f32)
+    elif precision == AMDGPU_PRECISION_FP16:
         if target_instruction.name == 'v_dot2c_f32_f16':
             ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop2, v_dot2c_f32_f16)
         elif target_instruction.name == 'v_dot2_f32_f16':
@@ -387,7 +389,9 @@ def get_dotx_fma_instruction(arch, precision):
         arch_str = arch
 
     if arch_str == 'gfx1030':
-        if precision[0:4] == 'fp16':
+        if precision[0:4] == 'fp32':
+            return v_fmac_f32
+        elif precision[0:4] == 'fp16':
             if DOTX_USE_VOP3P:
                 return v_dot2_f32_f16
             else:

@@ -44,7 +44,11 @@ else
 fi
 
 if [[ "${PREC}" = "fp32" ]] ; then
-    PREC_HSACO=""
+    if [[ "${ARCH}" = "gfx1030" ]]; then
+        PREC_HSACO="_${PREC}"
+    else
+        PREC_HSACO=""
+    fi
     CONV="conv"
 elif [[ "${PREC}" = "int4"* ]] ; then
     PREC_HSACO="_${PREC}"
@@ -77,7 +81,7 @@ export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
 export PER_PIXEL_CHECK=0
 
-export DBG_MODE=0
+export DBG_MODE=1
 export IGEMM_ASSERT_WHEN_INVALID=1
 export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
@@ -95,6 +99,9 @@ else
     echo "wrong direction"
     exit 1
 fi
+
+./out/conv_driver.exe $CONV -n 4 -c 16 -H 4 -W 8 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
+exit 1
 
 #./out/conv_driver.exe $CONV -n 1024 -c 1 -H 512 -W 1024 -k 1 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}
 #./out/conv_driver.exe $CONV -n 4096 -c 1 -H 512 -W 1024 -k 1 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}

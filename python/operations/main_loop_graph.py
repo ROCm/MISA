@@ -52,6 +52,8 @@ class ctrl_dotx_main_loop_t(object):
         self.shared_load_b_functor       = None
         self.move_slice_window_a_functor = None
         self.move_slice_window_b_functor = None
+        
+        self.move_slice_window_accumule_functor = ""
 
         # sympol type
         self.v_a                         = None
@@ -245,6 +247,8 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
 
         f_move_slice_window_a = ctrl.move_slice_window_a_functor
         f_move_slice_window_b = ctrl.move_slice_window_b_functor
+        
+        f_move_slice_window_acc = ctrl.move_slice_window_accumule_functor
 
         v_a = ctrl.v_a
         v_b = ctrl.v_b
@@ -307,6 +311,10 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
                                       dotx_core_loop_expr(self.mc, "msw a", f_move_slice_window_a), 
                                       dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b))
         
+        msw_a_b_acc = dotx_core_loop_node("msw a/b/acc node", 
+                                      msw_a_b, 
+                                      dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_acc))
+        
         wait_all_lgkm = dotx_core_loop_expr(self.mc, "wait all lds", f"s_waitcnt lgkmcnt(0)")
         barrier = dotx_core_loop_expr(self.mc, "barrier", f"s_barrier")
         wait_sst_node = dotx_core_loop_node("wait sst node", wait_all_lgkm, barrier)
@@ -343,7 +351,7 @@ class dotx_core_loop_for_loop(dotx_core_loop_node):
         self.append_new_node(self.form_loop_jump_finish_check(), stack, "global load and last repeat n")
         
         # move slice window part
-        self.append_new_node(msw_a_b, stack, "after msw")
+        self.append_new_node(msw_a_b_acc, stack, "after msw")
         
         # last k last n dotx
         wait_lgkmcnt = dotx_core_loop_expr(self.mc, f"wait for all sld", f's_waitcnt lgkmcnt({f_sst_a.get_issues() + f_sst_b.get_issues()})')
@@ -605,6 +613,8 @@ class dotx_core_loop_graph():
         f_move_slice_window_a = self.ctrl.move_slice_window_a_functor
         f_move_slice_window_b = self.ctrl.move_slice_window_b_functor
         
+        f_move_slice_window_acc = self.ctrl.move_slice_window_accumule_functor
+        
         v_sst_a_os = self.ctrl.v_sst_a_os
         v_sst_b_os = self.ctrl.v_sst_b_os
         
@@ -623,6 +633,10 @@ class dotx_core_loop_graph():
         msw_a_b = dotx_core_loop_node("msw a/b node", 
                                       dotx_core_loop_expr(self.mc, "msw a", f_move_slice_window_a), 
                                       dotx_core_loop_expr(self.mc, "msw b", f_move_slice_window_b))
+        
+        msw_a_b_acc = dotx_core_loop_node("msw a/b/acc node", 
+                                      msw_a_b, 
+                                      dotx_core_loop_expr(self.mc, "msw acc", f_move_slice_window_acc))
         
         base_node = dotx_core_loop_node("core_loop")
         node_clear_c = dotx_core_loop_expr(self.mc, ".clear_c", f".v_clear_nc {v_c()}, {dotx_m.total_acc_c()}")
@@ -644,7 +658,7 @@ class dotx_core_loop_graph():
         node_before_for_loop = dotx_core_loop_node("sst a/b before core loop0", first_sst, node_clear_c)
         check_loop_end_node = base_for_loop.form_loop_jump_end_check()
         end_check_before_msw = dotx_core_loop_node("end_check_before_msw", node_before_for_loop, check_loop_end_node)
-        base_node.first = dotx_core_loop_node("sst a/b before core loop1", end_check_before_msw, msw_a_b)
+        base_node.first = dotx_core_loop_node("sst a/b before core loop1", end_check_before_msw, msw_a_b_acc)
         
         # sst a/b double buffer switch
         sst_buffer_switch_b = dotx_core_loop_expr(self.mc, "sst a buffer switch", f"v_xor_b32 v[{v_sst_b_os()}], {hex(lds_single_size)}, v[{v_sst_b_os()}] ; switch double buffer b store")

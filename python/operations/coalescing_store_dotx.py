@@ -434,7 +434,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
 
         else:
-            assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+            #assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+            assert sst_vec == 1 and sld_vec == gst_vec
             gemm_n_post_thread_length = sld_vec
             gemm_n_post_cluster_length = gemm_n_size // gemm_n_post_thread_length
             gemm_m_post_cluster_length = ctrl.cdm.block_size() // gemm_n_post_cluster_length
@@ -492,7 +493,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f"v_lshl_or_b32 v[{v_tmp4} + 1], v[{v_tmp4} + 2], {utility_log2(sst_vec)}, v[{v_tmp4} + 1]")
                 self._emit(f"v_mad_u32_u24 v[{v_co_sst}], v[{v_tmp4}], {ctrl.cdm.macro_tile_n * sld_vec}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sld_vec:{sld_vec}")
             else:
-                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                #assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec, f"sst_vec={sst_vec}, sld_vec={sld_vec}, gst_vec={gst_vec}"
+                assert sst_vec == 1 and sld_vec == gst_vec
                 assert t_mt % l_mt == 0
                 self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(t_mt // l_mt)}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
@@ -544,7 +546,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 gemm_n_post_thread_length = 1
                 gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
             else:
-                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                #assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                assert sst_vec == 1 and sld_vec == gst_vec
                 gemm_n_post_thread_length = sld_vec
                 gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
 
@@ -888,7 +891,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         self._emit(inst_sld(v_c(vgpr_index), v_co_sld(), sld_offset))
                     current_issue_list = issue_list[i_ssgroup * num_sld_issues_per_ssgroup : (i_ssgroup+1) * num_sld_issues_per_ssgroup]
                     if not ctrl.feat_co_m_flag_check and (v_store_flag is not None and type(v_store_flag) is str):
-                        self._emit(v_cmp_eq_i32("vcc", 1, v_store_flag))
+                        self._emit(v_cmp_eq_i32(1, v_store_flag))
                         self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                     self._emit(f";   store to global, m index start:{m_index_start_per_group}")
 
@@ -904,7 +907,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                         # vdata, vaddr, srsrc, soffset, offset
                         if not ctrl.feat_co_m_flag_check and (s_gemm_m_num is not None):
                             #self._emit(f"v_cmp_gt_u32 vcc, s[{s_gemm_m_num()}], v[{v_tmp0()}]")
-                            self._emit(v_cmp_gt_u32('vcc', s_gemm_m_num(), v_tmp0()))
+                            self._emit(v_cmp_gt_u32(s_gemm_m_num(), v_tmp0()))
                             self._emit(f"s_and_saveexec_b64 s[{s_tmp6(4)}:{s_tmp6(5)}], vcc")
                         elif ctrl.feat_co_m_flag_check:
                             self._emit(ctrl.co_m_flag_check_start_functor())
@@ -945,6 +948,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             
             # do some assert
             accvgpr_consume_list.sort()
-            assert accvgpr_consume_list == [x for x in range(ctrl.cdm.total_acc_c())], f"accvgpr_consume_list:{accvgpr_consume_list}"
+            if ctrl.precision != 'fp32':
+                assert accvgpr_consume_list == [x for x in range(ctrl.cdm.total_acc_c())], f"accvgpr_consume_list:{accvgpr_consume_list}"
 
         return self._get_deferred()
