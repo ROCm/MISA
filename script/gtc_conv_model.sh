@@ -88,6 +88,14 @@ export IGEMM_REPEAT=4
 export IGEMM_GKS_ITERATIVE=1
 export IGEMM_BENCH_CSV=1
 
+if [[ "${ARCH}" == "gfx1030" ]]; then
+export IGEMM_SCLK_MHZ=2450
+elif [[ "${ARCH}" == "gfx90a" ]]; then
+export IGEMM_SCLK_MHZ=1700
+elif [[ "${ARCH}" == "gfx908" ]]; then
+export IGEMM_SCLK_MHZ=1502
+fi
+
 # Flag enables fwd, bwd, wrw convolutions
 if [[ "${DIR}" = "fwd" ]] ; then
     FORW=1
@@ -100,7 +108,7 @@ else
     exit 1
 fi
 
-./out/conv_driver.exe $CONV -n 64 -c 128 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n 256 -c 256 -H 14 -W 14 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 exit 1
 
 #./out/conv_driver.exe $CONV -n 1024 -c 1 -H 512 -W 1024 -k 1 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F ${FORW} ${LAYOUT_ARG}

@@ -951,7 +951,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
 
             # print(f"share_load_packed_vgpr:{share_load_packed_vgpr}, tunable.num_vgpr_accumulate_b:{outer.tunable.num_vgpr_accumulate_b}, num_vgpr_acc_b:{num_vgpr_acc_b}")
             if is_vgpr_acc_c:
-                self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c))
+                self.v_c                = sym_t("v_c"            ,vseq(outer.tunable.num_vgpr_accumulate_c + 1))
                 v_c_num                 = vseq()
             else:
                 v_c_resuable_num        = num_vgpr_acc_a + num_vgpr_acc_b + \
@@ -967,7 +967,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self.v_c                = sym_t("v_c"            ,vseq(v_c_needed), f"coalescing:{v_c_coalescing_num}, needed:{v_c_needed}, resuable:{v_c_resuable_num}")
 
             if not outer.tunable.tensor_a_pass_through:
-                self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a))
+                self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a + 1))
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
             self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
@@ -1434,6 +1434,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
             assert self.vgpr.get_accum_start() % 4 == 0
             kernel_code_dict['accum_offset']        =   self.vgpr.get_accum_start()
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            kernel_code_dict['wavefront_size']     =   self.tunable.wavefront_size
+            kernel_code_dict['cumode']              =   self.tunable.cumode
         kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
