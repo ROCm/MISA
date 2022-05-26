@@ -87,6 +87,7 @@ export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
 export IGEMM_GKS_ITERATIVE=1
 export IGEMM_BENCH_CSV=1
+export IGEMM_RAND_INT=0
 
 if [[ "${ARCH}" == "gfx1030" ]]; then
 export IGEMM_SCLK_MHZ=2450
