@@ -254,6 +254,9 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         assert vgpr_split_desc.get_lengths() == [l_mr, t_nr, t_nt, l_mt]
 
         vgpr_last_dim_num = l_mt if sst_vec == 1 else sst_vec
+        
+        if sst_vec == 1 and data_byte == 4:
+            vgpr_last_dim_num = 1
 
         vgpr_co_desc = make_transform_tensor_descriptor(vgpr_split_desc, 
                                     make_tuple(
@@ -458,7 +461,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             # desc after transpose
             gemm_co_post_desc = make_transform_tensor_descriptor(gemm_co_2d_desc,
                                         make_tuple(trans_unmerge([split_sld_groups, num_sld_issues_per_ssgroup, gemm_m_post_cluster_length]),
-                                                    trans_unmerge([gemm_n_post_cluster_length, gemm_n_post_thread_length])),
+                                                   trans_unmerge([gemm_n_post_cluster_length, gemm_n_post_thread_length])),
                                         make_tuple(0, 1),
                                         make_tuple([0, 1, 2], [3, 4]))
 

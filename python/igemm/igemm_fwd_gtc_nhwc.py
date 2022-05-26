@@ -940,8 +940,11 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
             num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
 
-            share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
+            if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
                                             if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+            else:
+                share_load_packed_vgpr = k_pack
 
             num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
             num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
@@ -2068,7 +2071,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v_igemm_k()}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_in_inb()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load in")
+            if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load in")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_m())}, v[{v.v_gemm_im()}] ; LDS load in")
 
         if not self.tunable.tensor_b_pass_through:
             self._emit(f"; LDS store, wei: e,c,k: {tb_e}x{tb_c}x{tb_k0}x{tb_k1}, {cb_e}x{cb_c}x{cb_k0}x{cb_k1}, k_pack:{k_pack}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
@@ -2086,7 +2092,10 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             if not self.tunable.tensor_a_pass_through:
                 self._emit(v_add_nc_u32(v.v_sst_b_os(), self.tunable.lds_a_np2, v.v_sst_b_os()))
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
+            if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load wei")
             if not self.tunable.tensor_a_pass_through:
                 self._emit(v_add_nc_u32(v.v_sld_b_os(), self.tunable.lds_a_np2, v.v_sld_b_os()))
 
@@ -2104,6 +2113,9 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), '0', v.v_tmp()))
             self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
         else:
+            if not (dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx) and self.tunable.vector_c >= 8):
+                self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
+                self._emit(f"v_mov_b32 v[{v.v_gemm_im()}], v[{v.v_co_sld()}]")
             self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))
             self._emit(self.coalescing_store.init_co_sub_m_index(v.v_co_sub_m_index(), v.v_out_os(), '0', v.v_tmp()))
             self._emit(self.coalescing_store.init_co_sub_n_index(v.v_co_sub_n_index(), '0', v.v_tmp()))
@@ -2137,12 +2149,23 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         self._emit(f"s_addc_u32 s[{s.s_p_out(1)}], s[{s.s_p_out()}+1], 0")
         self._emit_empty_line()
 
-        if self.tunable.use_fp32_atomic_add_for_fp16_data:
-            self._emit(self.try_shift_stride(s.s_out_stride_wo, 2))
+        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            if self.tunable.use_fp32_atomic_add_for_fp16_data:
+                self._emit(self.try_shift_stride(s.s_out_stride_wo, 2))
+            else:
+                self._emit(self.try_shift_stride(s.s_out_stride_wo, igemm_log2(data_byte)))
+            self._emit(v_add_nc_u32(v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index()))
+            self._emit(f"v_mul_lo_u32 v[{v.v_out_os()}], s[{s.s_out_stride_wo()}], v[{v.v_out_inb()}]")
         else:
-            self._emit(self.try_shift_stride(s.s_out_stride_wo, igemm_log2(data_byte)))
-        self._emit(v_add_nc_u32(v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index()))
-        self._emit(f"v_mul_lo_u32 v[{v.v_out_os()}], s[{s.s_out_stride_wo()}], v[{v.v_out_inb()}]")
+            if self.tunable.use_fp32_atomic_add_for_fp16_data:
+                #self._emit(self.try_shift_stride(s.s_out_stride_wo, 2))
+                pass
+            else:
+                #self._emit(self.try_shift_stride(s.s_out_stride_wo, igemm_log2(data_byte)))
+                self._emit(f"s_lshl_b32 s[{s.s_tmp()}], s[{s.s_out_stride_wo()}], {igemm_log2(data_byte)}")
+            self._emit(v_add_nc_u32(v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index()))
+            self._emit(f"v_mul_lo_u32 v[{v.v_out_os()}], s[{s.s_tmp()}], v[{v.v_out_inb()}]")
+            
         if self.tunable.use_fp32_atomic_add_for_fp16_data:
             self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], 2, v[{v.v_co_sub_n_index()}]")
         else:
@@ -2494,7 +2517,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self._emit(self.coalescing_store(v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
                 None,
-                s.s_out_stride_wo(), s.s_tmp(), v.v_out_flag(), s.s_k(), v.v_out_inb(), s.s_block_gtc_ik(), v.v_co_sub_m_index(), v.v_tmp()))
+                s.s_out_stride_wo(), s.s_tmp(), v.v_out_flag(), s.s_dim_mr(), v.v_out_inb(), s.s_block_gtc_inb(), v.v_co_sub_m_index(), v.v_tmp()))
         else:
             a = self.agpr
             self._emit(self.coalescing_store(a.a_c(), v.v_c(), v.v_co_sst(), v.v_co_sld(), s.s_p_out(), v.v_out_os(), None,
