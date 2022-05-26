@@ -2895,7 +2895,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n())
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
-            fctrl.move_slice_window_accumule_functor = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else None
+            fctrl.move_slice_window_accumule_functor = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else ""
 
             # sympol type
             fctrl.v_a                         = v.v_a
