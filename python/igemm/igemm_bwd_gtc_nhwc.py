@@ -167,8 +167,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                     vector_write = num_dword_per_group
                 return vector_write
 
-            ctrl_coalescing_store.vector_store_m = get_vector_write_out()
-            ctrl_coalescing_store.vector_fold_m = get_vector_write_out()
+            ctrl_coalescing_store.vector_store_n = get_vector_write_out()
             ctrl_coalescing_store.block_size = self.tunable.block_size
 
             ctrl_coalescing_store.div_v_const_func = self.div_v_const_func
@@ -264,6 +263,12 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         self.vgpr = self.kernel_vgpr_t(mc, self)
         if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             self.agpr = self.kernel_agpr_t(mc, self)
+
+    def get_vbuffer_resource_4th(self):
+        if self.mc.arch_config.arch < 1000:
+            return '0x27000'
+        elif self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
+            return '0x31014000'
 
     def use_bf16_1k_in_fp16(self):
         if self.tunable.precision == 'fp16' and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A and IGEMM_BWD_GTC_NHWC_USE_BF16_1K_IN_FP16:
@@ -540,7 +545,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_cbranch_scc0 {label_acc_yx_x_end}")
             self._emit(f"s_mov_b32 s[{self.s_move_slice_k_ix()}], 0")
             for i in range(ta_nb_per_thread):
-                self._emit(f"v_add_i32 v[{self.v_out_iho_list(i)}], s[{self.s_ho_diff_acc_y()}], v[{self.v_out_iho_list(i)}]")
+                self._emit(v_add_nc_i32(self.v_out_iho_list(i), self.s_ho_diff_acc_y(), self.v_out_iho_list(i)))
             self._emit_front(f"{label_acc_yx_x_end}:")
 
             # now set flags
@@ -1060,18 +1065,25 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             assert ta_nb_per_thread <= 16, "we pack flag into single vgpr"
 
             k_pack = outer.get_k_pack()
-            share_load_packed  = k_pack if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
 
             is_vgpr_acc_c = outer.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
             vseq = gpr_sequencer_t()
             num_vgpr_global_load_a      = outer.get_num_vgpr_global_load_a()
             num_vgpr_global_load_b      = outer.get_num_vgpr_global_load_b()
 
-            share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
-                                            if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+            if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                share_load_packed           = k_pack if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+                share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
+                                                if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
 
-            num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
-            num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
+                num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
+                num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
+
+            else:
+                share_load_packed_vgpr      = k_pack // int(4 // data_byte)
+
+                num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
+                num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
 
             # print(f"share_load_packed_vgpr:{share_load_packed_vgpr}, tunable.num_vgpr_accumulate_b:{outer.tunable.num_vgpr_accumulate_b}, num_vgpr_acc_b:{num_vgpr_acc_b}")
             pad_v_c = 1 if self.mc.arch_config.arch >= AMDGPU_ARCH_GFX1030 else 0
@@ -1097,6 +1109,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a + pad_v_a))
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
+            print(f'num_vgpr_acc_a:{num_vgpr_acc_a}, num_vgpr_acc_b:{num_vgpr_acc_b}')
             self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
             if outer.tunable.global_prefetch_a_num == 2:
                 self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(num_vgpr_global_load_a))
@@ -1684,6 +1697,9 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
             assert self.vgpr.get_accum_start() % 4 == 0
             kernel_code_dict['accum_offset']        =   self.vgpr.get_accum_start()
+        if self.mc.arch_config.arch >= 1000:
+            kernel_code_dict['wavefront_size']      =   self.tunable.wavefront_size
+            kernel_code_dict['cumode']              =   self.tunable.cumode
         kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
@@ -2287,7 +2303,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             # load output
             self._emit(f"s_mov_b32 s[{s.s_p_out(2)}], 0xffffffff")
-            self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], 0x27000")
+            self._emit(f"s_mov_b32 s[{s.s_p_out(3)}], {self.get_vbuffer_resource_4th()}")
             if self.tunable.tensor_a_pass_through and self.tunable.tensor_a_pass_through_interleave_gld:
                 mbb_gld_out = create_machine_basic_block(self.global_load_out())
                 gld_per_k = self.tunable.wave_repeat_m * self.tunable.wave_step_m
@@ -2386,7 +2402,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             self._emit(f".v_clear_nc {v.v_gld_b()}, {self.get_num_vgpr_global_load_b()}")
             self._emit(f"s_mov_b32 s[{s.s_p_wei(2)}], 0xffffffff")
-            self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], 0x27000")
+            self._emit(f"s_mov_b32 s[{s.s_p_wei(3)}], {self.get_vbuffer_resource_4th()}")
             if self.tunable.tensor_b_pass_through and self.tunable.tensor_b_pass_through_interleave_gld:
                 mbb_gld_wei = create_machine_basic_block(self.global_load_wei())
                 gld_per_k = self.tunable.wave_repeat_n * self.tunable.wave_step_n
@@ -2417,6 +2433,12 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
             self._emit(self.dotx_mapping.get_gemm_index_for_src_matrix(v.v_gemm_in(), v.v_gemm_im(), v.v_tmp(5), v.v_tmp(),
                                     k_pack=k_pack_src_mat, v_pack=v_pack))
+            if not (dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx) and self.tunable.vector_c >= 8):
+                '''
+                an optimization for vector >= 8 case, there src gemm m/n will be the same as dst gemm m/n, due to dotx mapping
+                '''
+                self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
+                self._emit(self.dotx_mapping.get_gemm_index_for_dst_matrix(v.v_co_sst(), v.v_co_sld(), v.v_tmp(5), v.v_tmp()))
         else:
             v_pack = k_pack if self.tunable.tensor_a_pass_through or self.tunable.tensor_b_pass_through else 1
             self._emit(f"v_mov_b32 v[{v.v_tmp(5)}], v0")
@@ -2442,7 +2464,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_out_inb()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load out")
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_m())}, v[{v.v_gemm_im()}] ; LDS load out")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_a_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_im()}] ; LDS load out")
 
         if not self.tunable.tensor_b_pass_through:
             self._emit(f"; LDS store, wei: e,k,c: {tb_e}x{tb_k}x{tb_c0}x{tb_c1}, {cb_e}x{cb_k}x{cb_c0}x{cb_c1}, k_pack:{k_pack}, k_pack_gld_b:{k_pack_gld_b}, {self.tunable.precision}")
@@ -2469,16 +2494,22 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if not self.tunable.tensor_a_pass_through:
                 self._emit(v_add_nc_u32(v.v_sst_b_os(), self.tunable.lds_a_np2, v.v_sst_b_os()))
             self._emit_empty_line()
-            self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
-            if self.tunable.lds_pad_n > 0:
-                self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_b_os()}]")
-                self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
-                self._emit(v_add_nc_u32(v.v_sld_b_os(), v.v_tmp(), v.v_sld_b_os()))
-                self._emit_empty_line()
+            if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load wei")
             if not self.tunable.tensor_a_pass_through:
-                self._emit(v_add_nc_u32(v.v_sld_b_os(), self.tunable.lds_a_np2, v.v_sld_b_os()))
+                self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
+            else:
+                self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
+                if self.tunable.lds_pad_n > 0:
+                    self._emit(f"v_lshrrev_b32 v[{v.v_tmp()}], 7, v[{v.v_sld_b_os()}]")
+                    self._emit(f"v_lshlrev_b32 v[{v.v_tmp()}], {igemm_log2(self.tunable.lds_pad_n * 4)}, v[{v.v_tmp()}]")
+                    self._emit(v_add_nc_u32(v.v_sld_b_os(), v.v_tmp(), v.v_sld_b_os()))
+                    self._emit_empty_line()
+                if not self.tunable.tensor_a_pass_through:
+                    self._emit(v_add_nc_u32(v.v_sld_b_os(), self.tunable.lds_a_np2, v.v_sld_b_os()))
 
-        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+        if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS or \
+                (not (dotx_support_dpp8(self.dotx_mapping.ctrl.inst_dotx) and self.tunable.vector_c >= 8)):
             self._emit(f"v_mov_b32 v[{v.v_gemm_in()}], v[{v.v_co_sst()}]")
             self._emit(f"v_mov_b32 v[{v.v_gemm_im()}], v[{v.v_co_sld()}]")
         self._emit(self.coalescing_store.init_co_lds_offset(v.v_co_sst(), v.v_co_sld(), v.v_gemm_im(), v.v_gemm_in(), '0', v.v_tmp()))
@@ -2675,7 +2706,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         if w_flag_cnt < tb_nc_per_thread:
             self._emit(f"v_bfe_u32 v[{v.v_wei_flag(w_flag_cnt)}], v[{v.v_wei_tmp_pack()}], {w_flag_cnt}, 1")
             w_flag_cnt = w_flag_cnt + 1
-        self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], 0x27000")
+        self._emit(f"s_mov_b32 s[{s.s_p_in(3)}], {self.get_vbuffer_resource_4th()}")
         for i_w in range(w_flag_cnt, tb_nc_per_thread):
             self._emit(f"v_bfe_u32 v[{v.v_wei_flag(i_w)}], v[{v.v_wei_tmp_pack()}], {i_w}, 1")
 
@@ -2864,6 +2895,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             fctrl.shared_load_b_functor       = inst_ds_read_mc_t(self.mc, data_byte * k_pack_src_mat * ctrl_dotx_mapping.thread_n())
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
+            fctrl.move_slice_window_accumule_functor = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else None
 
             # sympol type
             fctrl.v_a                         = v.v_a

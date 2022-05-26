@@ -53,6 +53,7 @@ using float16 = int16_t;
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS           "xdlops"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_NA               "fma_na"
 #define AMDGPU_WAVE_SIZE        64
+#define LANEGROUP_SIZE 8
 
 typedef enum {
     driverHalf  = 0, /*!< 16-bit floating point (Fully supported) */

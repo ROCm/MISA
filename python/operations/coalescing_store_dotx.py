@@ -709,7 +709,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             self._emit(f"; coalescing store, mapping:{ctrl.cdm.serialize()}")
             self._emit(f"; coalescing_groups:{ctrl.coalescing_groups}, num_dword_per_group:{ctrl.get_num_dword_per_group()}, block_size:{ctrl.cdm.block_size()}")
             self._emit(f'; gemm_co_prev_desc:{gemm_co_prev_desc.get_lengths()}, gemm_co_split_lengths:{gemm_co_split_lengths}, gemm_co_post_desc:{gemm_co_post_desc.get_lengths()}')
-            self._emit(ctrl.mul_si_func(s_gemm_m_stride, s_gemm_m_stride, data_byte))
+            # self._emit(ctrl.mul_si_func(s_gemm_m_stride, s_gemm_m_stride, data_byte))
             self._emit(f"s_barrier")
             
             gemm_m_co_start_coord = [0, 0, 0, 0, 0]
@@ -731,10 +731,13 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     if ctrl.precision == 'fp16':
                         for i in range(vgpr_last_dim_num):
                             # self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + i)}], v[{v_c(vgpr_index + i)}]")
-                            if i % 2 == 0:
-                                self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]")
+                            if sst_vec == 1:
+                                self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + i)}], v[{v_c(vgpr_index + i)}]")
                             else:
-                                self._emit(f"v_cvt_f16_f32_sdwa v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]  dst_sel:WORD_1")
+                                if i % 2 == 0:
+                                    self._emit(f"v_cvt_f16_f32 v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]")
+                                else:
+                                    self._emit(f"v_cvt_f16_f32_sdwa v[{v_c(vgpr_index + (i // 2))}], v[{v_c(vgpr_index + i)}]  dst_sel:WORD_1")
                             accvgpr_consume_list.append(vgpr_index + i)
 
                         #if not smem_trans:

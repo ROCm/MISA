@@ -136,6 +136,16 @@ class inst_v_add_nc_u32_t(inst_base_t):
             return 'v_add_nc_u32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
 v_add_nc_u32 = inst_v_add_nc_u32_t()
 
+class inst_v_add_nc_i32_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOP2)
+    def __call__(self, vdst, src0, src1):
+        if mc_get_current().arch_config.arch < 1000:
+            return 'v_add_i32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
+        else:
+            return 'v_add_nc_i32 v[{}], {}, {}'.format(vdst, mt_opr(src0), mt_opr(src1))
+v_add_nc_i32 = inst_v_add_nc_i32_t()
+
 class inst_v_sub_nc_u32_t(inst_base_t):
     def __init__(self):
         inst_base_t.__init__(self, INST_ENCODING_VOP2)

@@ -49,8 +49,6 @@ static inline int env_get_int_fwd(const char *var_name, int default_int) {
 //#define GEMM_K_GLOBAL_SPLIT 3
 #define MAX_GEMM_K_SPLITS 8
 
-#define LANEGROUP_SIZE 8
-
 typedef struct {
     void *p_in;
     void *p_wei;

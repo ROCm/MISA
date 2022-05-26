@@ -1859,6 +1859,8 @@ class igemm_fwd_gtc_nchwc_t(mc_base_t):
         self._emit(f"s_lshl_b32 s[{s.s_knum()}], s[{s.s_knum()}], {utility_log2(k_acc_per_block)}")
         self._emit_empty_line()
 
+        self._emit(m_mul_u32_si(s.s_out_stride_k(), s.s_out_stride_k(), data_byte))
+
     def emit_kernel_fma_main_loop(self):
         s = self.sgpr
         v = self.vgpr

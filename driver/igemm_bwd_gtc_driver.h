@@ -263,9 +263,14 @@ public:
     ~igemm_bwd_gtc_t(){}
 
     size_t get_block_size(const igemm_gtc_tunable_t *tunable) override {
-        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC || tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+        if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_MAC){
             return tunable->gemm_m_level0_cluster * tunable->gemm_n_level0_cluster *
                tunable->gemm_m_level1_cluster * tunable->gemm_n_level1_cluster;
+        }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS){
+            int waves_per_m = tunable->gemm_m_per_block / (tunable->lanegroup_tile_m * tunable->lanegroup_wave_m * tunable->lanegroup_repeat_m);
+            int waves_per_n = tunable->gemm_n_per_block / (tunable->lanegroup_tile_n * tunable->lanegroup_wave_n * tunable->lanegroup_repeat_n);
+            int wavefront_size = tunable->lanegroup_wave_m * tunable->lanegroup_wave_n * LANEGROUP_SIZE;
+            return waves_per_m * waves_per_n * wavefront_size;
         }else if(tunable->fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS){
             int waves_per_m = tunable->gemm_m_per_block / (tunable->wave_tile_m * tunable->wave_step_m * tunable->wave_repeat_m);
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
