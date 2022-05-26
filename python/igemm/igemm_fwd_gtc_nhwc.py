@@ -2412,7 +2412,7 @@ class igemm_fwd_gtc_nhwc_t(mc_base_t):
             fctrl.move_slice_window_a_functor = move_slice_window_a
             fctrl.move_slice_window_b_functor = move_slice_window_b
             
-            fctrl.move_slice_window_accumule_functor  = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else None
+            fctrl.move_slice_window_accumule_functor  = move_slice_window_acc if self.tunable.nxe != 0 and self.tunable.merge_e == 0 else ""
 
 
             # sympol type
