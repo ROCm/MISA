@@ -1,15 +1,15 @@
 from abc import ABC, abstractmethod
-from python.codegen.kernel_func import kernel_launcher
+from python.codegen.generator.kernel_func import kernel_launcher
 from python.codegen.gpu_arch.allocator import stack_allocator
 from python.codegen.gpu_arch.HW_components import base_HW
 from typing import List, Type
-from python.codegen.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
+from python.codegen.gpu_arch.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
 from python.codegen.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t, amdgpu_kernel_info_t, hsa_kernel_header
-from python.codegen.kernel_arg import _args_manager_t, karg_file_t
-from ..codegen.mc import mc_base_t, mc_asm_printer_t
+from python.codegen.generator.kernel_arg import _args_manager_t, karg_file_t
+from ..mc import mc_base_t, mc_asm_printer_t
 
 #public dep
-from python.codegen.kernel_arg import arg_kind, arg_type
+from python.codegen.generator.kernel_arg import arg_kind, arg_type
 from python.codegen.generator.instructions_graph import instruction_graph
 
 class kernel_constructor(mc_base_t, ABC):

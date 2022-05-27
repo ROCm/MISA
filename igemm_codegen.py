@@ -28,6 +28,7 @@ import argparse
 import sys, os, shutil
 
 from python import *
+from python.tools.config_parser import *
 
 OUT_DIR='out'
 

@@ -324,12 +324,12 @@ def abs(reg:regVar):
 def neg(reg:regVar):
     return regAbs
 
+m0_reg_block = reg_block('m0', reg_type.sgpr, -1, 2)
+
 class  M0_reg(regVar):
     def __init__(self):
-        self.label = 'm0'
-        self.dwords = 2
+        super().__init__(m0_reg_block.label, m0_reg_block, 0, 2)
 
-    
     def set_lable(self, label:str):
         raise AttributeError( "'m0' object has no attribute 'set_lable'" )
 

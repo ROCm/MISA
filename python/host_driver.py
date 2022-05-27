@@ -25,6 +25,7 @@
 ################################################################################
 
 from .codegen import *
+from python.tools.compile import *
 
 IGEMM_HOST_USE_GPU_NAIVE_CONV = True
 

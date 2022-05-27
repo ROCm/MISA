@@ -1,5 +1,6 @@
 from igemm import *
 from igemm.cellfft import *
+from python.tools.compile import *
 import sys, os, shutil
 import subprocess
 

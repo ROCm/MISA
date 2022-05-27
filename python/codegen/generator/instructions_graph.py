@@ -19,9 +19,9 @@ from bokeh.models.tools import BoxZoomTool, WheelZoomTool
 from bokeh.palettes import Spectral4
 from bokeh.plotting import from_networkx
 
-from python.codegen.generator_instructions import flow_control_base, instr_label_base,  reg_allocator_base
-from python.codegen.gpu_data_types import *
-from python.codegen.gpu_instruct import inst_base, instruction_type
+from python.codegen.generator.generator_instructions import flow_control_base, instr_label_base,  reg_allocator_base
+from python.codegen.gpu_arch.gpu_data_types import *
+from python.codegen.gpu_arch.gpu_instruct import inst_base, instruction_type
 
 class instruction_graph():
     

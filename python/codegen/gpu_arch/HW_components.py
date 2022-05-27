@@ -1,9 +1,9 @@
 from enum import Enum
-from python.codegen.generator_instructions import HW_Reg_Init, reg_allocator_caller
+from python.codegen.generator.generator_instructions import HW_Reg_Init, reg_allocator_caller
 from python.codegen.gpu_arch.allocator import base_allocator, onDemand_allocator, stack_allocator
 from typing import Dict, List, Tuple, Union
 from python.codegen.amdgpu import amdgpu_sgpr_limit
-from python.codegen.gpu_data_types import *
+from python.codegen.gpu_arch.gpu_data_types import *
 import copy
 
 class gpr_off_sequencer_t(object):
@@ -20,7 +20,7 @@ class gpr_off_sequencer_t(object):
     def get_last_pos(self):
         return self._last_pos
 
-from python.codegen.gpu_instruct import inst_caller_base
+from python.codegen.gpu_arch.gpu_instruct import inst_caller_base
 from python.codegen.gpu_arch.allocator import stack_allocator
 
 from typing import Type

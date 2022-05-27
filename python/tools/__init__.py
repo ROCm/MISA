@@ -2,7 +2,7 @@
 # 
 #  MIT License
 # 
-#  Copyright (c) 2020-2021 Advanced Micro Devices, Inc.
+#  Copyright (c) 2022 Advanced Micro Devices, Inc.
 # 
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,8 @@
 #  SOFTWARE.
 # 
 ################################################################################
-# pylint: disable=maybe-no-member
+# igemm module
 
-from python.direct.direct_class_1x1 import *
-from python.direct.direct_class import *
-from .codegen import *
-#from .direct.direct_class import *
-from .codegen.kernel_driver import *
+from .compile import *
+from .config_parser import *
 
-import os
-import copy
-import multiprocessing as mp
-from typing import Dict
-
-class direct_driver_t(base_driver_t):
-
-    def __init__(self, mc: mc_asm_printer_t, _config: base_config):
-        super().__init__(mc, _config)
-
-        #kernel = conv_direct_1x1u(mc)
-        kernel = _config.kernels[0](mc)
-        self.kernel_list.append(kernel)

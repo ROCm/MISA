@@ -32,7 +32,5 @@ from .mc import *
 from .mbb import *
 from .scheduler import *
 from .kernel_driver import *
-from .gpu_instruct import *
-from .kernel_arg import *
+from .generator import *
 from .gpu_arch import *
-from .gpu_data_types import *

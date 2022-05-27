@@ -30,7 +30,7 @@ import copy
 import multiprocessing as mp
 from abc import ABC, abstractmethod
 from python.codegen.mc import *
-from python.codegen.config_parser import config_content_t
+from python.tools.config_parser import config_content_t
 
 class base_config(ABC):
     def __init__(self, config_content: config_content_t, suf:str=''):
@@ -55,10 +55,12 @@ class base_config(ABC):
         self.data_type = get_data_type(config_content)
         self.layout = get_layout(config_content)
         self.direction = get_direction(config_content)
+        self.kernels = []
 
 
 from ..codegen import *
-from ..direct.kernel_constructor import kernel_constructor
+from ..tools.compile import *
+from .generator.kernel_constructor import kernel_constructor
 from typing import List
 from typing import Dict
 

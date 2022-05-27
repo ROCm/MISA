@@ -3,9 +3,9 @@ from os import name
 from python.codegen.gpu_arch.HW_components import base_HW, sgpr_file_t, vgpr_file_t
 from python.codegen.gpu_arch.allocator import base_allocator
 from typing import Generic, List, Type, TypeVar
-from python.codegen.gpu_data_types import block_of_reg_blocks, reg_block, reg_type
-from python.codegen.generator_instructions import instr_label_caller, reg_allocator_base
-from python.codegen.gpu_instruct import gpu_instructions_caller_base, inst_caller_base, instruction_type
+from python.codegen.gpu_arch.gpu_data_types import block_of_reg_blocks, reg_block, reg_type
+from python.codegen.generator.generator_instructions import instr_label_caller, reg_allocator_base
+from python.codegen.gpu_arch.gpu_instruct import gpu_instructions_caller_base, inst_caller_base, instruction_type
 
 import inspect
 

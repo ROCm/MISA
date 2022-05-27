@@ -2,15 +2,15 @@ from abc import ABC, abstractmethod
 import enum
 from typing import Union
 from python.codegen.gpu_arch.allocator import onDemand_allocator
-from python.codegen.gpu_data_types import *
+from python.codegen.gpu_arch.gpu_data_types import *
 from python.codegen.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
-from python.codegen.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
+from python.codegen.generator.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
 from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.kernel_driver import base_config
-from ..codegen.config_parser import config_content_t
+from ..tools.config_parser import config_content_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
-from .kernel_constructor import *
-from python.codegen.gpu_instruct import gpu_instructions_caller_base
+from ..codegen.generator.kernel_constructor import *
+from python.codegen.gpu_arch.gpu_instruct import gpu_instructions_caller_base
 
 
 class DATA_TYPE(Enum):
@@ -22,6 +22,8 @@ class direct_1x1u_config(base_config):
         super().__init__(config_content, '-navi')
         
         self.read_size = config_content.get_section('direct-navi')[0]['read_size']
+
+        self.kernels = [conv_direct_1x1u]
 
 class conv_direct_1x1u(kernel_constructor):
 

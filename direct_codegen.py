@@ -28,6 +28,7 @@ import argparse
 import sys, os, shutil
 
 from python.direct_driver import *
+from python.tools.config_parser import *
 
 OUT_DIR='out_direct'
 
@@ -60,8 +61,8 @@ config_content = config_parser()
 #config_content.dump()
 #print(args.output)
 
-#config_direct = direct_navi_config(config_parser())
-config_direct = direct_1x1u_config(config_parser())
+config_direct = direct_navi_config(config_parser())
+#config_direct = direct_1x1u_config(config_parser())
 
 if os.path.exists(args.dir):
     shutil.rmtree(args.dir)

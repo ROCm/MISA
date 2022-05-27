@@ -1,7 +1,7 @@
 
 
-from python.codegen.gpu_data_types import block_of_reg_blocks, label_t, reg_block
-from python.codegen.gpu_instruct import inst_base, inst_caller_base, instruction_type
+from python.codegen.gpu_arch.gpu_data_types import block_of_reg_blocks, label_t, reg_block
+from python.codegen.gpu_arch.gpu_instruct import inst_base, inst_caller_base, instruction_type
 from typing import List, Optional, Union
 
 class reg_allocator_base(inst_base):
