@@ -37,10 +37,13 @@ class inst_dotx_vop2_t(inst_base_t):
         self.k = k
         self.data_type = data_type
     
-    def __call__(self, vdst, vsrc0, vsrc1, dpp8 = list(), fi = 0):
+    def __call__(self, vdst, vsrc0, vsrc1, dpp = list(), fi = 0):
         modifier = ''
-        if len(dpp8) != 0:
-            modifier += ' dpp8:[{}]'.format(','.join(str(i) for i in dpp8))
+        if len(dpp) != 0:
+            if self.data_type == AMDGPU_PRECISION_FP32:
+                modifier += ' quad_perm:[{}]'.format(','.join(str(i) for i in dpp))
+            else:
+                modifier += ' dpp8:[{}]'.format(','.join(str(i) for i in dpp))
         if fi != 0:
             modifier += ' fi:{}'.format(fi)
         return f'{self.name} v[{vdst}], v[{vsrc0}], v[{vsrc1}]' + modifier
@@ -64,12 +67,14 @@ v_dot4_i32_i8   = inst_dotx_vop3p_t('v_dot4_i32_i8' ,  4, AMDGPU_PRECISION_INT8)
 v_dot4_u32_u8   = inst_dotx_vop3p_t('v_dot4_u32_u8' ,  4, AMDGPU_PRECISION_UINT8)
 v_dot8_i32_i4   = inst_dotx_vop3p_t('v_dot8_i32_i4' ,  8, AMDGPU_PRECISION_INT4)
 v_dot8_u32_u4   = inst_dotx_vop3p_t('v_dot8_u32_u4' ,  8, AMDGPU_PRECISION_UINT4)
-v_fmac_f32      = inst_dotx_vop2_t('v_fmac_f32' ,  1, AMDGPU_PRECISION_FP32)   # TODO: maybe not call it dotx?
+v_fmac_f32      = inst_dotx_vop2_t('v_fmac_f32' ,      1, AMDGPU_PRECISION_FP32)   # TODO: maybe not call it dotx?
+v_fmac_f32_dpp  = inst_dotx_vop2_t('v_fmac_f32_dpp' ,  1, AMDGPU_PRECISION_FP32) 
 
 def dotx_support_dpp8(inst):
     if isinstance(inst, inst_dotx_vop2_t):
         if inst.k == 1:
-            return False
+            return True
+            #return False
         else:
             return True
     elif isinstance(inst, inst_dotx_vop3p_t):
@@ -88,7 +93,8 @@ class macro_dotx_mxn_t(macro_base_t):
 
     def __init__(self, mc, lanegroup_tile_m, lanegroup_tile_n, stride, precision):
         macro_base_t.__init__(self, mc)
-        assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        #assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        assert lanegroup_tile_m % LANEGROUP_SIZE == 0 or lanegroup_tile_n % LANEGROUP_SIZE == 0
         self.lanegroup_tile_m = lanegroup_tile_m
         self.lanegroup_tile_n = lanegroup_tile_n
         self.stride = stride
@@ -99,6 +105,8 @@ class macro_dotx_mxn_t(macro_base_t):
         return '{} {},{},{}'.format(self.name(), c, a, b)
     
     def get_dotx_instruction(self):
+        if self.precision == 'fp32':
+            return v_fmac_f32_dpp
         if self.precision == 'fp16':
             return v_dot2c_f32_f16
         elif self.precision == 'int8':
@@ -111,13 +119,15 @@ class macro_dotx_mxn_t(macro_base_t):
         reg_b = msym_t(sym_t('b'))
         reg_c = msym_t(sym_t('c'))
         with self._emit_macro_indented('.macro {} c, a, b'.format(self.name())):
-            for idx_m in range(self.lanegroup_tile_m // LANEGROUP_SIZE):
-                for idx_n in range(self.lanegroup_tile_n // LANEGROUP_SIZE):
-                    for idx_dpp in range(LANEGROUP_SIZE):
-                        if self.precision == 'fp16':
-                            self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+            for idx_m in range(1):#(self.lanegroup_tile_m // LANEGROUP_SIZE):
+                for idx_n in range(1):#(self.lanegroup_tile_n // LANEGROUP_SIZE):
+                    for idx_dpp in range(self.lanegroup_tile_m):#(LANEGROUP_SIZE):
+                        if self.precision == 'fp32':
+                            self._emit(v_fmac_f32_dpp(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * self.lanegroup_tile_m))
+                        elif self.precision == 'fp16':
+                            self._emit(v_dot2c_f32_f16(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * self.lanegroup_tile_m))
                         elif self.precision == 'int8':
-                            self._emit(v_dot4c_i32_i8(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * 8))
+                            self._emit(v_dot4c_i32_i8(reg_c(idx_m * self.stride + idx_n + idx_dpp), reg_a(idx_m), reg_b(idx_n), [idx_dpp] * self.lanegroup_tile_m))
                         else:
                             assert False
 

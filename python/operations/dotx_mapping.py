@@ -86,7 +86,8 @@ class ctrl_dotx_mapping_t(object):
     '''
     def __init__(self, macro_tile_m, macro_tile_n, lanegroup_tile_m, lanegroup_tile_n, lanegroup_thrd_m, lanegroup_thrd_n,
                         lanegroup_wave_m, lanegroup_wave_n, waves, lanegroup_repeat_m, lanegroup_repeat_n, inst_dotx):
-        assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        #assert lanegroup_tile_m % LANEGROUP_SIZE == 0 and lanegroup_tile_n % LANEGROUP_SIZE == 0
+        assert lanegroup_tile_n % LANEGROUP_SIZE == 0
         wave_size = lanegroup_wave_m * lanegroup_wave_n * LANEGROUP_SIZE
         assert wave_size in (32, 64), f'unsupported wave size config:{wave_size}, wl_m:{lanegroup_wave_m}, wl_n:{lanegroup_wave_n}'
         assert macro_tile_m % (lanegroup_repeat_m * lanegroup_tile_m * lanegroup_wave_m) == 0
@@ -181,7 +182,8 @@ class ctrl_dotx_mapping_t(object):
         if not dotx_support_dpp8(self.inst_dotx):
             return self.lanegroup_tile_m // self.lanegroup_thrd_m
         else:
-            return LANEGROUP_SIZE
+            #return LANEGROUP_SIZE
+            return self.lanegroup_tile_m
     
     def lanegroup_size_n(self):
         if not dotx_support_dpp8(self.inst_dotx):
@@ -279,6 +281,15 @@ ctrl_dotx_mapping_vop2 = [
         ctrl_dotx_mapping_t( 32,  32,   8,   8,   8,   1,   2,   2,   1,   2,   2, None),   # 32
     ]
 
+ctrl_dotx_mapping_vop2_dpp4 = [
+        ctrl_dotx_mapping_t(128, 128,   4,   8,   4,   1,   2,   4,   4,   4,   4, None),   # 256
+        
+        ctrl_dotx_mapping_t(256,  32,   4,   8,   4,   1,   8,   1,   4,   2,   4, None),   # 256
+        
+        ctrl_dotx_mapping_t(128,  32,   4,   8,   4,   1,   8,   1,   2,   2,   4, None),   # 256
+        
+    ]
+
                         #  mt_m,mt_n,lt_m,lt_n,ld_m,ld_n,lw_m,lw_n,  ws,lr_m,lr_n, inst_mfma
 ctrl_dotx_mapping_vop3p = [
         ctrl_dotx_mapping_t(256, 128,   8,  16,   4,   4,   4,   2,   4,   2,   4, None),   # 256
@@ -337,7 +348,8 @@ def get_ctrl_dotx_mapping_from_lanegroup_tile(macro_tile_m, macro_tile_n, lanegr
         precision = amdgpu_string_to_precision(precision)
 
     if precision == AMDGPU_PRECISION_FP32:
-        ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_fmac_f32)
+        #ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop3p, v_fmac_f32)
+        ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop2_dpp4, v_fmac_f32_dpp)
     elif precision == AMDGPU_PRECISION_FP16:
         if target_instruction.name == 'v_dot2c_f32_f16':
             ctrl_dotx_mapping = copy_mapping_list(ctrl_dotx_mapping_vop2, v_dot2c_f32_f16)

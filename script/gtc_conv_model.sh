@@ -79,15 +79,15 @@ export IGEMM_GPU_NAIVE_CONV_HSACO=out/naive_conv.hsaco
 export IGEMM_SCLK_MHZ=1283
 export IGEMM_LOG_FASTEST_CONFIG=1
 export IGEMM_SLEEP_MS=117
-export PER_PIXEL_CHECK=1
+export PER_PIXEL_CHECK=0
 
-export DBG_MODE=1
+export DBG_MODE=0
 export IGEMM_ASSERT_WHEN_INVALID=1
 export IGEMM_WARMUP=1
 export IGEMM_REPEAT=4
 export IGEMM_GKS_ITERATIVE=1
 export IGEMM_BENCH_CSV=1
-export IGEMM_RAND_INT=0
+export IGEMM_RAND_INT=1
 
 if [[ "${ARCH}" == "gfx1030" ]]; then
 export IGEMM_SCLK_MHZ=2450
@@ -109,6 +109,7 @@ else
     exit 1
 fi
 
+./out/conv_driver.exe $CONV -n 1 -c 32 -H 3140 -W 4100 -k 32 -y 5 -x 5 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 ./out/conv_driver.exe $CONV -n 256 -c 256 -H 14 -W 14 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -g 1 -F $FORW ${LAYOUT_ARG}
 exit 1
 
