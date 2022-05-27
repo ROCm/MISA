@@ -1109,7 +1109,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self.v_a                = sym_t("v_a"               ,vseq(num_vgpr_acc_a + pad_v_a))
             if not outer.tunable.tensor_b_pass_through:
                 self.v_b                = sym_t("v_b"               ,vseq(num_vgpr_acc_b))
-            print(f'num_vgpr_acc_a:{num_vgpr_acc_a}, num_vgpr_acc_b:{num_vgpr_acc_b}')
+            # print(f'num_vgpr_acc_a:{num_vgpr_acc_a}, num_vgpr_acc_b:{num_vgpr_acc_b}')
             self.v_gld_a                = sym_t("v_gld_a"           ,vseq(num_vgpr_global_load_a))
             if outer.tunable.global_prefetch_a_num == 2:
                 self.v_gld_a_gpf        = sym_t("v_gld_a_gpf"       ,vseq(num_vgpr_global_load_a))
@@ -2496,8 +2496,8 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit_empty_line()
             if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
                 self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {utility_log2(data_byte * k_pack_src_mat * self.dotx_mapping.ctrl.thread_n())}, v[{v.v_gemm_in()}] ; LDS load wei")
-            if not self.tunable.tensor_a_pass_through:
-                self._emit(f"v_add_nc_u32 v[{v.v_sld_b_os()}], {self.tunable.lds_a_np2}, v[{v.v_sld_b_os()}]")
+                if not self.tunable.tensor_a_pass_through:
+                    self._emit(v_add_nc_u32(v.v_sld_b_os(), self.tunable.lds_a_np2, v.v_sld_b_os()))
             else:
                 self._emit(f"v_lshlrev_b32 v[{v.v_sld_b_os()}], {igemm_log2(data_byte)}, v[{v.v_gemm_in()}] ; LDS load wei")
                 if self.tunable.lds_pad_n > 0:
