@@ -118,6 +118,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
             ctrl_coalescing_store = ctrl_coalescing_store_dotx_t()
             ctrl_coalescing_store.cdm = ctrl_dotx_mapping
+            ctrl_coalescing_store.gemm_k_global_split = self.tunable.gemm_k_global_split
             ctrl_coalescing_store.coalescing_groups = self.coalescing_store_groups
             ctrl_coalescing_store.precision = self.tunable.precision
 
@@ -1863,6 +1864,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
         s_dummy = sym_t("s_dummy")
 
+        m_div_u32_si = div_u32_si_t(self.mc)
+        m_mul_u32_si = mul_u32_si_t(self.mc)
+        m_mul_u32_vi = mul_u32_vi_t(self.mc)
+
         k_pack = self.get_k_pack()
         k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 1
         k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
@@ -1978,12 +1983,16 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
         self._emit(f"s_mul_i32 s[{s.s_dim_mr()}], s[{s.s_n()}], s[{s.s_dim_br()}]")
         self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_m_per_block - 1}, s[{s.s_dim_mr()}]")
-        self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-        self._emit(f"s_lshl_b32 s[{s.s_dim_mp()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        # self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        # self._emit(f"s_lshl_b32 s[{s.s_dim_mp()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_tmp(), self.tunable.gemm_m_per_block, s.s_tmp(5)))
+        self._emit(m_mul_u32_si(s.s_dim_mp(), s.s_tmp(1), self.tunable.gemm_m_per_block))
 
         self._emit(f"s_add_u32 s[{s.s_tmp()}], {self.tunable.gemm_n_per_block - 1}, s[{s.s_c()}]")
-        self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(f"s_lshl_b32 s[{s.s_dim_np()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        #self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_tmp()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        #self._emit(f"s_lshl_b32 s[{s.s_dim_np()}], s[{s.s_tmp(1)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_tmp(), self.tunable.gemm_n_per_block, s.s_tmp(5)))
+        self._emit(m_mul_u32_si(s.s_dim_np(), s.s_tmp(1), self.tunable.gemm_n_per_block))
 
         self._emit_empty_line()
         self._emit(f"; gemm_m_per_block:{self.tunable.gemm_m_per_block}, gemm_n_per_block:{self.tunable.gemm_n_per_block}, source_access_order:{self.tunable.source_access_order}")
@@ -2014,8 +2023,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             self._emit(f"s_cbranch_scc0 {self.label_out}")
 
         # calculate group index
-        self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_dim_mp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
-        self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_dim_np()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        #self._emit(f"s_lshr_b32 s[{s.s_tmp()}], s[{s.s_dim_mp()}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        #self._emit(f"s_lshr_b32 s[{s.s_tmp(1)}], s[{s.s_dim_np()}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        self._emit(m_div_u32_si(s.s_tmp(), s.s_dim_mp(), self.tunable.gemm_m_per_block, s.s_tmp(5)))
+        self._emit(m_div_u32_si(s.s_tmp(1), s.s_dim_np(), self.tunable.gemm_n_per_block, s.s_tmp(5)))
         self._emit(f"s_mul_i32 s[0], s[{s.s_tmp(1)}], s[{s.s_tmp()}]")
     
         if self.tunable.multihead and self.tunable.nxe != 0:
@@ -2136,8 +2147,10 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 self._emit(m_int_div_rem_ss(s.s_tmp(5), s.s_tmp(4), s.s_bx(), '0', v.v_tmp(5), v.v_tmp(), s.s_tmp()))
 
         self._emit(f"; s_tmp+4:block_gtc_in, s_tmp+5:block_gtc_im")
-        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_tmp(4)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
-        self._emit(f"s_lshl_b32 s[{s.s_block_gtc_inb()}], s[{s.s_tmp(5)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        #self._emit(f"s_lshl_b32 s[{s.s_block_gtc_ic()}], s[{s.s_tmp(4)}], {igemm_log2(self.tunable.gemm_n_per_block)}")
+        #self._emit(f"s_lshl_b32 s[{s.s_block_gtc_inb()}], s[{s.s_tmp(5)}], {igemm_log2(self.tunable.gemm_m_per_block)}")
+        self._emit(m_mul_u32_si(s.s_block_gtc_ic(), s.s_tmp(4), self.tunable.gemm_n_per_block))
+        self._emit(m_mul_u32_si(s.s_block_gtc_inb(), s.s_tmp(5), self.tunable.gemm_m_per_block))
 
         # transform nb
         self._emit(v_add_nc_u32(v.v_tmp(5), s.s_block_gtc_inb(), v.v_out_inb()))
@@ -2455,13 +2468,16 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if k_pack_src_mat != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_out_inb()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}]")
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v.v_tmp(1)}],  {na_nb0*na_nb1 * k_pack_src_mat}, v[{v.v_tmp(2)}]")
                 if k_pack_src_mat != k_pack_gld_a:
                     assert k_pack_src_mat % k_pack_gld_a == 0
                     self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}]")   # gld_a k_pack_src_mat smaller than k_pack_src_mat
-                    self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                    #self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                    self._emit(v_add_nc_u32(v.v_tmp(), v.v_tmp(), v.v_tmp(2)))
             else:
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_out_inb()}]")
+                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}], {igemm_log2(na_nb0*na_nb1 * k_pack_src_mat)}, v[{v.v_out_inb()}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v.v_out_ik() if self.tunable.merge_e == 0 else v.v_out_ike_itr()}],  {na_nb0*na_nb1 * k_pack_src_mat}, v[{v.v_out_inb()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_a_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
             self._emit_empty_line()
             if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
@@ -2474,16 +2490,19 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             if k_pack_src_mat != 1:
                 self._emit(f"v_lshlrev_b32 v[{v.v_tmp(2)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_wei_ic()}]")
                 self._emit(f"v_lshrrev_b32 v[{v.v_tmp(1)}], {igemm_log2(k_pack_src_mat)},  v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}]")
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_c0*nb_c1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_tmp(1)}], {igemm_log2(nb_c0*nb_c1 * k_pack_src_mat)}, v[{v.v_tmp(2)}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v.v_tmp(1)}],  {nb_c0*nb_c1 * k_pack_src_mat}, v[{v.v_tmp(2)}]")
                 if k_pack_src_mat != k_pack_gld_b:
                     if k_pack_src_mat > k_pack_gld_b:
                         assert k_pack_src_mat % k_pack_gld_b == 0
                         self._emit(f"v_and_b32 v[{v.v_tmp(2)}], {k_pack_src_mat - 1}, v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}]")   # gld_b k_pack_src_mat smaller than k_pack_src_mat
-                        self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                        #self._emit(f"v_or_b32 v[{v.v_tmp()}], v[{v.v_tmp()}], v[{v.v_tmp(2)}]")
+                        self._emit(v_add_nc_u32(v.v_tmp(), v.v_tmp(), v.v_tmp(2)))
                     else:
                         pass # no need shift based on b k pack
             else:
-                self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}], {igemm_log2(nb_c0*nb_c1 * k_pack_src_mat)}, v[{v.v_wei_ic()}]")
+                #self._emit(f"v_lshl_or_b32 v[{v.v_tmp()}], v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}], {igemm_log2(nb_c0*nb_c1 * k_pack_src_mat)}, v[{v.v_wei_ic()}]")
+                self._emit(f"v_mad_u32_u24 v[{v.v_tmp()}], v[{v.v_wei_ik() if self.tunable.merge_e == 0 else v.v_wei_ike_itr()}],  {nb_c0*nb_c1 * k_pack_src_mat}, v[{v.v_wei_ic()}]")
             self._emit(f"v_lshlrev_b32 v[{v.v_sst_b_os()}], {igemm_log2(data_byte)}, v[{v.v_tmp()}]")
 
             if self.tunable.lds_pad_n > 0:
