@@ -504,8 +504,8 @@ public:
                             return false;
                     }
                     else{
-                        if((c / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 8 : tunable->vector_store) != 0)
-                            return false;
+                        //if((c / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 8 : tunable->vector_store) != 0)
+                        //    return false;
                     }
                 }
             }

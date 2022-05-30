@@ -194,7 +194,7 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
         sst_vec, sld_vec, smem_trans = 1, 1, False
         if ctrl.vector_store_m == 1 and ctrl.vector_store_n == 1:
             assert ctrl.vector_fold_m == 1
-            vector_size = min(int(l_mt * data_byte // 4), 1)
+            vector_size = max(int(l_mt * data_byte // 4), 1)
             sst_vec, sld_vec, smem_trans = vector_size, vector_size, False
         elif ctrl.vector_store_m != 1 and ctrl.vector_store_n == 1:
             sst_vec, sld_vec, smem_trans = utility_gcd(l_mt, ctrl.vector_store_m), ctrl.vector_store_m, False
@@ -435,7 +435,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
             sld_co_desc = make_naive_tensor_descriptor_packed(sld_co_lengths)
 
         else:
-            assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+            # assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+            assert sld_vec == gst_vec
             gemm_n_post_thread_length = sld_vec
             gemm_n_post_cluster_length = gemm_n_size // gemm_n_post_thread_length
             gemm_m_post_cluster_length = ctrl.cdm.block_size() // gemm_n_post_cluster_length
@@ -493,7 +494,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                     self._emit(f"v_lshl_or_b32 v[{v_tmp4} + 1], v[{v_tmp4} + 2], {utility_log2(sst_vec)}, v[{v_tmp4} + 1]")
                 self._emit(f"v_mad_u32_u24 v[{v_co_sst}], v[{v_tmp4}], {ctrl.cdm.macro_tile_n * sld_vec}, v[{v_tmp4} + 1]    ; macro_tile_n:{ctrl.cdm.macro_tile_n}, sld_vec:{sld_vec}")
             else:
-                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec, f'sst_vec:{sst_vec}, sld_vec:{sld_vec}, gst_vec:{gst_vec}'
+                #assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec, f'sst_vec:{sst_vec}, sld_vec:{sld_vec}, gst_vec:{gst_vec}'
+                assert sld_vec == gst_vec, f'sst_vec:{sst_vec}, sld_vec:{sld_vec}, gst_vec:{gst_vec}'
                 assert t_mt % l_mt == 0
                 self._emit(f"v_lshrrev_b32 v[{v_tmp4}], {utility_log2(t_mt // l_mt)}, v[{v_gemm_im}]    ; shink m by {sst_vec * (t_mt // l_mt)}")
                 self._emit(f"v_lshl_or_b32 v[{v_co_sst}], v[{v_tmp4}], {utility_log2(ctrl.cdm.macro_tile_n)}, v[{v_gemm_in}]")
@@ -545,7 +547,8 @@ class igemm_coalescing_store_dotx_t(mc_base_t):
                 gemm_n_post_thread_length = 1
                 gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
             else:
-                assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                # assert sst_vec == 1 and sld_vec != 1 and sld_vec == gst_vec
+                assert sld_vec == gst_vec
                 gemm_n_post_thread_length = sld_vec
                 gemm_n_post_cluster_length = ctrl.cdm.macro_tile_n // gemm_n_post_thread_length
 

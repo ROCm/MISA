@@ -102,7 +102,31 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         self.mul_vi_func = mul_u32_vi_t(mc)
         self.mul_si_func = mul_u32_si_t(mc)
 
-        self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
+        if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
+            def round_to_next_coalescing_group():
+                # TODO: this is ugly
+                cgroups = self.tunable.coalescing_store_groups
+                # first, try find if can divide repeat
+                if cgroups <= self.tunable.lanegroup_repeat_m:
+                    cgroups_along_repeat = cgroups
+                    while True:
+                        if self.tunable.lanegroup_repeat_m % cgroups_along_repeat == 0:
+                            return cgroups_along_repeat
+                        cgroups_along_repeat = cgroups_along_repeat + 1
+                
+                # 2nd, try find if can divide lanegroup_tile and repeat
+                if cgroups <= (self.tunable.lanegroup_repeat_m * self.tunable.lanegroup_repeat_m):
+                    while True:
+                        if self.tunable.lanegroup_tile_m * self.tunable.lanegroup_repeat_m % cgroups == 0:
+                            return cgroups
+                        cgroups = cgroups + 1
+                assert False
+
+            self.coalescing_store_groups = round_to_next_coalescing_group()
+        else:
+            # TODO: this coalescing_store_groups could be non-power-of-2
+            self.coalescing_store_groups = igemm_next_pow2(self.tunable.coalescing_store_groups)
+
         if self.tunable.fma_type != IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
             # TODO: add non dlops op
             assert (self.tunable.lanegroup_tile_m * self.tunable.lanegroup_repeat_m) % self.coalescing_store_groups == 0, \
@@ -910,7 +934,6 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             mc_base_t.__init__(self, mc)
             ta_nb0, ta_nb1, ta_e, ta_k, tb_e, tb_k, tb_c0, tb_c1 = outer.get_thread_lengths()
             tb_nk_per_thread = tb_k        # this is for weight
-            k_pack = outer.get_k_pack()
             sseq                            = gpr_sequencer_t()
             self.outer                      = outer
             self.s_ka                       = sym_t('s_ka'                      , sseq(2))
@@ -1076,12 +1099,16 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 share_load_packed           = k_pack if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
                 share_load_packed_vgpr      = share_load_packed // (4 // data_byte) //  outer.xdlops_mapping.ctrl.inst_mfma.num_v_a \
                                                 if outer.tunable.tensor_a_pass_through or outer.tunable.tensor_b_pass_through else 1
+                assert share_load_packed_vgpr != 0
 
                 num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
                 num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
 
             else:
-                share_load_packed_vgpr      = k_pack // int(4 // data_byte)
+                k_pack_lanegroup = outer.xdlops_mapping.ctrl.lanegroup_k_per_thread() if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else outer.dotx_mapping.ctrl.lanegroup_k_per_thread()
+                k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
+                share_load_packed_vgpr      = k_pack_src_mat // int(4 // data_byte)
+                assert share_load_packed_vgpr != 0
 
                 num_vgpr_acc_a              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_a if not outer.tunable.tensor_a_pass_through else 0
                 num_vgpr_acc_b              = share_load_packed_vgpr * outer.tunable.num_vgpr_accumulate_b if not outer.tunable.tensor_b_pass_through else 0
@@ -1516,7 +1543,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
 
         k_pack = self.get_k_pack()
-        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 1
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else self.dotx_mapping.ctrl.lanegroup_k_per_thread()
         k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
         m_wei_2d_global_load, m_out_2d_global_load = self.get_macro_global_load()
         # k_pack_gld_a = m_out_2d_global_load.ctrl.vector_d1
@@ -1869,7 +1896,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         m_mul_u32_vi = mul_u32_vi_t(self.mc)
 
         k_pack = self.get_k_pack()
-        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 1
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else self.dotx_mapping.ctrl.lanegroup_k_per_thread()
         k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
         k_pack_gld_a = m_out_2d_global_load.ctrl.vector_d1
         k_pack_gld_b = tb_k                    # weight order always load c first, hence consider gemm_k is always vector 1
@@ -2801,7 +2828,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
 
         data_byte = amdgpu_precision_data_byte(self.tunable.precision)
         k_pack = self.get_k_pack()
-        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else 1
+        k_pack_lanegroup = self.xdlops_mapping.ctrl.lanegroup_k_per_thread() if self.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS else self.dotx_mapping.ctrl.lanegroup_k_per_thread()
         k_pack_src_mat = k_pack if k_pack != 1 else k_pack_lanegroup
 
         m_move_slice_window             = self.get_macro_move_slice_window()
