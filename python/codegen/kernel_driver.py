@@ -61,8 +61,8 @@ class base_config(ABC):
 from ..codegen import *
 from ..tools.compile import *
 from .generator.kernel_constructor import kernel_constructor
-from typing import List
-from typing import Dict
+from typing import List, Dict
+from .runtime import *
 
 class base_driver_t(mc_base_t, ABC):
     def __init__(self, mc : mc_asm_printer_t, _config:base_config):
@@ -74,16 +74,15 @@ class base_driver_t(mc_base_t, ABC):
         self.kernel_list:List[kernel_constructor] = []
 
     def emit_hsa_header(self):
-        hsa_header_t(self.mc).emit()
+        #hsa_header_t(self.mc).emit()
+        pass
     
-    def emit_metadata(self):
-        kernel_info_list = [kernel.kernel_info for kernel in self.kernel_list]
-        amdgpu_metadata_t(self.mc, kernel_info_list).emit()
 
     def emit_kernel(self, **options):
         is_multiprocess = True if "emit_kernel_mp" in options and options["emit_kernel_mp"] == True else False
         emit_kernel_per_s = options.get("split_kernel", True)
         emit_kernel_per_inc = True if not emit_kernel_per_s else False
+        cur_runtime = get_runtime('hsa')
 
         origin_emitter = self.mc.emitter
         assert type(origin_emitter) is mc_emit_to_file_t
@@ -176,16 +175,14 @@ class base_driver_t(mc_base_t, ABC):
 
                     kps_file_name = self.get_kernel_per_s_file_name(kernel, origin_emitter.file_name)
                     if kps_file_name not in emitter_per_inc_dict.keys():
-
                         kps_emitter = mc_emit_to_file_t(kps_file_name, copy.copy(origin_emitter.indent))
-                        kernel.mc.emitter = kps_emitter
                         kps_emitter.open()
                         #kernel._emit(f".include \"{os.path.basename(origin_emitter.file_name)}\"")
                         #self.emit_global_macro_per_s_file(kernel.mc)
 
                         emitter_per_inc_dict[kps_file_name] = kps_emitter
-                        kinfo_per_inc_dict[kps_file_name] = [kernel.kernel_info]
-                    else:
+                        kinfo_per_inc_dict[kps_file_name] = []
+
                         kernel.mc.emitter = emitter_per_inc_dict[kps_file_name]
                         kinfo_per_inc_dict[kps_file_name].append(kernel.kernel_info)
 
@@ -218,23 +215,22 @@ class base_driver_t(mc_base_t, ABC):
             self._emit(f";---------------------------------------------------")
             self._emit_empty_line()
         elif emit_kernel_per_s:
-            for k, v in emitter_per_inc_dict.items():
-                self.mc.emitter = emitter_per_inc_dict[k]
-                amdgpu_metadata_t(self.mc, kinfo_per_inc_dict[k]).emit()
-                # os.chmod(k, 0x777)
-                v.close()
-                self._emit(f";---------------------------------------------------")
-                self._emit_empty_line()
-            origin_emitter.close()
-            os.remove(origin_emitter.file_name)
 
+            for k, v in emitter_per_inc_dict.items():
+                v.f.flush()
+                #TODO refactoring
+                self.mc.emitter = v
+                cur_runtime(self.mc, kinfo_per_inc_dict[k]).emmit_metadata()
+                v.f.flush()
+                v.close()
+            origin_emitter.close()#TODO refactoring
+            os.remove(origin_emitter.file_name)
 
 
     def do_emit(self, **options):
         self.emit_hsa_header()
         self.emit_kernel(**options)
-        if(not options.get('separate_metadata', False)==True):
-            self.emit_metadata()
+            
 
     #def get_filename(self, **options):
     def get_kernel_per_inc_file_name(self, ker:kernel_constructor, origin_file_name):

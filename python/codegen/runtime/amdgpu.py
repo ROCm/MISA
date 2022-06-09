@@ -46,15 +46,6 @@ AMDGPU_WAVE_SIZE        = 64
 AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_M = 4
 AMDGPU_XDLOPS_LANEGROUP_GRANULARITY_N = 64
 
-class _dict_with_default_t(object):
-    def __init__(self, d):
-        self.d = d
-    def __call__(self, key, default_value):
-        if self.d is None:
-            return default_value
-        if key in self.d:
-            return self.d[key]
-        return default_value
 
 def amdgpu_string_to_arch(amdgpu_arch_string):
     if amdgpu_arch_string == 'gfx900':
@@ -161,85 +152,12 @@ def amdgpu_sgpr_limit(arch):
     assert False, f"unsupported arch:{a}"
 
 
-class amdgpu_arch_detail_t(object):
-    '''
-    probe or hard code
-    '''
-    def __init__(self):
-        self.arch           = 0
-        self.num_cu         = 0
-        self.simd_per_cu    = 0
-        self.sclk_mhz       = 0
-        self.mclk_mhz       = 0
-        self.lds_size       = 0     # in byte
-        self.lds_banks      = 0
-        self.l1_size        = 0
-        self.l1_cache_line  = 0
-        self.l2_size        = 0
-        self.l2_cache_line  = 0
-        self.mem_channels   = 0
-        self.vgpr_per_cu    = 0
-        self.sgpr_per_cu    = 0
-        self.agpr_per_cu    = 0
-        self.wavefront_size = 64
-        self.max_waves_per_cu       = 0
-        self.fp32_fma_per_cycle     = 0
-        self.memory_op_per_cycle    = 0     # read write
-        self.memory_bus_width_bits  = 0    
-
-    def theoretical_fp32_gflops(self):
-        return self.num_cu * self.simd_per_cu * (self.sclk_mhz / 1000) * self.fp32_fma_per_cycle
-
-    def theoretical_bandwidth_gbps(self):
-        return (self.mclk_mhz / 1000) * (self.memory_bus_width_bits / 8) * self.memory_op_per_cycle
-
-def amdgpu_calculate_occupancy(arch_detail, vgpr_per_thread, block_size, lds_per_block):
-    vgpr_per_block = vgpr_per_thread * block_size
-    if vgpr_per_block > arch_detail.vgpr_per_cu:
-        print('vgpr required:{} is larger than hw vgpr:{}'.format(vgpr_per_block, arch_detail.vgpr_per_cu))
-        return 0
-    blocks_consider_vgpr = arch_detail.vgpr_per_cu // vgpr_per_block
-    if lds_per_block > arch_detail.lds_size:
-        print('lds required:{} is larger than hw vgpr:{}'.format(lds_per_block, arch_detail.lds_size))
-        return 0
-    blocks_consider_lds = arch_detail.lds_size // lds_per_block
-
-    return min(blocks_consider_vgpr, blocks_consider_lds)
-
-def amdgpu_valid_occupancy_with_max_waves(arch_detail, block_size, occupancy):
-    assert block_size >= arch_detail.wavefront_size and \
-            block_size % arch_detail.wavefront_size == 0
-    waves_per_block = block_size // arch_detail.wavefront_size
-    return waves_per_block * occupancy <= arch_detail.max_waves_per_cu
-
-def amdgpu_get_gfx906_60cu():
-    gfx906_60cu = amdgpu_arch_detail_t()
-    gfx906_60cu.arch            = AMDGPU_ARCH_GFX906
-    gfx906_60cu.num_cu          = 60
-    gfx906_60cu.simd_per_cu     = 64
-    gfx906_60cu.sclk_mhz        = 1725
-    gfx906_60cu.mclk_mhz        = 1000
-    gfx906_60cu.lds_size        = 65536
-    gfx906_60cu.lds_banks       = 32
-    gfx906_60cu.l1_size         = 16384
-    gfx906_60cu.l2_size         = 0
-    gfx906_60cu.mem_channels    = 0
-    gfx906_60cu.vgpr_per_cu     = 65536
-    gfx906_60cu.sgpr_per_cu     = 3200
-    gfx906_60cu.agpr_per_cu     = 0
-    gfx906_60cu.wavefront_size      = 64
-    gfx906_60cu.max_waves_per_cu    = 40
-    gfx906_60cu.fp32_fma_per_cycle  = 2
-    gfx906_60cu.memory_op_per_cycle = 2     # read write
-    gfx906_60cu.memory_bus_width_bits = 4096
-    return gfx906_60cu
-
 class amdgpu_arch_config_t(object):
     '''
     config some of arch related feature
     '''
     def __init__(self, arch_dict):
-        ad = _dict_with_default_t(arch_dict)
+        ad = arch_dict.get
         self.arch           = ad('arch', AMDGPU_ARCH_GFX906)
         if self.arch == AMDGPU_ARCH_GFX900:
             self.use_dlops  = ad('use_dlops', False)
@@ -327,7 +245,7 @@ class amdgpu_kernel_code_t(object):
     .end_amd_kernel_code_t
     '''
     def __init__(self, kernel_code_dict):
-        kc = _dict_with_default_t(kernel_code_dict)
+        kc = kernel_code_dict.get
         self.enable_sgpr_private_segment_buffer     = kc('enable_sgpr_private_segment_buffer', 0)
         self.enable_sgpr_dispatch_ptr               = kc('enable_sgpr_dispatch_ptr', 0)
         self.enable_sgpr_queue_ptr                  = kc('enable_sgpr_queue_ptr', 0)
@@ -363,6 +281,7 @@ class amdgpu_kernel_code_t(object):
         self.kernarg_segment_byte_size              = kc('kernarg_segment_byte_size', 0)
         self.tg_split                               = kc('tg_split', 0)
         self.accum_offset                           = kc('accum_offset', 0)
+        self.wave_size                              = kc('wave_size', 64)
 
     def cal_user_sgpr_count(self):
         count = 0
@@ -419,12 +338,6 @@ class amdgpu_kernel_arg_t(object):
         return '    - {{ .name: {:<10}, .size: {}, .offset: {:>3}, .value_kind: {}, .value_type: {}{}}}'.format(
             self.name, self.size, self.offset, self.value_kind, self.value_type, misc_metadata)
 
-class amdgpu_kernel_info_t(object):
-    def __init__(self, kernel_code, kernel_name, kernel_block_size, kernel_args):
-        self.kernel_code = kernel_code
-        self.kernel_name = kernel_name
-        self.kernel_block_size = kernel_block_size
-        self.kernel_args = kernel_args
     
 class amd_kernel_code_t(mc_base_t):
     def __init__(self, mc, kernel_info):
@@ -540,41 +453,14 @@ class amdgpu_metadata_t(mc_base_t):
             self._emit('...')
             self._emit('.end_amdgpu_metadata')
 
-class hsa_header_t(mc_base_t):
-    '''
-    only used in cov2
-    '''
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
-    def emit(self):
-        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
-            self._emit(".hsa_code_object_version 2,1")
-            self._emit(".hsa_code_object_isa")
-            self._emit_empty_line()
-
-class hsa_kernel_header(mc_base_t):
-    '''
-    only used in cov2
-    '''
-    def __init__(self, mc, amdgpu_kernel_info:amdgpu_kernel_info_t):
-        mc_base_t.__init__(self, mc)
-        self._kernel_info = amdgpu_kernel_info
-
-    def emit(self):
-        kernel_name = self._kernel_info.kernel_name
-        self._emit('.text')
-        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
-            self._emit('.globl {}'.format(kernel_name))
-        self._emit('.p2align 8')
-        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V3:
-            self._emit('.type {},@function'.format(kernel_name))
-        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
-            self._emit('.amdgpu_hsa_kernel {}'.format(kernel_name))
-        self._emit('{}:'.format(kernel_name))
-
-
-class hsa_footer_t(mc_base_t):
-    def __init__(self, mc):
-        mc_base_t.__init__(self, mc)
-    def emit(self):
-        pass
+#class hsa_header_t(mc_base_t):
+#    '''
+#    only used in cov2
+#    '''
+#    def __init__(self, mc):
+#        mc_base_t.__init__(self, mc)
+#    def emit(self):
+#        if self.mc.arch_config.code_object == AMDGPU_CODEOBJECT_V2:
+#            self._emit(".hsa_code_object_version 2,1")
+#            self._emit(".hsa_code_object_isa")
+#            self._emit_empty_line()

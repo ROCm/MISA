@@ -43,6 +43,11 @@ class kernel_constructor(mc_base_t, ABC):
         self.instr_ctrl.execute_all()
         #some optimize
 
+    def get_kernel_lang_class(self, kernel_info, **kwargs) -> base_lang_api:
+        lang = kwargs.get('lang', None)
+        if(lang == 'llvm-asm' or lang == None):
+            from ..shader_lang.llvm_asm import llvm_kernel
+            return llvm_kernel(self.mc, kernel_info, self.instr_ctrl._emmit_created_code)
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
         self.instr_ctrl = instruction_ctrl()
@@ -50,9 +55,15 @@ class kernel_constructor(mc_base_t, ABC):
         self.set_GPU_HW()
         t = type(self.instructions_caller)
         self.k_config = kernel_launcher[t](self.instructions_caller, self.HW)
+        
         self._set_kernel_karg_t()
         self.generate_kernel_body()
+        
         self.kernel_info = self._construct_kernel_info()
+        self._kernel_lang_formater = self.get_kernel_lang_class(self.kernel_info, **kwargs)
+        
+        #self.emit_kernel_code = self._kernel_lang_formater.emit_kernel_code
+
 
     @abstractmethod    
     def set_GPU_HW(self):
@@ -106,28 +117,25 @@ class kernel_constructor(mc_base_t, ABC):
     def _get_LDS_usage(self):
         return 0
 
-    def _emit_kernel_header(self):
-        hsa_kernel_header(mc=self.mc, amdgpu_kernel_info=self.kernel_info).emit()
-
     @abstractmethod
     def _emit_kernel_body(self):
         pass
 
-    def _emit_kernel_end(self):
-        self._emit('s_endpgm')
-
     def emit_kernel_footer(self):
         self._emit_empty_line()
+        pass
 
     def _emit_kernel_symbols(self):
         self.kargs.emit_symb()
         self._emit_empty_line()
 
-    def emit_kernel_code(self):
-        self._emit_kernel_header()
-        self._emit_kernel_symbols()
-        self.instr_ctrl._emmit_created_code(self._emit)
-        self._emit_kernel_end()
+    def emit_kernel_code(self, **options):
+        self._kernel_lang_formater.emit_kernel_code(**options)
+        #self._emit_kernel_header()
+        #self._emit_kernel_symbols()
+        #self.instr_ctrl._emmit_created_code(self._emit)
+        #self._emit_kernel_end()
 
     def emit_kernel_amd_kernel_code_t(self):
-        amd_kernel_code_t(self.mc, self.kernel_info).emit()
+        #self._kernel_lang_formater._emit_kernel_amd_kernel_code_t()
+        pass
