@@ -23,6 +23,5 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .GFX10 import *
-from .allocator import *
-
+#from .gpu_data_types import *
+#from .gpu_instruct import *

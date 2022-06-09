@@ -1,9 +1,9 @@
 from enum import Enum
-from python.codegen.generator.generator_instructions import HW_Reg_Init, reg_allocator_caller
-from python.codegen.gpu_arch.allocator import base_allocator, onDemand_allocator, stack_allocator
 from typing import Dict, List, Tuple, Union
-from python.codegen.amdgpu import amdgpu_sgpr_limit
-from python.codegen.gpu_arch.gpu_data_types import *
+from ..generator_instructions import HW_Reg_Init, reg_allocator_caller
+from ..allocator import base_allocator, onDemand_allocator, stack_allocator
+from .gpu_data_types import *
+
 import copy
 
 class gpr_off_sequencer_t(object):
@@ -20,11 +20,11 @@ class gpr_off_sequencer_t(object):
     def get_last_pos(self):
         return self._last_pos
 
-from python.codegen.gpu_arch.gpu_instruct import inst_caller_base
-from python.codegen.gpu_arch.allocator import stack_allocator
+from .gpu_instruct import inst_caller_base
+from ..allocator import stack_allocator
 
 from typing import Type
-from python.codegen.gpu_arch.allocator import base_allocator
+from ..allocator import base_allocator
 
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks', 'label_as_pos']
@@ -54,13 +54,11 @@ class gpr_file_t():#mc_base_t):
         ofsets:List[int]  = block_info[1]
         base_reg = regs[0]
         base_reg.set_position(self._allocator.malloc(base_reg.dwords, alignment))
-        s.append(f'.set {base_reg.label}, {base_reg.position}')
         base_reg_pos = base_reg.position
         
         for i in range(len(ofsets)):
             cur_reg = regs[i+1]
             cur_reg.set_position(base_reg_pos + ofsets[i])
-            s.append(f'.set {cur_reg.label}, {cur_reg.position}')
 
         return '\n'.join(s)
 
@@ -77,7 +75,6 @@ class gpr_file_t():#mc_base_t):
     def _reuse(self, reg_tuple_src_dst:Tuple, alignment):
         src, dst = reg_tuple_src_dst
         dst.set_position(src.position)
-        return f'.set {dst.label}, {dst.position} \n .set {src.label}, -1'
 
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
         ret = reg_block.declare(label, self.reg_t, dwords=dwords, label_as_pos=self.label_as_pos, reg_align=alignment)

@@ -1,10 +1,8 @@
 from enum import Enum
 from typing import List
 
+from ..base_components import reg_block, reg_type, regVar
 #should be 1 symbol len
-class reg_type(Enum):
-    sgpr = 's'
-    vgpr = 'v'
 
 class const_val():
     def __init__(self, val) -> None:
@@ -114,91 +112,6 @@ class label_t():
     def define(self):
         return f' {self.val}:'
 
-class reg_block(object):
-    __slots__ = ['label', 'dwords', 'reg_t', 'position', 'label_as_pos', 'reg_align']
-    def __init__(self, label:str, reg_t:reg_type, position:int = 0, dwords:int = 1, label_as_pos=False, reg_align=1):
-        
-        assert type(label) is str
-        assert type(position) is int
-        assert type(dwords) is int
-
-        self.label = f'{reg_t.value}_{label}'
-        self.position = position
-        self.dwords = dwords
-        self.reg_t = reg_t
-        self.reg_align = reg_align
-        self.label_as_pos = label_as_pos
-
-    @classmethod
-    def declare(cls, label:str, reg_t:reg_type, dwords:int = 1, label_as_pos=False, reg_align=1):
-        '''Declaration without definition, only block type, label and size will be defined'''
-        return reg_block(label, reg_t, position=-1, dwords=dwords, label_as_pos=label_as_pos, reg_align=reg_align)
-
-    #def define(self):
-    #    if(self.position < 0):
-    #        assert False, 'block can`t be defined, the block position has not been set'
-    #    if type(self.label) in (tuple, list):
-    #        assert False, "not support label is tuple and call define"
-    #    return f'.set {self.label}, {self.position}'
-
-    def define(self):
-        return f'.set {self.label}, {self.position}'
-
-    def set_position(self, position:int):
-        self.position = position
-
-    def expr(self, index = 0):
-        if type(index) is int:
-            if index == 0:
-                return self.label
-            return f'{self.label}+{index}'
-        elif type(index) is tuple:
-            assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
-            return f'{self.label}+{index[0]}:{self.label}+{index[1]}'
-        else:
-            assert False
-
-    def __call__(self, index1:int=0, index2:int=0):
-        if(index2<=index1):
-            return self.expr(index1)
-        else:
-            return self.expr((index1,index2))
-
-    def get_str(self, index=None) -> str:
-        if self.label_as_pos:
-            self_pos = self.label
-        else:
-            self_pos = self.position
-
-        if index is None:
-            return f'{self.reg_t.value}[{self_pos}]'
-        elif type(index) is int:
-            if index == 0:
-                return f'{self.reg_t.value}[{self_pos}]'
-            return f'{self.reg_t.value}[{self_pos}+{index}]'
-        elif type(index) is tuple:
-            assert len(index) == 2, 'expect tuple (start-index, end-index), inclusive'
-            return f'{self.reg_t.value}[{self_pos}+{index[0]}:{self_pos}+{index[1]}]'
-        else:
-            assert False
-    
-    def __getitem__(self, key):
-        slice_size = 1
-
-        if(type(key) is tuple):
-            assert len(key) == 2
-            slice_size = key[1] - key[0] + 1
-            new_offset = key[0]
-        elif (type(key) is slice):
-            indices = key.indices(self.dwords-1)
-            assert(indices[2] <= 1)
-            slice_size = indices[1] - indices[0] + 1
-            new_offset = indices[0]
-        else:
-            new_offset = key
-        #send label without reg_type prefix
-        view_slice = regVar('', self, new_offset, slice_size)
-        return view_slice
 
 class reg_block_custom_reg(reg_block):
     def __init__(self, label:str, reg_t:reg_type, dwords:int = 1):
@@ -227,83 +140,6 @@ class block_of_reg_blocks(reg_block):
     def declare(cls, label:str, reg_t:reg_type, reg_blocks:List[reg_block], dwords:int = 1, reg_align=1):
         '''Declaration without definition, only block type, label and size will be defined'''
         return block_of_reg_blocks(label, reg_t, reg_blocks, position=-1, dwords=dwords, reg_align=reg_align)
-
-class regVar(object):
-    __slots__ = ['label', 'base_reg', 'reg_offset', 'regVar_size']
-    def __init__(self, label:str, base_reg:reg_block, reg_offset:int = 0, regVar_size:int = 1):
-        self.label = label
-        self.base_reg = base_reg
-        self.reg_offset = reg_offset
-        self.regVar_size = regVar_size
-        assert(regVar_size >= 0)
-    
-    #@classmethod
-    #def init_working_label(cls, label:str, reg:reg_block, reg_offset:int = 0, dwords:int = 0):
-    #    #cls = self.__class__
-    #    result = regVar.__new__(cls)
-    #    #result.__dict__.update(self.__dict__)
-    #    result.label = label #set as reg.label + offset
-    #    result.base_reg = reg
-    #    result.right_index = dwords
-
-    def __getitem__(self, key):
-        slice_size = 1
-
-        assert(self.regVar_size > 0)
-        if(type(key) is tuple):
-            assert len(key) == 2
-            slice_size = key[1] - key[0] + 1
-            new_offset = key[0]
-        elif (type(key) is slice):
-            indices = key.indices(self.regVar_size - 1)
-            assert(indices[2] <= 1)
-            slice_size = indices[1] - indices[0] + 1
-            new_offset = indices[0]
-        else:
-            new_offset = key
-        #send label without reg_type prefix
-        assert(new_offset < self.regVar_size and slice_size <= self.regVar_size - new_offset)
-        new_offset = self.reg_offset + new_offset
-        
-        block_slice = regVar('', self.base_reg, new_offset, slice_size)
-        return block_slice
-
-    def set_lable(self, label:str):
-        self.label = label
-
-    def define(self):
-        if(self.base_reg.position < 0):
-            assert False, 'block can`t be defined, the block position has not been set'
-        if type(self.label) in (tuple, list):
-            assert False, "not support label is tuple and call define"
-        return f'.set {self.label}, {self.base_reg.position + self.reg_offset}'
-
-    def define_as(self, label:str):
-        self.label = label
-        #self.define()
-        if(self.base_reg.position < 0):
-            assert False, 'block can`t be defined, the block position has not been set'
-        if type(label) in (tuple, list):
-            assert False, "not support label is tuple and call define"
-        return f'.set {label}, {self.base_reg.position + self.reg_offset}'
-
-    def __str__(self) -> str:
-        assert(self.regVar_size > 0)
-        right_index = self.regVar_size - 1
-        
-        if(right_index == 0):
-            return self.base_reg.get_str(index=self.reg_offset)
-        else:
-            return self.base_reg.get_str(index=(self.reg_offset, self.reg_offset+right_index))
-    
-    def __add__(self, offset):
-        assert(type(offset) is int)
-        return regVar(self.label, self.base_reg, self.reg_offset + offset, self.regVar_size - offset)
-    
-    def get_view_range(self):
-        l = self.reg_offset
-        r = self.regVar_size + l
-        return (l, r)
 
 
 class regAbs(regVar):

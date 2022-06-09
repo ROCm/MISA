@@ -26,7 +26,7 @@
 import os
 import subprocess
 
-from ..codegen.amdgpu import *
+from ..codegen.runtime.amdgpu import *
 import os
 
 IGEMM_HOST_USE_GPU_NAIVE_CONV = True
