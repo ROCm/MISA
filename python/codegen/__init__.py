@@ -23,14 +23,12 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .symbol import *
-from .macro import *
-from .compile import *
-from .config_parser import *
-from .amdgpu import *
+from .old.symbol import *
+from .old.macro import *
+from .runtime.amdgpu import *
 from .mc import *
-from .mbb import *
-from .scheduler import *
+from .old.mbb import *
+from .old.scheduler import *
 from .kernel_driver import *
 from .generator import *
-from .gpu_arch import *
+

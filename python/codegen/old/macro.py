@@ -25,7 +25,7 @@
 ################################################################################
 
 from .symbol import *
-from .mc import *
+from ..mc import *
 
 class macro_base_t(mc_base_t):
     '''

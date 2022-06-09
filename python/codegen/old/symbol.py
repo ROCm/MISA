@@ -45,6 +45,8 @@ class sym_t(object):
         if type(self.label) in (tuple, list):
             assert False, "not support label is tuple and call declare"
         comments_str = '' if self.comments == '' else f'  ; {self.comments}'
+        return f'//.set {self.label}, {self.value}{comments_str}'
+        #TODO lang based definition
         return f'.set {self.label}, {self.value}{comments_str}'
     @staticmethod
     def expr(label, index = 0):

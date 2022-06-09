@@ -23,5 +23,4 @@
 #  SOFTWARE.
 # 
 ################################################################################
-from .kernel_constructor import *
 from .direct_class import *

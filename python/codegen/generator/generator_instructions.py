@@ -1,8 +1,8 @@
-
-
-from python.codegen.gpu_arch.gpu_data_types import block_of_reg_blocks, label_t, reg_block
-from python.codegen.gpu_arch.gpu_instruct import inst_base, inst_caller_base, instruction_type
 from typing import List, Optional, Union
+
+from .gpu_arch.gpu_data_types import block_of_reg_blocks, label_t, reg_block
+from .base_components import inst_base, inst_caller_base, instruction_type
+
 
 class reg_allocator_base(inst_base):
     def __init__(self, inst_type:instruction_type, reg:Union[reg_block, List[reg_block], block_of_reg_blocks, tuple], alignment, allocator_f) -> None:
@@ -13,7 +13,6 @@ class reg_allocator_base(inst_base):
 
     def __str__(self) -> str:
         return self.allocator_f(self.reg, self.alignment)
-
 
 class reg_allocator_caller(inst_caller_base):
     def __init__(self, insturction_list: List[inst_base]) -> None:
@@ -51,7 +50,6 @@ class flow_control_caller(inst_caller_base):
     
     def kernel_func_end(self, func_ptr):
         return self.ic_pb(flow_control_base(f'{func_ptr.func_name}.end()', func_ptr))
-
     
 class HW_Reg_Init(inst_base):
     def __init__(self) -> None:
@@ -66,7 +64,6 @@ class HW_Reg_Init(inst_base):
 
     def get_dst_regs(self):
         return self.dst_regs
-
 
 class instr_label_base(inst_base):
     def __init__(self, instr_label:label_t) -> None:
@@ -83,4 +80,3 @@ class instr_label_caller(inst_caller_base):
     def set_label(self, label:label_t):
         return self.ic_pb(instr_label_base(label))
 
-    

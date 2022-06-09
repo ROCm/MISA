@@ -1,9 +1,8 @@
 from abc import ABC, abstractclassmethod
 from typing import Dict, List, OrderedDict
-from python.codegen.gpu_arch.gpu_data_types import reg_block
-from python.codegen.gpu_arch.gpu_instruct import instruction_type, inst_base
+from .gpu_arch.gpu_data_types import reg_block
+from .gpu_arch.gpu_instruct import instruction_type, inst_base
 from sortedcontainers import SortedDict
-
 
 
 class base_allocator(ABC):

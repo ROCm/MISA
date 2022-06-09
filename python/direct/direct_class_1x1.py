@@ -1,16 +1,20 @@
 from abc import ABC, abstractmethod
 import enum
 from typing import Union
-from python.codegen.gpu_arch.allocator import onDemand_allocator
-from python.codegen.gpu_arch.gpu_data_types import *
-from python.codegen.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
+
+from python.codegen.generator.allocator import onDemand_allocator
+from python.codegen.generator.gpu_arch.gpu_data_types import *
+from python.codegen.generator.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
+from python.codegen.generator.gpu_arch.GFX10 import gfx10_instructions_caller
+from python.codegen.generator.gpu_arch.gpu_instruct import gpu_instructions_caller_base
+
 from python.codegen.generator.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
-from python.codegen.gpu_arch.GFX10 import gfx10_instructions_caller
 from python.codegen.kernel_driver import base_config
+
 from ..tools.config_parser import config_content_t
 from ..codegen.mc import mc_base_t, mc_asm_printer_t
 from ..codegen.generator.kernel_constructor import *
-from python.codegen.gpu_arch.gpu_instruct import gpu_instructions_caller_base
+
 
 
 class DATA_TYPE(Enum):

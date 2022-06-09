@@ -1,7 +1,7 @@
 from abc import ABC
 from enum import Enum
 from python.codegen.mc import mc_base_t
-from python.codegen.amdgpu import amdgpu_kernel_arg_t
+from python.codegen.runtime.amdgpu import amdgpu_kernel_arg_t
 from typing import List
 
 class arg_type(Enum):
