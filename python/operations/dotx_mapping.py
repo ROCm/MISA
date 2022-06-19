@@ -286,7 +286,8 @@ ctrl_dotx_mapping_vop2_dpp4 = [
         
         ctrl_dotx_mapping_t(256,  32,   4,   8,   4,   1,   8,   1,   4,   2,   4, None),   # 256
         
-        ctrl_dotx_mapping_t(128,  32,   4,   8,   4,   1,   8,   1,   2,   2,   4, None),   # 256
+        ctrl_dotx_mapping_t(128,  32,   4,   8,   4,   1,   8,   1,   2,   2,   4, None),   # 128
+        ctrl_dotx_mapping_t( 32, 128,   4,   8,   4,   1,   2,   4,   2,   4,   2, None),   # 128
         
     ]
 
