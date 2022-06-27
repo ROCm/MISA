@@ -32,7 +32,7 @@ import copy
 
 # assuming dpp8. dpp16 is less efficient so ignore that
 LANEGROUP_SIZE   = 8
-DOTX_USE_VOP3P   = False
+DOTX_USE_VOP3P   = True
 
 class ctrl_dotx_mapping_t(object):
     '''

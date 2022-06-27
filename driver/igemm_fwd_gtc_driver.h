@@ -245,7 +245,7 @@ static void dump_fwd_karg(igemm_fwd_gtc_nchwc_karg_t * karg){
     std::cout<<"dilation_hw:"  <<std::hex<<karg->dilation_hw<<std::dec<<",";
     std::cout<<"pad_hw:"       <<std::hex<<karg->pad_hw<<std::dec<<",";
     std::cout<<"wei_hw:"       <<std::hex<<karg->wei_hw<<std::dec<<",";
-    
+    std::cout<<"move_slice_k:"       <<std::hex<<karg->move_slice_k<<std::dec<<",";
 #if USE_MAGIC_DIV
     std::cout<<"magic_0:"      <<karg->magic_0<<",";
     std::cout<<"magic_1:"      <<karg->magic_1<<",";
@@ -748,7 +748,7 @@ public:
             karg_size = sizeof(karg);
             memcpy(static_cast<void*>(&karg_buffer[0]), static_cast<void*>(&karg), karg_size);
 
-            //dump_fwd_karg(&karg);
+            dump_fwd_karg(&karg);
             //printf("block:%d, grid:%d\n", get_block_size(tunable), get_grid_size(arg, tunable));
         } else {
             assert(0);
