@@ -24,7 +24,7 @@
 # 
 ################################################################################
 
-from .runtime import base_runtime
+from runtime import base_runtime
 
 class pal_runtime(base_runtime):
 

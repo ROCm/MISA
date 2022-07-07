@@ -1,3 +1,6 @@
 [submodule "runtime_py/pybind11"]
 	path = runtimes_4python/pybind11
 	url = ../../pybind/pybind11
+[submodule "python/codegen/extension"]
+	path = python/codegen/extension
+	url = ../../shurale-nkn/MISA_lang_ext

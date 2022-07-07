@@ -24,14 +24,28 @@
 # 
 ################################################################################
 
-from python.codegen.runtime.amdgpu import amdgpu_metadata_t
-from runtime import base_runtime
+import string
+from .lang_api import *
 
-class hsa_runtime(base_runtime):
+__extension_available = False
+try:
+    __import__('imp').find_module('extension.lang')
+    __extension_available = True
+    #import extension.lang
+except ImportError:
+    pass
 
-    def __init__(self, mc, kernel_info, **args):
-        super().__init__(mc=mc, kernel_info=kernel_info, **args)
 
-    def emmit_metadata(self, **args):
-        amdgpu_metadata_t(self.mc, self.kernel_info).emit()
-        self._emit_empty_line()
+def get_kernel_lang_class(self, kernel_info, **kwargs) -> base_lang_api:
+    lang = kwargs.get('lang', None)
+    if(lang == 'llvm-asm' or lang == None):
+        from ..shader_lang.llvm_asm import llvm_kernel
+        return llvm_kernel(self.mc, kernel_info, self.instr_ctrl._emmit_created_code)
+    elif(__extension_available):
+        import extension.lang
+        ret = extension.lang.get_kernel_lang_class(self, kernel_info, **kwargs)
+        if (ret != None):
+            return  ret
+    pass
+
+

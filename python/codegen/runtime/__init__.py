@@ -24,15 +24,10 @@
 # 
 ################################################################################
 
-import string
-from .runtime import *
-from .hsa_rt import hsa_runtime
-from .pal_rt import pal_runtime
 
+from importlib.metadata import metadata
+from abc import ABC
 
-def get_runtime(name:string, **args) -> base_runtime:
-    if (name == 'hsa'):
-        return hsa_runtime
-    elif(name == 'pal'):
-        return pal_runtime
+from base_api import base_runtime
+from selector import get_runtime
 

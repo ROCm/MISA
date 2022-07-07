@@ -23,15 +23,28 @@
 #  SOFTWARE.
 # 
 ################################################################################
+import string
 
-from python.codegen.runtime.amdgpu import amdgpu_metadata_t
+from .hsa_rt import hsa_runtime
+from .pal_rt import pal_runtime
 from runtime import base_runtime
 
-class hsa_runtime(base_runtime):
+__runtime_extension_available = False
+try:
+    __import__('imp').find_module('extension.runtime')
+    __extension_available = True
+    #import extension.lang
+except ImportError:
+    pass
 
-    def __init__(self, mc, kernel_info, **args):
-        super().__init__(mc=mc, kernel_info=kernel_info, **args)
 
-    def emmit_metadata(self, **args):
-        amdgpu_metadata_t(self.mc, self.kernel_info).emit()
-        self._emit_empty_line()
+def get_runtime(name:string, **args) -> base_runtime:
+    if (name == 'hsa'):
+        return hsa_runtime
+    elif(name == 'pal'):
+        return pal_runtime
+    elif(__extension_available):
+        import extension.runtime
+        ret = extension.runtime.get_runtime(name, **args)
+        if (ret != None):
+            return  ret
