@@ -28,6 +28,6 @@
 from importlib.metadata import metadata
 from abc import ABC
 
-from base_api import base_runtime
+from base_api import base_runtime_class
 from selector import get_runtime
 

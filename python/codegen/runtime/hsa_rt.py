@@ -25,9 +25,9 @@
 ################################################################################
 
 from python.codegen.runtime.amdgpu import amdgpu_metadata_t
-from runtime import base_runtime
+from runtime import base_runtime_class
 
-class hsa_runtime(base_runtime):
+class hsa_runtime(base_runtime_class):
 
     def __init__(self, mc, kernel_info, **args):
         super().__init__(mc=mc, kernel_info=kernel_info, **args)

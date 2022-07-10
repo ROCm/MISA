@@ -1,5 +1,5 @@
 from python.codegen.runtime.amdgpu import amd_kernel_code_t
-from python.codegen.shader_lang.lang_api import *
+from python.codegen.shader_lang.base_api import *
 
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)
@@ -24,7 +24,7 @@ class hsa_kernel_header(mc_base_t):
             self._emit('.amdgpu_hsa_kernel {}'.format(kernel_name))
         self._emit('{}:'.format(kernel_name))
 
-class llvm_kernel(base_lang_api):    
+class llvm_kernel(base_lang_class):    
     
     def __init__(self, mc, kernel_info: amdgpu_kernel_info_t, emmit_created_code):
         super().__init__(mc, kernel_info, emmit_created_code)

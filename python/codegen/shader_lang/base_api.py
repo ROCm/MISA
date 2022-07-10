@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from python.codegen.mc import mc_asm_printer_t, mc_base_t
 
 
-
 class amdgpu_kernel_info_t(object):
     def __init__(self, kernel_code, kernel_name, kernel_block_size, kernel_args):
         self.kernel_code = kernel_code
@@ -11,7 +10,7 @@ class amdgpu_kernel_info_t(object):
         self.kernel_block_size = kernel_block_size
         self.kernel_args = kernel_args
 
-class base_lang_api(mc_base_t, ABC):    
+class base_lang_class(mc_base_t, ABC):    
     
     def _emit_kernel_header(self):
         pass

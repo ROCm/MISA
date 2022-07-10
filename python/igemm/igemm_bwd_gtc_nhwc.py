@@ -24,7 +24,7 @@
 # 
 ################################################################################
 # pylint: disable=maybe-no-member
-from python.codegen.shader_lang.lang_api import amdgpu_kernel_info_t
+from python.codegen.shader_lang.base_api import amdgpu_kernel_info_t
 from ..codegen import *
 from ..operations import *
 from .igemm_base import *

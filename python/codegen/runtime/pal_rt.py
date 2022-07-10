@@ -24,9 +24,9 @@
 # 
 ################################################################################
 
-from runtime import base_runtime
+from runtime import base_runtime_class
 
-class pal_runtime(base_runtime):
+class pal_runtime(base_runtime_class):
 
     def __init__(self, arch_dict):
         super().__init__(arch_dict)

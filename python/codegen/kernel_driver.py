@@ -62,7 +62,7 @@ from ..codegen import *
 from ..tools.compile import *
 from .generator.kernel_constructor import kernel_constructor
 from typing import List, Dict
-from .runtime import *
+from .runtime import get_runtime
 
 class base_driver_t(mc_base_t, ABC):
     def __init__(self, mc : mc_asm_printer_t, _config:base_config):
@@ -183,8 +183,8 @@ class base_driver_t(mc_base_t, ABC):
                         emitter_per_inc_dict[kps_file_name] = kps_emitter
                         kinfo_per_inc_dict[kps_file_name] = []
 
-                        kernel.mc.emitter = emitter_per_inc_dict[kps_file_name]
-                        kinfo_per_inc_dict[kps_file_name].append(kernel.kernel_info)
+                    kernel.mc.emitter = emitter_per_inc_dict[kps_file_name]
+                    kinfo_per_inc_dict[kps_file_name].append(kernel.kernel_info)
 
 
                 kernel._emit(';----------------------------------------------------------')

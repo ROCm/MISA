@@ -23,28 +23,27 @@
 #  SOFTWARE.
 # 
 ################################################################################
-import string
 
-from .hsa_rt import hsa_runtime
-from .pal_rt import pal_runtime
-from runtime import base_runtime_class
+from shader_lang import base_lang_class
 
-__runtime_extension_available = False
+__extension_available = False
 try:
-    __import__('imp').find_module('extension.runtime_ext')
+    __import__('imp').find_module('extension.lang')
     __extension_available = True
     #import extension.lang
 except ImportError:
     pass
 
 
-def get_runtime(name:string, **args) -> base_runtime_class:
-    if (name == 'hsa'):
-        return hsa_runtime
-    elif(name == 'pal'):
-        return pal_runtime
+def get_kernel_lang_class(self, kernel_info, **kwargs) -> base_lang_class:
+    lang = kwargs.get('lang', None)
+    if(lang == 'llvm-asm' or lang == None):
+        from ..shader_lang.llvm_asm import llvm_kernel
+        return llvm_kernel(self.mc, kernel_info, self.instr_ctrl._emmit_created_code)
     elif(__extension_available):
-        from extension import runtime_ext
-        ret = runtime_ext.get_runtime(name, **args)
+        import extension.lang
+        ret = extension.lang.get_kernel_lang_class(self, kernel_info, **kwargs)
         if (ret != None):
             return  ret
+    pass
+

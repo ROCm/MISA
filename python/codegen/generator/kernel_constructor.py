@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
+from email.policy import default
 from typing import List, Type
 
 from requests import options
 
 from ..mc import mc_base_t, mc_asm_printer_t
 from ..runtime.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t
-from ..shader_lang.lang_api import amdgpu_kernel_info_t, base_lang_api
+from shader_lang.base_api import amdgpu_kernel_info_t
+import shader_lang
 
 from .kernel_arg import _args_manager_t, karg_file_t
 from .kernel_func import kernel_launcher
@@ -43,11 +45,6 @@ class kernel_constructor(mc_base_t, ABC):
         self.instr_ctrl.execute_all()
         #some optimize
 
-    def get_kernel_lang_class(self, kernel_info, **kwargs) -> base_lang_api:
-        lang = kwargs.get('lang', None)
-        if(lang == 'llvm-asm' or lang == None):
-            from ..shader_lang.llvm_asm import llvm_kernel
-            return llvm_kernel(self.mc, kernel_info, self.instr_ctrl._emmit_created_code)
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
         self.instr_ctrl = instruction_ctrl()
@@ -60,16 +57,16 @@ class kernel_constructor(mc_base_t, ABC):
         self.generate_kernel_body()
         
         self.kernel_info = self._construct_kernel_info()
-        self._kernel_lang_formater = self.get_kernel_lang_class(self.kernel_info, **kwargs)
+        self._kernel_lang_formater = shader_lang.get_kernel_lang_class(self, self.kernel_info, **kwargs)
         
         #self.emit_kernel_code = self._kernel_lang_formater.emit_kernel_code
 
+    kernel_gfx = base_HW
 
     @abstractmethod    
     def set_GPU_HW(self):
-        self.HW = base_HW(self.instructions_caller, stack_allocator, stack_allocator, 104, 256, 65000)
+        self.HW = self.kernel_gfx(self.instructions_caller, stack_allocator, stack_allocator)
         
-    
     def get_kernel_block_size(self):
         return (64, 1, 1)
 

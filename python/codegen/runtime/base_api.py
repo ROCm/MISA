@@ -30,7 +30,7 @@ from abc import ABC
 from python.codegen.mc import mc_base_t
 
 
-class base_runtime(ABC, mc_base_t):
+class base_runtime_class(ABC, mc_base_t):
     def __init__(self, mc, kernel_info, **args):
         mc_base_t.__init__(self, mc)
         self.kernel_info = kernel_info
