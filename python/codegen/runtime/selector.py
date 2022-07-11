@@ -25,15 +25,14 @@
 ################################################################################
 import string
 
-from .hsa_rt import hsa_runtime
-from .pal_rt import pal_runtime
-from runtime import base_runtime_class
+from python.codegen.runtime.hsa_rt import hsa_runtime
+from python.codegen.runtime.pal_rt import pal_runtime
+from python.codegen.runtime.base_api import base_runtime_class
 
 __runtime_extension_available = False
 try:
-    __import__('imp').find_module('extension.runtime_ext')
-    __extension_available = True
-    #import extension.lang
+    from python.codegen.extension import runtime_ext
+    __runtime_extension_available = True
 except ImportError:
     pass
 
@@ -43,8 +42,7 @@ def get_runtime(name:string, **args) -> base_runtime_class:
         return hsa_runtime
     elif(name == 'pal'):
         return pal_runtime
-    elif(__extension_available):
-        from extension import runtime_ext
+    elif(__runtime_extension_available):
         ret = runtime_ext.get_runtime(name, **args)
         if (ret != None):
             return  ret

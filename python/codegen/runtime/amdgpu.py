@@ -26,7 +26,7 @@
 # pylint: disable=maybe-no-member
 import os
 import subprocess
-from ..mc import *
+from python.codegen.mc import mc_base_t
 
 AMDGPU_PRECISION_FP32   = (0 << 20)
 AMDGPU_PRECISION_FP16   = (1 << 20)

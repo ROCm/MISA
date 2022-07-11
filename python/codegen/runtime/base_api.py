@@ -24,9 +24,7 @@
 # 
 ################################################################################
 
-from importlib.metadata import metadata
 from abc import ABC
-
 from python.codegen.mc import mc_base_t
 
 

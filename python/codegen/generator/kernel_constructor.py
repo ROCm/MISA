@@ -4,22 +4,18 @@ from typing import List, Type
 
 from requests import options
 
-from ..mc import mc_base_t, mc_asm_printer_t
-from ..runtime.amdgpu import amd_kernel_code_t, amdgpu_kernel_code_t
-from shader_lang.base_api import amdgpu_kernel_info_t
-import shader_lang
+from python.codegen.mc import mc_base_t, mc_asm_printer_t
+from python.codegen.shader_lang import amdgpu_kernel_info_t, get_kernel_lang_class
 
-from .kernel_arg import _args_manager_t, karg_file_t
-from .kernel_func import kernel_launcher
-from .allocator import stack_allocator
+from python.codegen.runtime.amdgpu import amdgpu_kernel_code_t
+from python.codegen.generator.kernel_arg import _args_manager_t, karg_file_t
+from python.codegen.generator.kernel_func import kernel_launcher
+from python.codegen.generator.allocator import stack_allocator
+from python.codegen.generator.instructions_graph import instruction_graph
 
-from .gpu_arch.HW_components import base_HW
-from .gpu_arch.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
+from python.codegen.generator.gpu_arch.HW_components import base_HW
+from python.codegen.generator.gpu_arch.gpu_instruct import gpu_instructions_caller_base, instruction_ctrl
 
-
-#public dep
-from .kernel_arg import arg_kind, arg_type
-from .instructions_graph import instruction_graph
 
 class kernel_constructor(mc_base_t, ABC):
 
@@ -48,6 +44,7 @@ class kernel_constructor(mc_base_t, ABC):
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
         self.instr_ctrl = instruction_ctrl()
+        self.kernel_gfx = base_HW
         self._instructions_init()
         self.set_GPU_HW()
         t = type(self.instructions_caller)
@@ -57,13 +54,10 @@ class kernel_constructor(mc_base_t, ABC):
         self.generate_kernel_body()
         
         self.kernel_info = self._construct_kernel_info()
-        self._kernel_lang_formater = shader_lang.get_kernel_lang_class(self, self.kernel_info, **kwargs)
+        self._kernel_lang_formater = get_kernel_lang_class(self, self.kernel_info, **kwargs)
         
         #self.emit_kernel_code = self._kernel_lang_formater.emit_kernel_code
 
-    kernel_gfx = base_HW
-
-    @abstractmethod    
     def set_GPU_HW(self):
         self.HW = self.kernel_gfx(self.instructions_caller, stack_allocator, stack_allocator)
         

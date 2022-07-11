@@ -24,7 +24,7 @@
 # 
 ################################################################################
 
-from runtime import base_runtime_class
+from python.codegen.runtime.base_api import base_runtime_class
 
 class pal_runtime(base_runtime_class):
 

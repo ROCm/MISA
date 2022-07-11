@@ -25,7 +25,7 @@
 ################################################################################
 
 from python.codegen.runtime.amdgpu import amdgpu_metadata_t
-from runtime import base_runtime_class
+from python.codegen.runtime.base_api import base_runtime_class
 
 class hsa_runtime(base_runtime_class):
 

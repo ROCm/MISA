@@ -1,5 +1,6 @@
+from python.codegen.mc import mc_base_t
 from python.codegen.runtime.amdgpu import amd_kernel_code_t
-from python.codegen.shader_lang.base_api import *
+from python.codegen.shader_lang.base_api import amdgpu_kernel_info_t, base_lang_class
 
 AMDGPU_CODEOBJECT_V2    = (0 << 28)
 AMDGPU_CODEOBJECT_V3    = (1 << 28)

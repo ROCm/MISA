@@ -25,7 +25,9 @@
 ################################################################################
 from .old.symbol import *
 from .old.macro import *
-from .runtime.amdgpu import *
+from .runtime import *
+from .shader_lang import *
+from .extension import *
 from .mc import *
 from .old.mbb import *
 from .old.scheduler import *

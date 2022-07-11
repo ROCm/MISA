@@ -1,13 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import Union
-from python.codegen.generator.gpu_arch.gpu_data_types import *
-from python.codegen.generator.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
-from python.codegen.generator.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
-from python.codegen.generator.gpu_arch.GFX10 import gfx10_instructions_caller
+
 from python.codegen.kernel_driver import base_config
-from ..tools.config_parser import config_content_t
-from ..codegen.mc import mc_base_t, mc_asm_printer_t
-from ..codegen.generator.kernel_constructor import *
+from python.codegen.mc import mc_base_t, mc_asm_printer_t
+
+from python.tools.config_parser import config_content_t
+from python.codegen.generator.kernel_arg import arg_kind, arg_type
+from python.codegen.generator.kernel_func import kernel_func, kernel_launcher, launcher_kernel, mfunc_func
+from python.codegen.generator.kernel_constructor import *
+
+from python.codegen.generator.gpu_arch.gpu_data_types import *
+from python.codegen.generator.gpu_arch.GFX10 import gfx10_instructions_caller
+from python.codegen.generator.gpu_arch.HW_components import HW_gfx9, sgpr_file_t, sgpr_hw_component, vgpr_file_t, vgpr_hw_component
 from python.codegen.generator.gpu_arch.gpu_instruct import gpu_instructions_caller_base
 
 class direct_navi_config(base_config):
@@ -170,6 +174,8 @@ class conv_direct_navi(kernel_constructor):
 
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         super().__init__(mc_asm_printer, **kwargs)
+        self.kernel_gfx = HW_gfx9
+
     class custom_caller(gfx10_instructions_caller):
         def __init__(self, insturction_list) -> None:
             super().__init__(insturction_list)
@@ -178,9 +184,6 @@ class conv_direct_navi(kernel_constructor):
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
         self.kargs=self.kernel_karg_t(self.mc)
-    
-    def set_GPU_HW(self):
-        self.HW = HW_gfx9(self.instructions_caller, stack_allocator, stack_allocator)
 
     def _instructions_init(self):
         '''Defined in kernel class to make overwrited sgpr and vgpr trackable by IDE.'''

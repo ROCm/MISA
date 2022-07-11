@@ -29,8 +29,15 @@ import os
 import copy
 import multiprocessing as mp
 from abc import ABC, abstractmethod
-from python.codegen.mc import *
+from typing import List, Dict
+
+from python.codegen import *
+from python.tools.compile import *
+
+from python.codegen.mc import mc_base_t
 from python.tools.config_parser import config_content_t
+from python.codegen.generator.kernel_constructor import kernel_constructor
+from python.codegen.runtime.selector import get_runtime
 
 class base_config(ABC):
     def __init__(self, config_content: config_content_t, suf:str=''):
@@ -57,12 +64,6 @@ class base_config(ABC):
         self.direction = get_direction(config_content)
         self.kernels = []
 
-
-from ..codegen import *
-from ..tools.compile import *
-from .generator.kernel_constructor import kernel_constructor
-from typing import List, Dict
-from .runtime import get_runtime
 
 class base_driver_t(mc_base_t, ABC):
     def __init__(self, mc : mc_asm_printer_t, _config:base_config):

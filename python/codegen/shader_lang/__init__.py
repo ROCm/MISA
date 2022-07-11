@@ -24,6 +24,6 @@
 # 
 ################################################################################
 
-import string
-from base_api import base_lang_class
-from selector import get_kernel_lang_class
+from .base_api import base_lang_class, amdgpu_kernel_info_t
+from .selector import get_kernel_lang_class
+
