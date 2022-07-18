@@ -20,12 +20,9 @@ class gpr_off_sequencer_t(object):
     def get_last_pos(self):
         return self._last_pos
 
-from .gpu_instruct import inst_caller_base
-from ..allocator import stack_allocator
-
-from typing import Type
-from ..allocator import base_allocator
-
+#######################################
+#Registers type definition
+#######################################
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks', 'label_as_pos']
     def __init__(self, ic:inst_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None, label_as_pos=False):
@@ -183,6 +180,10 @@ class special_regs_base():
     def clean_special_reg(self, name):
         self._special_reg_dirty[name] = False
 
+#######################################
+#Binary interface  definition
+#######################################
+
 class sgpr_hw_component(special_regs_base):
     def __init__(self, gpu_instructions_caller_base, sgpr_size, sgpr_alloc:Type[base_allocator], *args, **kwargs) -> None:
         super().__init__(gpu_instructions_caller_base=gpu_instructions_caller_base, *args, **kwargs)
@@ -204,6 +205,9 @@ class sgpr_hw_component(special_regs_base):
     def get_karg_segment_ptr(self):
         return self.get_special_reg('karg_segment_ptr')
     
+    def allways_defined_regs(self):
+        return [VCC_reg(), EXEC_reg(), M0_reg()]
+
     def ABI_sgpr_setregs(self, Reg_Init_instr:HW_Reg_Init):
         off_seq = 0
         alloc = self.sgpr_alloc
@@ -217,6 +221,10 @@ class sgpr_hw_component(special_regs_base):
                 reg.set_position(off_seq)
                 Reg_Init_instr.dst_regs.append(reg[:])
                 off_seq += reg.dwords
+        
+        special_extra = self.allways_defined_regs()
+        for i in special_extra:
+            Reg_Init_instr.dst_regs.append(i)
     
     def get_ABI_sgpr_active_reg_list(self):
         ret = []
@@ -231,7 +239,6 @@ class sgpr_hw_component(special_regs_base):
         
 class vgpr_hw_component(special_regs_base):
     def __init__(self, gpu_instructions_caller_base, vgpr_size, vgpr_alloc:Type[base_allocator], *args, **kwargs) -> None:
-        
         super().__init__(*args, **kwargs)
         self.vgpr_alloc = vgpr_alloc(vgpr_size)
         v_type = reg_type.vgpr
@@ -269,6 +276,11 @@ class vgpr_hw_component(special_regs_base):
                 reg = self._special_regs_storage[i]
                 ret.append(reg)
         return ret
+
+#######################################
+#HW definition
+#######################################
+
 class base_HW(sgpr_hw_component, vgpr_hw_component):
     def __init__(self, gpu_instructions_caller_base,sgpr_alloc:Type[base_allocator], vgpr_alloc:Type[base_allocator], sgpr_size, vgpr_size, LDS_size) -> None:
         super().__init__(
