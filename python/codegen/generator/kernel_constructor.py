@@ -8,7 +8,7 @@ from python.codegen.mc import mc_base_t, mc_asm_printer_t
 from python.codegen.shader_lang import amdgpu_kernel_info_t, get_kernel_lang_class
 
 from python.codegen.runtime.amdgpu import amdgpu_kernel_code_t
-from python.codegen.generator.kernel_arg import _args_manager_t, karg_file_t
+from python.codegen.generator.kernel_arg import _args_manager_t, _singl_arg, karg_file_t
 from python.codegen.generator.kernel_func import kernel_launcher
 from python.codegen.generator.allocator import stack_allocator
 from python.codegen.generator.instructions_graph import instruction_graph
@@ -29,6 +29,14 @@ class kernel_constructor(mc_base_t, ABC):
         '''Should be called before get_amdgpu_metadata_list in kernel_constructor.__init__.
         Defined in kernel class to make overwrited kernel_karg_t trackable by IDE.'''
         self.kargs=self.kernel_karg_t(self.mc)
+    
+    def _print_karg_as_vars(self):
+        args_list:List[_singl_arg] = self.kargs.args_list
+        print_f = self._emit
+        var_create_f = self._kernel_code_lang.create_variable
+        for v in args_list:
+            print_f(var_create_f(v.name, v.offset))
+            #print_f(var_create_f(*v.ret_symb_var()))
 
     def generate_kernel_body(self):
         self._emit_kernel_body()
@@ -64,6 +72,9 @@ class kernel_constructor(mc_base_t, ABC):
         self.k_config = kernel_launcher[t](instructions_caller_base=self.instructions_caller, code_lang=self._kernel_code_lang, gpu_HW=self.HW)
         #define kernel arguments as karg
         self._set_kernel_karg_t()
+        #print kernel arguments
+        self._print_karg_as_vars()
+        #call kernel generator
         self.generate_kernel_body()
 
 
