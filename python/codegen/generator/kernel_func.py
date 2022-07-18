@@ -1,6 +1,8 @@
 from os import name
 from typing import Generic, List, Type, TypeVar
 
+from python.codegen.shader_lang.base_api import base_lang_class
+
 from .allocator import base_allocator
 from .generator_instructions import instr_label_caller, reg_allocator_base
 
@@ -12,13 +14,13 @@ import inspect
 
 T = TypeVar('T')
 class kernel_func(Generic[T]):
-    def __init__(self, instructions_caller_base:T, func_name:str=None, sgpr_a:base_allocator=None, vgpr_a:base_allocator=None, agpr_a:base_allocator=None) -> None:
+    def __init__(self, instructions_caller_base:T, code_lang:base_lang_class=None, func_name:str=None, sgpr_a:base_allocator=None, vgpr_a:base_allocator=None, agpr_a:base_allocator=None) -> None:
         
         if(sgpr_a != None ):#and issubclass(type(sgpr_a), base_allocator)):
-            self.sgpr_f = sgpr_file_t(instructions_caller_base, sgpr_a)
+            self.sgpr_f = sgpr_file_t(instructions_caller_base, code_lang, sgpr_a)
         
         if(vgpr_a != None ):#and issubclass(type(sgpr_a), base_allocator)):
-            self.vgpr_f = vgpr_file_t(instructions_caller_base, vgpr_a)
+            self.vgpr_f = vgpr_file_t(instructions_caller_base, code_lang, vgpr_a)
 
         self.agpr_f = None
 
@@ -26,6 +28,7 @@ class kernel_func(Generic[T]):
         
 
         self.ic = instructions_caller_base
+        self.code_lang:base_lang_class = code_lang
         self.PIc = gpu_instructions_caller_base(instructions_caller_base.il)
         if(func_name == None):
             self.func_name = self.__class__.__name__
@@ -39,6 +42,9 @@ class kernel_func(Generic[T]):
     @classmethod
     def create_from_other_inst(cls, other, func_name: str = None):
         
+        instructions_caller = getattr(other, 'ic')
+        code_lang = getattr(other, 'code_lang', None)
+
         sgpr_f = getattr(other, 'sgpr_f', None)
         sgpr_a = getattr(sgpr_f, '_allocator', None)
 
@@ -47,8 +53,9 @@ class kernel_func(Generic[T]):
 
         agpr_f = getattr(other, 'agpr_f', None)
         agpr_a = getattr(agpr_f, '_allocator', None)
+        
 
-        return cls(other.ic, func_name, sgpr_a = sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
+        return cls(instructions_caller, code_lang, func_name, sgpr_a = sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
 
     def _func_begin(self):
         self.PIc.kernel_func_begin(self)
@@ -111,12 +118,12 @@ class kernel_func(Generic[T]):
         pass
 class kernel_launcher(kernel_func[T]):
     
-    def __init__(self, instructions_caller_base: T, gpu_HW:base_HW, func_name: str = None):
+    def __init__(self, instructions_caller_base: T, code_lang:base_lang_class, gpu_HW:base_HW, func_name: str = None):
         sgpr_a = getattr(gpu_HW, 'sgpr_alloc', None)
         vgpr_a = getattr(gpu_HW, 'vgpr_alloc', None)
         agpr_a = getattr(gpu_HW, 'agpr_alloc', None)
         
-        super().__init__(instructions_caller_base, func_name=func_name, sgpr_a=sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
+        super().__init__(instructions_caller_base, code_lang=code_lang, func_name=func_name, sgpr_a=sgpr_a, vgpr_a=vgpr_a, agpr_a=agpr_a)
         self.HW = gpu_HW
     
     def _func_begin(self):
@@ -129,7 +136,7 @@ class kernel_launcher(kernel_func[T]):
 
     @classmethod
     def create_from_other_inst(cls, other, func_name: str = None):
-        return cls(other.ic, other.HW, func_name)
+        return cls(other.ic, other.code_lang, other.HW, func_name)
 
 
 def mfunc_class(cls):

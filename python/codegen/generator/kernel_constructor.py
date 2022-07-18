@@ -41,22 +41,31 @@ class kernel_constructor(mc_base_t, ABC):
         self.instr_ctrl.execute_all()
         #some optimize
 
+        #setup amdgpu_kernel_info_t from curen kernel
+        self.kernel_info = amdgpu_kernel_info_t(
+            kernel_code=self._get_kernel_code_obj_t(),
+            kernel_args=self.kargs.get_amdgpu_metadata_list(),
+            kernel_block_size=self.get_kernel_block_size(), kernel_name=self.get_kernel_name()
+        )
+
     def __init__(self, mc_asm_printer: mc_asm_printer_t, **kwargs):
         mc_base_t.__init__(self, mc_asm_printer)
+        #Instruction manager init
         self.instr_ctrl = instruction_ctrl()
+        #kernel language selection
+        self._kernel_code_lang = get_kernel_lang_class(self.mc, self.instr_ctrl._emmit_created_code, **kwargs)
+
+        #hardware selection
         self.kernel_gfx = base_HW
         self._instructions_init()
         self.set_GPU_HW()
+        #setup kernel type
         t = type(self.instructions_caller)
-        self.k_config = kernel_launcher[t](self.instructions_caller, self.HW)
-        
+        self.k_config = kernel_launcher[t](instructions_caller_base=self.instructions_caller, code_lang=self._kernel_code_lang, gpu_HW=self.HW)
+        #define kernel arguments as karg
         self._set_kernel_karg_t()
         self.generate_kernel_body()
-        
-        self.kernel_info = self._construct_kernel_info()
-        self._kernel_lang_formater = get_kernel_lang_class(self, self.kernel_info, **kwargs)
-        
-        #self.emit_kernel_code = self._kernel_lang_formater.emit_kernel_code
+
 
     def set_GPU_HW(self):
         self.HW = self.kernel_gfx(self.instructions_caller, stack_allocator, stack_allocator)
@@ -64,11 +73,6 @@ class kernel_constructor(mc_base_t, ABC):
     def get_kernel_block_size(self):
         return (64, 1, 1)
 
-    def _construct_kernel_info(self) -> amdgpu_kernel_info_t:
-        return amdgpu_kernel_info_t(
-            kernel_code=self._get_kernel_code_obj_t(),
-            kernel_args=self.kargs.get_amdgpu_metadata_list(),
-            kernel_block_size=self.get_kernel_block_size(), kernel_name=self.get_kernel_name())
     
     @abstractmethod
     def _instructions_init(self):
@@ -121,12 +125,8 @@ class kernel_constructor(mc_base_t, ABC):
         self._emit_empty_line()
 
     def emit_kernel_code(self, **options):
-        self._kernel_lang_formater.emit_kernel_code(**options)
-        #self._emit_kernel_header()
-        #self._emit_kernel_symbols()
-        #self.instr_ctrl._emmit_created_code(self._emit)
-        #self._emit_kernel_end()
+        self._kernel_code_lang.emit_kernel_code(self.kernel_info, **options)
 
     def emit_kernel_amd_kernel_code_t(self):
-        #self._kernel_lang_formater._emit_kernel_amd_kernel_code_t()
+        #self._kernel_code_lang._emit_kernel_amd_kernel_code_t()
         pass

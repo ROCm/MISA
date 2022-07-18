@@ -27,22 +27,37 @@ class hsa_kernel_header(mc_base_t):
 
 class llvm_kernel(base_lang_class):    
     
-    def __init__(self, mc, kernel_info: amdgpu_kernel_info_t, emmit_created_code):
-        super().__init__(mc, kernel_info, emmit_created_code)
-    
-    def _emit_kernel_header(self):
-        hsa_kernel_header(mc=self.mc, amdgpu_kernel_info=self._kernel_info).emit()
+    def __init__(self, mc, emmit_created_code):
+        super().__init__(mc, emmit_created_code)
+
+    def _set_variable_mod(self, real_variable_mode):
+        if(real_variable_mode):
+            self.variable_print_mode = ''
+        else:
+            self.variable_print_mode = '//'
+
+    def _emit_kernel_header(self, kernel_info:amdgpu_kernel_info_t):
+        hsa_kernel_header(mc=self.mc, amdgpu_kernel_info=kernel_info).emit()
         
     def _emit_kernel_end(self):
         self._emit('s_endpgm')
         self._emit('')
 
-    def _emit_kernel_amd_kernel_code_t(self):
+    def _emit_kernel_amd_kernel_code_t(self, kernel_info):
         amd_kernel_code_t(self.mc, self._kernel_info).emit()
 
-    def emit_kernel_code(self, ):
-        self._emit_kernel_header()
+    def create_variable(self, name, value=0):
+        return f'{self.variable_print_mode}.set {name}, {value}'
+    
+    def set_variable_val(self, name, value):
+        return f'{self.variable_print_mode}.set {name}, {value}'
+
+    def unset_variable(self, name):
+        return f'{self.variable_print_mode}.unset {name}'
+
+    def emit_kernel_code(self, kernel_info:amdgpu_kernel_info_t, **kwargs):
+        self._emit_kernel_header(kernel_info)
         #self._emit_kernel_symbols()
         self._emmit_created_code(self._emit)
         self._emit_kernel_end()
-        self._emit_kernel_amd_kernel_code_t()
+        self._emit_kernel_amd_kernel_code_t(kernel_info)

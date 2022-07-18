@@ -12,14 +12,33 @@ class amdgpu_kernel_info_t(object):
 
 class base_lang_class(mc_base_t, ABC):    
     
+    def __init__(self, mc_asm_printer: mc_asm_printer_t, emmit_created_code, real_variable_mode=True):
+        super().__init__(mc_asm_printer)
+        self._emmit_created_code = emmit_created_code
+        self._set_variable_mod(real_variable_mode)
+    
+    def _set_variable_mod(self, real_variable_mode):
+        if(real_variable_mode):
+            self.variable_print_mode = ''
+        else:
+            self.variable_print_mode = '#'
+
+    @abstractmethod
     def _emit_kernel_header(self):
         pass
 
-    def __init__(self, mc_asm_printer: mc_asm_printer_t, kernel_info:amdgpu_kernel_info_t, emmit_created_code):
-        super().__init__(mc_asm_printer)
-        self._kernel_info = kernel_info
-        self._emmit_created_code = emmit_created_code
+    @abstractmethod
+    def create_variable(self, name:str, value=0):
+        pass
     
+    @abstractmethod
+    def set_variable_val(self, name:str, value):
+        pass
 
-    def emit_kernel_code(self, kernel_obj, **kwargs):
+    @abstractmethod
+    def unset_variable(self, name:str):
+        pass
+    
+    @abstractmethod
+    def emit_kernel_code(self, kernel_info:amdgpu_kernel_info_t, **kwargs):
         pass

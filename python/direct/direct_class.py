@@ -40,9 +40,7 @@ class conv_direct_navi(kernel_constructor):
             self.H = pb_arg('H', arg_kind.value, arg_type.I32)
             self.W = pb_arg('W', arg_kind.value, arg_type.I32)
             self.K = pb_arg('K', arg_kind.value, arg_type.I32)
-            self.X = pb_arg('Y', arg_kind.value, arg_type.I32)
-            self.Y = pb_arg('X', arg_kind.value, arg_type.I32)
-            self.G = pb_arg('G', arg_kind.value, arg_type.I32)
+
 
     def _get_LDS_usage(self):
         return 0
@@ -53,7 +51,7 @@ class conv_direct_navi(kernel_constructor):
         def launch_k(self:kernel_launcher[gfx10_instructions_caller], karg:conv_direct_navi.kernel_karg_t):
             class _sgpr(sgpr_file_t):
                 def __init__(self, sgpr_f, HW:sgpr_hw_component):
-                    super().__init__(sgpr_f.ic, sgpr_f._allocator)
+                    super().__init__(sgpr_f.ic, code_lang=sgpr_f.code_lang, gpr_allocator=sgpr_f._allocator)
                     add = self.add 
                     self.karg_ptr = HW.get_karg_segment_ptr()
                     self.group_id = HW.get_gid_x()
@@ -72,7 +70,7 @@ class conv_direct_navi(kernel_constructor):
             
             class _vgpr(vgpr_file_t):
                 def __init__(self, vgpr_f, HW:vgpr_hw_component):
-                    super().__init__(vgpr_f.ic, vgpr_f._allocator)
+                    super().__init__(vgpr_f.ic, code_lang=vgpr_f.code_lang, gpr_allocator=vgpr_f._allocator)
                     add = self.add 
                     self.tid = HW.get_tid_x()
                     self.in_off = add('in_off', 1)
@@ -98,7 +96,7 @@ class conv_direct_navi(kernel_constructor):
             ic.s_load_dwordx2(s.in_buff_ptr[0:1], s.karg_ptr[0:1], karg.in_ptr+0)
             ic.s_load_dwordx2(s.out_buff_ptr[0:1], s.karg_ptr[0:1], karg.out_ptr+0)
             ic.s_load_dwordx2(s.wei_buff_ptr[0:1], s.karg_ptr[0:1], karg.wei_ptr+0)
-            ic.s_load_dwordx2(s.C[0], s.karg_ptr[0:1], karg.C+0)
+            ic.s_load_dword(s.C[0], s.karg_ptr[0:1], karg.C+0)
 
             
             wGroup_stride = s.add('wGroup_stride', 1)
@@ -118,18 +116,19 @@ class conv_direct_navi(kernel_constructor):
 
             tid_offset = v.add('tid_offset', 1)
             seq_items_per_thread = 4
-            ic.s_mul_i32(tid_offset[0], item_size * seq_items_per_thread, v.tid[0])
+            ic.v_mul_lo_u32(tid_offset[0], item_size * seq_items_per_thread, v.tid[0])
             
             @mfunc_func
             def func_x1(self:kernel_func[gfx10_instructions_caller],
                 buff_ptr:regVar, t_offset:regVar, soffset:regVar, cnt:int, result_var:regVar):
                 ic = self.ic
                 s = self.sgpr_f
+                v = self.vgpr_f
                 read_tmp = []
                 for i in range(cnt):
-                    read_tmp.append(s.add_no_pos(f'read_{i}', 1))
+                    read_tmp.append(v.add_no_pos(f'read_{i}', 1))
 
-                read_block = s.add_block('read_block', read_tmp)
+                read_block = v.add_block('read_block', read_tmp)
                 
                 if(cnt == 1):
                     load_ic = ic.buffer_load_dword

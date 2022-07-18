@@ -35,12 +35,12 @@ except ImportError:
     pass
 
 
-def get_kernel_lang_class(self, kernel_info, **kwargs) -> base_lang_class:
+def get_kernel_lang_class(mc, emmit_created_code_f, **kwargs) -> base_lang_class:
     lang = kwargs.get('lang', None)
     if(lang == 'llvm-asm' or lang == None):        
-        return llvm_kernel(self.mc, kernel_info, self.instr_ctrl._emmit_created_code)
+        return llvm_kernel(mc, emmit_created_code_f)
     elif(__extension_available):
-        ret = lang_ext.get_kernel_lang_class(self, kernel_info, **kwargs)
+        ret = lang_ext.get_kernel_lang_class(mc, emmit_created_code_f, **kwargs)
         if (ret != None):
             return  ret
     pass

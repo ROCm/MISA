@@ -1,10 +1,12 @@
-from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Type, Union
+
+from python.codegen.shader_lang.base_api import base_lang_class
+
 from ..generator_instructions import HW_Reg_Init, reg_allocator_caller
 from ..allocator import base_allocator, onDemand_allocator, stack_allocator
 from .gpu_data_types import *
+from .gpu_instruct import inst_caller_base
 
-import copy
 
 class gpr_off_sequencer_t(object):
     def __init__(self, offset = 0):
@@ -25,12 +27,13 @@ class gpr_off_sequencer_t(object):
 #######################################
 class gpr_file_t():#mc_base_t):
     __slots__ = ['_allocator', 'reg_t', 'define_on_creation', 'ic', 'active_blocks', 'label_as_pos']
-    def __init__(self, ic:inst_caller_base, reg_t:reg_type, gpr_allocator:base_allocator=None, label_as_pos=False):
+    def __init__(self, ic:inst_caller_base, code_lang:base_lang_class, reg_t:reg_type, gpr_allocator:base_allocator=None, label_as_pos=False):
         #mc_base_t.__init__(self, mc)
         self._allocator = gpr_allocator
         self.reg_t = reg_t
         self.define_on_creation = False
         self.ic = reg_allocator_caller(ic.il)
+        self.code_lang:base_lang_class = code_lang
         self.active_blocks:List[reg_block] = []
         self.label_as_pos = label_as_pos
     
@@ -43,7 +46,10 @@ class gpr_file_t():#mc_base_t):
        
     def _alloc(self, reg:reg_block, alignment):
         reg.set_position(self._allocator.malloc(reg.dwords, alignment))
-        return f'.set {reg.label}, {reg.position}'
+        return self.code_lang.create_variable(reg.label, reg.position)
+
+    def _alloc_print_f(self, reg:reg_block):
+        return
 
     def _alloc_block(self, block_info:tuple, alignment):
         s = []
@@ -51,18 +57,20 @@ class gpr_file_t():#mc_base_t):
         ofsets:List[int]  = block_info[1]
         base_reg = regs[0]
         base_reg.set_position(self._allocator.malloc(base_reg.dwords, alignment))
+        s.append(self.code_lang.create_variable(base_reg.label, base_reg.position))
         base_reg_pos = base_reg.position
         
         for i in range(len(ofsets)):
             cur_reg = regs[i+1]
             cur_reg.set_position(base_reg_pos + ofsets[i])
+            s.append(self.code_lang.create_variable(cur_reg.label, cur_reg.position))
 
         return '\n'.join(s)
 
     def _dealloc(self, reg:reg_block, alignment=0):
         #self.active_blocks.remove(reg)
         self._allocator.mfree(reg.position)
-        return f'//dealock .unset {reg.label}, {reg.position}'
+        return self.code_lang.unset_variable(reg.label)
 
     def _dealloc_all(self):
         blocks = self.active_blocks
@@ -71,7 +79,12 @@ class gpr_file_t():#mc_base_t):
 
     def _reuse(self, reg_tuple_src_dst:Tuple, alignment):
         src, dst = reg_tuple_src_dst
+        
         dst.set_position(src.position)
+
+        set_dst_var_cmd = self.code_lang.create_variable(dst.label, dst.position)
+        unset_src_var_cmd = self.code_lang.unset_variable(src.label)
+        return f'{set_dst_var_cmd} \n {unset_src_var_cmd}'
 
     def add(self, label:str, dwords:int = 1, alignment:int = 0):
         ret = reg_block.declare(label, self.reg_t, dwords=dwords, label_as_pos=self.label_as_pos, reg_align=alignment)
@@ -141,8 +154,8 @@ class gpr_file_t():#mc_base_t):
         self.ic.Block_split(block_of_reg_blocks, self._split_block)
 
 class sgpr_file_t(gpr_file_t):
-    def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):
-        super().__init__(gpu_instructions_caller_base, reg_type.sgpr, gpr_allocator)
+    def __init__(self, gpu_instructions_caller_base, code_lang:base_lang_class, gpr_allocator:base_allocator):
+        super().__init__(ic=gpu_instructions_caller_base, code_lang=code_lang, reg_t=reg_type.sgpr, gpr_allocator=gpr_allocator)
         
         vcc = VCC_reg()
         self.vcc = vcc
@@ -157,8 +170,8 @@ class sgpr_file_t(gpr_file_t):
         self.m0 = M0_reg()
     
 class vgpr_file_t(gpr_file_t):
-    def __init__(self, gpu_instructions_caller_base, gpr_allocator:base_allocator):
-        super().__init__(gpu_instructions_caller_base, reg_type.vgpr, gpr_allocator)
+    def __init__(self, gpu_instructions_caller_base, code_lang:base_lang_class, gpr_allocator:base_allocator):
+        super().__init__(ic=gpu_instructions_caller_base, code_lang=code_lang, reg_t=reg_type.vgpr, gpr_allocator=gpr_allocator)
     
 class special_regs_base():
     def __init__(self) -> None:
@@ -282,7 +295,7 @@ class vgpr_hw_component(special_regs_base):
 #######################################
 
 class base_HW(sgpr_hw_component, vgpr_hw_component):
-    def __init__(self, gpu_instructions_caller_base,sgpr_alloc:Type[base_allocator], vgpr_alloc:Type[base_allocator], sgpr_size, vgpr_size, LDS_size) -> None:
+    def __init__(self, gpu_instructions_caller_base,sgpr_alloc:Type[base_allocator], vgpr_alloc:Type[base_allocator], sgpr_size=104, vgpr_size=256, LDS_size=65000) -> None:
         super().__init__(
             gpu_instructions_caller_base=gpu_instructions_caller_base,
             sgpr_size=sgpr_size,
