@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from abc import ABC, abstractmethod
 import inspect
-from typing import Dict, List
+from typing import Callable, Dict, List, NewType
 
 class reg_type(Enum):
     sgpr = 's'
@@ -58,8 +58,8 @@ class inst_base(ABC):
     def __str__(self) -> str:
         return f'{self.label}'
 
-    def emit(self) -> str:
-        return self.__str__()
+    def emit(self, emiter_f:Callable[[NewType], None]):
+        emiter_f(self)
 
     def emit_trace(self) -> str:
         return self.trace

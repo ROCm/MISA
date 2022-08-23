@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-
+from python.codegen.generator.base_components import inst_base, all_atrs
 from python.codegen.mc import mc_asm_printer_t, mc_base_t
+
 
 
 class amdgpu_kernel_info_t(object):
@@ -42,3 +43,15 @@ class base_lang_class(mc_base_t, ABC):
     @abstractmethod
     def emit_kernel_code(self, kernel_info:amdgpu_kernel_info_t, **kwargs):
         pass
+
+    def emit_instruction(self, instr:inst_base, is_comment:bool=False):
+        print_mode = self.variable_print_mode if is_comment else ''
+        str_op = getattr(instr, "__str__", None)
+        
+        if callable(str_op):
+            self._emit(f'{print_mode}{str_op()}')
+        else:
+            curent_args = map(lambda atr:getattr(instr, atr, None), all_atrs)
+            curent_args = filter(None.__ne__, curent_args)
+            self._emit(f"{print_mode}{self.label} {', '.join(map(str, curent_args))} {getattr(instr, 'MODIFIERS', '')}")
+        

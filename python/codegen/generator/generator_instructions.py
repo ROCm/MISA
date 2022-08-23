@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from .gpu_arch.gpu_data_types import block_of_reg_blocks, label_t, reg_block
 from .base_components import inst_base, inst_caller_base, instruction_type
@@ -13,6 +13,10 @@ class reg_allocator_base(inst_base):
         self.print_f = print_f
 
     def __str__(self) -> str:
+        return self.execute()
+        return self.print_f(self.reg)
+
+    def execute(self):
         return self.allocator_f(self.reg, self.alignment)
 
 class reg_allocator_caller(inst_caller_base):
@@ -40,7 +44,10 @@ class flow_control_base(inst_base):
         self.func_ptr = func_ptr
 
     def __str__(self) -> str:
-        return f'//{self.label}'
+        return f'{self.label}'
+
+    def emit(self, emiter_f:Callable[[inst_base, any], None]):
+        emiter_f(self, True)
 
 class flow_control_caller(inst_caller_base):
     def __init__(self, insturction_list: List[inst_base]) -> None:
@@ -58,7 +65,10 @@ class HW_Reg_Init(inst_base):
         self.dst_regs = []
 
     def __str__(self) -> str:
-        return f'//{self.label}'
+        return f'{self.label}'
+
+    def emit(self, emiter_f:Callable[[inst_base], None]):
+        return
 
     def get_srs_regs(self):
         return []
