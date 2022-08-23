@@ -46,6 +46,51 @@ class instruction_type(Enum):
 dst_atrs = ['DST', 'DST0','DST1', 'DST2']
 src_atrs = ['SRC', 'SRC0', 'SRC1', 'SRC2', 'SRC3']
 
+all_atrs = [*dst_atrs, *src_atrs]
+
+
+def get_gfxXXX_instructions_sets():
+    i_t = instruction_type
+
+    def is_scalar(inst:inst_base):
+        if (inst.inst_type in [i_t.SOP1, i_t.SOP2, i_t.SOPC, i_t.SOPK, i_t.SOPP, i_t.VOP3P, i_t.SMEM]):
+            return True
+        return False
+    def is_vector(inst:inst_base):
+        if (inst.inst_type in [i_t.VOPC, i_t.VOP1, i_t.VOP2, i_t.VOP3, i_t.VOP3P, i_t.DPP8, i_t.DPP16, i_t.VINTRP, i_t.VMEM]):
+            return True
+        return False
+    def is_memory(inst:inst_base):
+        if (inst.inst_type in [i_t.VMEM, i_t.SMEM, i_t.MTBUF, i_t.MUBUF, i_t.DS, i_t.FLAT]):
+            return True
+        if(inst.label in ['s_waitcnt']):
+            return True
+        if(inst.inst_type is i_t.SOPK and inst.label in 
+            ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
+            return True
+        return False
+    def is_program_flow(inst:inst_base):
+        if (inst.inst_type in [i_t.SOPP, i_t.FLOW_CONTROL]):
+            #if(not (inst.label in ['s_nop', 's_waitcnt'])):
+            if(inst.label in ['s_waitcnt']):
+                return False
+            return True
+        #if(inst.inst_type is i_t.SOPK and inst.label in 
+        #    ['s_waitcnt_expcnt','s_waitcnt_lgkmcnt','s_waitcnt_vmcnt','s_waitcnt_vscnt']):
+        #    return True
+        return False
+    def is_exec_dependent(inst:inst_base):
+        if( is_vector(inst) or (inst.label in [i_t.EXP, i_t.MTBUF, i_t.MUBUF, i_t.DS, i_t.FLAT]) ):
+            return True
+        return False
+
+    return { 
+        'scalar' : is_scalar,
+        'vector' : is_vector,
+        'memory' : is_memory,
+        'program_flow' : is_program_flow,
+        'exec_dep' : is_exec_dependent
+    }
 
 class inst_base(ABC):
     __slots__ = ['label', 'inst_type', 'trace']

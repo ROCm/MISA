@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List
 
-from ..base_components import *
+from ..base_components import inst_base
 from ..generator_instructions import flow_control_caller, instr_label_caller, reg_allocator_caller
 
 class gpu_instructions_caller_base(reg_allocator_caller, flow_control_caller, instr_label_caller):
@@ -28,7 +28,6 @@ class instruction_ctrl():
 
     def execute_all(self):
         self._emmit_all(self.code_str.append)
-
 
     def _emmit_all(self, emmiter):
         e = emmiter
