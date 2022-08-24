@@ -43,6 +43,9 @@ class base_lang_class(mc_base_t, ABC):
     @abstractmethod
     def emit_kernel_code(self, kernel_info:amdgpu_kernel_info_t, **kwargs):
         pass
+    
+    def call_emmit_created_code(self):
+        self._emmit_created_code(self.emit_instruction)
 
     def emit_instruction(self, instr:inst_base, is_comment:bool=False):
         print_mode = self.variable_print_mode if is_comment else ''

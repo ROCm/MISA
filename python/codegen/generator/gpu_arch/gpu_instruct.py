@@ -27,20 +27,10 @@ class instruction_ctrl():
         assert(False)
 
     def execute_all(self):
-        self._emmit_all(self.code_str.append)
-
-    def _emmit_all(self, emmiter):
-        e = emmiter
         for i in self.instructions_list:
-            e(f'{i}')
-    
+            i.execute()
+        
     def _emmit_created_code(self, emmiter):
         e = emmiter
-        for i in self.code_str:
-            e(i)
-
-    def _emmit_range(self, emmiter, strt:int, end:int):
-        e = emmiter
-        i_list = self.instructions_list
-        for i in i_list:
-            e(f'{i}')
+        for i in self.instructions_list:
+            i.emit(emmiter)

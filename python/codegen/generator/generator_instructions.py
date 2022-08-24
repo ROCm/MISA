@@ -13,11 +13,10 @@ class reg_allocator_base(inst_base):
         self.print_f = print_f
 
     def __str__(self) -> str:
-        return self.execute()
         return self.print_f(self.reg)
 
     def execute(self):
-        return self.allocator_f(self.reg, self.alignment)
+        self.allocator_f(self.reg, self.alignment)
 
 class reg_allocator_caller(inst_caller_base):
     def __init__(self, insturction_list: List[inst_base]) -> None:

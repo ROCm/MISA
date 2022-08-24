@@ -102,6 +102,9 @@ class inst_base(ABC):
     @abstractmethod
     def __str__(self) -> str:
         return f'{self.label}'
+    
+    def execute(self):
+        pass
 
     def emit(self, emiter_f:Callable[[NewType], None]):
         emiter_f(self)

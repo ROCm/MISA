@@ -58,6 +58,6 @@ class llvm_kernel(base_lang_class):
     def emit_kernel_code(self, kernel_info:amdgpu_kernel_info_t, **kwargs):
         self._emit_kernel_header(kernel_info)
         #self._emit_kernel_symbols()
-        self._emmit_created_code(self._emit)
+        self.call_emmit_created_code()
         self._emit_kernel_end()
         self._emit_kernel_amd_kernel_code_t(kernel_info)
