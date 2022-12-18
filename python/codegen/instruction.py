@@ -236,6 +236,16 @@ class inst_v_cmpx_le_u32_t(inst_base_t):
             return 'v_cmpx_le_u32 {}, {}'.format(mt_opr(src0), mt_opr(src1))
 v_cmpx_le_u32 = inst_v_cmpx_le_u32_t()
 
+class inst_v_cmpx_le_u16_t(inst_base_t):
+    def __init__(self):
+        inst_base_t.__init__(self, INST_ENCODING_VOPC)
+    def __call__(self, src0, src1):
+        if mc_get_current().arch_config.arch < 1000:
+            return 'v_cmpx_le_u16 vcc, {}, {}'.format(mt_opr(src0), mt_opr(src1))
+        else:
+            return 'v_cmpx_le_u16 {}, {}'.format(mt_opr(src0), mt_opr(src1))
+v_cmpx_le_u16 = inst_v_cmpx_le_u16_t()
+
 class inst_v_cmpx_eq_i32_t(inst_base_t):
     def __init__(self):
         inst_base_t.__init__(self, INST_ENCODING_VOPC)
