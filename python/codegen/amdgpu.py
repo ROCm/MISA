@@ -45,6 +45,7 @@ AMDGPU_ARCH_GFX900      = 900
 AMDGPU_ARCH_GFX906      = 906
 AMDGPU_ARCH_GFX908      = 908
 AMDGPU_ARCH_GFX90A      = 910
+AMDGPU_ARCH_GFX940      = 940
 AMDGPU_ARCH_GFX1030     = 1030
 
 AMDGPU_WAVE_SIZE        = 64
@@ -70,6 +71,8 @@ def amdgpu_string_to_arch(amdgpu_arch_string):
         return AMDGPU_ARCH_GFX908
     if amdgpu_arch_string == 'gfx90a':
         return AMDGPU_ARCH_GFX90A
+    if amdgpu_arch_string == 'gfx940':
+        return AMDGPU_ARCH_GFX940
     if amdgpu_arch_string == 'gfx1030':
         return AMDGPU_ARCH_GFX1030
     assert False
@@ -83,6 +86,8 @@ def amdgpu_arch_to_string(amdgpu_arch_gfxxxx):
         return 'gfx908'
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX90A:
         return 'gfx90a'
+    if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX940:
+        return 'gfx940'
     if amdgpu_arch_gfxxxx == AMDGPU_ARCH_GFX1030:
         return 'gfx1030'
     assert False
@@ -277,7 +282,7 @@ class amdgpu_arch_config_t(object):
         if self.arch == AMDGPU_ARCH_GFX906:
             self.use_dlops  = ad('use_dlops', True)
             self.use_xdlops = ad('use_xdlops', False)
-        elif self.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A):
+        elif self.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940):
             self.use_dlops  = ad('use_dlops', False)
             self.use_xdlops = ad('use_xdlops', True)
         elif self.arch == AMDGPU_ARCH_GFX1030:
@@ -396,6 +401,14 @@ class amdgpu_kernel_code_t(object):
         self.accum_offset                           = kc('accum_offset', 0)
         self.wavefront_size                         = kc('wavefront_size', 64)
         self.cumode                                 = kc('cumode', 1)   # 0-cu mode, 1-wgp mode. for gfx>10
+        self.amdhsa_float_round_mode_32             = kc('amdhsa_float_round_mode_32', 0)
+        self.amdhsa_float_round_mode_16_64          = kc('amdhsa_float_round_mode_16_64', 0)
+        self.amdhsa_float_denorm_mode_32            = kc('amdhsa_float_denorm_mode_32', 0)
+        self.amdhsa_float_denorm_mode_16_64         = kc('amdhsa_float_denorm_mode_16_64', 0)
+        self.amdhsa_dx10_clamp                      = kc('amdhsa_dx10_clamp', 0)
+        self.amdhsa_ieee_mode                       = kc('amdhsa_ieee_mode', 0)
+        self.amdhsa_fp16_overflow                   = kc('amdhsa_fp16_overflow', 0)
+
 
     def cal_user_sgpr_count(self):
         count = 0
@@ -512,9 +525,19 @@ class amd_kernel_code_t(mc_base_t):
                 self._emit('.amdhsa_next_free_vgpr {}'.format(                      self.ki.kernel_code.workitem_vgpr_count))
                 self._emit('.amdhsa_next_free_sgpr {}'.format(                      self.ki.kernel_code.wavefront_sgpr_count - 2*3))
 
-                self._emit('.amdhsa_ieee_mode 0')   # seems everyone close this?
-                self._emit('.amdhsa_dx10_clamp 0')  # seems everyone close this?
-                if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                self._emit('.amdhsa_ieee_mode {}'.format(                           self.ki.kernel_code.amdhsa_ieee_mode))
+                self._emit('.amdhsa_dx10_clamp {}'.format(                          self.ki.kernel_code.amdhsa_dx10_clamp))
+                if self.ki.kernel_code.amdhsa_float_round_mode_32:
+                    self._emit('.amdhsa_float_round_mode_32 {}'.format(             self.ki.kernel_code.amdhsa_float_round_mode_32))
+                if self.ki.kernel_code.amdhsa_float_round_mode_16_64:
+                    self._emit('.amdhsa_float_round_mode_16_64 {}'.format(          self.ki.kernel_code.amdhsa_float_round_mode_16_64))
+                if self.ki.kernel_code.amdhsa_float_denorm_mode_32:
+                    self._emit('.amdhsa_float_denorm_mode_32 {}'.format(            self.ki.kernel_code.amdhsa_float_denorm_mode_32))
+                if self.ki.kernel_code.amdhsa_float_denorm_mode_16_64:
+                    self._emit('.amdhsa_float_denorm_mode_16_64 {}'.format(         self.ki.kernel_code.amdhsa_float_denorm_mode_16_64))
+                if self.ki.kernel_code.amdhsa_fp16_overflow:
+                    self._emit('.amdhsa_fp16_overflow {}'.format(                   self.ki.kernel_code.amdhsa_fp16_overflow))
+                if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940):
                     self._emit('.amdhsa_tg_split {}'.format(                        self.ki.kernel_code.tg_split))
                     self._emit('.amdhsa_accum_offset {}'.format(                    self.ki.kernel_code.accum_offset))
                 if self.mc.arch_config.arch >= 1000:

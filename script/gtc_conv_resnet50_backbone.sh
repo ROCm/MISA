@@ -61,7 +61,7 @@ else
     exit 1
 fi
 
-if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] ; then
+if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] && [ "${ARCH}" != "gfx940" ]; then
     echo "wrong arch: ${ARCH}"
     exit 1
 fi

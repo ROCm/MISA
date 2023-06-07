@@ -152,10 +152,10 @@ static inline std::string get_igemm_gtc_fma_type(std::string arch_string, const 
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC;
         if(arch_string == "gfx906" || arch_string == "gfx1030")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
-        if(arch_string == "gfx908" || arch_string == "gfx90a")
+        if(arch_string == "gfx908" || arch_string == "gfx90a" || arch_string == "gfx940")
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS;
     }else if(sec.count("wave_tile_m") > 0 && sec.count("wave_tile_n") > 0){
-        assert(arch_string == "gfx908" || arch_string == "gfx90a");
+        assert(arch_string == "gfx908" || arch_string == "gfx90a" || arch_string == "gfx940");
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS;
     }
     return IGEMM_GTC_TUNABLE_FMA_TYPE_NA;
@@ -283,6 +283,8 @@ igemm_gtc_encode_kernel_name(const igemm_gtc_tunable_t *tunable) {
             kernel_name += "gtcx_";
         else if(gcn_arch == 910)
             kernel_name += "gtcx2_";
+        else if(gcn_arch == 940)
+            kernel_name += "gtcx3_";
     }
     std::string vector_c_str = "";
     if(tunable->vector_c > 1)
