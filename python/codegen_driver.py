@@ -157,6 +157,10 @@ class codegen_driver_t(mc_base_t):
                 dfv = self.kernel_list[0].get_predefine_for_bf16_1k_in_fp16_default_value()
                 inst_mfma_emit_macro_mfma_16f(self.mc, sym, dfv)
 
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX940:
+            inst_buffer_store_emit_with_macro(self.mc)
+            inst_buffer_atomic_add_emit_with_macro(self.mc)
+
     def emit_global_macro_per_s_file(self, mc):
         # emit global macro, independent of tunable
         if self.tunable_dicts[0]['direction'] == 'wrw':

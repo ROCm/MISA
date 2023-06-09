@@ -83,6 +83,56 @@ class inst_buffer_store_t(object):
             return f"buffer_store_dwordx4 v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False
 
+class inst_buffer_store_with_macro_switch_t(object):
+    ''' TODO: this implementation always offen '''
+    def __init__(self, data_byte):
+        self.data_byte = data_byte
+
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi = 0):
+        if type(soffset) is int and soffset == 0:
+            soffset_str = "0"
+        else:
+            soffset_str = f"s[{soffset}]"
+
+        if self.data_byte == 1:
+            if lo_hi == 0:
+                return f"buffer_store_byte_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            else:
+                return f"buffer_store_byte_d16_hi_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 2:
+            if lo_hi == 0:
+                return f"buffer_store_short_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+            else:
+                return f"buffer_store_short_d16_hi_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 4:
+            return f"buffer_store_dword_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 8:
+            return f"buffer_store_dwordx2_m v[{vdata}:{vdata}+1], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 12:
+            return f"buffer_store_dwordx3_m v[{vdata}:{vdata}+2], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 16:
+            return f"buffer_store_dwordx4_m v[{vdata}:{vdata}+3], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False
+
+def inst_buffer_store_emit_with_macro(mc):
+    mc.emit(f'.ifndef force_sc0_sc1')
+    mc.emit(f'.set force_sc0_sc1, 0')
+    mc.emit(f'.endif')
+    mc.emit_empty_line()
+
+    inst_list = ['buffer_store_byte', 'buffer_store_byte_d16_hi', 'buffer_store_short', 'buffer_store_short_d16_hi',
+                'buffer_store_dword', 'buffer_store_dwordx2', 'buffer_store_dwordx3', 'buffer_store_dwordx4']
+    for inst in inst_list:
+        macro_name = inst + '_m'
+        mc.emit(f'.macro {macro_name} dst, addr, base, modifier:vararg')
+        mc.emit(f'.if force_sc0_sc1 == 1')
+        mc.emit(f'    {inst} \\dst, \\addr, \\base, \\modifier sc0 sc1')
+        mc.emit(f'.else')
+        mc.emit(f'    {inst} \\dst, \\addr, \\base, \\modifier')
+        mc.emit(f'.endif')
+        mc.emit(f'.endm')
+        mc.emit_empty_line()
+
 class inst_buffer_atomic_add_dword_t(object):
     ''' TODO: this implementation always offen '''
     def __init__(self, data_byte, pack=1):
@@ -101,6 +151,75 @@ class inst_buffer_atomic_add_dword_t(object):
             return f"buffer_atomic_pk_add_f16 v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
         assert False, f"data_byte:{self.data_byte}, pack:{self.pack}"
 
+class inst_buffer_atomic_add_dword_with_macro_switch_t(object):
+    ''' TODO: this implementation always offen '''
+    def __init__(self, data_byte, pack=1):
+        self.data_byte = data_byte
+        self.pack = pack
+
+    def __call__(self, vdata, vaddr, srsrc, soffset, offset, lo_hi=0):
+        if type(soffset) is int and soffset == 0:
+            soffset_str = "0"
+        else:
+            soffset_str = f"s[{soffset}]"
+
+        if self.data_byte == 4 and self.pack == 1:
+            return f"buffer_atomic_add_f32_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        if self.data_byte == 4 and self.pack == 2:
+            return f"buffer_atomic_pk_add_f16_m v[{vdata}], v[{vaddr}], s[{srsrc}:{srsrc}+3], {soffset_str} offen offset:{offset}"
+        assert False, f"data_byte:{self.data_byte}, pack:{self.pack}"
+
+
+def inst_buffer_atomic_add_emit_with_macro(mc):
+    mc.emit(f'.ifndef atomic_add_using_cas')
+    mc.emit(f'.set atomic_add_using_cas, 0')
+    mc.emit(f'.endif')
+    mc.emit_empty_line()
+
+    inst_list = ['buffer_atomic_add_f32', 'buffer_atomic_pk_add_f16']
+    def get_add_inst(atomic_inst):
+        if atomic_inst == 'buffer_atomic_add_f32':
+            return 'v_add_f32'
+        else:
+            return 'v_pk_add_f16'
+
+    for inst in inst_list:
+        macro_name = inst + '_m'
+        label_cas_loop_start = 'Label_cas_loop_start_\\@'
+        label_cas_loop_end = 'Label_cas_loop_end_\\@'
+        label_cas_loop_out = 'Label_cas_loop_out_\\@'
+        mc.emit(f'.macro {macro_name} data, addr, base, other:vararg')
+        mc.emit(f'.if atomic_add_using_cas == 1')
+        mc.emit(f'    s_cbranch_execz {label_cas_loop_out}')
+        mc.emit(f'    s_mov_b64 s[0:1], exec')
+        mc.emit(f'    buffer_load_dword v[v_tmp+2], \\addr, \\base, \\other sc1')
+        mc.emit(f'    s_waitcnt vmcnt(0)')
+        mc.emit(f'    v_mov_b32 v[v_tmp+3] v[v_tmp+2]')
+        mc.emit(f'    {get_add_inst(inst)} v[v_tmp+2], \\data v[v_tmp+3]')
+        mc.emit(f'    buffer_atomic_cmpswap v[v_tmp+2:v_tmp+3], \\addr, \\base, \\other sc0')
+        mc.emit(f'    s_waitcnt vmcnt(0)')
+        mc.emit(f'    v_cmp_ne_u32 s[s_tmp+2:s_tmp+3], v[v_tmp+2], v[v_tmp+3]')
+        mc.emit(f'    s_and_saveexec_b64 s[s_tmp+2:s_tmp+3], s[s_tmp+2:s_tmp+3]')
+        mc.emit(f'    s_cbranch_execz {label_cas_loop_end}')
+        mc.emit(f'{label_cas_loop_start}:')
+        mc.emit(f'    buffer_load_dword v[v_tmp+2], \\addr, \\base, \\other sc1')
+        mc.emit(f'    s_waitcnt vmcnt(0)')
+        mc.emit(f'    v_mov_b32 v[v_tmp+3] v[v_tmp+2]')
+        mc.emit(f'    {get_add_inst(inst)} v[v_tmp+2], \\data v[v_tmp+3]')
+        mc.emit(f'    buffer_atomic_cmpswap v[v_tmp+2:v_tmp+3], \\addr, \\base, \\other sc0')
+        mc.emit(f'    s_waitcnt vmcnt(0)')
+        mc.emit(f'    v_cmp_ne_u32 s[s_tmp+2:s_tmp+3], v[v_tmp+2], v[v_tmp+3]')
+        mc.emit(f'    s_and_saveexec_b64 s[s_tmp+2:s_tmp+3], s[s_tmp+2:s_tmp+3]')
+        mc.emit(f'    s_cbranch_execnz {label_cas_loop_start}')
+        mc.emit(f'{label_cas_loop_end}:')
+        mc.emit(f'    s_mov_b64 exec, s[0:1]')
+        mc.emit(f'    s_nop 0')
+        mc.emit(f'{label_cas_loop_out}:')
+        mc.emit(f'.else')
+        mc.emit(f'    {inst} \\data, \\addr, \\base, \\other')
+        mc.emit(f'.endif')
+        mc.emit(f'.endm')
+        mc.emit_empty_line()
 
 # pattern is logic or of below:
 GLOBAL_PTN_D0_S = (1 << 0)
