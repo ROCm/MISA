@@ -187,34 +187,24 @@ def inst_buffer_atomic_add_emit_with_macro(mc):
         macro_name = inst + '_m'
         label_cas_loop_start = 'Label_cas_loop_start_\\@'
         label_cas_loop_end = 'Label_cas_loop_end_\\@'
-        label_cas_loop_out = 'Label_cas_loop_out_\\@'
+        #label_cas_loop_out = 'Label_cas_loop_out_\\@'
         mc.emit(f'.macro {macro_name} data, addr, base, other:vararg')
         mc.emit(f'.if atomic_add_using_cas == 1')
-        mc.emit(f'    s_cbranch_execz {label_cas_loop_out}')
         mc.emit(f'    s_mov_b64 s[0:1], exec')
-        mc.emit(f'    buffer_load_dword v[v_tmp+2], \\addr, \\base, \\other sc1')
-        mc.emit(f'    s_waitcnt vmcnt(0)')
-        mc.emit(f'    v_mov_b32 v[v_tmp+3] v[v_tmp+2]')
-        mc.emit(f'    {get_add_inst(inst)} v[v_tmp+2], \\data v[v_tmp+3]')
-        mc.emit(f'    buffer_atomic_cmpswap v[v_tmp+2:v_tmp+3], \\addr, \\base, \\other sc0')
-        mc.emit(f'    s_waitcnt vmcnt(0)')
-        mc.emit(f'    v_cmp_ne_u32 s[s_tmp+2:s_tmp+3], v[v_tmp+2], v[v_tmp+3]')
-        mc.emit(f'    s_and_saveexec_b64 s[s_tmp+2:s_tmp+3], s[s_tmp+2:s_tmp+3]')
-        mc.emit(f'    s_cbranch_execz {label_cas_loop_end}')
         mc.emit(f'{label_cas_loop_start}:')
-        mc.emit(f'    buffer_load_dword v[v_tmp+2], \\addr, \\base, \\other sc1')
+        mc.emit(f'    buffer_load_dword v[v_tmp+2], \\addr, \\base, \\other sc1') # should bypass L1
         mc.emit(f'    s_waitcnt vmcnt(0)')
         mc.emit(f'    v_mov_b32 v[v_tmp+3] v[v_tmp+2]')
-        mc.emit(f'    {get_add_inst(inst)} v[v_tmp+2], \\data v[v_tmp+3]')
+        mc.emit(f'    {get_add_inst(inst)} v[v_tmp+2], \\data, v[v_tmp+3]')
+        ########      tmp = dst, dst = v_tmp+3 == tmp ? v_tmp+2 : v_tmp, v_tmp+2 = v_tmp(return value)
         mc.emit(f'    buffer_atomic_cmpswap v[v_tmp+2:v_tmp+3], \\addr, \\base, \\other sc0')
         mc.emit(f'    s_waitcnt vmcnt(0)')
-        mc.emit(f'    v_cmp_ne_u32 s[s_tmp+2:s_tmp+3], v[v_tmp+2], v[v_tmp+3]')
+        mc.emit(f'    v_cmp_ne_u32 s[s_tmp+2:s_tmp+3], v[v_tmp+2], v[v_tmp+3]') # if true, cmpswap fail
         mc.emit(f'    s_and_saveexec_b64 s[s_tmp+2:s_tmp+3], s[s_tmp+2:s_tmp+3]')
         mc.emit(f'    s_cbranch_execnz {label_cas_loop_start}')
         mc.emit(f'{label_cas_loop_end}:')
         mc.emit(f'    s_mov_b64 exec, s[0:1]')
         mc.emit(f'    s_nop 0')
-        mc.emit(f'{label_cas_loop_out}:')
         mc.emit(f'.else')
         mc.emit(f'    {inst} \\data, \\addr, \\base, \\other')
         mc.emit(f'.endif')
