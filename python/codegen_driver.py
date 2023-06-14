@@ -135,7 +135,7 @@ class codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(self.mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(self.mc).emit()
         macro_c_clear_t(self.mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:
@@ -157,6 +157,10 @@ class codegen_driver_t(mc_base_t):
                 dfv = self.kernel_list[0].get_predefine_for_bf16_1k_in_fp16_default_value()
                 inst_mfma_emit_macro_mfma_16f(self.mc, sym, dfv)
 
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX940:
+            inst_buffer_store_emit_with_macro(self.mc)
+            inst_buffer_atomic_add_emit_with_macro(self.mc)
+
     def emit_global_macro_per_s_file(self, mc):
         # emit global macro, independent of tunable
         if self.tunable_dicts[0]['direction'] == 'wrw':
@@ -177,7 +181,7 @@ class codegen_driver_t(mc_base_t):
             macro_mdiv_u32_rem_vs_t(mc).emit()
 
         # emit_write_4d_strided_t(self.mc).emit()
-        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A) and self.mc.arch_config.use_xdlops:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX908, AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940) and self.mc.arch_config.use_xdlops:
             macro_acc_c_clear_t(mc).emit()
         macro_c_clear_t(mc).emit()
         if self.mc.arch_config.arch == AMDGPU_ARCH_GFX1030:

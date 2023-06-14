@@ -61,7 +61,7 @@ else
     exit 1
 fi
 
-if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] ; then
+if [ "${ARCH}" != "gfx90a" ] && [ "${ARCH}" != "gfx908" ] && [ "${ARCH}" != "gfx1030" ] && [ "${ARCH}" != "gfx940" ]; then
     echo "wrong arch: ${ARCH}"
     exit 1
 fi
@@ -97,73 +97,74 @@ else
     exit 1
 fi
 
-BATCH=256
+BATCH=64
+SLEEP=33
 
 # resnet 50 bottleneck [3, 4, 6, 3]
 # stage 1 x 3
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 64 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
 # stage 2 x 4
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 56 -W 56 -k 128 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 56 -W 56 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 56 -W 56 -k 128 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 128 -H 28 -W 28 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
 # stage 3 x 6
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 28 -W 28 -k 256 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 28 -W 28 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 28 -W 28 -k 256 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 256 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 256 -H 14 -W 14 -k 1024 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
 # stage 4 x 3
-./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 14 -W 14 -k 512 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 1024 -H 14 -W 14 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 14 -W 14 -k 512 -y 3 -x 3 -p 1 -q 1 -u 2 -v 2 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 2048 -H 7 -W 7 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 2048 -H 7 -W 7 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
 
-./out/conv_driver.exe $CONV -n $BATCH -c 2048 -H 7 -W 7 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
-./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG}
+./out/conv_driver.exe $CONV -n $BATCH -c 2048 -H 7 -W 7 -k 512 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 512 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP
+./out/conv_driver.exe $CONV -n $BATCH -c 512 -H 7 -W 7 -k 2048 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -t 1 -F $FORW ${LAYOUT_ARG} ; sleep $SLEEP

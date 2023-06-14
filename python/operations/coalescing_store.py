@@ -1178,10 +1178,9 @@ class igemm_coalescing_store_xdlops_t(mc_base_t):
         inst_sld = inst_ds_read_t(inst_sld_byte)
         if ctrl.gemm_k_global_split:
             v_pack = 2 if ctrl.vector_write_out == 2 and data_byte == 2 else 1
-            inst_gst = inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte, v_pack) 
+            inst_gst = inst_buffer_atomic_add_dword_with_macro_switch_t(ctrl.vector_write_out * data_byte, v_pack) if self.mc.arch_config.arch == AMDGPU_ARCH_GFX940 else inst_buffer_atomic_add_dword_t(ctrl.vector_write_out * data_byte, v_pack) 
         else:
-            inst_gst = inst_buffer_store_t(ctrl.vector_write_out * data_byte)
-       
+            inst_gst = inst_buffer_store_with_macro_switch_t(ctrl.vector_write_out * data_byte) if self.mc.arch_config.arch == AMDGPU_ARCH_GFX940 else inst_buffer_store_t(ctrl.vector_write_out * data_byte)
 
         s_out_offset_itr = sym_t(s_tmp6(0))
         # s_thread_m_stride = sym_t(s_tmp4(1))

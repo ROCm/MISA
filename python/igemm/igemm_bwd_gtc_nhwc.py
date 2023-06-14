@@ -289,7 +289,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         return self._get_deferred()
 
     def is_accvgpr_unified(self):
-        return IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A \
+        return IGEMM_BWD_GTC_NHWC_ACCVGPR_UNIFIED and self.mc.arch_config.arch in (AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940) \
                 and not (self.tunable.gemm_m_per_block == 256 and self.tunable.gemm_n_per_block == 256)
 
     class macro_set_flag_nhw(macro_base_t):
@@ -1227,7 +1227,7 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
             total_vgpr                  = vseq()
             self.accum_start            = 0
             if outer.tunable.fma_type == IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS:
-                if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+                if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940):
                     total_vgpr          = (total_vgpr + 3) // 4 * 4 # round to multiply of 4
                     self.accum_start    = total_vgpr
                     total_vgpr          = total_vgpr + outer.tunable.num_agpr_accumulate_c
@@ -1681,9 +1681,14 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
                 'kernarg_segment_byte_size'         :   self.karg.get_count(),
                 'wavefront_sgpr_count'              :   self.sgpr.get_count() + 2*3,
                 'workitem_vgpr_count'               :   self.vgpr.get_count()}
-        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX90A:
+        if self.mc.arch_config.arch in (AMDGPU_ARCH_GFX90A, AMDGPU_ARCH_GFX940):
             assert self.vgpr.get_accum_start() % 4 == 0
             kernel_code_dict['accum_offset']        =   self.vgpr.get_accum_start()
+        if self.mc.arch_config.arch == AMDGPU_ARCH_GFX940:
+            kernel_code_dict['amdhsa_float_round_mode_32']      =   3
+            kernel_code_dict['amdhsa_float_round_mode_16_64']   =   3
+            kernel_code_dict['amdhsa_dx10_clamp']               =   1
+            kernel_code_dict['amdhsa_ieee_mode']                =   1
         kernel_code = amdgpu_kernel_code_t(kernel_code_dict)
         return kernel_code
 
@@ -1733,46 +1738,46 @@ class igemm_bwd_gtc_nhwc_t(mc_base_t):
         '''
         kas = []
         # name: {}, .size: {}, .offset: {}, .value_kind: {}, .value_type
-        kas.append(amdgpu_kernel_arg_t('p_in'               , 8,   0, 'global_buffer','f32',address_space='global',is_const='false'))
-        kas.append(amdgpu_kernel_arg_t('p_wei'              , 8,   8, 'global_buffer','f32',address_space='global',is_const='true'))
-        kas.append(amdgpu_kernel_arg_t('p_out'              , 8,  16, 'global_buffer','f32',address_space='global',is_const='true'))
-        kas.append(amdgpu_kernel_arg_t('hi'                 , 4,  24, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('wi'                 , 4,  28, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('n'                  , 4,  32, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('k'                  , 4,  36, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('c'                  , 4,  40, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('ho'                 , 4,  44, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('wo'                 , 4,  48, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('stride_h'           , 4,  52, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('stride_w'           , 4,  56, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dilation_h'         , 4,  60, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dilation_w'         , 4,  64, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('pad_h'              , 4,  68, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('pad_w'              , 4,  72, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('y'                  , 4,  76, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('x'                  , 4,  80, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_iy'           , 4,  84, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_ix'           , 4,  88, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_dy'           , 4,  92, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_dx'           , 4,  96, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_y'            , 4, 100, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_x'            , 4, 104, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_h'            , 4, 108, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dtile_w'            , 4, 112, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_y'           , 4, 116, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_x'           , 4, 120, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_h'           , 4, 124, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_w'           , 4, 128, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_h_left'      , 4, 132, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('dslice_w_left'      , 4, 136, 'by_value', 'i32'))
-        kas.append(amdgpu_kernel_arg_t('group'              , 4, 140, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('p_in_'               , 8,   0, 'global_buffer','f32',address_space='global',is_const='false'))
+        kas.append(amdgpu_kernel_arg_t('p_wei_'              , 8,   8, 'global_buffer','f32',address_space='global',is_const='true'))
+        kas.append(amdgpu_kernel_arg_t('p_out_'              , 8,  16, 'global_buffer','f32',address_space='global',is_const='true'))
+        kas.append(amdgpu_kernel_arg_t('hi_'                 , 4,  24, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('wi_'                 , 4,  28, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('n_'                  , 4,  32, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('k_'                  , 4,  36, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('c_'                  , 4,  40, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('ho_'                 , 4,  44, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('wo_'                 , 4,  48, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('stride_h_'           , 4,  52, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('stride_w_'           , 4,  56, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dilation_h_'         , 4,  60, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dilation_w_'         , 4,  64, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('pad_h_'              , 4,  68, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('pad_w_'              , 4,  72, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('y_'                  , 4,  76, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('x_'                  , 4,  80, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_iy_'           , 4,  84, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_ix_'           , 4,  88, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_dy_'           , 4,  92, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_dx_'           , 4,  96, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_y_'            , 4, 100, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_x_'            , 4, 104, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_h_'            , 4, 108, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dtile_w_'            , 4, 112, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_y_'           , 4, 116, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_x_'           , 4, 120, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_h_'           , 4, 124, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_w_'           , 4, 128, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_h_left_'      , 4, 132, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('dslice_w_left_'      , 4, 136, 'by_value', 'i32'))
+        kas.append(amdgpu_kernel_arg_t('group_'              , 4, 140, 'by_value', 'i32'))
         if IGEMM_GTC_FEAT_MAGIC_DIVISION:
-            kas.append(amdgpu_kernel_arg_t('magic_0'        , 4, 144, 'by_value', 'i32'))
-            kas.append(amdgpu_kernel_arg_t('magic_1'        , 4, 148, 'by_value', 'i32'))
-            kas.append(amdgpu_kernel_arg_t('magic_2'        , 4, 152, 'by_value', 'i32'))
-            kas.append(amdgpu_kernel_arg_t('magic_3'        , 4, 156, 'by_value', 'i32'))
-            kas.append(amdgpu_kernel_arg_t('shift_pack_0'   , 4, 160, 'by_value', 'i32'))
-            kas.append(amdgpu_kernel_arg_t('ks'             , 4, 164, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('magic_0_'        , 4, 144, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('magic_1_'        , 4, 148, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('magic_2_'        , 4, 152, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('magic_3_'        , 4, 156, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('shift_pack_0_'   , 4, 160, 'by_value', 'i32'))
+            kas.append(amdgpu_kernel_arg_t('ks_'             , 4, 164, 'by_value', 'i32'))
         return kas
 
     def get_kernel_info(self):

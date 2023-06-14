@@ -128,10 +128,10 @@ def get_igemm_gtc_fma_type(tunable_dict):
     if 'gemm_m_per_thread' in tunable_dict and 'gemm_n_per_thread' in tunable_dict:
         if tunable_dict['arch'] == 'gfx900':
             return IGEMM_GTC_TUNABLE_FMA_TYPE_MAC
-        if tunable_dict['arch'] in ('gfx906', 'gfx908', 'gfx90a', 'gfx1030'):
+        if tunable_dict['arch'] in ('gfx906', 'gfx908', 'gfx90a', 'gfx940', 'gfx1030'):
             return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
     if 'wave_tile_m' in tunable_dict and 'wave_tile_n' in tunable_dict:
-        assert tunable_dict['arch'] in ('gfx908', 'gfx90a')
+        assert tunable_dict['arch'] in ('gfx908', 'gfx90a', 'gfx940')
         return IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS
     if 'lanegroup_tile_m' in tunable_dict and 'lanegroup_tile_n' in tunable_dict:
         return IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS
@@ -139,7 +139,7 @@ def get_igemm_gtc_fma_type(tunable_dict):
 
 def get_igemm_gtc_gemm_k_global_split(tunable_dict):
     assert type(tunable_dict) is dict
-    if tunable_dict['arch'] in ('gfx908', 'gfx90a'):
+    if tunable_dict['arch'] in ('gfx908', 'gfx90a', 'gfx940'):
         gemm_k_global_split = utility_dict_with_default_t(tunable_dict)('gemm_k_global_split', 0)
         if gemm_k_global_split > 0:
             return 1
@@ -749,6 +749,8 @@ def igemm_gtc_encode_kernel_base_name(tunable, arch):
             kernel_name += 'gtcx_'                              # generic tensor contraction with xdlops
         elif arch_str == 'gfx90a':
             kernel_name += 'gtcx2_'
+        elif arch_str == 'gfx940':
+            kernel_name += 'gtcx3_'
         else:
             assert False
     
