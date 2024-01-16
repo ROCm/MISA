@@ -246,7 +246,7 @@ class config_parser_t(object):
                         sys.exit(-1)
                     key = tok[0].strip()
                     value = tok[1].strip()
-                    if key is '' or value is '':
+                    if key == '' or value == '':
                         print("fail to parse key/value of line :\"{}\"".format(line))
                         sys.exit(-1)
                     if key not in current_section:

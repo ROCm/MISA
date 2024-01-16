@@ -52,9 +52,9 @@ class compile_hip_t(object):
         arch_str = amdgpu_arch_to_string(self.arch_config.arch)
         use_hip_clang = _check_hip_clang()
         if use_hip_clang:
-            cmd = ['/opt/rocm/hip/bin/hipcc']
+            cmd = ['/opt/rocm/bin/hipcc']
         else:
-            cmd = ['/opt/rocm/hip/bin/hipcc']
+            cmd = ['/opt/rocm/bin/hipcc']
         cmd += ['-x', 'hip']
         cmd += ['--cuda-gpu-arch={}'.format(arch_str)]
         cmd += ['--cuda-device-only', '-c', '-O3']
@@ -176,7 +176,7 @@ class compile_host_t(object):
         xdnnroot ='2f6f70742f696e74656c2f696e74656c6f6e656170692f6f6e65444e4e2f6c61746573742f6370755f676f6d702f'
         if use_hip_clang:
             if IGEMM_HOST_USE_HIPCC:
-                cmd = ['/opt/rocm/hip/bin/hipcc']
+                cmd = ['/opt/rocm/bin/hipcc']
                 cmd += ['-std=c++14']
                 cmd += ['-pthread']
             else:
