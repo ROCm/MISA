@@ -243,8 +243,8 @@ class igemm_gtc_tunable_parameter_t(object):
         assert self.precision in ('fp32', 'fp16', 'bf16', 'int8', 'int4')
         if self.tensor_layout == "nchw":
             assert self.nxb in (1,4,8,16,32,64,128,256)
-        elif self.tensor_layout == "nhwc":
-            assert self.nxb == 0, 'nhwc now no need have different nxb value'
+        elif self.tensor_layout == "nhwc" or self.tensor_layout == "ndhwc":
+            assert self.nxb == 0, 'nhwc or ndhwc do not need to have different nxb value'
         elif self.tensor_layout[0:5] == "nchwc":
             assert self.vector_c in (4, 8, 16, 32), 'do not support arbitary vector_c'
         else:
@@ -288,7 +288,7 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_n = self.gemm_n_per_block // self.nxb
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = _unmerge_x1_from_e(self.gemm_k_per_block, self.nxe)
-            elif self.tensor_layout == 'nhwc':
+            elif self.tensor_layout == 'nhwc' or self.tensor_layout == 'ndhwc':
                 self.unmerge_sub_n = 1                          # not used
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
@@ -319,8 +319,8 @@ class igemm_gtc_tunable_parameter_t(object):
                 self.unmerge_sub_k = 1                          # not used
                 self.unmerge_sub_c = 1                          # not used
 
-        self.tensor_a_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
-        self.tensor_b_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' else 1
+        self.tensor_a_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' or self.tensor_layout == 'ndhwc' else 1
+        self.tensor_b_pass_through_interleave_gld = 0 if self.tensor_layout == 'nhwc' or self.tensor_layout == 'ndhwc' else 1
 
         self.fma_interleave = IGEMM_GTC_FEAT_FMA_INTERLEAVE
         self.local_prefetch_num = 1

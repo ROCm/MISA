@@ -118,7 +118,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", help="config file as input")
     parser.add_argument("-d", "--dir", help="directory of output files", default = OUT_DIR)
-    parser.add_argument("-output", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
+    parser.add_argument("-o", "--output", nargs='?', const='tunable_parameter_list.txt', help="output tunable parameter list")
     parser.add_argument("-s", "--split_kernel", action="store_true")
     args = parser.parse_args()
 

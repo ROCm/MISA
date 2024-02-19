@@ -613,7 +613,7 @@ public:
     }
 
     result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable,
-                 void *p_in, void *p_wei, void *p_out, int current_gks) override {
+                 void *p_in, void *p_wei, void *p_out, int current_gks, void *p_print=nullptr) override {
         if (!tunable_is_valid(arg, tunable)) {
             result_t result;
             result.return_code = -1;
