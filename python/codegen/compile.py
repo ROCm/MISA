@@ -229,7 +229,8 @@ class compile_host_t(object):
             if IGEMM_HOST_USE_XDNN:
                 cmd += [f'-L{bytes.fromhex(xdnnroot).decode()}/lib', f"-l{bytes.fromhex('646e6e6c').decode()}", f'-Wl,-rpath={bytes.fromhex(xdnnroot).decode()}/lib']
             cmd += ['-o', self.target_exec]
-        # print("[host] " + " ".join(cmd))
+        cmd += ['-ggdb', '-O0']
+        print("[host] " + " ".join(cmd))
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.STDOUT)
         try:
             (out, _) = p.communicate()

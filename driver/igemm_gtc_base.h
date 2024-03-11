@@ -53,6 +53,7 @@ using float16 = int16_t;
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_XDLOPS           "xdlops"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_NA               "fma_na"
 #define AMDGPU_WAVE_SIZE        64
+#define DEBUG_ASM_PRINT 0
 
 typedef enum {
     driverHalf  = 0, /*!< 16-bit floating point (Fully supported) */
@@ -685,7 +686,7 @@ public:
     virtual size_t get_block_size(const igemm_gtc_tunable_t *tunable) = 0;
     virtual size_t get_grid_size(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual bool tunable_is_valid(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
-    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks) = 0;
+    virtual result_t run(const args_t *arg, const igemm_gtc_tunable_t *tunable, void *p_in, void *p_wei, void *p_out, int current_gks, void *p_print=nullptr) = 0;
     virtual std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) = 0;
     virtual igemm_spatial_tiling_t get_spatial_tiling(const args_t *arg) = 0;
 

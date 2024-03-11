@@ -51,6 +51,8 @@ class codegen_driver_t(mc_base_t):
             # gtc fwd
             if 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'] == 'nhwc':
                 kernel_list.extend([igemm_fwd_gtc_nhwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
+            elif 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'] == 'ndhwc':
+                kernel_list.extend([igemm_fwd_gtc_ndhwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
             elif 'tensor_layout' in tunable_dicts[0] and tunable_dicts[0]['tensor_layout'][0:5] == 'nchwc':
                 kernel_list.extend([igemm_fwd_gtc_nchwc_t(mc_asm_printer_t(mc.emitter, mc.arch_config), igemm_gtc_tunable_parameter_t(td)) for td in tunable_dicts])
             else:
