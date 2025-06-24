@@ -30,6 +30,7 @@
 
 #include "igemm_gtc_base.h"
 #include "config_parser.h"
+#include "use_tracker.hpp"
 #include "utility.h"
 #include <string>
 #include <unistd.h>
@@ -407,6 +408,8 @@ public:
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable) override
     {
+        SETUP_TRACKING();
+        
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -427,15 +430,15 @@ public:
         int forw = arg->get_int("forw");
 
         int need_bwd = (forw == 0 ? 1 : (forw & 2 ? 1 : 0));
-        if(need_bwd == 0)
-            return false;
+        IF_CHECK(need_bwd == 0)
+            TRACK_RETURN(false);;
 
         assert(c % group == 0 && k % group == 0);
 
         size_t splits = igemm_split_batch_size(arg, utility_string_to_data_byte(tunable->precision));
-        if(splits == 0){
+        IF_CHECK(splits == 0){
             printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
-            return false;
+            TRACK_RETURN(false);
         }
         n = n/splits;   // split batch size here
 
@@ -471,7 +474,7 @@ public:
 
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
-        if(tunable->tensor_layout == "nchw"){
+        IF_CHECK(tunable->tensor_layout == "nchw"){
             int nxe = tunable->nxe;
             int nxb = tunable->nxb;
             int b = h_tilda_slice * w_tilda_slice;
@@ -524,46 +527,47 @@ public:
                 unit_conv && (ho * wo) % tunable->tensor_b_thread_lengths[3] != 0)) {
                 return false;
             }
-        } else if (tunable->tensor_layout == "nhwc"){
+        } 
+        IF_CHECK (tunable->tensor_layout == "nhwc"){
             // limitation for loading filter using multielement instructions
             int tb_c1 = tunable->tensor_b_thread_lengths[3];
             int data_byte = utility_string_to_data_byte(tunable->precision);
             int vector_d1 = utility_gcd(tb_c1, 4 * (4 / data_byte));
-            if ((c / group) % vector_d1 != 0)
-                return false;
+            IF_CHECK((c / group) % vector_d1 != 0)
+                TRACK_RETURN(false);
 
-            if(tunable->tensor_a_thread_lengths[1] == 1){
+            IF_CHECK(tunable->tensor_a_thread_lengths[1] == 1){
                 ;   // if output k 1, indicate padded k support
             }
-            else{
-                if((k / group) >> tunable->gemm_k_global_split == 0 || ((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
-                    return false;
+            ELSE_CHECK(){
+                if(((k / group) >> tunable->gemm_k_global_split == 0 || ((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0))
+                    TRACK_RETURN(false);
             }
-            if((tunable->nxe == 0) && !unit_conv){
-                return false;
+            IF_CHECK(((tunable->nxe == 0) && !unit_conv)){
+                TRACK_RETURN(false);
             }
 
-            if (tunable->precision == "fp32") {
+            IF_CHECK(tunable->precision == "fp32") {
                 // no additional checks;
             }
-            else if (tunable->precision == "fp16" || tunable->precision == "bf16") {
+            IF_CHECK(tunable->precision == "fp16" || tunable->precision == "bf16") {
                 // fp16 support vector writeout by default. check get_vector_write_out()
-                if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[3] == 1 && tunable->merge_e && !tunable->gemm_k_global_split){
+                IF_CHECK(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[3] == 1 && tunable->merge_e && !tunable->gemm_k_global_split){
                     ;   // only case that support every config
                         // thread_k, thread_c is one, merge_e, and not gks
                 }
                 else{
-                    if(tunable->gemm_k_global_split){
-                        if((c / group) % 2 != 0)
-                            return false;
+                    IF_CHECK(tunable->gemm_k_global_split){
+                        IF_CHECK(((c / group) % 2 != 0))
+                            TRACK_RETURN(false);
                     }
                     else{
-                        if((c / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 8 : tunable->vector_store) != 0)
-                            return false;
+                        IF_CHECK(((c / group) % utility_gcd((int)tunable->gemm_n_per_block, tunable->vector_store == 0 ? 8 :(int) tunable->vector_store) != 0))
+                            TRACK_RETURN(false);
                     }
                 }
             } 
-            else if(tunable->precision == "int8"){
+            IF_CHECK(tunable->precision == "int8"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
                 if(tunable->tensor_a_thread_lengths[1] == 1){
                     ;   // if both 1, c is also write out one by one
@@ -573,12 +577,12 @@ public:
                         assert(false);
                     }
                     else{
-                        if((c / group) % utility_gcd(tunable->gemm_n_per_block, tunable->vector_store == 0 ? 16 : tunable->vector_store) != 0)
-                            return false;
+                        if((c / group) % utility_gcd((int)tunable->gemm_n_per_block, tunable->vector_store == 0 ? 16 : (int)tunable->vector_store) != 0)
+                            TRACK_RETURN(false);
                     }
                 }
             }
-            else {
+            ELSE_CHECK() {
                 assert(0);
             }
         }

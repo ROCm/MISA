@@ -462,42 +462,49 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
             }
         }
 
-        printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(current_tunable).c_str());
-        fflush(stdout);
+        std::string current_kernel_name = driver->get_kernel_name(current_tunable).c_str();
+        std::string single_kernel_name = env_get_str("IGEMM_KVALID_TARGET", "");
+        
+        if(single_kernel_name == "" || single_kernel_name == current_kernel_name){
+            printf("[%s:%2d] %s", direction.c_str(), index, driver->get_kernel_name(current_tunable).c_str());
+            fflush(stdout);
+            pre_func();
+            result_t result = driver->run(conv_args, current_tunable, device_input, device_weight, device_output, current_gks);
+            std::string gks_string = "";
+            if(current_tunable->gemm_k_global_split){
+                gks_string = "[" + std::to_string(result.gks) + "]";
+            }
+            printf("%s", gks_string.c_str());
+            std::string tiling_string = get_tiling_string(driver, conv_args);
+            printf("%s", tiling_string.c_str());
 
-        pre_func();
+            printf(", ");
+            fflush(stdout);
 
-        result_t result = driver->run(conv_args, current_tunable, device_input, device_weight, device_output, current_gks);
+            if (result.return_code != 0){
+                printf("not applicable\n");
+                return result_t{};
+            }
+            double gflops = theo_conv_flop / (result.duration_ms * 1e6);
+            printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
+                    gflops / 1000 , (gflops / theo_gpu_gflops) * 100);
 
-        std::string gks_string = "";
-        if(current_tunable->gemm_k_global_split){
-            gks_string = "[" + std::to_string(result.gks) + "]";
+            post_func();
+
+            printf("\n");
+            result.gflops = gflops;
+            result.efficiency = (gflops / theo_gpu_gflops) * 100;
+
+            if(dump_gmap)
+                gmap_dump(conv_args, current_tunable, result.gks);
+            return result;
         }
-        printf("%s", gks_string.c_str());
-        std::string tiling_string = get_tiling_string(driver, conv_args);
-        printf("%s", tiling_string.c_str());
-
-        printf(", ");
-        fflush(stdout);
-
-        if (result.return_code != 0){
-            printf("not applicable\n");
+        else{
+            //skip
             return result_t{};
         }
 
-        double gflops = theo_conv_flop / (result.duration_ms * 1e6);
-        printf("cost:%.3fms, tflops:%.3f(%.2f%%)", result.duration_ms,
-                gflops / 1000 , (gflops / theo_gpu_gflops) * 100);
-
-        post_func();
-
-        printf("\n");
-        result.gflops = gflops;
-        result.efficiency = (gflops / theo_gpu_gflops) * 100;
-
-        if(dump_gmap)
-            gmap_dump(conv_args, current_tunable, result.gks);
-        return result;
+        
     };
 
     auto need_skip_due_to_macro_tile_boundary = [&](const igemm_gtc_tunable_t * tunable){

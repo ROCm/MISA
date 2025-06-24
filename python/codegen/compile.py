@@ -177,8 +177,9 @@ class compile_host_t(object):
         if use_hip_clang:
             if IGEMM_HOST_USE_HIPCC:
                 cmd = ['/opt/rocm/bin/hipcc']
-                cmd += ['-std=c++14']
+                cmd += ['-std=c++17']
                 cmd += ['-pthread']
+                cmd += ['-I/opt/rocm/include/half/']
             else:
                 cmd = ['g++']
                 cmd += ['-D__HIP_PLATFORM_HCC__=','-I/opt/rocm/hip/include', '-I/opt/rocm/hcc/include', '-I/opt/rocm/hsa/include']
