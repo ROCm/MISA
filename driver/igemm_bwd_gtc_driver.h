@@ -582,7 +582,7 @@ public:
                     }
                 }
             }
-                    }
+        }
 
         return true;
     }
