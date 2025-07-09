@@ -582,10 +582,7 @@ public:
                     }
                 }
             }
-            ELSE_CHECK() {
-                assert(0);
-            }
-        }
+                    }
 
         return true;
     }
