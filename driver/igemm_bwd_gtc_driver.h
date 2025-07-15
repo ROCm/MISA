@@ -540,7 +540,7 @@ public:
                 ;   // if output k 1, indicate padded k support
             }
             ELSE_CHECK(){
-                if(((k / group) >> tunable->gemm_k_global_split == 0 || ((k >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0))
+                IF_CHECK((k / group) >> tunable->gemm_k_global_split == 0 || (k / group) % (gemm_k_per_block << tunable->gemm_k_global_split) != 0)
                     TRACK_RETURN(false);
             }
             IF_CHECK(((tunable->nxe == 0) && !unit_conv)){

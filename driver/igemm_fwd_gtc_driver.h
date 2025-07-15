@@ -459,7 +459,7 @@ public:
                 ;   // if both 1, indicate padded c support
             }
             else{
-                if((c / group) >> tunable->gemm_k_global_split == 0  || ((c >> tunable->gemm_k_global_split) / group) % gemm_k_per_block != 0)
+                if((c / group) >> tunable->gemm_k_global_split == 0  || (c / group) % (gemm_k_per_block << tunable->gemm_k_global_split) != 0)
                     return false;
             }
 
