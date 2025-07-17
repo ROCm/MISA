@@ -489,7 +489,6 @@ static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t
         return ms;
     };
 
-    assert(repeat > 2);
     std::vector<float> duration_list;
     for (int i = 0; i < warmup; i++) {
         launch_kernels();
@@ -499,13 +498,14 @@ static inline float igemm_launch_kernels(const std::vector<igemm_launch_kernel_t
         float d = launch_kernels();
         duration_list.push_back(d);
     }
-    // remove min and max from list, then do average
-    auto imin = std::min_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imin);
-    auto imax = std::max_element(begin(duration_list), end(duration_list));
-    duration_list.erase(imax);
-
-    assert(duration_list.size() == (repeat - 2));
+    if(repeat > 2){
+        // remove min and max from list, then do average
+        auto imin = std::min_element(begin(duration_list), end(duration_list));
+        duration_list.erase(imin);
+        auto imax = std::max_element(begin(duration_list), end(duration_list));
+        duration_list.erase(imax);
+    }
+    
     float avg_duration = std::accumulate(duration_list.begin(), duration_list.end(), (float).0) / duration_list.size();
     return avg_duration;
 }

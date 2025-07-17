@@ -348,6 +348,14 @@ public:
     bool tunable_is_valid(const args_t *arg,
                           const igemm_gtc_tunable_t *tunable) override
     {
+
+        {
+            int forw = arg->get_int("forw");
+            int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
+            if(need_fwd == 0)
+                return false;
+        }
+
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
         int n = arg->get_int("batchsize");
@@ -365,12 +373,8 @@ public:
         int ho = conv_out_size(hi, pad_h, dilation_h, y, stride_h);
         int wo = conv_out_size(wi, pad_w, dilation_w, x, stride_w);
         int group = arg->get_int("group_count");
-        int forw = arg->get_int("forw");
         std::string fil_layout = arg->get_str("fil_layout");
 
-        int need_fwd = (forw == 0 ? 1 : (forw & 1 ? 1 : 0));
-        if(need_fwd == 0)
-            return false;
 
         assert(c % group == 0 && k % group == 0);
 
@@ -455,11 +459,9 @@ public:
                     return false;
             }
 
-            if(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1){
-                ;   // if both 1, indicate padded c support
-            }
-            else{
-                if((c / group) >> tunable->gemm_k_global_split == 0  || (c / group) % (gemm_k_per_block << tunable->gemm_k_global_split) != 0)
+            if (!(tunable->tensor_a_thread_lengths[1] == 1 && tunable->tensor_b_thread_lengths[1] == 1)){
+                if((c / group) >> tunable->gemm_k_global_split == 0  
+                    || (c / group) % (gemm_k_per_block << tunable->gemm_k_global_split) != 0)
                     return false;
             }
 

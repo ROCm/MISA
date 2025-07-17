@@ -302,7 +302,7 @@ public:
             }
         }
 
-        if ((x * y * stride_h * stride_w != 1) && (tunable->nxe == 0))
+        if (!unit_conv && (tunable->nxe == 0))
             return false;
 
         return true;

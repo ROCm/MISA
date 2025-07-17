@@ -412,7 +412,6 @@ public:
         
         int hi = arg->get_int("in_h");
         int wi = arg->get_int("in_w");
-        int n = arg->get_int("batchsize");
         int k = arg->get_int("out_channels");
         int c = arg->get_int("in_channels");
 
@@ -440,7 +439,6 @@ public:
             printf("image size (c*h*w) is bigger than 4g, which is not supported now\n");
             TRACK_RETURN(false);
         }
-        n = n/splits;   // split batch size here
 
         int gemm_m_per_block         = tunable->gemm_m_per_block;
         int gemm_n_per_block         = tunable->gemm_n_per_block;
@@ -475,6 +473,9 @@ public:
         bool unit_conv = (x==1)&&(y==1)&&(stride_h==1)&&(stride_w==1)&&(dilation_h==1)&&(dilation_w==1)&&(pad_h==0)&&(pad_w==0);
 
         IF_CHECK(tunable->tensor_layout == "nchw"){
+            
+            int n = arg->get_int("batchsize") / splits;
+
             int nxe = tunable->nxe;
             int nxb = tunable->nxb;
             int b = h_tilda_slice * w_tilda_slice;
@@ -536,10 +537,7 @@ public:
             IF_CHECK((c / group) % vector_d1 != 0)
                 TRACK_RETURN(false);
 
-            IF_CHECK(tunable->tensor_a_thread_lengths[1] == 1){
-                ;   // if output k 1, indicate padded k support
-            }
-            ELSE_CHECK(){
+            IF_CHECK(tunable->tensor_a_thread_lengths[1] != 1){
                 IF_CHECK((k / group) >> tunable->gemm_k_global_split == 0 || (k / group) % (gemm_k_per_block << tunable->gemm_k_global_split) != 0)
                     TRACK_RETURN(false);
             }
@@ -566,7 +564,7 @@ public:
                             TRACK_RETURN(false);
                     }
                 }
-            } 
+            }
             IF_CHECK(tunable->precision == "int8"){
                 // fp16 support vector writeout by default. check get_vector_write_out()
                 if(tunable->tensor_a_thread_lengths[1] == 1){
