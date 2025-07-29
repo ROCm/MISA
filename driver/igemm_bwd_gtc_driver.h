@@ -275,6 +275,7 @@ public:
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
+        assert(false);
     }
     size_t get_grid_size(const args_t *arg,
                       const igemm_gtc_tunable_t *tunable) override {
@@ -887,9 +888,9 @@ public:
         auto bwd_prolog = (need_set_zero || tunable->gemm_k_global_split)? 
             std::function<float()>{[&]() -> float{
                 if(use_workspace == 1)
-                    hipMemset(p_in_workspace, 0, static_cast<size_t>(splits)*n*c*hi*wi*sizeof(float));
+                    HIP_CALL(hipMemset(p_in_workspace, 0, static_cast<size_t>(splits)*n*c*hi*wi*sizeof(float)));
                 else
-                    hipMemset(p_in, 0, static_cast<size_t>(splits)*n*c*hi*wi*utility_string_to_data_byte(tunable->precision));
+                    HIP_CALL(hipMemset(p_in, 0, static_cast<size_t>(splits)*n*c*hi*wi*utility_string_to_data_byte(tunable->precision)));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -1042,7 +1043,7 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
-        hipFree(p_in_workspace);
+        HIP_CALL(hipFree(p_in_workspace));
         //usleep(1000 * 5);
         return result;
     }

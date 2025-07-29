@@ -20,7 +20,7 @@ class if_class {
 
 #define SETUP_TRACKING()                                                       \
     bool report_IsValid =                                                      \
-        std::string(env_get_str("IGEMM_KVALID_TARGET", "")) != "";             \
+        std::string(env_get_str("IGEMM_KVALID_TARGET", const_cast<char*>(""))) != "";             \
     std::vector<std::string> layer_stack_;                                     \
     auto print_stack = [&]() {                                                 \
         std::cout << "\n";                                                     \

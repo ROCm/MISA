@@ -193,9 +193,9 @@ static inline void gpu_naive_conv_fwd_nchw_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = n * k_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nchw_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nchw_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -238,9 +238,9 @@ static inline void gpu_naive_conv_bwd_nchw_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = n * c_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nchw_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nchw_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -283,9 +283,9 @@ static inline void gpu_naive_conv_wrw_nchw_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = k_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nchw_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nchw_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -328,9 +328,9 @@ static inline void gpu_naive_conv_fwd_nchw_fp16(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = n * k_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nchw_fp16, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nchw_fp16, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -373,9 +373,9 @@ static inline void gpu_naive_conv_bwd_nchw_fp16(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = n * c_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nchw_fp16, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nchw_fp16, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -418,9 +418,9 @@ static inline void gpu_naive_conv_wrw_nchw_fp16(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = k_per_group * group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nchw_fp16, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nchw_fp16, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -464,9 +464,9 @@ static inline void gpu_naive_conv_fwd_nhwc_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = group * n * ho;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_nhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -509,9 +509,9 @@ static inline void gpu_naive_conv_bwd_nhwc_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = group * n * h;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_nhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -554,9 +554,9 @@ static inline void gpu_naive_conv_wrw_nhwc_fp32(void *src, void *filter,
 
     int block_size = 256;
     int grid_size = group * k_per_group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_nhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -605,9 +605,9 @@ static inline void gpu_naive_conv_fwd_ndhwc_fp32(void *src, void *filter, void *
 
     int block_size = 256;
     int grid_size = group * n * do_;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_ndhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_fwd_ndhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -656,9 +656,9 @@ static inline void gpu_naive_conv_bwd_ndhwc_fp32(void *src, void *filter, void *
 
     int block_size = 256;
     int grid_size = group * n * d;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_ndhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_bwd_ndhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 
@@ -707,9 +707,9 @@ static inline void gpu_naive_conv_wrw_ndhwc_fp32(void *src, void *filter, void *
 
     int block_size = 256;
     int grid_size = group * k_per_group;
-    HIP_CALL(hipHccModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_ndhwc_fp32, grid_size * block_size, 1, 1,
+    HIP_CALL(hipExtModuleLaunchKernel(the_gpu_handle.kernel_naive_conv_wrw_ndhwc_fp32, grid_size * block_size, 1, 1,
                                             block_size, 1, 1, 0, 0, NULL,
-                                            (void **)&config, NULL, NULL));
+                                            (void **)&config, NULL, NULL,0));
 
 }
 

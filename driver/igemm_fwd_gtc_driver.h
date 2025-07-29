@@ -283,6 +283,7 @@ public:
             int waves_per_n = tunable->gemm_n_per_block / (tunable->wave_tile_n * tunable->wave_step_n * tunable->wave_repeat_n);
             return waves_per_m * waves_per_n * AMDGPU_WAVE_SIZE;
         }
+        assert(false);
     }
     // return grid size without consideration of split k
     size_t get_grid_size(const args_t *arg,
@@ -799,9 +800,9 @@ public:
         auto fwd_prolog = tunable->gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
                 if(use_workspace == 1)
-                    hipMemset(p_out_workspace, 0, static_cast<size_t>(n) * splits * k * ho * wo * sizeof(float));
+                    HIP_CALL(hipMemset(p_out_workspace, 0, static_cast<size_t>(n) * splits * k * ho * wo * sizeof(float)));
                 else
-                    hipMemset(p_out, 0, static_cast<size_t>(n) * splits * k * ho * wo * utility_string_to_data_byte(tunable->precision));
+                    HIP_CALL(hipMemset(p_out, 0, static_cast<size_t>(n) * splits * k * ho * wo * utility_string_to_data_byte(tunable->precision)));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -936,9 +937,9 @@ public:
         if(env_get_int_fwd("DBG_MODE", 0) != 0){
             printf("workspace debug \r\n");
             float* gemmc_host_check = (float* )malloc(k * n * ho * wo * sizeof(float));
-            printf("gemmc_host_check size=%d\n",  k * n * ho * wo * sizeof(float));
+            printf("gemmc_host_check size=%lu\n",  k * n * ho * wo * sizeof(float));
             printf("copy output\n");
-            hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo, hipMemcpyDeviceToHost);
+            HIP_CALL(hipMemcpy(gemmc_host_check, p_out, k * n * ho * wo, hipMemcpyDeviceToHost));
 
             for (int i_check = 0; i_check < (0+block_size); i_check++)
             {
@@ -957,7 +958,7 @@ public:
 #ifdef IGEMM_SPLIT_KERNEL
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
-        hipFree(p_out_workspace);
+        HIP_CALL(hipFree(p_out_workspace));
         //usleep(1000 * 5);
         return result;
     }

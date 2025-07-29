@@ -73,7 +73,7 @@ void serialize_block_req(const block_req_t * block_req, FILE* fp, std::vector<bo
     std::ostringstream ss;
     index_t num_pixel_total = 0;
     index_t num_pixel_valid = 0;
-    for(int i=0; i<block_req->req.size(); i++){
+    for(size_t i=0; i<block_req->req.size(); i++){
         const auto & thread_req = block_req->req[i];
         //assert(thread_req.tid == i);
         if(thread_req.tid != i)

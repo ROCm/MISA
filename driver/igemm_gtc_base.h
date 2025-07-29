@@ -403,19 +403,20 @@ static inline float igemm_launch_kernel_single(hipFunction_t kernel_func, void* 
 
     hipEvent_t start;
     hipEvent_t stop;
-    hipEventCreate(&start);
-    hipEventCreate(&stop);
+    
+    HIP_CALL(hipEventCreate(&start));
+    HIP_CALL(hipEventCreate(&stop));
 
     // for hipHccModuleLaunchKernel/hipExtModuleLaunchKernel, the grid_size is in unit of workitem
-    HIP_CALL(hipHccModuleLaunchKernel(kernel_func, grid_size[0], grid_size[1], grid_size[2],
+    HIP_CALL(hipExtModuleLaunchKernel(kernel_func, grid_size[0], grid_size[1], grid_size[2],
                                         block_size[0], block_size[1], block_size[2], 0, 0, NULL,
-                                        (void **)&config, start, stop));
+                                        (void **)&config, start, stop,0));
 
 
-    hipEventSynchronize(stop);
-    hipEventElapsedTime(&ms, start, stop);
-    hipEventDestroy(start);
-    hipEventDestroy(stop);
+    HIP_CALL(hipEventSynchronize(stop));
+    HIP_CALL(hipEventElapsedTime(&ms, start, stop));
+    HIP_CALL(hipEventDestroy(start));
+    HIP_CALL(hipEventDestroy(stop));
 
     return ms;
 }
@@ -575,10 +576,10 @@ static inline size_t igemm_split_batch_size(const args_t *arg, int data_byte)
 #define SPATIAL_TILING_FLAG_TLE     0   // input section size should <= a value in var (hi|lo, hi->tile in h, lo->tile in w)
 #define SPATIAL_TILING_FLAG_TEQ     1   // tile size equal to value in var (hi|lo, hi->tile in h, lo->tile in w)
 
-typedef struct {
+struct igemm_spatial_tiling_t {
     uint32_t tile_w {0};
     uint32_t tile_h {0};
-} igemm_spatial_tiling_t;
+};
 
 static inline uint32_t
 igemm_find_tile_size_with_upper_bound(uint32_t out_size, size_t upper_bound,

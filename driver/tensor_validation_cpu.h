@@ -80,7 +80,7 @@ bool valid_vector(const float *ref, const T *pred, size_t n,
     for (size_t i = 0; i < n; ++i) {
         if(igemm_valid_float)
             if(!(valid_float<float>(ref[i]) && valid_float<T>(pred[i]))){
-                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], pred[i]);
+                printf(" invalid float at %zu, ref:%f, pred:%f\n", i, ref[i], static_cast<double>(pred[i]));
                 return false;
             }
         
@@ -268,6 +268,7 @@ double get_nrms(std::string direction, driverDataType_t driver_data_type){
             return 8.2e-3;
 #endif
         }
+        return 1.5e-6;
     };
     double nrms = basic_tolerance();
     if (direction == "bwd"){

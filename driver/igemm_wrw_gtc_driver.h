@@ -583,6 +583,7 @@ public:
                 return get_kernel_name(tunable_return);
             }
         }
+        assert(false);
     }
 
     // get grid size without gks
@@ -768,9 +769,9 @@ public:
         auto wrw_prolog = gemm_k_global_split ? 
             std::function<float()>{[&]() -> float{
                 if(use_workspace == 1)
-                    hipMemset(p_wei_workspace, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float));
+                    HIP_CALL(hipMemset(p_wei_workspace, 0x0, group * (k / group) * (c / group) * y * x * sizeof(float)));
                 else
-                    hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * data_byte);
+                    HIP_CALL(hipMemset(p_wei, 0x0, group * (k / group) * (c / group) * y * x * data_byte));
                 return .0;
             }} : 
             std::function<float()>{[&]() -> float{
@@ -939,7 +940,7 @@ public:
         HIP_CALL(hipModuleUnload(cur_kernel_module));
 #endif
         if(workspace_size > 0)
-            hipFree(p_wei_workspace);
+            HIP_CALL(hipFree(p_wei_workspace));
         return result;
     }
     std::vector<int> get_gks_list(const args_t *arg, const igemm_gtc_tunable_t *tunable) override

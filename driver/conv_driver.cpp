@@ -615,8 +615,8 @@ void launch_conv_driver(driver_t * driver, const args_t *conv_args, const std::v
 }
 
 int main(int argc, char **argv) {
-    char *hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
-    char *config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
+    std::string hsaco = env_get_str("IGEMM_HSACO", IGEMM_HSACO);
+    std::string config_file = env_get_str("IGEMM_CONFIG_FILE", IGEMM_CONFIG_FILE);
     std::string run_only_kernel = env_get_str("IGEMM_RUN_ONLY_KERNEL", IGEMM_RUN_ONLY_KERNEL_DEFAULT);
     int warmup = env_get_int("IGEMM_WARMUP", WARMUP);
     int repeat = env_get_int("IGEMM_REPEAT", REPEAT);
@@ -636,8 +636,8 @@ int main(int argc, char **argv) {
     }
 
 #ifdef USE_GPU_NAIVE_CONV
-    char *gpu_naive_conv_hsaco = env_get_str("IGEMM_GPU_NAIVE_CONV_HSACO", IGEMM_GPU_NAIVE_CONV_HSACO);
-    gpu_naive_conv_init(gpu_naive_conv_hsaco);
+    std::string gpu_naive_conv_hsaco = env_get_str("IGEMM_GPU_NAIVE_CONV_HSACO", IGEMM_GPU_NAIVE_CONV_HSACO);
+    gpu_naive_conv_init(gpu_naive_conv_hsaco.c_str());
 #endif
 
     auto tunables = igemm_gtc_tunable_from_config(content);
@@ -649,7 +649,7 @@ int main(int argc, char **argv) {
 
     hipModule_t module;
 #ifndef IGEMM_SPLIT_KERNEL
-    HIP_CALL(hipModuleLoad(&module, hsaco));
+    HIP_CALL(hipModuleLoad(&module, hsaco.c_str()));
 #endif
 
     std::string base_arg = create_base_args(argc, argv);
@@ -762,8 +762,8 @@ int main(int argc, char **argv) {
 
     // launch tensor cast module
     hipModule_t module_tensor_cast;
-    char *hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
-    HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast));
+    std::string hsaco_tensor_cast = env_get_str("IGEMM_TENSOR_CAST_HSACO", IGEMM_TENSOR_CAST_HSACO);
+    HIP_CALL(hipModuleLoad(&module_tensor_cast, hsaco_tensor_cast.c_str()));
 
     if (need_fwd){
         int fastest_id = -1;
@@ -774,8 +774,8 @@ int main(int argc, char **argv) {
                 gen_rand_vector<float, float>(host_input, static_cast<size_t>(n) * c * hi * wi, 0.0, 1.0);
                 gen_rand_vector<float, float>(host_weight, static_cast<size_t>(k) * c * y * x, -0.5, 0.5);
             }else{
-                gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
-                gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, -5, 5);
+                gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, 1, 1);
+                gen_rand_vector<float, int>(host_weight, static_cast<size_t>(k) * c * y * x, 1, 1);
             }
 
             //gen_rand_vector<float, int>(host_input, static_cast<size_t>(n) * c * hi * wi, -5, 5);
@@ -1272,17 +1272,17 @@ int main(int argc, char **argv) {
     free(host_weight);
     free(host_output);
 
-    hipFree(device_input);
-    hipFree(device_weight);
-    hipFree(device_output);
+    HIP_CALL(hipFree(device_input));
+    HIP_CALL(hipFree(device_weight));
+    HIP_CALL(hipFree(device_output));
 
 #if defined(USE_HALF) || defined(USE_INT8) || defined(USE_BF16) || defined(USE_INT4)
     free(host_input_dtype);
     free(host_weight_dtype);
     free(host_output_dtype);
 
-    hipFree(device_input_dtype);
-    hipFree(device_weight_dtype);
-    hipFree(device_output_dtype);
+    HIP_CALL(hipFree(device_input_dtype));
+    HIP_CALL(hipFree(device_weight_dtype));
+    HIP_CALL(hipFree(device_output_dtype));
 #endif
 }
