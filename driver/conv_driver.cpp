@@ -68,6 +68,7 @@
 
 #include "common.h"
 #include "args.h"
+#include "shisa_dumps.h"
 #include "config_parser.h"
 #include "perf.h"
 #include "tensor_transpose.h"

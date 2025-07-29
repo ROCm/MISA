@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <numeric>
 #include <math.h>
+#include "shisa_dumps.h"
 
 static inline int env_get_int_fwd(const char *var_name, int default_int) {
     char *v = getenv(var_name);

@@ -33,7 +33,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "common.h"
+
+static inline int find_vector_c_from_base_arg(const std::string& base_arg);
 
 typedef struct {
     std::string long_name;
@@ -289,6 +290,23 @@ static inline args_t create_conv_args(int argc, char *argv[]) {
     args.insert_arg("dbg_info", 'h', "0", "Show debug info", "int");
     args.parse(argc, argv);
     return args;
+}
+
+// return 1 for case like "conv", "convfp16"
+// return vec_c for case ike "convfp16x8", "convint8x16"...
+static inline int find_vector_c_from_base_arg(const std::string& base_arg)
+{
+    if(base_arg.compare(0, 4, "conv") == 0){
+        auto found_vec = base_arg.find("x");       // we are looking for the "x" character
+        if(found_vec != std::string::npos){
+            std::string vec_str = base_arg.substr(found_vec + 1);
+            int vector_c = std::stoi( vec_str );    // TODO: try...catch...
+            return vector_c;
+        }else{
+            return 1;
+        }
+    }
+    return 0;
 }
 
 #endif

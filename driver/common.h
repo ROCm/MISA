@@ -35,96 +35,8 @@
 #include <array>
 #include <vector>
 
-struct gridinfo_t {
-    std::array<uint32_t, 3> gsize;
-    std::array<uint32_t, 3> wsize;
-};
 
-#define MAX_KARG_DUMP_BYTES 1024
-enum class kargtype_t : int {
-    unknown                    = 0,
-    igemm_fwd_gtc_karg_t       = 1,
-    igemm_fwd_gtc_nhwc_karg_t  = 2,
-    igemm_fwd_gtc_nchwc_karg_t = 3,
-    igemm_bwd_gtc_karg_t       = 4,
-    igemm_bwd_gtc_nhwc_karg_t  = 5,
-    igemm_wrw_gtc_karg_t       = 6
-};
 
-enum class convdir_t : int { FWD = 1, BWD = 2, WRW = 3 };
-
-enum class misadatatype_t : int {
-    UNKNOWN = 0,
-    FP32 = 1,
-    FP16 = 2,
-    BF16 = 3,
-    INT8 = 4,
-    INT4 = 5
-};
-
-struct dispatchinfo_t {
-    size_t karg_size;
-    gridinfo_t gi;
-    kargtype_t ktype;
-    uint32_t _reserved;
-    char karg_dump[MAX_KARG_DUMP_BYTES];
-};
-static_assert(sizeof(dispatchinfo_t) == MAX_KARG_DUMP_BYTES + 40);
-
-struct convparams_t {
-    int hi;
-    int wi;
-    int n;
-    int k; // this is indeed k_per_group
-    int c; // this is indeed c_per_group
-    int ho;
-    int wo;
-    int stride_h;
-    int stride_w;
-    int ddilation_h;
-    int ddilation_w;
-    int fdilation_h;
-    int fdilation_w;
-    int pad_h;
-    int pad_w;
-    int y;
-    int x;
-    int group;
-    convdir_t dir;
-    misadatatype_t dtype;
-};
-
-#define DUMPFILE_VERSION 4
-struct dumpheader_t {
-    uint64_t version;
-    size_t   n_dispatches;
-    size_t   workspace_size;
-    gridinfo_t   gi_postlog;
-    convparams_t conv;
-    int gks;
-    int use_prolog;
-    int use_postlog;
-    int cast_total_length;
-};
-static_assert(sizeof(dumpheader_t) == 36 * 4);
-
-void dump_shader_args(std::string dump_dir, const dumpheader_t &header, const std::vector<dispatchinfo_t> &data, std::string kernel_name);
-misadatatype_t dtype(const std::string &s);
-
-// return_code : -1, not applicable
-//             : -2, need skip, unique_index not accumulate
-//             :  0, success
-typedef struct {
-    int return_code     {-1};
-    int gks             {0};  // this is to store the gks value after benchmarked.
-    int grid_size       {0};
-    float duration_ms   {FLT_MAX};
-    float gflops        {0};
-    float efficiency    {0};
-    std::string kernel_name;
-    dumpheader_t dumpheader;
-    std::vector<dispatchinfo_t> dumpdata;
-} result_t;
 
 static inline size_t conv_out_size(size_t in_size, size_t pad, size_t dilation,
                                    size_t ksize, size_t stride) {
@@ -273,28 +185,11 @@ static inline int env_get_int(const char *var_name, int default_int) {
     return r;
 }
 
-static inline char *env_get_str(const char *var_name, char *default_str) {
-    char *v = getenv(var_name);
+static inline std::string env_get_str(const char *var_name, const char *default_str) {
+    char * v = getenv(var_name);
     if (v)
-        return v;
-    return default_str;
-}
-
-// return 1 for case like "conv", "convfp16"
-// return vec_c for case ike "convfp16x8", "convint8x16"...
-static inline int find_vector_c_from_base_arg(const std::string& base_arg)
-{
-    if(base_arg.compare(0, 4, "conv") == 0){
-        auto found_vec = base_arg.find("x");       // we are looking for the "x" character
-        if(found_vec != std::string::npos){
-            std::string vec_str = base_arg.substr(found_vec + 1);
-            int vector_c = std::stoi( vec_str );    // TODO: try...catch...
-            return vector_c;
-        }else{
-            return 1;
-        }
-    }
-    return 0;
+        return std::string{v};
+    return std::string{default_str};
 }
 
 #endif

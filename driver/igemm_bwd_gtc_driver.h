@@ -39,6 +39,8 @@
 #include <numeric>
 #include <cstring>
 
+#include "shisa_dumps.h"
+
 // #define IGEMM_BWD_UPSAMPLING_USE_CUSTOM_KERNEL 1
 #define MAX_GEMM_K_SPLITS_BWD 8
 
@@ -906,38 +908,17 @@ public:
         result_t result;
         result.kernel_name = kernel_name;
 
-        std::string dump_dir = env_get_str("IGEMM_DUMPDIR_ALL", "");
-        if (dump_dir.size()) {
-            std::cout << "DEBUG: Dumping all dispatches to " << dump_dir << std::endl;
-        }
-        result.dumpdata.clear();
-        memset(&result.dumpheader, 0, sizeof(result.dumpheader));
-        result.dumpheader.workspace_size = workspace_size;
-        result.dumpheader.gi_postlog.gsize = {static_cast<uint32_t>(thread_length_cast), 1, 1};
-        result.dumpheader.gi_postlog.wsize = {256, 1, 1};
-        result.dumpheader.use_prolog = (need_set_zero || tunable->gemm_k_global_split);
-        result.dumpheader.use_postlog = use_workspace == 1;
-        result.dumpheader.cast_total_length = karg_tensor_cast.total_length;
-        result.dumpheader.conv.hi = hi;
-        result.dumpheader.conv.wi = wi;
-        result.dumpheader.conv.n = n;
-        result.dumpheader.conv.k = k;
-        result.dumpheader.conv.c = c;
-        result.dumpheader.conv.ho = ho;
-        result.dumpheader.conv.wo = wo;
-        result.dumpheader.conv.stride_h = stride_h;
-        result.dumpheader.conv.stride_w = stride_w;
-        result.dumpheader.conv.ddilation_h = 1;
-        result.dumpheader.conv.ddilation_w = 1;
-        result.dumpheader.conv.fdilation_h = dilation_h;
-        result.dumpheader.conv.fdilation_w = dilation_w;
-        result.dumpheader.conv.pad_h = pad_h;
-        result.dumpheader.conv.pad_w = pad_w;
-        result.dumpheader.conv.y = y;
-        result.dumpheader.conv.x = x;
-        result.dumpheader.conv.group = group;
-        result.dumpheader.conv.dir = convdir_t::BWD;
-        result.dumpheader.conv.dtype = dtype(tunable->precision);
+        DumpWriter_t shisa_dump(kernel_name);
+
+        auto build_header_dump = [&](int n_dispatches, int gks) {
+            bool use_prolog = (need_set_zero || tunable->gemm_k_global_split);
+            bool use_postlog = use_workspace == 1;
+            gridinfo_t postlog{
+                {static_cast<uint32_t>(thread_length_cast), 1, 1}, {256, 1, 1}};
+            return dumpheader_t::make_header(
+                arg, postlog, workspace_size, n_dispatches, gks, karg_tensor_cast.total_length, use_prolog,
+                use_postlog, convdir_t::BWD, dtype(tunable->precision));
+        };
 
         if(true){
             float min_duration = FLT_MAX;
@@ -965,10 +946,7 @@ public:
                         karg->ks       = _gks;
 
                         kernels.push_back({kernel_func, karg_buffer, karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
-                        result.dumpheader.n_dispatches = kernels.size();
-                        result.dumpheader.gks = _gks;
-                        result.dumpdata.push_back(kernels.back());
-                        result.dumpdata.back().ktype = ktype;
+
                         // if(use_workspace == 1){
                         //     size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
                         //     kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
@@ -978,6 +956,7 @@ public:
                     }
 
                     // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&karg_buffer[0]));
+                    shisa_dump.dump_kernels(kernels, build_header_dump, _gks, kargtype_t::igemm_bwd_gtc_nhwc_karg_t);
                     duration = igemm_launch_kernels(kernels, bwd_prolog, bwd_postlog, warmup, repeat);
 
                     if(min_duration > duration){
@@ -1024,14 +1003,10 @@ public:
                             }
 
                             kernels.push_back({kernel_func, (void*)&kargs[valid_kernel_index * karg_size], karg_size, std::vector<size_t>{grid_size * block_size, splits, 1}, std::vector<size_t>{block_size, 1, 1}});
-                            result.dumpheader.n_dispatches = kernels.size();
-                            result.dumpheader.gks = _gks;
-                            result.dumpdata.push_back(kernels.back());
-                            result.dumpdata.back().ktype = ktype;
-
                             valid_kernel_index++;
                         }
                     }
+                    
                     //if(use_workspace == 1){
                     //    size_t thread_length_cast = (static_cast<size_t>(n) * c * hi * wi + 8 * 256) / (8 * 256) * (8 * 256) / 8;
                     //        kernels.push_back({tensor_cast_func, &karg_tensor_cast, karg_tensor_cast_size, {thread_length_cast, 1, 1}, {256, 1, 1}});
@@ -1040,7 +1015,7 @@ public:
                     // dump_bwd_karg(reinterpret_cast<igemm_bwd_gtc_nhwc_karg_t*>(&kargs[0]));
 
                     assert(kernels.size() == valid_kernel_index);
-                    
+                    shisa_dump.dump_kernels(kernels, build_header_dump, _gks,kargtype_t::igemm_bwd_gtc_nhwc_karg_t);
                     duration = igemm_launch_kernels(kernels, bwd_prolog, bwd_postlog, warmup, repeat);
 
                     if(min_duration > duration){
@@ -1053,16 +1028,10 @@ public:
             };
             if(current_gks != -1){
                 run_with_gks(current_gks);
-                if (dump_dir.size())
-                    dump_shader_args(dump_dir, result.dumpheader, result.dumpdata, result.kernel_name);
-                result.dumpdata.clear();
             }else{
                 std::vector<int> all_gks = get_gks_list(arg, tunable);
                 for(int gks : all_gks){
                     run_with_gks(gks);
-                    if (dump_dir.size())
-                        dump_shader_args(dump_dir, result.dumpheader, result.dumpdata, result.kernel_name);
-                    result.dumpdata.clear();
                 }
             }
             result.return_code = 0;

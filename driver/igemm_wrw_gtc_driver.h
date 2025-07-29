@@ -37,6 +37,8 @@
 #include <algorithm>
 #include <numeric>
 
+#include "shisa_dumps.h"
+
 #define WRW_MAX_GEMM_K_SPLITS 10
 
 typedef struct {

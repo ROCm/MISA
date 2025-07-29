@@ -47,6 +47,7 @@ using float16 = int16_t;
 #include <stdint.h>
 #include <numeric>
 #include "magic_div.h"
+#include "shisa_dumps.h"
 
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_MAC              "mac"
 #define IGEMM_GTC_TUNABLE_FMA_TYPE_DLOPS            "dlops"
